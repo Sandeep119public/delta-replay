@@ -1,7 +1,7 @@
 import { formatTime } from '../utils/time.js';
 
 export class Timeline {
-  constructor({ sliderEl, startLabelEl, currentLabelEl, endLabelEl, indexLabelEl, timeLabelEl, startIndexLabelEl, appState, engine }) {
+  constructor({ sliderEl, startLabelEl, currentLabelEl, endLabelEl, indexLabelEl, timeLabelEl, startIndexLabelEl, appState, engine, startTimeLabelEl = null }) {
     this.slider = sliderEl;
     this.startLabel = startLabelEl;
     this.currentLabel = currentLabelEl;
@@ -9,6 +9,7 @@ export class Timeline {
     this.indexLabel = indexLabelEl;
     this.timeLabel = timeLabelEl;
     this.startIndexLabel = startIndexLabelEl;
+    this.startTimeLabelEl = startTimeLabelEl;
     this.appState = appState;
     this.engine = engine;
 
@@ -67,5 +68,8 @@ export class Timeline {
     this.timeLabel.textContent = c ? formatTime(c.time) : '—';
     this.currentLabel.textContent = c ? formatTime(c.time) : '—';
     this.startIndexLabel.textContent = `Replay start: ${idx}`;
+    if (this.startTimeLabelEl) {
+      this.startTimeLabelEl.textContent = c ? `${formatTime(c.time)} · idx ${idx}` : '—';
+    }
   }
 }

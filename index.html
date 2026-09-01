@@ -23,12 +23,37 @@
           <label for="timeframe-select">Timeframe</label>
           <select id="timeframe-select"></select>
         </div>
-        <button id="load-btn" class="btn btn-primary">Load</button>
+        <div class="selector-group">
+          <label for="from-date">From (UTC)</label>
+          <div class="datetime-group">
+            <input type="date" id="from-date" />
+            <input type="time" id="from-time" step="60" />
+          </div>
+        </div>
+        <div class="selector-group">
+          <label for="to-date">To (UTC)</label>
+          <div class="datetime-group">
+            <input type="date" id="to-date" />
+            <input type="time" id="to-time" step="60" />
+          </div>
+        </div>
+        <button id="load-btn" class="btn btn-primary">LOAD DATA</button>
       </div>
       <div class="topbar-right">
         <span id="data-status" class="data-status">No data loaded</span>
       </div>
     </header>
+
+    <!-- MODE BANNER -->
+    <div id="mode-banner" class="mode-banner mode-idle">
+      <span id="mode-indicator" class="mode-indicator">NO DATA LOADED</span>
+      <span id="progress-panel" class="progress-panel hidden">
+        <span id="progress-text">0 / 0</span>
+        <span id="progress-pct">0%</span>
+        <span id="market-time" class="market-time">—</span>
+      </span>
+      <span id="market-time-full" class="market-time-full">CURRENT MARKET TIME: —</span>
+    </div>
 
     <!-- MAIN CHART AREA -->
     <main class="main">
@@ -53,7 +78,19 @@
         </div>
       </div>
       <div class="timeline-start-controls">
-        <span id="start-index-label">Replay start: 0</span>
+        <div class="start-info">
+          <span id="start-index-label">Replay start: 0</span>
+          <span id="start-time-label" class="start-time-label">—</span>
+        </div>
+        <div class="jump-group">
+          <label for="jump-date" class="jump-label">Jump to (UTC)</label>
+          <div class="datetime-group jump-datetime">
+            <input type="date" id="jump-date" />
+            <input type="time" id="jump-time" step="60" />
+            <button id="jump-btn" class="btn btn-secondary">JUMP</button>
+          </div>
+          <span id="jump-error" class="jump-error hidden"></span>
+        </div>
         <button id="start-replay-btn" class="btn btn-accent" disabled>START REPLAY</button>
       </div>
     </section>

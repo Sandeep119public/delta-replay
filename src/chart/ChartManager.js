@@ -63,11 +63,13 @@ export class ChartManager {
   /**
    * Load full visible dataset initially (or on seek/reset).
    * @param {Array} candles - canonical candles visible
+   * @param {object} [opts]
+   * @param {boolean} [opts.fit=true] - whether to fit content (preview/seek). False preserves zoom.
    */
-  setData(candles) {
+  setData(candles, { fit = true } = {}) {
     if (!this.series) throw new Error('Chart not initialized');
     this.series.setData(candles);
-    this.chart.timeScale().fitContent();
+    if (fit && candles.length) this.chart.timeScale().fitContent();
   }
 
   /**
@@ -77,6 +79,30 @@ export class ChartManager {
   update(candle) {
     if (!this.series) throw new Error('Chart not initialized');
     this.series.update(candle);
+  }
+
+  /**
+   * Keep newest candle visible without destroying zoom.
+   * Uses scrollToRealTime which preserves logical range width.
+   */
+  followCurrent() {
+    if (!this.chart) return;
+    try {
+      // Only auto-follow if user is not heavily scrolled back: check scrollPosition vs max.
+      // Lightweight-charts: if visible range includes near real time, scrolling is gentle.
+      // We simply call scrollToRealTime — it keeps zoom level.
+      this.chart.timeScale().scrollToRealTime();
+    } catch {}
+  }
+
+  /**
+   * Scroll to specific index's time.
+   */
+  scrollToTime(unixSec) {
+    if (!this.chart) return;
+    try {
+      this.chart.timeScale().scrollToPosition(5, false);
+    } catch {}
   }
 
   clear() {

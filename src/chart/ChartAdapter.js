@@ -56,6 +56,8 @@ export class ChartAdapter {
         return;
       }
       this.chart.update(candle);
+      // Auto-follow newest candle without resetting zoom
+      this.chart.followCurrent();
     }));
 
     // Also handle direct display before replay (preview mode)
