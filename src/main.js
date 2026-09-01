@@ -9,11 +9,63 @@ import { TimeframeSelector } from './ui/TimeframeSelector.js';
 import { Timeline } from './ui/Timeline.js';
 import { ReplayControls } from './ui/ReplayControls.js';
 import { toUnixSeconds, unixToDateTimeInput, formatTime } from './utils/time.js';
+import { PaperTradingEngine } from './trading/PaperTradingEngine.js';
+import { TradingPanel } from './ui/TradingPanel.js';
 
 const appState = new AppState();
 const engine = new ReplayEngine();
 const deltaProvider = new DeltaCandleProvider();
-const localProvider = new LocalCandleProvider({ basePath: '/sample-data' });
+const localProvider = new LocalCandleProvider(); // basePath defaults to import.meta.env.BASE_URL + 'sample-data' for Pages subpath
+
+// --- Paper Trading Engine (isolated, only MARKET_CANDLE) ---
+const tradingEngine = new PaperTradingEngine({ startingBalance: 10000, replayEngine: engine });
+
+// Integration-level guards: disallow time-travel while position is open
+// Keep ReplayEngine generic; guard at application layer to prevent bypass.
+const _origSeek = engine.seek.bind(engine);
+const _origReset = engine.reset.bind(engine);
+const _origStart = engine.start.bind(engine);
+const _origLoad = engine.load.bind(engine);
+
+function _guardBlocked(action) {
+  if (tradingEngine.hasOpenPosition()) {
+    const msg = `Cannot ${action} while a position is open — close position first.`;
+    showError(msg);
+    const errEl = document.getElementById('trading-error');
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+      setTimeout(() => { errEl.textContent = ''; errEl.classList.add('hidden'); }, 3000);
+    }
+    return true;
+  }
+  return false;
+}
+
+engine.seek = (idx) => {
+  if (_guardBlocked('seek')) return engine.getState();
+  return _origSeek(idx);
+};
+engine.reset = () => {
+  if (_guardBlocked('reset replay')) return engine.getState();
+  return _origReset();
+};
+engine.start = (idx) => {
+  if (_guardBlocked('start replay')) return engine.getState();
+  return _origStart(idx);
+};
+engine.load = (candles) => {
+  if (tradingEngine.hasOpenPosition()) {
+    // Block data reload via direct engine.load as well (e.g., loadData)
+    // Allow initial load when no position? Already blocked above, but keep consistent
+    const msg = 'Cannot load new data while a position is open — close position or reset account first.';
+    showError(msg);
+    const errEl = document.getElementById('trading-error');
+    if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); setTimeout(() => { errEl.textContent = ''; errEl.classList.add('hidden'); }, 3000); }
+    return engine.getState();
+  }
+  return _origLoad(candles);
+};
 
 // DOM
 const symbolSelect = document.getElementById('symbol-select');
@@ -60,6 +112,9 @@ const resetBtn = document.getElementById('btn-reset');
 const speedSelect = document.getElementById('speed-select');
 const statusEl = document.getElementById('replay-status');
 
+// Trading panel DOM
+const tradingPanelEl = document.getElementById('trading-panel');
+
 // Init UI components
 new SymbolSelector(symbolSelect, appState);
 new TimeframeSelector(timeframeSelect, appState);
@@ -73,6 +128,28 @@ const timeline = new Timeline({
 
 const controls = new ReplayControls({
   playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, engine
+});
+
+// Trading panel wiring
+const tradingPanel = new TradingPanel({
+  tradingEngine,
+  balanceEl: document.getElementById('acct-balance'),
+  equityEl: document.getElementById('acct-equity'),
+  realizedEl: document.getElementById('acct-realized'),
+  unrealizedEl: document.getElementById('acct-unrealized'),
+  posSymbolEl: document.getElementById('pos-symbol'),
+  posSideEl: document.getElementById('pos-side'),
+  posQtyEl: document.getElementById('pos-qty'),
+  posEntryEl: document.getElementById('pos-entry'),
+  posCurrentEl: document.getElementById('pos-current'),
+  posPnlEl: document.getElementById('pos-pnl'),
+  qtyInput: document.getElementById('trade-qty'),
+  buyBtn: document.getElementById('btn-buy'),
+  sellBtn: document.getElementById('btn-sell'),
+  closeBtn: document.getElementById('btn-close'),
+  resetBtn: document.getElementById('btn-reset-acct'),
+  tradesListEl: document.getElementById('trades-list'),
+  errorEl: document.getElementById('trading-error'),
 });
 
 // Chart
@@ -221,6 +298,28 @@ function onReplayEventSync(state) {
   updateProgress(state);
 }
 
+// SEEK safety: disallow seek while position open
+function trySeek(idx) {
+  if (tradingEngine.hasOpenPosition()) {
+    showError('Cannot seek while a position is open — close position first.');
+    // also surface via trading panel
+    const errEl = document.getElementById('trading-error');
+    if (errEl) {
+      errEl.textContent = 'Seek blocked: close open position first';
+      errEl.classList.remove('hidden');
+      setTimeout(() => { errEl.textContent = ''; errEl.classList.add('hidden'); }, 3000);
+    }
+    return false;
+  }
+  try {
+    engine.seek(idx);
+    return true;
+  } catch (e) {
+    showError(e.message);
+    return false;
+  }
+}
+
 // Timeline -> controls linkage
 let pendingStartIndex = 0;
 timeline.onChange((idx) => {
@@ -230,7 +329,7 @@ timeline.onChange((idx) => {
   // sync start time label is inside timeline
 });
 
-// Jump-to-time handling
+// Jump-to-time handling (with seek safety)
 function handleJump() {
   jumpError.classList.add('hidden');
   jumpError.textContent = '';
@@ -267,11 +366,16 @@ function handleJump() {
     timeline.setPosition(idx);
     updateProgress(st);
   } else if (st.status === 'playing') {
+    if (!tradingEngine.canSeek()) {
+      jumpError.textContent = 'Cannot jump while position open';
+      jumpError.classList.remove('hidden');
+      return;
+    }
     // Safest: pause then seek
     try { engine.pause(); } catch {}
-    try { engine.seek(idx); } catch (e) { jumpError.textContent = e.message; jumpError.classList.remove('hidden'); }
+    trySeek(idx);
   } else if (st.status === 'paused' || st.status === 'ended') {
-    try { engine.seek(idx); } catch (e) { jumpError.textContent = e.message; jumpError.classList.remove('hidden'); }
+    trySeek(idx);
   }
 }
 if (jumpBtn) jumpBtn.addEventListener('click', handleJump);
@@ -281,6 +385,12 @@ let loadToken = 0;
 let currentAbort = null;
 
 async function loadData() {
+  if (tradingEngine.hasOpenPosition()) {
+    showError('Cannot load new data while a position is open — close position or reset account first.');
+    const errEl = document.getElementById('trading-error');
+    if (errEl) { errEl.textContent = 'Cannot load new data while a position is open'; errEl.classList.remove('hidden'); setTimeout(() => { errEl.textContent = ''; errEl.classList.add('hidden'); }, 3000); }
+    return;
+  }
   const token = ++loadToken;
   if (currentAbort) {
     try { currentAbort.abort(); } catch {}
@@ -417,7 +527,7 @@ engine.on('reset', (s) => {
     startReplayBtn.disabled = false;
   }
   onReplayEventSync(s);
-  // allow engine's stateChanged to also fire, but ensure sync
+  // replay reset DOES NOT reset trading account (separate concerns)
 });
 engine.on('loaded', () => onReplayEventSync(engine.getState()));
 
@@ -425,7 +535,10 @@ sliderEl.addEventListener('change', () => {
   const idx = Number(sliderEl.value);
   const st = engine.getState();
   if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
-    try { engine.seek(idx); } catch (e) { showError(e.message); }
+    if (st.status === 'playing') {
+      try { engine.pause(); } catch {}
+    }
+    trySeek(idx);
   } else {
     pendingStartIndex = idx;
     controls.setStartIndex(idx);

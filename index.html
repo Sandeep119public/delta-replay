@@ -118,6 +118,51 @@
       <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; → Step &nbsp;|&nbsp; R: Reset</p>
       <div id="error-banner" class="error-banner hidden"></div>
     </section>
+
+    <!-- PAPER TRADING PANEL -->
+    <section id="trading-panel" class="trading-section">
+      <div class="trading-header">
+        <h3>PAPER TRADING</h3>
+        <span id="trading-error" class="trading-error hidden"></span>
+      </div>
+      <div class="trading-grid">
+        <div class="account-panel">
+          <h4>ACCOUNT</h4>
+          <div class="kv"><span>Balance</span><span id="acct-balance">$10,000.00</span></div>
+          <div class="kv"><span>Equity</span><span id="acct-equity">$10,000.00</span></div>
+          <div class="kv"><span>Realized PnL</span><span id="acct-realized">$0.00</span></div>
+          <div class="kv"><span>Unrealized PnL</span><span id="acct-unrealized">$0.00</span></div>
+        </div>
+        <div class="position-panel">
+          <h4>POSITION</h4>
+          <div class="kv"><span>Symbol</span><span id="pos-symbol">—</span></div>
+          <div class="kv"><span>Side</span><span id="pos-side">—</span></div>
+          <div class="kv"><span>Qty</span><span id="pos-qty">—</span></div>
+          <div class="kv"><span>Entry</span><span id="pos-entry">—</span></div>
+          <div class="kv"><span>Current</span><span id="pos-current">—</span></div>
+          <div class="kv"><span>PnL</span><span id="pos-pnl">—</span></div>
+        </div>
+        <div class="order-panel">
+          <h4>ORDER</h4>
+          <div class="order-row">
+            <label for="trade-qty">Qty</label>
+            <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" />
+          </div>
+          <div class="order-buttons">
+            <button id="btn-buy" class="btn btn-buy">BUY MARKET</button>
+            <button id="btn-sell" class="btn btn-sell">SELL MARKET</button>
+          </div>
+          <div class="order-buttons">
+            <button id="btn-close" class="btn" disabled>CLOSE POSITION</button>
+            <button id="btn-reset-acct" class="btn btn-secondary">RESET ACCOUNT</button>
+          </div>
+        </div>
+      </div>
+      <div class="trades-history">
+        <h4>TRADE HISTORY</h4>
+        <div id="trades-list" class="trades-list"><span class="empty-hint">No trades yet</span></div>
+      </div>
+    </section>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>

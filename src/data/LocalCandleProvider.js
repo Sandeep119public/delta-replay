@@ -8,9 +8,12 @@ export class LocalCandleProvider extends CandleProvider {
    * @param {Map<string, object[]>} [opts.inMemory] - for tests / offline injection
    * @param {number} [opts.latencyMs] - artificial delay to test race conditions
    */
-  constructor({ basePath = '/sample-data', inMemory = null, latencyMs = 0 } = {}) {
+  constructor({ basePath = null, inMemory = null, latencyMs = 0 } = {}) {
     super();
-    this.basePath = basePath;
+    // Use Vite base so /sample-data resolves under /delta-replay/ on GitHub Pages.
+    // import.meta.env.BASE_URL is '/' in dev and '/delta-replay/' in prod.
+    const defaultBase = `${import.meta.env.BASE_URL ?? '/'}sample-data`.replace(/\/\//g, '/');
+    this.basePath = (basePath ?? defaultBase).replace(/\/$/, '');
     this.inMemory = inMemory; // Map key: `${symbol}-${timeframe}`
     this.latencyMs = latencyMs;
   }
