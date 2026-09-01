@@ -11,7 +11,7 @@ function sendCandle(engine, c) {
 
 describe('PaperTrading — Account', () => {
   it('starting balance 10000 and equity = cash + unrealized', () => {
-    const t = new PaperTradingEngine({ startingBalance: 10000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 10000 });
     const a = t.getAccountSnapshot();
     expect(a.cashBalance).toBe(10000);
     expect(a.equity).toBe(10000);
@@ -20,7 +20,7 @@ describe('PaperTrading — Account', () => {
   });
 
   it('reset account clears positions/trades and restores balance', () => {
-    const t = new PaperTradingEngine({ startingBalance: 10000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 10000 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     sendCandle(t, candle(1001, 110));
@@ -33,7 +33,7 @@ describe('PaperTrading — Account', () => {
   });
 
   it('equity calculation with open position', () => {
-    const t = new PaperTradingEngine({ startingBalance: 10000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 10000 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 2 });
     sendCandle(t, candle(1001, 110)); // unrealized 20
@@ -45,7 +45,7 @@ describe('PaperTrading — Account', () => {
 
 describe('PaperTrading — LONG', () => {
   it('open long', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     const res = t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     expect(res.success).toBe(true);
@@ -56,7 +56,7 @@ describe('PaperTrading — LONG', () => {
   });
 
   it('unrealized profit long', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 2 });
     sendCandle(t, candle(1001, 105));
@@ -64,7 +64,7 @@ describe('PaperTrading — LONG', () => {
   });
 
   it('unrealized loss long', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     sendCandle(t, candle(1001, 90));
@@ -72,7 +72,7 @@ describe('PaperTrading — LONG', () => {
   });
 
   it('close long profit', () => {
-    const t = new PaperTradingEngine({ startingBalance: 10000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 10000 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     sendCandle(t, candle(1001, 120));
@@ -84,7 +84,7 @@ describe('PaperTrading — LONG', () => {
   });
 
   it('close long loss', () => {
-    const t = new PaperTradingEngine({ startingBalance: 10000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 10000 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     sendCandle(t, candle(1001, 80));
@@ -96,7 +96,7 @@ describe('PaperTrading — LONG', () => {
 
 describe('PaperTrading — SHORT', () => {
   it('open short', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     const res = t.placeOrder({ symbol: 'BTCUSD', side: 'SELL', quantity: 1 });
     expect(res.success).toBe(true);
@@ -104,7 +104,7 @@ describe('PaperTrading — SHORT', () => {
   });
 
   it('unrealized profit short when price drops', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'SELL', quantity: 1 });
     sendCandle(t, candle(1001, 80));
@@ -112,7 +112,7 @@ describe('PaperTrading — SHORT', () => {
   });
 
   it('unrealized loss short when price rises', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'SELL', quantity: 1 });
     sendCandle(t, candle(1001, 120));
@@ -120,7 +120,7 @@ describe('PaperTrading — SHORT', () => {
   });
 
   it('close short profit', () => {
-    const t = new PaperTradingEngine({ startingBalance: 5000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 5000 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'SELL', quantity: 2 });
     sendCandle(t, candle(1001, 90));
@@ -130,7 +130,7 @@ describe('PaperTrading — SHORT', () => {
   });
 
   it('close short loss', () => {
-    const t = new PaperTradingEngine({ startingBalance: 5000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 5000 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'SELL', quantity: 1 });
     sendCandle(t, candle(1001, 110));
@@ -141,34 +141,34 @@ describe('PaperTrading — SHORT', () => {
 
 describe('PaperTrading — validation', () => {
   it('reject zero quantity', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     const res = t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 0 });
     expect(res.success).toBe(false);
     expect(res.code).toBe('INVALID_QUANTITY');
   });
   it('reject negative quantity', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     expect(t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: -1 }).code).toBe('INVALID_QUANTITY');
   });
   it('reject NaN', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     expect(t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: NaN }).code).toBe('INVALID_QUANTITY');
   });
   it('reject no market price', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     const res = t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     expect(res.code).toBe('NO_MARKET_PRICE');
   });
   it('reject invalid side', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     expect(t.placeOrder({ symbol: 'BTCUSD', side: 'HOLD', quantity: 1 }).code).toBe('INVALID_SIDE');
   });
   it('reject invalid symbol', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     expect(t.placeOrder({ symbol: '', side: 'BUY', quantity: 1 }).code).toBe('INVALID_SYMBOL');
   });
@@ -176,7 +176,7 @@ describe('PaperTrading — validation', () => {
 
 describe('PaperTrading — position rules', () => {
   it('cannot open duplicate same-side position', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     const res = t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
@@ -184,7 +184,7 @@ describe('PaperTrading — position rules', () => {
   });
 
   it('opposite-side closes existing position (no auto-reverse)', () => {
-    const t = new PaperTradingEngine({ startingBalance: 10000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 10000 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     sendCandle(t, candle(1001, 110));
@@ -197,7 +197,7 @@ describe('PaperTrading — position rules', () => {
   });
 
   it('close when no position rejected', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     expect(t.closePosition('BTCUSD').code).toBe('NO_POSITION');
   });
@@ -206,7 +206,7 @@ describe('PaperTrading — position rules', () => {
 describe('PaperTrading — replay integration', () => {
   it('receives MARKET_CANDLE and updates current price & PnL exactly once per candle', () => {
     const replay = new ReplayEngine();
-    const trading = new PaperTradingEngine({ replayEngine: replay });
+    const trading = new PaperTradingEngine({ feeRate: 0, replayEngine: replay });
     const candles = [
       candle(1000, 100), candle(1001, 105), candle(1002, 110)
     ].map((c, i) => ({ time: c.time, open: c.close, high: c.close + 1, low: c.close - 1, close: c.close, volume: 10 }));
@@ -227,7 +227,7 @@ describe('PaperTrading — replay integration', () => {
 
   it('determinism: same sequence twice yields same PnL/balance/trades', () => {
     function runOnce() {
-      const t = new PaperTradingEngine({});
+      const t = new PaperTradingEngine({ feeRate: 0 });
       const seq = [100, 105, 95, 110];
       seq.forEach((price, i) => {
         sendCandle(t, candle(1000 + i, price));
@@ -245,7 +245,7 @@ describe('PaperTrading — replay integration', () => {
 
 describe('PaperTrading — future-data safety', () => {
   it('engine has no access to AppState or ReplayEngine internals', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     // Ensure no properties reference external arrays
     expect(t._latestCandle).toBeNull();
     sendCandle(t, candle(1000, 100));
@@ -259,7 +259,7 @@ describe('PaperTrading — future-data safety', () => {
 
   it('trading engine works using only candle events, not ReplayEngine._candles', () => {
     const replay = new ReplayEngine();
-    const trading = new PaperTradingEngine({ replayEngine: replay });
+    const trading = new PaperTradingEngine({ feeRate: 0, replayEngine: replay });
     const candles = [candle(1000, 100), candle(1001, 200)].map(c => ({ time: c.time, open: c.close, high: c.close + 1, low: c.close - 1, close: c.close, volume: 10 }));
     replay.load(candles);
     replay.start(0);
@@ -273,7 +273,7 @@ describe('PaperTrading — future-data safety', () => {
 
 describe('PaperTrading — seek safety', () => {
   it('canSeek false while position open, true after close', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     expect(t.canSeek()).toBe(true);
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
@@ -287,7 +287,7 @@ describe('PaperTrading — seek safety', () => {
   it('seek blocked behavior documented: UI should check hasOpenPosition before engine.seek', () => {
     // Simulate UI guard
     const replay = new ReplayEngine();
-    const trading = new PaperTradingEngine({ replayEngine: replay });
+    const trading = new PaperTradingEngine({ feeRate: 0, replayEngine: replay });
     const candles = [candle(1000, 100), candle(1001, 110), candle(1002, 120)].map(c => ({ time: c.time, open: c.close, high: c.close + 1, low: c.close - 1, close: c.close, volume: 10 }));
     replay.load(candles);
     replay.start(0);
@@ -303,7 +303,7 @@ describe('PaperTrading — seek safety', () => {
 
 describe('PaperTrading — trade history', () => {
   it('records closed trade with correct fields', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     sendCandle(t, candle(1000, 100));
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 2 });
     sendCandle(t, candle(1001, 150));
@@ -322,3 +322,6 @@ describe('PaperTrading — trade history', () => {
     expect(tr.id).toBe(1);
   });
 });
+
+
+

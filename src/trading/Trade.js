@@ -1,5 +1,5 @@
 export class Trade {
-  constructor({ id, symbol, side, quantity, entryPrice, exitPrice, openedAt, closedAt, realizedPnL }) {
+  constructor({ id, symbol, side, quantity, entryPrice, exitPrice, openedAt, closedAt, realizedPnL, grossPnL, entryFee, exitFee, totalFee, netPnL }) {
     this.id = id;
     this.symbol = symbol;
     this.side = side;
@@ -8,7 +8,13 @@ export class Trade {
     this.exitPrice = exitPrice;
     this.openedAt = openedAt;
     this.closedAt = closedAt;
-    this.realizedPnL = realizedPnL;
+    // realizedPnL kept as net for backward compat
+    this.realizedPnL = realizedPnL ?? netPnL ?? 0;
+    this.grossPnL = grossPnL ?? realizedPnL ?? 0;
+    this.entryFee = entryFee ?? 0;
+    this.exitFee = exitFee ?? 0;
+    this.totalFee = totalFee ?? (this.entryFee + this.exitFee);
+    this.netPnL = netPnL ?? this.realizedPnL;
   }
 
   clone() {

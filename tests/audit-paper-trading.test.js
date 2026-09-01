@@ -6,7 +6,7 @@ function c(time, close) { return { time, open: close, high: close + 1, low: clos
 
 describe('Audit — Accounting correctness', () => {
   it('equity = cash + unrealized, no double count, sequential trades', () => {
-    const t = new PaperTradingEngine({ startingBalance: 10000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 10000 });
     t.onMarketCandle({ candle: c(1000, 100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 }); // long 100
     t.onMarketCandle({ candle: c(1001, 110) });
@@ -45,7 +45,7 @@ describe('Audit — Accounting correctness', () => {
 
 describe('Audit — Position lifecycle immutability', () => {
   it('entry price and quantity immutable, currentPrice updates once per candle', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000, 100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 2 });
     const p1 = t.getPosition('BTCUSD');
@@ -61,7 +61,7 @@ describe('Audit — Position lifecycle immutability', () => {
   });
 
   it('closed position reference cannot affect account after mutation', () => {
-    const t = new PaperTradingEngine({ startingBalance: 10000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 10000 });
     t.onMarketCandle({ candle: c(1000, 100) });
     const res = t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     const opened = res.position;
@@ -74,7 +74,7 @@ describe('Audit — Position lifecycle immutability', () => {
 
 describe('Audit — Event duplication', () => {
   it('one candle → one POSITION_UPDATED + one ACCOUNT_UPDATED', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000, 100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     let posUpdates = 0, acctUpdates = 0;
@@ -87,7 +87,7 @@ describe('Audit — Event duplication', () => {
 
   it('duplicate attach does not duplicate processing', () => {
     const replay = new ReplayEngine();
-    const t = new PaperTradingEngine({ replayEngine: replay });
+    const t = new PaperTradingEngine({ feeRate: 0, replayEngine: replay });
     // second attach with same engine should be idempotent
     t.attachToReplay(replay);
     t.attachToReplay(replay);
@@ -106,7 +106,7 @@ describe('Audit — Event duplication', () => {
 
   it('detach stops updates', () => {
     const replay = new ReplayEngine();
-    const t = new PaperTradingEngine({ replayEngine: replay });
+    const t = new PaperTradingEngine({ feeRate: 0, replayEngine: replay });
     const candles = [c(1000,100), c(1001,110)].map(cc => ({ time: cc.time, open: cc.close, high: cc.close+1, low: cc.close-1, close: cc.close, volume:10 }));
     replay.load(candles);
     replay.start(0);
@@ -123,7 +123,7 @@ describe('Audit — Event duplication', () => {
 describe('Audit — Subscription lifecycle', () => {
   it('attach/detach/destroy lifecycle', () => {
     const replay = new ReplayEngine();
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     expect(t._unsubs.length).toBe(0);
     t.attachReplayEngine(replay);
     expect(t._unsubs.length).toBe(1);
@@ -138,7 +138,7 @@ describe('Audit — Subscription lifecycle', () => {
 describe('Audit — Future-data safety', () => {
   it('cannot know future candles, only latest', () => {
     const replay = new ReplayEngine();
-    const t = new PaperTradingEngine({ replayEngine: replay });
+    const t = new PaperTradingEngine({ feeRate: 0, replayEngine: replay });
     const candles = [100,200,300,400].map((p,i) => ({ time: 1000+i, open: p, high: p+1, low: p-1, close: p, volume:10 }));
     replay.load(candles);
     replay.start(0); // only 100 revealed
@@ -151,7 +151,7 @@ describe('Audit — Future-data safety', () => {
   });
 
   it('mutation of event candle payload does not affect engine', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     const payload = { candle: c(1000, 100), index: 0, timestamp: 1000 };
     t.onMarketCandle(payload);
     // mutate payload after
@@ -178,11 +178,11 @@ describe('Audit — Future-data safety', () => {
 
 describe('Audit — Order execution uses latest close only', () => {
   it('no candle → rejected', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     expect(t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 }).code).toBe('NO_MARKET_PRICE');
   });
   it('execution = latest close', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000, 100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     expect(t.getPosition('BTCUSD').entryPrice).toBe(100);
@@ -195,7 +195,7 @@ describe('Audit — Order execution uses latest close only', () => {
 
 describe('Audit — Opposite order', () => {
   it('SELL while LONG closes, no new short', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000, 100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     t.onMarketCandle({ candle: c(1001, 150) });
@@ -210,7 +210,7 @@ describe('Audit — Seek safety bypass', () => {
   it('direct engine.seek should be blocked when position open (integration guard)', async () => {
     // This test simulates main.js wrapper logic
     const replay = new ReplayEngine();
-    const t = new PaperTradingEngine({ replayEngine: replay });
+    const t = new PaperTradingEngine({ feeRate: 0, replayEngine: replay });
     const candles = [100,110,120].map((p,i) => ({ time: 1000+i, open: p, high: p+1, low: p-1, close: p, volume:10 }));
     replay.load(candles);
     replay.start(0);
@@ -227,7 +227,7 @@ describe('Audit — Seek safety bypass', () => {
 
 describe('Audit — Reset and reload safety', () => {
   it('reset blocked while position open (guard)', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000, 100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     expect(t.hasOpenPosition()).toBe(true);
@@ -237,7 +237,7 @@ describe('Audit — Reset and reload safety', () => {
   });
 
   it('account reset clears all state', () => {
-    const t = new PaperTradingEngine({ startingBalance: 10000 });
+    const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 10000 });
     t.onMarketCandle({ candle: c(1000,100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     t.onMarketCandle({ candle: c(1001, 200) });
@@ -250,7 +250,7 @@ describe('Audit — Reset and reload safety', () => {
 
 describe('Audit — Symbol consistency', () => {
   it('position symbol matches order symbol, not overwritten by different market candle', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000,100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     // Simulate next candle still BTCUSD price 110
@@ -265,7 +265,7 @@ describe('Audit — Symbol consistency', () => {
 
 describe('Audit — Event immutability', () => {
   it('position snapshot mutation does not corrupt engine', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000,100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     let captured = null;
@@ -276,7 +276,7 @@ describe('Audit — Event immutability', () => {
   });
 
   it('account snapshot mutation does not corrupt engine', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000,100) });
     const snap = t.getAccountSnapshot();
     snap.cashBalance = 999999;
@@ -286,7 +286,7 @@ describe('Audit — Event immutability', () => {
 
 describe('Audit — Trade history immutability', () => {
   it('getTrades returns clone, push does not affect internal', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000,100) });
     t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
     t.onMarketCandle({ candle: c(1001,110) });
@@ -301,13 +301,13 @@ describe('Audit — Trade history immutability', () => {
 
 describe('Audit — Numeric validation', () => {
   it('reject Infinity', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000,100) });
     expect(t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: Infinity }).code).toBe('INVALID_QUANTITY');
     expect(t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: -Infinity }).code).toBe('INVALID_QUANTITY');
   });
   it('very small quantity allowed, PnL not NaN', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     t.onMarketCandle({ candle: c(1000,100) });
     const res = t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 0.0000001 });
     expect(res.success).toBe(true);
@@ -320,7 +320,7 @@ describe('Audit — Numeric validation', () => {
 describe('Audit — Determinism', () => {
   it('same sequence same result', () => {
     function run() {
-      const t = new PaperTradingEngine({ startingBalance: 1000 });
+      const t = new PaperTradingEngine({ feeRate: 0, startingBalance: 1000 });
       [100,110,90].forEach((p,i) => {
         t.onMarketCandle({ candle: c(1000+i, p) });
         if (i===0) t.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
@@ -336,7 +336,7 @@ describe('Audit — Determinism', () => {
 
 describe('Audit — Performance O(1)', () => {
   it('onMarketCandle does not iterate trades', () => {
-    const t = new PaperTradingEngine({});
+    const t = new PaperTradingEngine({ feeRate: 0 });
     // create 5 closed trades
     for (let i=0;i<5;i++) {
       t.onMarketCandle({ candle: c(1000+i*10, 100) });
@@ -354,3 +354,4 @@ describe('Audit — Performance O(1)', () => {
     expect(t.getPosition('BTCUSD').unrealizedPnL).toBe(100);
   });
 });
+

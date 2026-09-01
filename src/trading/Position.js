@@ -10,14 +10,16 @@ export class Position {
    * @param {number} p.entryPrice
    * @param {number} p.currentPrice
    * @param {number} p.openedAt - unix seconds
+   * @param {number} [p.entryFee] - fee at entry (notional * rate)
    */
-  constructor({ symbol, side, quantity, entryPrice, currentPrice, openedAt }) {
+  constructor({ symbol, side, quantity, entryPrice, currentPrice, openedAt, entryFee = 0 }) {
     this.symbol = symbol;
     this.side = side;
     this.quantity = quantity;
     this.entryPrice = entryPrice;
     this.currentPrice = currentPrice;
     this.openedAt = openedAt;
+    this.entryFee = entryFee;
   }
 
   get unrealizedPnL() {
@@ -33,6 +35,7 @@ export class Position {
       entryPrice: this.entryPrice,
       currentPrice: this.currentPrice,
       openedAt: this.openedAt,
+      entryFee: this.entryFee,
     });
   }
 
@@ -44,6 +47,7 @@ export class Position {
       entryPrice: this.entryPrice,
       currentPrice: this.currentPrice,
       openedAt: this.openedAt,
+      entryFee: this.entryFee,
       unrealizedPnL: this.unrealizedPnL,
     };
   }

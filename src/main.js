@@ -137,6 +137,7 @@ const tradingPanel = new TradingPanel({
   equityEl: document.getElementById('acct-equity'),
   realizedEl: document.getElementById('acct-realized'),
   unrealizedEl: document.getElementById('acct-unrealized'),
+  feesEl: document.getElementById('acct-fees'),
   posSymbolEl: document.getElementById('pos-symbol'),
   posSideEl: document.getElementById('pos-side'),
   posQtyEl: document.getElementById('pos-qty'),

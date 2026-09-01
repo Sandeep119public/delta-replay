@@ -4,6 +4,7 @@ import { Position } from './Position.js';
 import { Trade } from './Trade.js';
 import { TradingEvents } from './TradingEvents.js';
 import { TradingValidator } from './TradingValidator.js';
+import { TRADING_CONFIG, calcFee } from './TradingConfig.js';
 
 /**
  * PaperTradingEngine — consumes MARKET_CANDLE only.
@@ -16,11 +17,13 @@ export class PaperTradingEngine extends EventEmitter {
   /**
    * @param {object} opts
    * @param {number} [opts.startingBalance=10000]
+   * @param {number} [opts.feeRate] - taker fee rate, defaults to TRADING_CONFIG
    * @param {import('../replay/ReplayEngine.js').ReplayEngine} [opts.replayEngine] - optional auto-wire
    */
-  constructor({ startingBalance = 10000, replayEngine = null } = {}) {
+  constructor({ startingBalance = 10000, feeRate = TRADING_CONFIG.TAKER_FEE_RATE, replayEngine = null } = {}) {
     super();
     this.account = new TradingAccount({ startingBalance });
+    this.feeRate = feeRate;
     this._positions = new Map(); // symbol -> Position
     this._trades = [];
     this._nextTradeId = 1;
@@ -111,6 +114,11 @@ export class PaperTradingEngine extends EventEmitter {
 
     // No existing position: open new
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
+    const entryNotional = execPrice * q;
+    const entryFee = calcFee(entryNotional, this.feeRate);
+    // deduct entry fee immediately
+    this.account.cashBalance -= entryFee;
+    this.account.totalFees += entryFee;
     const position = new Position({
       symbol,
       side: posSide,
@@ -118,13 +126,14 @@ export class PaperTradingEngine extends EventEmitter {
       entryPrice: execPrice,
       currentPrice: execPrice,
       openedAt: time,
+      entryFee,
     });
     this._positions.set(symbol, position);
     // unrealized 0 at open
     this._recalcUnrealized();
-    this.emit(TradingEvents.POSITION_OPENED, { position: position.clone().toJSON() });
+    this.emit(TradingEvents.POSITION_OPENED, { position: position.clone().toJSON(), entryFee });
     this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
-    return { success: true, position: position.clone().toJSON() };
+    return { success: true, position: position.clone().toJSON(), entryFee };
   }
 
   /**
@@ -145,12 +154,19 @@ export class PaperTradingEngine extends EventEmitter {
   _closePositionInternal(symbol, exitPrice, closedAt) {
     const pos = this._positions.get(symbol);
     if (!pos) return this._reject('NO_POSITION', `No open position for ${symbol}`);
-    const realized = pos.side === 'LONG'
+    const gross = pos.side === 'LONG'
       ? (exitPrice - pos.entryPrice) * pos.quantity
       : (pos.entryPrice - exitPrice) * pos.quantity;
+    const exitNotional = exitPrice * pos.quantity;
+    const exitFee = calcFee(exitNotional, this.feeRate);
+    const entryFee = pos.entryFee || 0;
+    const totalFee = entryFee + exitFee;
+    const net = gross - totalFee;
 
-    this.account.cashBalance += realized;
-    this.account.realizedPnL += realized;
+    // cash: add gross, deduct exitFee (entry already deducted)
+    this.account.cashBalance += gross - exitFee;
+    this.account.realizedPnL += net;
+    this.account.totalFees += exitFee;
 
     const trade = new Trade({
       id: this._nextTradeId++,
@@ -161,17 +177,22 @@ export class PaperTradingEngine extends EventEmitter {
       exitPrice,
       openedAt: pos.openedAt,
       closedAt,
-      realizedPnL: realized,
+      realizedPnL: net,
+      grossPnL: gross,
+      entryFee,
+      exitFee,
+      totalFee,
+      netPnL: net,
     });
     this._trades.push(trade);
 
     this._positions.delete(symbol);
     this._recalcUnrealized();
 
-    this.emit(TradingEvents.POSITION_CLOSED, { symbol, realizedPnL: realized, exitPrice, trade: trade.clone().toJSON() });
+    this.emit(TradingEvents.POSITION_CLOSED, { symbol, realizedPnL: net, grossPnL: gross, entryFee, exitFee, totalFee, exitPrice, trade: trade.clone().toJSON() });
     this.emit(TradingEvents.TRADE_EXECUTED, { trade: trade.clone().toJSON() });
     this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
-    return { success: true, realizedPnL: realized, trade: trade.clone().toJSON(), closedPosition: pos.clone().toJSON() };
+    return { success: true, realizedPnL: net, grossPnL: gross, entryFee, exitFee, totalFee, netPnL: net, trade: trade.clone().toJSON(), closedPosition: pos.clone().toJSON() };
   }
 
   _recalcUnrealized() {

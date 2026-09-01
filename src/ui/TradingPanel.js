@@ -3,7 +3,7 @@ import { formatTime } from '../utils/time.js';
 export class TradingPanel {
   constructor({
     tradingEngine,
-    balanceEl, equityEl, realizedEl, unrealizedEl,
+    balanceEl, equityEl, realizedEl, unrealizedEl, feesEl,
     posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
     qtyInput, buyBtn, sellBtn, closeBtn, resetBtn,
     tradesListEl, errorEl
@@ -13,6 +13,7 @@ export class TradingPanel {
     this.equityEl = equityEl;
     this.realizedEl = realizedEl;
     this.unrealizedEl = unrealizedEl;
+    this.feesEl = feesEl;
     this.posSymbolEl = posSymbolEl;
     this.posSideEl = posSideEl;
     this.posQtyEl = posQtyEl;
@@ -103,6 +104,7 @@ export class TradingPanel {
     this.equityEl.textContent = this._fmtMoney(acct.equity);
     this.realizedEl.textContent = this._fmtMoney(acct.realizedPnL);
     this.unrealizedEl.textContent = this._fmtMoney(acct.unrealizedPnL);
+    if (this.feesEl) this.feesEl.textContent = this._fmtMoney(acct.totalFees);
     this.unrealizedEl.className = acct.unrealizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
     this.realizedEl.className = acct.realizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
 
@@ -128,14 +130,17 @@ export class TradingPanel {
       this.closeBtn.disabled = false;
     }
 
-    // Trades list
+    // Trades list with gross/fees/net
     const trades = this.engine.getTrades();
     if (trades.length === 0) {
       this.tradesListEl.innerHTML = '<span class="empty-hint">No trades yet</span>';
     } else {
       this.tradesListEl.innerHTML = trades.slice().reverse().map(t => {
-        const cls = t.realizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
-        return `<div class="trade-row"><span>${t.symbol} ${t.side} ${t.quantity} @ ${t.entryPrice.toFixed(2)}→${t.exitPrice.toFixed(2)}</span><span class="${cls}">${this._fmtMoney(t.realizedPnL)}</span></div>`;
+        const cls = (t.netPnL ?? t.realizedPnL) >= 0 ? 'pnl-pos' : 'pnl-neg';
+        const gross = t.grossPnL ?? t.realizedPnL;
+        const fee = t.totalFee ?? ((t.entryFee ?? 0) + (t.exitFee ?? 0));
+        const net = t.netPnL ?? t.realizedPnL;
+        return `<div class="trade-row"><span>${t.symbol} ${t.side} ${t.quantity} @ ${t.entryPrice.toFixed(2)}→${t.exitPrice.toFixed(2)}</span><span>${this._fmtMoney(gross)} / <span class="pnl-neg">${this._fmtMoney(fee)}</span> / <span class="${cls}">${this._fmtMoney(net)}</span></span></div>`;
       }).join('');
     }
 
