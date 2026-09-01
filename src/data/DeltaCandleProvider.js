@@ -24,7 +24,7 @@ export const TIMEFRAME_SECONDS = {
   '1w': 604800,
 };
 
-export const MAX_CANDLES = 10000;
+export const MAX_CANDLES = 100000;
 export const CHUNK_SIZE = 2000; // conservative per-request cap to handle observed limit
 
 export class DeltaCandleProvider extends CandleProvider {
@@ -149,7 +149,7 @@ export class DeltaCandleProvider extends CandleProvider {
       allRaw.push(...rawChunk);
 
       iterations++;
-      if (iterations > 50) {
+      if (iterations > 200) {
         throw new DeltaError('INVALID_REQUEST', 'Too many chunks - range may be too large or API not progressing');
       }
 

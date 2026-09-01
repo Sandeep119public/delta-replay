@@ -20,9 +20,12 @@ export class ChartAdapter {
       // No chart update on loaded alone; wait for start/seek or direct load display.
     }));
 
+    const WINDOW = 1000;
+    const windowed = (arr) => arr.length > WINDOW ? arr.slice(arr.length - WINDOW) : arr;
+
     this._unsubs.push(this.engine.on(ReplayEvents.STARTED, ({ index }) => {
       const visible = this.engine.getVisibleCandles();
-      this.chart.setData(visible);
+      this.chart.setData(windowed(visible));
     }));
 
     // Single candle reveal: use update for performance
@@ -40,7 +43,7 @@ export class ChartAdapter {
     this._unsubs.push(this.engine.on(ReplayEvents.STARTED, ({ index }) => { lastSetIndex = index; }));
     this._unsubs.push(this.engine.on(ReplayEvents.SEEKED, ({ index, visibleCandles }) => {
       lastSetIndex = index;
-      this.chart.setData(visibleCandles);
+      this.chart.setData(windowed(visibleCandles));
     }));
     this._unsubs.push(this.engine.on(ReplayEvents.RESET, (payload) => {
       // payload may include visibleCandles/index after fix, fallback to getVisibleCandles
@@ -48,7 +51,7 @@ export class ChartAdapter {
       const idx = payload?.index ?? (visible.length ? visible.length - 1 : -1);
       lastSetIndex = idx;
       if (visible.length === 0) this.chart.clear();
-      else this.chart.setData(visible);
+      else this.chart.setData(windowed(visible));
     }));
     this._unsubs.push(this.engine.on(ReplayEvents.MARKET_CANDLE, ({ candle, index }) => {
       if (index === lastSetIndex) {
@@ -71,9 +74,18 @@ export class ChartAdapter {
   }
 
   /**
-   * Preview: show all candles before replay starts (user browsing).
+   * Preview: show windowed candles before replay starts (TradingView-style, hide future).
+   * Expects full array but will window to last 1000 if large.
    */
   showPreview(candles) {
-    this.chart.setData(candles);
+    const WINDOW = 1000;
+    const win = candles.length > WINDOW ? candles.slice(candles.length - WINDOW) : candles;
+    this.chart.setData(win);
+  }
+
+  showPreviewWindow(candles, centerIdx, windowSize = 1000) {
+    const start = Math.max(0, centerIdx - windowSize + 1);
+    const win = candles.slice(start, centerIdx + 1);
+    this.chart.setData(win);
   }
 }
