@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delta Replay</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="logo">DELTA REPLAY</h1>
+        <span class="phase-badge">PHASE 1 — HISTORICAL REPLAY</span>
+      </div>
+      <div class="topbar-center">
+        <div class="selector-group">
+          <label for="symbol-select">Symbol</label>
+          <select id="symbol-select"></select>
+        </div>
+        <div class="selector-group">
+          <label for="timeframe-select">Timeframe</label>
+          <select id="timeframe-select"></select>
+        </div>
+        <button id="load-btn" class="btn btn-primary">Load</button>
+      </div>
+      <div class="topbar-right">
+        <span id="data-status" class="data-status">No data loaded</span>
+      </div>
+    </header>
+
+    <!-- MAIN CHART AREA -->
+    <main class="main">
+      <div id="chart-container" class="chart-container"></div>
+      <div id="chart-overlay" class="chart-overlay hidden">
+        <p id="overlay-text"></p>
+      </div>
+    </main>
+
+    <!-- TIMELINE -->
+    <section class="timeline-section">
+      <div class="timeline-header">
+        <span id="timeline-start-label">—</span>
+        <span id="timeline-current-label" class="timeline-current">—</span>
+        <span id="timeline-end-label">—</span>
+      </div>
+      <div class="timeline-track-wrap">
+        <input type="range" id="timeline-slider" min="0" max="100" value="0" disabled />
+        <div class="timeline-meta">
+          <span id="timeline-index-label">0 / 0</span>
+          <span id="timeline-time-label">—</span>
+        </div>
+      </div>
+      <div class="timeline-start-controls">
+        <span id="start-index-label">Replay start: 0</span>
+        <button id="start-replay-btn" class="btn btn-accent" disabled>START REPLAY</button>
+      </div>
+    </section>
+
+    <!-- REPLAY CONTROLS -->
+    <section class="controls-section">
+      <div class="controls-row">
+        <button id="btn-reset" class="btn" disabled title="R (Reset)">RESET</button>
+        <button id="btn-play" class="btn" disabled title="Space (Play/Pause)">PLAY</button>
+        <button id="btn-pause" class="btn hidden" disabled>PAUSE</button>
+        <button id="btn-step" class="btn" disabled title="→ (Step)">STEP</button>
+        <div class="speed-group">
+          <label for="speed-select">Speed</label>
+          <select id="speed-select" disabled>
+            <option value="0.25">0.25x</option>
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x</option>
+            <option value="2">2x</option>
+            <option value="5">5x</option>
+            <option value="10">10x</option>
+          </select>
+        </div>
+        <span id="replay-status" class="replay-status">idle</span>
+      </div>
+      <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; → Step &nbsp;|&nbsp; R: Reset</p>
+      <div id="error-banner" class="error-banner hidden"></div>
+    </section>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
