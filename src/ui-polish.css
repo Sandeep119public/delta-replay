@@ -1,0 +1,526 @@
+/* UI polish: layout, hierarchy, spacing, and responsive behavior */
+
+#app {
+  grid-template-columns: minmax(0, 1fr) var(--trading-w);
+  grid-template-rows: auto auto auto minmax(420px, 1fr) auto auto;
+  grid-template-areas:
+    "header header"
+    "mode mode"
+    "error error"
+    "main main"
+    "timeline timeline"
+    "controls controls";
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+#app > .error-panel { grid-area: error; }
+
+/* Header: give the data controls a real layout instead of squeezing flex items. */
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(210px, auto) minmax(0, 1fr) minmax(180px, 240px);
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.topbar-center {
+  display: grid;
+  grid-template-columns: minmax(110px, 140px) minmax(110px, 140px) minmax(230px, 1fr) minmax(230px, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  justify-content: stretch;
+}
+
+.selector-group,
+.selector-datetime {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  flex: none;
+}
+
+.selector-group select,
+.selector-group input[type="date"],
+.selector-group input[type="time"] {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.datetime-group {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 6px;
+}
+
+.datetime-group input,
+.datetime-group input[type="time"] {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+#load-btn {
+  min-height: 38px;
+  padding-inline: 16px;
+}
+
+.topbar-right {
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.data-status {
+  display: block;
+  width: 100%;
+  max-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.phase-badge {
+  opacity: 0.9;
+}
+
+/* Mode/status bar */
+.mode-banner {
+  min-height: 34px;
+  padding: 6px 16px;
+}
+
+.mode-banner .progress-panel {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.market-time-full {
+  margin-left: auto;
+}
+
+/* Error state lives in its own intentional row. */
+.error-panel {
+  margin: 8px 16px 0;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, rgba(239,68,68,0.10), rgba(239,68,68,0.06));
+  border-color: rgba(239,68,68,0.45);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+}
+
+.error-panel-header {
+  margin-bottom: 5px;
+}
+
+.error-panel-message {
+  margin: 0;
+  max-width: 900px;
+}
+
+.error-panel-actions {
+  align-items: center;
+}
+
+/* Main work area */
+.main-layout {
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.main {
+  min-height: 0;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+
+.chart-container {
+  min-height: 0;
+}
+
+.chart-overlay {
+  background: rgba(9, 12, 17, 0.78);
+  backdrop-filter: blur(2px);
+}
+
+.chart-overlay-content {
+  padding: 28px;
+  border: 1px solid rgba(42,51,66,0.9);
+  border-radius: 10px;
+  background: rgba(23,27,34,0.88);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+}
+
+.chart-overlay-content p {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Sidebar: compact but readable instead of a tall stack of tiny cards. */
+.trading-section {
+  width: var(--trading-w);
+  min-width: var(--trading-w);
+  max-width: var(--trading-w);
+  padding: 12px;
+  gap: 10px;
+  background: #151922;
+  border-left: 1px solid var(--border);
+  scrollbar-width: thin;
+}
+
+.trading-header {
+  position: sticky;
+  top: -12px;
+  z-index: 3;
+  margin: -12px -12px 0;
+  padding: 12px;
+  background: rgba(21,25,34,0.96);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(42,51,66,0.7);
+}
+
+.trading-title {
+  font-size: 13px;
+}
+
+.trading-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.account-panel,
+.position-panel,
+.order-panel {
+  padding: 11px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.015);
+}
+
+.order-panel {
+  grid-column: 1 / -1;
+}
+
+.account-panel h3,
+.position-panel h3,
+.order-panel h3,
+.trades-history h3,
+.pending-orders h3 {
+  margin-bottom: 10px;
+  color: #a7b0c0;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+}
+
+.kv {
+  padding: 3px 0;
+  font-size: 11px;
+}
+
+.kv span:last-child {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-controls {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(42,51,66,0.75);
+}
+
+.risk-controls input,
+.order-row input,
+.order-row select {
+  min-height: 36px;
+}
+
+.order-row {
+  margin-bottom: 7px;
+}
+
+.order-row label {
+  min-width: 76px;
+}
+
+.order-row select {
+  flex: 1 1 auto;
+  width: 100%;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 8px;
+}
+
+.order-buttons .btn,
+.risk-buttons .btn {
+  min-height: 38px;
+}
+
+.pending-orders,
+.trades-history {
+  gap: 6px;
+}
+
+.trades-list {
+  max-height: 132px;
+  padding: 7px 8px;
+  background: var(--bg-input);
+  border-radius: 8px;
+}
+
+/* Timeline: compact, structured and easy to scan. */
+.timeline-section {
+  padding: 12px 16px;
+  background: #151922;
+}
+
+.timeline-header,
+.timeline-meta {
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-track-wrap {
+  margin: 6px 0 8px;
+}
+
+#timeline-slider {
+  height: 26px;
+}
+
+.timeline-start-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(360px, 440px) auto;
+  align-items: end;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.start-info {
+  min-width: 0;
+}
+
+#start-index-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jump-group {
+  max-width: none;
+  min-width: 0;
+}
+
+.jump-datetime {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px auto;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.jump-datetime input {
+  width: 100%;
+  flex: none;
+  min-height: 36px;
+}
+
+#jump-btn,
+#start-replay-btn {
+  min-height: 36px;
+}
+
+/* Replay controls */
+.controls-section {
+  padding: 10px 16px 12px;
+  background: #11151c;
+}
+
+.controls-row {
+  min-height: 36px;
+}
+
+.shortcuts-hint {
+  margin-top: 5px;
+}
+
+/* Error/status and disabled controls should look intentional, not broken. */
+.btn:disabled,
+select:disabled,
+input:disabled {
+  filter: saturate(0.55);
+}
+
+/* Wide desktop */
+@media (min-width: 1440px) {
+  :root { --trading-w: 390px; }
+}
+
+/* Medium desktop / laptops */
+@media (max-width: 1280px) {
+  :root { --trading-w: 350px; --trading-w-min: 320px; }
+  .topbar {
+    grid-template-columns: minmax(190px, 1fr) minmax(0, 2.5fr) minmax(150px, 190px);
+    gap: 10px;
+  }
+  .topbar-center {
+    grid-template-columns: minmax(100px, 1fr) minmax(100px, 1fr) minmax(170px, 1.5fr) minmax(170px, 1.5fr) auto;
+  }
+  .data-status { font-size: 11px; }
+  .trading-section { min-width: 350px; }
+}
+
+/* Collapse data controls before they become cramped. */
+@media (max-width: 1120px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "mode"
+      "error"
+      "main"
+      "timeline"
+      "controls";
+  }
+
+  .topbar {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 10px 12px 12px;
+  }
+
+  .topbar-left,
+  .topbar-right {
+    width: 100%;
+  }
+
+  .topbar-right {
+    justify-content: flex-start;
+  }
+
+  .data-status {
+    text-align: left;
+  }
+
+  .topbar-center {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .selector-datetime {
+    grid-column: span 1;
+  }
+
+  #load-btn {
+    width: 100%;
+  }
+
+  .main-layout {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .main {
+    min-height: 500px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .trading-section {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    border-left: none;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .timeline-start-controls {
+    grid-template-columns: minmax(160px, 1fr) minmax(340px, 1.6fr) auto;
+  }
+}
+
+@media (max-width: 800px) {
+  .topbar-center {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .selector-datetime {
+    grid-column: 1 / -1;
+  }
+
+  .datetime-group {
+    grid-template-columns: minmax(0, 1fr) 100px;
+  }
+
+  .timeline-start-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .jump-datetime {
+    grid-template-columns: minmax(0, 1fr) 100px auto;
+  }
+
+  #start-replay-btn {
+    width: 100%;
+  }
+
+  .trading-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .order-panel {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar-center,
+  .trading-panels,
+  .order-buttons,
+  .risk-buttons,
+  .jump-datetime {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .datetime-group {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-banner {
+    align-items: flex-start;
+    padding-inline: 10px;
+  }
+
+  .market-time-full {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .error-panel {
+    margin-inline: 10px;
+  }
+
+  .timeline-section,
+  .controls-section {
+    padding-inline: 10px;
+  }
+
+  .chart-overlay-content {
+    max-width: calc(100vw - 32px);
+    padding: 20px;
+  }
+}
