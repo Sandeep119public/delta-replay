@@ -451,30 +451,51 @@ body {
 .trading-panels {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  gap: 10px;
 }
 .account-panel, .position-panel, .order-panel {
-  background: var(--bg-input);
+  background: #141923;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 10px;
+  padding: 10px 12px;
   min-width: 0;
   overflow: hidden;
 }
-.account-panel h3, .position-panel h3, .order-panel h3,
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(42, 51, 66, 0.5);
+  padding-bottom: 6px;
+}
+.panel-header h3,
 .trades-history h3, .pending-orders h3 {
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.5px;
-  margin-bottom: 8px;
   text-transform: uppercase;
+  margin-bottom: 0;
+}
+.equity-highlight {
+  font-size: 14px;
+  font-weight: 800;
+  color: #34d399;
+  letter-spacing: 0.5px;
+}
+.kv-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
 }
 .kv {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  align-items: center;
+  font-size: 11px;
   padding: 2px 0;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   min-width: 0;
 }
 .kv span:first-child { color: var(--text-muted); flex-shrink: 0; }
@@ -483,8 +504,40 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
   min-width: 0;
 }
+
+/* Order Type Segmented Tabs */
+.order-type-tabs {
+  display: flex;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  margin-bottom: 8px;
+}
+.order-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.order-tab:hover {
+  color: var(--text);
+}
+.order-tab.active {
+  background: #242b38;
+  color: #60a5fa;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
 .order-row {
   display: flex;
   gap: var(--sp-2);
@@ -496,54 +549,107 @@ body {
   font-size: 11px;
   color: var(--text-muted);
   flex-shrink: 0;
-  min-width: 70px;
+  min-width: 60px;
 }
 .order-row input {
   width: 100%;
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: #0d1117 !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
   border-radius: var(--radius);
-  padding: 8px;
-  min-height: 36px;
+  padding: 6px 10px;
+  min-height: 32px;
+  font-size: 13px;
   min-width: 0;
 }
-.order-buttons {
-  display: flex;
-  gap: var(--sp-2);
+
+/* Action Buttons */
+.order-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.order-secondary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
   margin-top: 6px;
 }
-.order-buttons .btn { flex: 1 1 0; min-width: 0; }
-.btn-buy { background: #16a34a; border-color: #16a34a; color: white; }
-.btn-buy:hover:not(:disabled) { background: #15803d; }
-.btn-sell { background: #ef4444; border-color: #ef4444; color: white; }
-.btn-sell:hover:not(:disabled) { background: #dc2626; }
+.btn-buy-main {
+  background: linear-gradient(135deg, #059669, #10b981) !important;
+  border: 1px solid #10b981 !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  min-height: 38px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+  cursor: pointer;
+}
+.btn-buy-main:hover:not(:disabled) {
+  background: linear-gradient(135deg, #10b981, #34d399) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+.btn-sell-main {
+  background: linear-gradient(135deg, #e11d48, #f43f5e) !important;
+  border: 1px solid #f43f5e !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  min-height: 38px;
+  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.25);
+  cursor: pointer;
+}
+.btn-sell-main:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f43f5e, #fb7185) !important;
+  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.4);
+}
+.btn-close-pos {
+  background: #1e242f;
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  font-weight: 600;
+}
+.btn-close-pos:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+}
+
+/* Risk Controls */
 .risk-controls {
   margin-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  border-top: 1px solid rgba(42, 51, 66, 0.5);
+  padding-top: 6px;
 }
 .risk-label {
   font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
 }
-.risk-controls input {
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
+.risk-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.risk-inputs input {
+  background: #0d1117 !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
   border-radius: var(--radius);
-  padding: 6px 8px;
-  min-height: 32px;
-  font-size: 12px;
-  width: 100%;
+  padding: 4px 8px;
+  min-height: 28px;
+  font-size: 11px;
 }
 .risk-buttons {
   display: flex;
   gap: 6px;
+  margin-top: 4px;
 }
-.risk-buttons .btn { flex: 1; }
+.risk-buttons .btn { flex: 1; min-height: 28px; font-size: 11px; padding: 4px 8px; }
+
 .pending-orders, .trades-history {
   min-width: 0;
   display: flex;
@@ -552,12 +658,12 @@ body {
 }
 .trades-list {
   font-size: 11px;
-  max-height: 160px;
-  overflow: auto;
+  max-height: 120px;
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 6px;
-  background: var(--bg-input);
+  background: #0d1117;
   min-width: 0;
   word-break: break-word;
 }
@@ -576,8 +682,8 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pnl-pos { color: var(--green); }
-.pnl-neg { color: var(--red); }
+.pnl-pos { color: #34d399; font-weight: 700; }
+.pnl-neg { color: #f87171; font-weight: 700; }
 
 /* ===== TIMELINE ===== */
 .timeline-section {

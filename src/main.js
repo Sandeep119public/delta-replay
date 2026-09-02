@@ -700,6 +700,10 @@ async function loadAndPrepareReplay({ targetSec = null, autoStart = false } = {}
     controls.setStartIndex(pendingStartIndex);
     timeline.setPosition(pendingStartIndex);
     updatePreviewWindow(pendingStartIndex);
+    const startCandle = candleStore.get(pendingStartIndex);
+    if (startCandle && tradingEngine) {
+      tradingEngine.onMarketCandle({ candle: startCandle, index: pendingStartIndex });
+    }
     startReplayBtn.disabled = false;
     if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
 

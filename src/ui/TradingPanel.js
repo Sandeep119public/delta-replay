@@ -44,8 +44,28 @@ export class TradingPanel {
     this.clearRiskBtn = clearRiskBtn || document.getElementById('btn-clear-risk');
 
     this._bindEvents();
+    this._bindTabs();
     this._updateOrderTypeUI();
     this.render();
+  }
+
+  _bindTabs() {
+    try {
+      const tabs = document.querySelectorAll('.order-tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          const type = tab.getAttribute('data-type');
+          if (this.orderTypeSelect) {
+            this.orderTypeSelect.value = type;
+            this.orderTypeSelect.dispatchEvent(new Event('change'));
+          } else {
+            this._updateOrderTypeUI();
+          }
+        });
+      });
+    } catch {}
   }
 
   _bindEvents() {
@@ -82,7 +102,7 @@ export class TradingPanel {
 
   _getSymbol() {
     const select = document.getElementById('symbol-select');
-    return select ? select.value : 'BTCUSD';
+    return select ? select.value : 'BTCUSDT';
   }
 
   _getOrderType() {
@@ -92,6 +112,12 @@ export class TradingPanel {
 
   _updateOrderTypeUI() {
     const type = this._getOrderType();
+    try {
+      document.querySelectorAll('.order-tab').forEach(t => {
+        if (t.getAttribute('data-type') === type) t.classList.add('active');
+        else t.classList.remove('active');
+      });
+    } catch {}
     if (this.limitPriceRow) {
       if (type === 'LIMIT') this.limitPriceRow.classList.remove('hidden');
       else this.limitPriceRow.classList.add('hidden');

@@ -117,53 +117,69 @@
       <!-- TRADING SIDEBAR -->
       <aside id="trading-panel" class="trading-section" aria-label="Paper trading">
         <div class="trading-header">
-          <h2 class="trading-title">PAPER TRADING</h2>
+          <h2 class="trading-title">⚡ PAPER TRADING</h2>
           <span id="trading-error" class="trading-error hidden" role="alert"></span>
         </div>
         <div class="trading-panels">
           <div class="account-panel">
-            <h3>ACCOUNT</h3>
-            <div class="kv"><span>Balance</span><span id="acct-balance">$10,000.00</span></div>
-            <div class="kv"><span>Equity</span><span id="acct-equity">$10,000.00</span></div>
-            <div class="kv"><span>Realized PnL</span><span id="acct-realized">$0.00</span></div>
-            <div class="kv"><span>Unrealized PnL</span><span id="acct-unrealized">$0.00</span></div>
-            <div class="kv"><span>Fees</span><span id="acct-fees">$0.00</span></div>
+            <div class="panel-header">
+              <h3>ACCOUNT EQUITY</h3>
+              <span id="acct-equity" class="equity-highlight">$10,000.00</span>
+            </div>
+            <div class="kv-grid">
+              <div class="kv"><span>Balance</span><span id="acct-balance">$10,000.00</span></div>
+              <div class="kv"><span>Realized PnL</span><span id="acct-realized">$0.00</span></div>
+              <div class="kv"><span>Unrealized PnL</span><span id="acct-unrealized">$0.00</span></div>
+              <div class="kv"><span>Total Fees</span><span id="acct-fees">$0.00</span></div>
+            </div>
           </div>
           <div class="position-panel">
-            <h3>POSITION</h3>
-            <div class="kv"><span>Symbol</span><span id="pos-symbol">—</span></div>
-            <div class="kv"><span>Side</span><span id="pos-side">—</span></div>
-            <div class="kv"><span>Qty</span><span id="pos-qty">—</span></div>
-            <div class="kv"><span>Entry</span><span id="pos-entry">—</span></div>
-            <div class="kv"><span>Current</span><span id="pos-current">—</span></div>
-            <div class="kv"><span>PnL</span><span id="pos-pnl">—</span></div>
-            <div class="kv"><span>Stop Loss</span><span id="pos-sl">—</span></div>
-            <div class="kv"><span>Take Profit</span><span id="pos-tp">—</span></div>
+            <div class="panel-header">
+              <h3>ACTIVE POSITION</h3>
+              <span id="pos-side-badge" class="pos-badge hidden">—</span>
+            </div>
+            <div class="kv-grid">
+              <div class="kv"><span>Symbol</span><span id="pos-symbol">—</span></div>
+              <div class="kv"><span>Side</span><span id="pos-side">—</span></div>
+              <div class="kv"><span>Size</span><span id="pos-qty">—</span></div>
+              <div class="kv"><span>Entry Price</span><span id="pos-entry">—</span></div>
+              <div class="kv"><span>Mark Price</span><span id="pos-current">—</span></div>
+              <div class="kv"><span>Unrealized PnL</span><span id="pos-pnl">—</span></div>
+              <div class="kv"><span>Stop Loss</span><span id="pos-sl">—</span></div>
+              <div class="kv"><span>Take Profit</span><span id="pos-tp">—</span></div>
+            </div>
             <div class="risk-controls">
-              <label class="risk-label" for="sl-price">Set Risk (when position open)</label>
-              <input id="sl-price" type="number" min="0.0001" step="0.01" placeholder="Stop Loss price" aria-label="Stop Loss price" />
-              <input id="tp-price" type="number" min="0.0001" step="0.01" placeholder="Take Profit price" aria-label="Take Profit price" />
+              <label class="risk-label" for="sl-price">Set Position Risk</label>
+              <div class="risk-inputs">
+                <input id="sl-price" type="number" min="0.0001" step="0.01" placeholder="Stop Loss (SL)" aria-label="Stop Loss price" />
+                <input id="tp-price" type="number" min="0.0001" step="0.01" placeholder="Take Profit (TP)" aria-label="Take Profit price" />
+              </div>
               <div class="risk-buttons">
-                <button id="btn-set-risk" class="btn btn-secondary" disabled>SET SL/TP</button>
-                <button id="btn-clear-risk" class="btn" disabled>CLEAR</button>
+                <button id="btn-set-risk" class="btn btn-primary" disabled>SET SL/TP</button>
+                <button id="btn-clear-risk" class="btn btn-secondary" disabled>CLEAR</button>
               </div>
             </div>
           </div>
           <div class="order-panel">
-            <h3>ORDER</h3>
-            <div class="order-row">
-              <label for="order-type">Type</label>
-              <select id="order-type" aria-label="Order type">
-                <option value="MARKET" selected>Market</option>
-                <option value="LIMIT">Limit</option>
-                <option value="STOP_MARKET">Stop</option>
-              </select>
+            <div class="panel-header">
+              <h3>PLACE ORDER</h3>
             </div>
+            <div class="order-type-tabs">
+              <button type="button" class="order-tab active" data-type="MARKET">Market</button>
+              <button type="button" class="order-tab" data-type="LIMIT">Limit</button>
+              <button type="button" class="order-tab" data-type="STOP_MARKET">Stop</button>
+            </div>
+            <select id="order-type" class="hidden" aria-label="Order type">
+              <option value="MARKET" selected>Market</option>
+              <option value="LIMIT">Limit</option>
+              <option value="STOP_MARKET">Stop</option>
+            </select>
             <div class="order-row">
-              <label for="trade-qty">Qty</label>
+              <label for="trade-qty">Quantity</label>
               <div class="qty-input-wrap">
                 <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" aria-label="Trade quantity" />
                 <div class="qty-presets">
+                  <button type="button" class="qty-chip" data-qty="0.05">0.05</button>
                   <button type="button" class="qty-chip" data-qty="0.1">0.1</button>
                   <button type="button" class="qty-chip" data-qty="0.5">0.5</button>
                   <button type="button" class="qty-chip" data-qty="1">1.0</button>
@@ -178,13 +194,13 @@
               <label for="stop-price">Stop Price</label>
               <input id="stop-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" aria-label="Stop price" />
             </div>
-            <div class="order-buttons">
-              <button id="btn-buy" class="btn btn-buy" disabled>BUY MARKET</button>
-              <button id="btn-sell" class="btn btn-sell" disabled>SELL MARKET</button>
+            <div class="order-actions-grid">
+              <button id="btn-buy" class="btn btn-buy-main" disabled>BUY / LONG</button>
+              <button id="btn-sell" class="btn btn-sell-main" disabled>SELL / SHORT</button>
             </div>
-            <div class="order-buttons">
-              <button id="btn-close" class="btn" disabled>CLOSE POSITION</button>
-              <button id="btn-reset-acct" class="btn btn-secondary">RESET ACCOUNT</button>
+            <div class="order-secondary-grid">
+              <button id="btn-close" class="btn btn-close-pos" disabled>CLOSE POSITION</button>
+              <button id="btn-reset-acct" class="btn btn-secondary">RESET ACCT</button>
             </div>
           </div>
         </div>
