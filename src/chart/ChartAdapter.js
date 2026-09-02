@@ -21,39 +21,33 @@ export class ChartAdapter {
       return visible.length > WINDOW ? visible.slice(-WINDOW) : visible;
     };
 
-    const render = (index, fit = false) => {
+    const render = (index) => {
       const window = visibleWindow();
-      const last = window[window.length - 1];
-      if (!last) {
+      if (!window.length) {
         this.chart.clear();
         this._lastRenderedIndex = -1;
         return;
       }
 
-      // The chart is rendered from the ReplayEngine snapshot itself. Do not
-      // maintain a second incremental candle queue here: the engine is the
-      // authoritative replay cursor and visible-candle set.
-      this.chart.renderReplayWindow?.(window, { fit });
-      if (!this.chart.renderReplayWindow) {
-        this.chart.setRevealedMax?.(last.time);
-        this.chart.setData(window, { fit });
+      // Full redraw from the authoritative replay snapshot. This deliberately
+      // avoids lightweight-charts incremental-update state and guarantees the
+      // chart contents match the replay cursor exactly.
+      if (typeof this.chart.renderReplayWindow === 'function') {
+        this.chart.renderReplayWindow(window, { fit: true });
+      } else {
+        this.chart.setRevealedMax?.(window[window.length - 1].time);
+        this.chart.setData(window, { fit: true });
       }
       this._lastRenderedIndex = index;
     };
 
-    this._unsubs.push(this.engine.on(ReplayEvents.STARTED, ({ index }) => render(index, true)));
-    this._unsubs.push(this.engine.on(ReplayEvents.SEEKED, ({ index }) => render(index, true)));
+    this._unsubs.push(this.engine.on(ReplayEvents.STARTED, ({ index }) => render(index)));
+    this._unsubs.push(this.engine.on(ReplayEvents.SEEKED, ({ index }) => render(index)));
     this._unsubs.push(this.engine.on(ReplayEvents.RESET, (payload) => {
-      const index = payload?.index ?? this.engine.getState().currentIndex;
-      render(index, true);
+      render(payload?.index ?? this.engine.getState().currentIndex);
     }));
-
-    // Forward replay is deliberately a full bounded-window render. This is
-    // O(1000) per candle and avoids all lightweight-charts incremental-update
-    // state/order problems while remaining bounded for large datasets.
     this._unsubs.push(this.engine.on(ReplayEvents.STEPPED, ({ index }) => {
-      if (index <= this._lastRenderedIndex) return;
-      render(index, false);
+      if (index > this._lastRenderedIndex) render(index);
     }));
   }
 
