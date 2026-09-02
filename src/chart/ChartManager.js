@@ -49,6 +49,13 @@ export class ChartManager {
     this._autoFollow = true;
     this._isUserPanning = false;
 
+    // Trading visual overlays
+    this._positionLine = null;
+    this._stopLossLine = null;
+    this._takeProfitLine = null;
+    this._orderLines = new Map();
+    this._onChartClickCallbacks = [];
+
     this._resizeObserver = new ResizeObserver(() => this.resize());
     this._resizeObserver.observe(this.container);
     window.addEventListener('resize', this._onWindowResize);
@@ -61,6 +68,16 @@ export class ChartManager {
           if (this._autoFollow) { this._autoFollow = false; this._emitAutoFollowChanged(); }
         } else if (range.to >= this._revealedMaxTime) {
           if (!this._autoFollow) { this._autoFollow = true; this._emitAutoFollowChanged(); }
+        }
+      });
+
+      this.chart.subscribeClick((param) => {
+        if (!param || !param.point || !this.series) return;
+        const price = this.coordinateToPrice(param.point.y);
+        if (price != null && Number.isFinite(price)) {
+          this._onChartClickCallbacks.forEach(cb => {
+            try { cb({ price, point: param.point, time: param.time }); } catch {}
+          });
         }
       });
     } catch {}
@@ -241,11 +258,192 @@ export class ChartManager {
     try { this.chart.timeScale().scrollToPosition(3, false); } catch {}
   }
 
+  coordinateToPrice(y) {
+    if (!this.series || !Number.isFinite(y)) return null;
+    try {
+      return this.series.coordinateToPrice(y);
+    } catch {
+      return null;
+    }
+  }
+
+  onChartClick(cb) {
+    if (typeof cb === 'function') {
+      this._onChartClickCallbacks.push(cb);
+    }
+  }
+
+  updatePositionLines(position) {
+    if (!this.series) return;
+
+    if (!position || !Number.isFinite(Number(position.entryPrice))) {
+      this.clearPositionLines();
+      return;
+    }
+
+    const isLong = position.side === 'LONG';
+    const entryPrice = Number(position.entryPrice);
+    const posColor = isLong ? '#10b981' : '#f43f5e';
+    const title = `${position.side} ${position.quantity} @ ${entryPrice.toFixed(2)}`;
+
+    // 1. Position Entry Line
+    if (!this._positionLine) {
+      try {
+        this._positionLine = this.series.createPriceLine({
+          price: entryPrice,
+          color: posColor,
+          lineWidth: 2,
+          lineStyle: 0, // Solid
+          axisLabelVisible: true,
+          title,
+        });
+      } catch {}
+    } else {
+      try {
+        this._positionLine.applyOptions({
+          price: entryPrice,
+          color: posColor,
+          title,
+        });
+      } catch {}
+    }
+
+    // 2. Stop Loss Line
+    const sl = position.stopLossPrice != null ? Number(position.stopLossPrice) : null;
+    if (sl != null && Number.isFinite(sl) && sl > 0) {
+      const slTitle = `SL: ${sl.toFixed(2)}`;
+      if (!this._stopLossLine) {
+        try {
+          this._stopLossLine = this.series.createPriceLine({
+            price: sl,
+            color: '#ef4444',
+            lineWidth: 2,
+            lineStyle: 2, // Dashed
+            axisLabelVisible: true,
+            title: slTitle,
+          });
+        } catch {}
+      } else {
+        try {
+          this._stopLossLine.applyOptions({
+            price: sl,
+            color: '#ef4444',
+            title: slTitle,
+          });
+        } catch {}
+      }
+    } else if (this._stopLossLine) {
+      try { this.series.removePriceLine(this._stopLossLine); } catch {}
+      this._stopLossLine = null;
+    }
+
+    // 3. Take Profit Line
+    const tp = position.takeProfitPrice != null ? Number(position.takeProfitPrice) : null;
+    if (tp != null && Number.isFinite(tp) && tp > 0) {
+      const tpTitle = `TP: ${tp.toFixed(2)}`;
+      if (!this._takeProfitLine) {
+        try {
+          this._takeProfitLine = this.series.createPriceLine({
+            price: tp,
+            color: '#10b981',
+            lineWidth: 2,
+            lineStyle: 2, // Dashed
+            axisLabelVisible: true,
+            title: tpTitle,
+          });
+        } catch {}
+      } else {
+        try {
+          this._takeProfitLine.applyOptions({
+            price: tp,
+            color: '#10b981',
+            title: tpTitle,
+          });
+        } catch {}
+      }
+    } else if (this._takeProfitLine) {
+      try { this.series.removePriceLine(this._takeProfitLine); } catch {}
+      this._takeProfitLine = null;
+    }
+  }
+
+  clearPositionLines() {
+    if (this._positionLine) {
+      try { this.series?.removePriceLine(this._positionLine); } catch {}
+      this._positionLine = null;
+    }
+    if (this._stopLossLine) {
+      try { this.series?.removePriceLine(this._stopLossLine); } catch {}
+      this._stopLossLine = null;
+    }
+    if (this._takeProfitLine) {
+      try { this.series?.removePriceLine(this._takeProfitLine); } catch {}
+      this._takeProfitLine = null;
+    }
+  }
+
+  updateOrderLines(orders) {
+    if (!this.series) return;
+    const pending = Array.isArray(orders) ? orders.filter(o => o && o.status === 'PENDING') : [];
+    const activeIds = new Set(pending.map(o => o.id));
+
+    // Remove obsolete order lines
+    if (this._orderLines) {
+      for (const [id, line] of this._orderLines.entries()) {
+        if (!activeIds.has(id)) {
+          try { this.series.removePriceLine(line); } catch {}
+          this._orderLines.delete(id);
+        }
+      }
+    } else {
+      this._orderLines = new Map();
+    }
+
+    // Create / update active pending order lines
+    for (const o of pending) {
+      const price = Number(o.stopPrice ?? o.limitPrice);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      const isBuy = o.side === 'BUY';
+      const color = o.type === 'STOP_MARKET' ? '#f59e0b' : (isBuy ? '#38bdf8' : '#fb923c');
+      const typeLabel = o.type === 'STOP_MARKET' ? 'STOP' : 'LIMIT';
+      const title = `${typeLabel} ${o.side} ${o.quantity} @ ${price.toFixed(2)}`;
+
+      const existing = this._orderLines.get(o.id);
+      if (existing) {
+        try { existing.applyOptions({ price, color, title }); } catch {}
+      } else {
+        try {
+          const line = this.series.createPriceLine({
+            price,
+            color,
+            lineWidth: 1,
+            lineStyle: 1, // Dotted
+            axisLabelVisible: true,
+            title,
+          });
+          if (line) this._orderLines.set(o.id, line);
+        } catch {}
+      }
+    }
+  }
+
+  clearTradingLines() {
+    this.clearPositionLines();
+    if (this._orderLines) {
+      for (const line of this._orderLines.values()) {
+        try { this.series?.removePriceLine(line); } catch {}
+      }
+      this._orderLines.clear();
+    }
+  }
+
   clear() {
+    this.clearTradingLines();
     if (this.series) this.series.setData([]);
   }
 
   destroy() {
+    this.clearTradingLines();
     window.removeEventListener('resize', this._onWindowResize);
     if (this._resizeObserver) this._resizeObserver.disconnect();
     if (this.chart) {

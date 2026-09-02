@@ -633,6 +633,132 @@ const tradingPanel = new TradingPanel({
   clearRiskBtn: document.getElementById('btn-clear-risk'),
 });
 
+// ===== CHART TRADING OVERLAYS & INTERACTIVE CLICK =====
+const chartFloatingBar = document.getElementById('chart-floating-bar');
+const chartPosBadge = document.getElementById('chart-pos-badge');
+const chartPosEntry = document.getElementById('chart-pos-entry');
+const chartPosPnl = document.getElementById('chart-pos-pnl');
+const btnChartClose = document.getElementById('btn-chart-close');
+const chartToast = document.getElementById('chart-toast');
+let toastTimeout = null;
+
+function showTradingToast(msg) {
+  if (!chartToast) return;
+  chartToast.textContent = msg;
+  chartToast.classList.remove('hidden');
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    chartToast.classList.add('hidden');
+  }, 2500);
+}
+
+function updateChartPositionPill(pos) {
+  if (!chartFloatingBar) return;
+  if (!pos) {
+    chartFloatingBar.classList.add('hidden');
+    return;
+  }
+  chartFloatingBar.classList.remove('hidden');
+  if (chartPosBadge) {
+    chartPosBadge.textContent = `${pos.side} ${pos.quantity}`;
+    chartPosBadge.className = `chart-pos-badge ${pos.side === 'LONG' ? 'pos-long' : 'pos-short'}`;
+  }
+  if (chartPosEntry) {
+    chartPosEntry.textContent = `@ $${Number(pos.entryPrice).toFixed(2)}`;
+  }
+  if (chartPosPnl) {
+    const pnl = Number(pos.unrealizedPnL || 0);
+    chartPosPnl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+    chartPosPnl.className = `chart-pos-pnl ${pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
+  }
+}
+
+if (btnChartClose) {
+  btnChartClose.addEventListener('click', () => {
+    const positions = tradingEngine.getPositions();
+    if (positions.length > 0) {
+      tradingEngine.closePosition(positions[0].symbol);
+    }
+  });
+}
+
+function syncChartTradingLines() {
+  const positions = tradingEngine.getPositions();
+  const activePos = positions.length > 0 ? positions[0] : null;
+  chartManager.updatePositionLines(activePos);
+  
+  const pendingOrders = tradingEngine.getPendingOrders ? tradingEngine.getPendingOrders() : [];
+  chartManager.updateOrderLines(pendingOrders);
+  updateChartPositionPill(activePos);
+}
+
+tradingEngine.on('positionOpened', syncChartTradingLines);
+tradingEngine.on('positionUpdated', syncChartTradingLines);
+tradingEngine.on('positionClosed', () => {
+  chartManager.updatePositionLines(null);
+  updateChartPositionPill(null);
+  syncChartTradingLines();
+});
+tradingEngine.on('accountReset', () => {
+  chartManager.clearTradingLines();
+  updateChartPositionPill(null);
+});
+tradingEngine.on('orderPlaced', syncChartTradingLines);
+tradingEngine.on('orderTriggered', syncChartTradingLines);
+tradingEngine.on('orderFilled', syncChartTradingLines);
+tradingEngine.on('orderCancelled', syncChartTradingLines);
+tradingEngine.on('stopLossTriggered', syncChartTradingLines);
+tradingEngine.on('takeProfitTriggered', syncChartTradingLines);
+
+// Interactive Chart Click Handler for SL / TP / Orders
+chartManager.onChartClick(({ price }) => {
+  if (!Number.isFinite(price) || price <= 0) return;
+  const positions = tradingEngine.getPositions();
+  if (positions.length > 0) {
+    const p = positions[0];
+    const isLong = p.side === 'LONG';
+    const entryPrice = Number(p.entryPrice);
+    
+    // Determine whether clicked price is TP or SL based on position direction
+    const isTP = isLong ? (price > entryPrice) : (price < entryPrice);
+    const slInput = document.getElementById('sl-price');
+    const tpInput = document.getElementById('tp-price');
+    
+    if (isTP) {
+      const res = tradingEngine.setTakeProfit(p.symbol, price);
+      if (res.success) {
+        if (tpInput) tpInput.value = price.toFixed(2);
+        showTradingToast(`Take Profit set to $${price.toFixed(2)}`);
+      } else {
+        showTradingError(res.message);
+      }
+    } else {
+      const res = tradingEngine.setStopLoss(p.symbol, price);
+      if (res.success) {
+        if (slInput) slInput.value = price.toFixed(2);
+        showTradingToast(`Stop Loss set to $${price.toFixed(2)}`);
+      } else {
+        showTradingError(res.message);
+      }
+    }
+    syncChartTradingLines();
+    tradingPanel.render();
+  } else {
+    // Fill active Limit / Stop price input in the order form if selected
+    const limitInput = document.getElementById('limit-price');
+    const stopInput = document.getElementById('stop-price');
+    const orderTypeSelect = document.getElementById('order-type');
+    const type = orderTypeSelect ? orderTypeSelect.value : 'MARKET';
+    if (type === 'LIMIT' && limitInput) {
+      limitInput.value = price.toFixed(2);
+      showTradingToast(`Limit Price set to $${price.toFixed(2)}`);
+    } else if (type === 'STOP_MARKET' && stopInput) {
+      stopInput.value = price.toFixed(2);
+      showTradingToast(`Stop Price set to $${price.toFixed(2)}`);
+    }
+  }
+});
+
 // ===== JUMP =====
 function handleJump() {
   jumpError.classList.add('hidden'); jumpError.textContent = '';

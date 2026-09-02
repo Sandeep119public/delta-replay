@@ -107,6 +107,23 @@
       <!-- CHART AREA -->
       <main class="main" role="main" aria-label="Chart">
         <div id="chart-container" class="chart-container"></div>
+        
+        <!-- On-Chart Floating Trading Status Bar -->
+        <div id="chart-floating-bar" class="chart-floating-bar hidden">
+          <div class="chart-floating-left">
+            <span id="chart-pos-badge" class="chart-pos-badge">LONG 1.0</span>
+            <span id="chart-pos-entry" class="chart-pos-entry">@ $65,000.00</span>
+            <span id="chart-pos-pnl" class="chart-pos-pnl pnl-pos">+$0.00</span>
+          </div>
+          <div class="chart-floating-right">
+            <span class="chart-click-hint">🎯 Click chart to set SL / TP</span>
+            <button id="btn-chart-close" type="button" class="btn btn-xs btn-chart-close">✕ Close</button>
+          </div>
+        </div>
+
+        <!-- On-Chart Notification Toast -->
+        <div id="chart-toast" class="chart-toast hidden" role="status"></div>
+
         <div id="chart-overlay" class="chart-overlay hidden">
           <div class="chart-overlay-content">
             <p id="overlay-text"></p>
