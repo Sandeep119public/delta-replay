@@ -524,3 +524,156 @@ input:disabled {
     padding: 20px;
   }
 }
+
+/* FINAL DESKTOP VIEWPORT FIT */
+@media (min-width: 1121px) {
+  html,
+  body {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #app {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows: auto auto auto minmax(0, 1fr) 132px 62px;
+  }
+
+  .main-layout,
+  .main,
+  .chart-container,
+  .trading-section {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .main-layout {
+    overflow: hidden;
+  }
+
+  .trading-section {
+    overflow: hidden;
+  }
+
+  /* Do not waste half the sidebar on disabled risk controls. */
+  .position-panel:has(#btn-set-risk:disabled) .risk-controls {
+    display: none;
+  }
+
+  .trading-panels {
+    gap: 8px;
+  }
+
+  .account-panel,
+  .position-panel,
+  .order-panel {
+    padding: 8px;
+  }
+
+  .account-panel h3,
+  .position-panel h3,
+  .order-panel h3,
+  .pending-orders h3,
+  .trades-history h3 {
+    margin-bottom: 5px;
+  }
+
+  .kv {
+    padding: 2px 0;
+    line-height: 1.15;
+  }
+
+  .order-row {
+    margin-bottom: 4px;
+  }
+
+  .order-row input,
+  .order-row select,
+  .order-buttons .btn,
+  .risk-buttons .btn {
+    min-height: 31px;
+  }
+
+  .pending-orders,
+  .trades-history {
+    min-height: 0;
+  }
+
+  .trades-list {
+    max-height: 48px;
+    min-height: 30px;
+    overflow: auto;
+    padding: 4px 6px;
+  }
+
+  .timeline-section {
+    height: 132px;
+    min-height: 0;
+    padding: 7px 16px;
+    overflow: hidden;
+  }
+
+  .timeline-track-wrap {
+    margin: 2px 0 4px;
+  }
+
+  #timeline-slider {
+    height: 22px;
+  }
+
+  .timeline-start-controls {
+    margin-top: 3px;
+    gap: 8px;
+  }
+
+  #jump-btn,
+  #start-replay-btn {
+    min-height: 32px;
+  }
+
+  .controls-section {
+    height: 62px;
+    min-height: 0;
+    padding: 5px 16px 7px;
+    overflow: hidden;
+  }
+
+  .controls-row {
+    min-height: 32px;
+  }
+
+  .controls-row .btn,
+  #speed-select {
+    min-height: 31px;
+  }
+
+  .shortcuts-hint {
+    margin-top: 2px;
+    line-height: 1.1;
+  }
+
+  /* An error must not push the timeline below the viewport. */
+  .error-panel {
+    max-height: 92px;
+    margin-top: 6px;
+    padding: 8px 12px;
+    overflow: hidden;
+  }
+
+  .error-panel-header {
+    margin-bottom: 3px;
+  }
+
+  .error-panel-actions {
+    margin-top: 4px;
+  }
+
+  .error-panel-context {
+    max-height: 28px;
+    overflow: auto;
+  }
+}
