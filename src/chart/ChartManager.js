@@ -21,9 +21,9 @@ export class ChartManager {
         timeVisible: true,
         secondsVisible: false,
         borderColor: '#242b38',
-        rightOffset: 8,
-        barSpacing: 9,
-        minBarSpacing: 3,
+        rightOffset: 12,
+        barSpacing: 10,
+        minBarSpacing: 4,
       },
       rightPriceScale: {
         borderColor: '#242b38',
@@ -37,9 +37,12 @@ export class ChartManager {
     this.series = this.chart.addCandlestickSeries({
       upColor: '#089981',
       downColor: '#f23645',
+      borderVisible: true,
+      borderUpColor: '#089981',
+      borderDownColor: '#f23645',
       wickUpColor: '#089981',
       wickDownColor: '#f23645',
-      borderVisible: false
+      wickVisible: true,
     });
 
     this._revealedMaxTime = null;

@@ -525,11 +525,33 @@ function selectPreset(presetKey) {
   const nowSec = Math.floor(Date.now() / 1000);
   let targetSec = nowSec - 86400;
 
-  if (presetKey === '1d') targetSec = nowSec - 86400;
-  else if (presetKey === '3d') targetSec = nowSec - 3 * 86400;
-  else if (presetKey === '7d') targetSec = nowSec - 7 * 86400;
-  else if (presetKey === '30d') targetSec = nowSec - 30 * 86400;
-  else if (presetKey === 'now') targetSec = nowSec - 12 * 3600;
+  if (presetKey === '1d') {
+    targetSec = nowSec - 86400;
+    if (timeframeSelect && appState.timeframe === '1m') {
+      timeframeSelect.value = '5m';
+      appState.timeframe = '5m';
+    }
+  } else if (presetKey === '3d') {
+    targetSec = nowSec - 3 * 86400;
+    if (timeframeSelect && (appState.timeframe === '1m' || appState.timeframe === '3m')) {
+      timeframeSelect.value = '15m';
+      appState.timeframe = '15m';
+    }
+  } else if (presetKey === '7d') {
+    targetSec = nowSec - 7 * 86400;
+    if (timeframeSelect && ['1m', '3m', '5m'].includes(appState.timeframe)) {
+      timeframeSelect.value = '1h';
+      appState.timeframe = '1h';
+    }
+  } else if (presetKey === '30d') {
+    targetSec = nowSec - 30 * 86400;
+    if (timeframeSelect && ['1m', '3m', '5m', '15m'].includes(appState.timeframe)) {
+      timeframeSelect.value = '1h';
+      appState.timeframe = '1h';
+    }
+  } else if (presetKey === 'now') {
+    targetSec = nowSec - 6 * 3600;
+  }
 
   const dt = unixToDateTimeInput(targetSec);
   if (replayDateEl) replayDateEl.value = dt.date;
