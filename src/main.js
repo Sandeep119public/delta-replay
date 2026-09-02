@@ -643,6 +643,10 @@ function handleJump() {
   try { target = toUnixSeconds(jumpDateEl.value, jumpTimeEl.value || '00:00'); } catch (e) { jumpError.textContent = e.message; jumpError.classList.remove('hidden'); return; }
   const idx = findClosestIndex(target);
   if (idx < 0) { jumpError.textContent = 'No candle found for that time'; jumpError.classList.remove('hidden'); return; }
+  const c = candleStore.get(idx) || appState.candles[idx];
+  if (c && Math.abs(c.time - target) > 86400 && dataStatus) {
+    dataStatus.textContent = `Jumped to nearest candle: ${formatTime(c.time)}`;
+  }
   const st = engine.getState();
   if (st.status === 'idle' || st.status === 'ready') {
     pendingStartIndex = idx; controls.setStartIndex(idx); timeline.setPosition(idx); updateProgress(st); updatePreviewWindow(idx);
@@ -835,9 +839,20 @@ if (headerStartReplayBtn) {
   headerStartReplayBtn.addEventListener('click', () => {
     const st = engine.getState();
     const hasData = candleStore.getCount() > 0 || appState.candles.length > 0;
-    if (hasData && st.status === 'ready') {
+    if (!hasData) {
+      loadAndPrepareReplay({ autoStart: true });
+      return;
+    }
+    if (st.status === 'ready') {
       engine.start(pendingStartIndex);
-    } else if (hasData && st.status === 'paused') {
+      engine.play();
+    } else if (st.status === 'paused') {
+      engine.play();
+    } else if (st.status === 'playing') {
+      engine.pause();
+    } else if (st.status === 'ended') {
+      engine.reset();
+      engine.start(pendingStartIndex);
       engine.play();
     } else {
       loadAndPrepareReplay({ autoStart: true });
@@ -922,7 +937,11 @@ sliderEl.addEventListener('change', () => {
   const st = engine.getState();
   if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
     if (st.status === 'playing') { try { engine.pause(); } catch {} }
-    trySeek(idx);
+    const ok = trySeek(idx);
+    if (!ok) {
+      sliderEl.value = String(st.currentIndex);
+      timeline.setPosition(st.currentIndex);
+    }
   } else {
     pendingStartIndex = idx; controls.setStartIndex(idx); updateProgress(st); updatePreviewWindow(idx);
   }
@@ -937,13 +956,27 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
     e.preventDefault();
     const s = engine.getState();
-    if (s.status === 'paused' || s.status === 'ready') engine.play();
-    else if (s.status === 'playing') engine.pause();
+    const hasData = candleStore.getCount() > 0 || appState.candles.length > 0;
+    if (!hasData) return;
+    if (s.status === 'ready') {
+      engine.start(pendingStartIndex);
+      engine.play();
+    } else if (s.status === 'paused') {
+      engine.play();
+    } else if (s.status === 'playing') {
+      engine.pause();
+    } else if (s.status === 'ended') {
+      engine.reset();
+      engine.start(pendingStartIndex);
+      engine.play();
+    }
   } else if (e.code === 'ArrowRight') {
     e.preventDefault();
     try { engine.stepForward(); } catch {}
   } else if (e.code === 'KeyR') {
     e.preventDefault();
+    const hasData = candleStore.getCount() > 0 || appState.candles.length > 0;
+    if (!hasData) return;
     engine.reset();
     const st = engine.getState();
     if (st.status === 'ready') {
@@ -951,6 +984,10 @@ document.addEventListener('keydown', (e) => {
       timeline.setTotal(candleStore.getCount() || appState.candles.length, candleStore.getAll().length ? candleStore.getAll() : appState.candles);
       controls.setStartIndex(pendingStartIndex);
       startReplayBtn.disabled = false;
+    } else if (st.status === 'paused' && st.currentIndex >= 0) {
+      updateRevealedMax(st.currentIndex);
+      timeline.setPosition(st.currentIndex);
+      applyWindowedChart(st.currentIndex);
     }
   } else if (e.code === 'Escape') {
     const s = engine.getState();

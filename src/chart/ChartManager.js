@@ -56,16 +56,11 @@ export class ChartManager {
     try {
       this.chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
         if (!range || this._revealedMaxTime == null || this._isUserPanning) return;
-        const tolerance = 60;
-        if (range.to < this._revealedMaxTime - tolerance) {
+        // User scrolled back into history
+        if (range.to < this._revealedMaxTime) {
           if (this._autoFollow) { this._autoFollow = false; this._emitAutoFollowChanged(); }
-        } else if (Math.abs(range.to - this._revealedMaxTime) <= tolerance) {
+        } else if (range.to >= this._revealedMaxTime) {
           if (!this._autoFollow) { this._autoFollow = true; this._emitAutoFollowChanged(); }
-        }
-        if (range.to > this._revealedMaxTime) {
-          this._isUserPanning = true;
-          try { this.chart.timeScale().setVisibleRange({ from: range.from, to: this._revealedMaxTime }); } catch {}
-          setTimeout(() => { this._isUserPanning = false; }, 50);
         }
       });
     } catch {}
@@ -93,12 +88,12 @@ export class ChartManager {
       let close = Number(c.close);
       const prev = i > 0 ? candles[i - 1] : null;
 
-      // When Delta returns sparse flat ticks where open == close and high == low:
+      // When Delta/providers return sparse flat ticks where open == close and high == low:
       if (high <= low || Math.abs(high - low) < 1e-4) {
         if (prev && Number.isFinite(Number(prev.close)) && Math.abs(Number(prev.close) - close) > 0.01) {
           open = Number(prev.close);
         }
-        const tickSpread = Math.max(0.2, close * 0.00015);
+        const tickSpread = Math.max(close * 0.00015, Math.abs(close) > 0 ? Math.abs(close) * 0.00001 : 0.0001);
         high = Math.max(open, close) + tickSpread * 0.5;
         low = Math.min(open, close) - tickSpread * 0.5;
       } else if (open === close && prev && Math.abs(Number(prev.close) - close) > 0.01) {
@@ -118,6 +113,16 @@ export class ChartManager {
     return result;
   }
 
+  _detectPrecision(candles) {
+    if (!candles || !candles.length) return { type: 'price', precision: 2, minMove: 0.01 };
+    const sample = candles[0];
+    const price = sample?.close || sample?.open || 100;
+    if (price < 0.1) return { type: 'price', precision: 6, minMove: 0.000001 };
+    if (price < 1) return { type: 'price', precision: 4, minMove: 0.0001 };
+    if (price < 10) return { type: 'price', precision: 4, minMove: 0.0001 };
+    return { type: 'price', precision: 2, minMove: 0.01 };
+  }
+
   setData(candles, { fit = true } = {}) {
     if (!this.series) throw new Error('Chart not initialized');
     const source = Array.isArray(candles) ? candles : [];
@@ -127,6 +132,9 @@ export class ChartManager {
     const prepared = this._prepareCandlesForChart(filtered);
     this._isUserPanning = true;
     try {
+      if (prepared.length) {
+        try { this.series.applyOptions({ priceFormat: this._detectPrecision(prepared) }); } catch {}
+      }
       this.series.setData(prepared);
       try { this.chart.priceScale('right').applyOptions({ autoScale: true }); } catch {}
       if (fit && prepared.length) {
@@ -159,6 +167,9 @@ export class ChartManager {
     const prepared = this._prepareCandlesForChart(valid);
     this._isUserPanning = true;
     try {
+      if (prepared.length) {
+        try { this.series.applyOptions({ priceFormat: this._detectPrecision(prepared) }); } catch {}
+      }
       this.series.setData(prepared);
       // Force the price scale to recalculate from the new dataset.
       try { this.chart.priceScale('right').applyOptions({ autoScale: true }); } catch {}

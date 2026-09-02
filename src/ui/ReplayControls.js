@@ -83,7 +83,7 @@ export class ReplayControls {
 
     this.stepBtn.disabled = !(isPaused && state.currentIndex < state.totalCandles - 1);
     this.resetBtn.disabled = !hasData || isIdle || isReady;
-    this.speedSelect.disabled = !hasData || isIdle || isReady;
+    this.speedSelect.disabled = !hasData || isIdle;
 
     // The start button is a pre-play control. PLAY/STEP become the active
     // controls only after a replay start event moves the engine to PAUSED.
