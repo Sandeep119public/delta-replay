@@ -3,7 +3,7 @@ import { EventEmitter } from '../core/EventEmitter.js';
 export class AppState extends EventEmitter {
   constructor() {
     super();
-    this.symbol = 'BTCUSD';
+    this.symbol = 'BTCUSDT';
     this.timeframe = '1m';
     this._candles = []; // legacy direct storage (used when no store)
     this._store = null; // CandleStore reference if available

@@ -128,9 +128,10 @@ export class DeltaCandleProvider extends CandleProvider {
       if (chunkEnd <= chunkStart) chunkEnd = resolvedTo;
 
       let rawChunk;
+      const apiSymbol = symbol === 'BTCUSD' ? 'BTCUSDT' : (symbol === 'ETHUSD' ? 'ETHUSDT' : symbol);
       try {
         rawChunk = await this.client.fetchCandles({
-          symbol,
+          symbol: apiSymbol,
           resolution,
           start: chunkStart,
           end: chunkEnd,

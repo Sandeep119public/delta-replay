@@ -189,9 +189,10 @@ export class HistoricalDataManager extends EventEmitter {
     // Concurrency limited fetch with retry
     const fetchChunkWithRetry = async (chunk, attempt = 0) => {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const apiSymbol = symbol === 'BTCUSD' ? 'BTCUSDT' : (symbol === 'ETHUSD' ? 'ETHUSDT' : symbol);
       try {
         const raw = await this.provider.client.fetchCandles({
-          symbol,
+          symbol: apiSymbol,
           resolution: timeframe,
           start: chunk.from,
           end: chunk.to,
