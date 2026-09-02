@@ -68,13 +68,14 @@ export class Timeline {
   }
 
   _updateLabels(idx) {
-    this.indexLabel.textContent = `${idx} / ${this._total > 0 ? this._total - 1 : 0}`;
+    this.indexLabel.textContent = `${idx + 1} / ${this._total > 0 ? this._total : 0}`;
     const t = this._times?.[idx] ?? this._candles?.[idx]?.time;
-    this.timeLabel.textContent = Number.isFinite(t) ? formatTime(t) : '—';
-    this.currentLabel.textContent = Number.isFinite(t) ? formatTime(t) : '—';
-    this.startIndexLabel.textContent = `Replay start: ${idx}`;
+    const timeStr = Number.isFinite(t) ? formatTime(t) : '—';
+    this.timeLabel.textContent = timeStr;
+    this.currentLabel.textContent = timeStr;
+    this.startIndexLabel.textContent = `Replay cursor: #${idx + 1} of ${this._total}`;
     if (this.startTimeLabelEl) {
-      this.startTimeLabelEl.textContent = Number.isFinite(t) ? `${formatTime(t)} · idx ${idx}` : '—';
+      this.startTimeLabelEl.textContent = Number.isFinite(t) ? timeStr : '—';
     }
   }
 }

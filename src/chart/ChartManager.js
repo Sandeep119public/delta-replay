@@ -14,29 +14,32 @@ export class ChartManager {
   init() {
     if (this.chart) return;
     this.chart = createChart(this.container, {
-      layout: { background: { type: ColorType.Solid, color: '#0e1116' }, textColor: '#8a93a6' },
-      grid: { vertLines: { color: '#1e242f' }, horzLines: { color: '#1e242f' } },
+      layout: { background: { type: ColorType.Solid, color: '#0d1117' }, textColor: '#94a3b8' },
+      grid: { vertLines: { color: 'rgba(42, 51, 66, 0.35)' }, horzLines: { color: 'rgba(42, 51, 66, 0.35)' } },
       crosshair: { mode: 1 },
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        borderColor: '#2a3342',
-        rightOffset: 5,
-        barSpacing: 6,
-        minBarSpacing: 1.5,
+        borderColor: '#242b38',
+        rightOffset: 8,
+        barSpacing: 9,
+        minBarSpacing: 3,
       },
       rightPriceScale: {
-        borderColor: '#2a3342',
+        borderColor: '#242b38',
         autoScale: true,
-        scaleMargins: { top: 0.1, bottom: 0.1 },
+        scaleMargins: { top: 0.08, bottom: 0.08 },
       },
       width: this.container.clientWidth || 800,
       height: this.container.clientHeight || 450
     });
 
     this.series = this.chart.addCandlestickSeries({
-      upColor: '#22c55e', downColor: '#ef4444',
-      wickUpColor: '#22c55e', wickDownColor: '#ef4444', borderVisible: false
+      upColor: '#089981',
+      downColor: '#f23645',
+      wickUpColor: '#089981',
+      wickDownColor: '#f23645',
+      borderVisible: false
     });
 
     this._revealedMaxTime = null;
