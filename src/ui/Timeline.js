@@ -27,6 +27,9 @@ export class Timeline {
 
   setTotal(total, candles) {
     this._total = total;
+    // Store only timestamps to avoid duplicating full OHLC (future OHLC not needed for labels)
+    this._times = candles ? candles.map(c => c.time) : [];
+    // Keep reference for backward compat but not used for OHLC
     this._candles = candles;
     if (total === 0) {
       this.slider.disabled = true;
@@ -41,10 +44,10 @@ export class Timeline {
     this.slider.max = total - 1;
     this.slider.value = Math.floor(total * 0.5);
     this._updateLabels(Number(this.slider.value));
-    // labels for start/end
-    if (candles && candles.length) {
-      this.startLabel.textContent = formatTime(candles[0].time);
-      this.endLabel.textContent = formatTime(candles[candles.length - 1].time);
+    // labels for start/end use timestamps only
+    if (this._times && this._times.length) {
+      this.startLabel.textContent = formatTime(this._times[0]);
+      this.endLabel.textContent = formatTime(this._times[this._times.length - 1]);
     }
   }
 
@@ -64,12 +67,12 @@ export class Timeline {
 
   _updateLabels(idx) {
     this.indexLabel.textContent = `${idx} / ${this._total > 0 ? this._total - 1 : 0}`;
-    const c = this._candles?.[idx];
-    this.timeLabel.textContent = c ? formatTime(c.time) : '—';
-    this.currentLabel.textContent = c ? formatTime(c.time) : '—';
+    const t = this._times?.[idx] ?? this._candles?.[idx]?.time;
+    this.timeLabel.textContent = Number.isFinite(t) ? formatTime(t) : '—';
+    this.currentLabel.textContent = Number.isFinite(t) ? formatTime(t) : '—';
     this.startIndexLabel.textContent = `Replay start: ${idx}`;
     if (this.startTimeLabelEl) {
-      this.startTimeLabelEl.textContent = c ? `${formatTime(c.time)} · idx ${idx}` : '—';
+      this.startTimeLabelEl.textContent = Number.isFinite(t) ? `${formatTime(t)} · idx ${idx}` : '—';
     }
   }
 }

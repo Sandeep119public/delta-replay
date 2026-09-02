@@ -18,4 +18,22 @@ export class TradingValidator {
     if (!allowed.includes(side)) return { valid: false, code: 'INVALID_SIDE', message: `Side must be BUY or SELL, got ${side}` };
     return { valid: true };
   }
+
+  static validateLimitPrice(p) {
+    if (p == null || !Number.isFinite(p)) return { valid: false, code: 'INVALID_LIMIT_PRICE', message: 'Limit price must be a finite number' };
+    if (p <= 0) return { valid: false, code: 'INVALID_LIMIT_PRICE', message: 'Limit price must be > 0' };
+    return { valid: true };
+  }
+
+  static validateOrderType(type) {
+    const allowed = ['MARKET', 'LIMIT', 'STOP_MARKET'];
+    if (!allowed.includes(type)) return { valid: false, code: 'INVALID_ORDER_TYPE', message: `Order type must be MARKET or LIMIT or STOP_MARKET, got ${type}` };
+    return { valid: true };
+  }
+
+  static validateStopPrice(p) {
+    if (p == null || !Number.isFinite(p)) return { valid: false, code: 'INVALID_STOP_PRICE', message: 'Stop price must be a finite number' };
+    if (p <= 0) return { valid: false, code: 'INVALID_STOP_PRICE', message: 'Stop price must be > 0' };
+    return { valid: true };
+  }
 }

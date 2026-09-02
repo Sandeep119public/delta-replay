@@ -34,9 +34,9 @@ export class LocalCandleProvider extends CandleProvider {
     if (this.inMemory && this.inMemory.has(key)) {
       raw = this.inMemory.get(key);
     } else {
-      // fetch from basePath
+      // fetch from basePath — use safest browser-compatible form (bound to globalThis)
       const url = `${this.basePath}/${symbol}-${timeframe}.json`;
-      const res = await fetch(url, { signal });
+      const res = await globalThis.fetch.call(globalThis, url, { signal });
       if (!res.ok) throw new Error(`Failed to load ${url}: ${res.status} ${res.statusText}`);
       raw = await res.json();
     }

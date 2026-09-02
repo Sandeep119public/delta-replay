@@ -214,7 +214,7 @@ describe('HistoricalDataManager — fetching', () => {
 
   it('caching hit avoids fetch', async () => {
     let fetches = 0;
-    const client = { fetchCandles: async ()=>{ fetches++; return [c(1000,100)]; } };
+    const client = { fetchCandles: async ({ start, end })=>{ fetches++; const res=[]; for(let t=start; t<=end; t+=60) if(t===1000||t===1060) res.push(c(t,100)); return res; } };
     const provider = new DeltaCandleProvider({ client, maxCandles: 100000 });
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
@@ -229,10 +229,14 @@ describe('HistoricalDataManager — fetching', () => {
   it('partial cache reuses hit part', async () => {
     let fetches = 0;
     const client = {
-      fetchCandles: async ({ start })=>{
+      fetchCandles: async ({ start, end })=>{
         fetches++;
-        if (start===1000) return [c(1000,100)];
-        return [c(1180,101)];
+        const res=[];
+        for(let t=start; t<=end; t+=60) {
+          if(t===1000||t===1060) res.push(c(t,100));
+          else if(t===1120||t===1180) res.push(c(t,101));
+        }
+        return res;
       }
     };
     const provider = new DeltaCandleProvider({ client, maxCandles: 100000, chunkSize: 2 });

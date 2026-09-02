@@ -6,7 +6,9 @@ export class TradingPanel {
     balanceEl, equityEl, realizedEl, unrealizedEl, feesEl,
     posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
     qtyInput, buyBtn, sellBtn, closeBtn, resetBtn,
-    tradesListEl, errorEl
+    tradesListEl, errorEl,
+    orderTypeSelect, limitPriceInput, stopPriceInput, pendingListEl,
+    posSlEl, posTpEl, slInput, tpInput, setRiskBtn, clearRiskBtn
   }) {
     this.engine = tradingEngine;
     this.balanceEl = balanceEl;
@@ -27,8 +29,22 @@ export class TradingPanel {
     this.resetBtn = resetBtn;
     this.tradesListEl = tradesListEl;
     this.errorEl = errorEl;
+    // order UI - fallback to DOM queries if not provided
+    this.orderTypeSelect = orderTypeSelect || document.getElementById('order-type');
+    this.limitPriceInput = limitPriceInput || document.getElementById('limit-price');
+    this.stopPriceInput = stopPriceInput || document.getElementById('stop-price');
+    this.limitPriceRow = document.getElementById('limit-price-row');
+    this.stopPriceRow = document.getElementById('stop-price-row');
+    this.pendingListEl = pendingListEl || document.getElementById('pending-orders-list');
+    this.posSlEl = posSlEl || document.getElementById('pos-sl');
+    this.posTpEl = posTpEl || document.getElementById('pos-tp');
+    this.slInput = slInput || document.getElementById('sl-price');
+    this.tpInput = tpInput || document.getElementById('tp-price');
+    this.setRiskBtn = setRiskBtn || document.getElementById('btn-set-risk');
+    this.clearRiskBtn = clearRiskBtn || document.getElementById('btn-clear-risk');
 
     this._bindEvents();
+    this._updateOrderTypeUI();
     this.render();
   }
 
@@ -39,6 +55,15 @@ export class TradingPanel {
     this.resetBtn.addEventListener('click', () => {
       this.engine.resetAccount();
     });
+    if (this.orderTypeSelect) {
+      this.orderTypeSelect.addEventListener('change', () => this._updateOrderTypeUI());
+    }
+    if (this.setRiskBtn) {
+      this.setRiskBtn.addEventListener('click', () => this._setRisk());
+    }
+    if (this.clearRiskBtn) {
+      this.clearRiskBtn.addEventListener('click', () => this._clearRisk());
+    }
 
     this.engine.on('accountUpdated', () => this.render());
     this.engine.on('positionOpened', () => this.render());
@@ -46,22 +71,107 @@ export class TradingPanel {
     this.engine.on('positionUpdated', () => this.render());
     this.engine.on('tradeExecuted', () => this.render());
     this.engine.on('accountReset', () => this.render());
-    this.engine.on('orderRejected', (err) => this.showError(err.message));
+    this.engine.on('orderPlaced', () => this.render());
+    this.engine.on('orderTriggered', () => this.render());
+    this.engine.on('orderFilled', () => this.render());
+    this.engine.on('orderCancelled', () => this.render());
+    this.engine.on('stopLossTriggered', () => this.render());
+    this.engine.on('takeProfitTriggered', () => this.render());
+    this.engine.on('orderRejected', (err) => this.showError(err.message || err.reason || 'Order rejected'));
   }
 
   _getSymbol() {
-    // Use engine's last position symbol or appState fallback via document select
     const select = document.getElementById('symbol-select');
     return select ? select.value : 'BTCUSD';
+  }
+
+  _getOrderType() {
+    if (this.orderTypeSelect) return this.orderTypeSelect.value;
+    return 'MARKET';
+  }
+
+  _updateOrderTypeUI() {
+    const type = this._getOrderType();
+    if (this.limitPriceRow) {
+      if (type === 'LIMIT') this.limitPriceRow.classList.remove('hidden');
+      else this.limitPriceRow.classList.add('hidden');
+    }
+    if (this.stopPriceRow) {
+      if (type === 'STOP_MARKET') this.stopPriceRow.classList.remove('hidden');
+      else this.stopPriceRow.classList.add('hidden');
+    }
+    // Update button labels
+    if (type === 'LIMIT') {
+      this.buyBtn.textContent = 'BUY LIMIT';
+      this.sellBtn.textContent = 'SELL LIMIT';
+    } else if (type === 'STOP_MARKET') {
+      this.buyBtn.textContent = 'BUY STOP';
+      this.sellBtn.textContent = 'SELL STOP';
+    } else {
+      this.buyBtn.textContent = 'BUY';
+      this.sellBtn.textContent = 'SELL';
+    }
   }
 
   _place(side) {
     this.clearError();
     const symbol = this._getSymbol();
     const qty = parseFloat(this.qtyInput.value);
-    const res = this.engine.placeOrder({ symbol, side, quantity: qty });
+    const orderType = this._getOrderType();
+    let res;
+    if (orderType === 'LIMIT') {
+      const lp = parseFloat(this.limitPriceInput.value);
+      res = this.engine.placeLimitOrder({ symbol, side, quantity: qty, limitPrice: lp });
+    } else if (orderType === 'STOP_MARKET') {
+      const sp = parseFloat(this.stopPriceInput.value);
+      res = this.engine.placeStopOrder({ symbol, side, quantity: qty, stopPrice: sp });
+    } else {
+      res = this.engine.placeOrder({ symbol, side, quantity: qty });
+    }
     if (!res.success) this.showError(res.message);
     else this.clearError();
+    this.render();
+  }
+
+  _setRisk() {
+    this.clearError();
+    const positions = this.engine.getPositions();
+    if (!positions.length) {
+      this.showError('No open position for SL/TP');
+      return;
+    }
+    const symbol = positions[0].symbol;
+    const slVal = this.slInput.value.trim();
+    const tpVal = this.tpInput.value.trim();
+    let res;
+    if (slVal && tpVal) {
+      res = this.engine.setRisk({ symbol, stopLoss: parseFloat(slVal), takeProfit: parseFloat(tpVal) });
+    } else if (slVal) {
+      res = this.engine.setStopLoss(symbol, parseFloat(slVal));
+    } else if (tpVal) {
+      res = this.engine.setTakeProfit(symbol, parseFloat(tpVal));
+    } else {
+      this.showError('Enter SL or TP price');
+      return;
+    }
+    if (!res.success) this.showError(res.message);
+    else this.clearError();
+    this.render();
+  }
+
+  _clearRisk() {
+    this.clearError();
+    const positions = this.engine.getPositions();
+    if (!positions.length) {
+      this.showError('No open position to clear');
+      return;
+    }
+    const symbol = positions[0].symbol;
+    if (this.slInput) this.slInput.value = '';
+    if (this.tpInput) this.tpInput.value = '';
+    // clear both if set
+    this.engine.clearStopLoss(symbol);
+    this.engine.clearTakeProfit(symbol);
     this.render();
   }
 
@@ -72,7 +182,6 @@ export class TradingPanel {
       this.showError('No open position to close');
       return;
     }
-    // close first (single per symbol model, but allow any)
     const symbol = positions[0].symbol;
     const res = this.engine.closePosition(symbol);
     if (!res.success) this.showError(res.message);
@@ -80,10 +189,17 @@ export class TradingPanel {
     this.render();
   }
 
+  _cancelOrder(orderId) {
+    this.clearError();
+    const res = this.engine.cancelOrder(orderId);
+    if (!res.success) this.showError(res.message);
+    this.render();
+  }
+
   showError(msg) {
     this.errorEl.textContent = msg;
     this.errorEl.classList.remove('hidden');
-    setTimeout(() => this.clearError(), 3000);
+    setTimeout(() => this.clearError(), 3500);
   }
 
   clearError() {
@@ -96,6 +212,57 @@ export class TradingPanel {
     if (!Number.isFinite(n)) return '—';
     const sign = n >= 0 ? '' : '-';
     return `${sign}$${Math.abs(n).toFixed(2)}`;
+  }
+
+  _fmtTime(ts) {
+    if (!ts) return '—';
+    try { return formatTime(ts); } catch { return String(ts); }
+  }
+
+  _renderPending() {
+    if (!this.pendingListEl) return;
+    const pending = this.engine.getPendingOrders ? this.engine.getPendingOrders() : [];
+    const allOrders = this.engine.getOrders ? this.engine.getOrders() : [];
+    // Show pending prominently, plus recently filled/cancelled/rejected for visibility
+    if (allOrders.length === 0) {
+      this.pendingListEl.innerHTML = '<span class="empty-hint">No pending orders</span>';
+      return;
+    }
+    // Split pending vs history
+    const pendings = pending;
+    const nonPending = allOrders.filter(o => o.status !== 'PENDING').slice().reverse().slice(0, 5);
+    let html = '';
+    if (pendings.length === 0) {
+      html += '<div class="empty-hint">No pending orders</div>';
+    } else {
+      html += pendings.map(o => {
+        const statusCls = o.status === 'PENDING' ? 'pnl-pos' : o.status === 'FILLED' ? 'pnl-pos' : 'pnl-neg';
+        const price = o.type === 'STOP_MARKET' ? o.stopPrice : o.limitPrice;
+        const typeLabel = o.type === 'STOP_MARKET' ? 'STOP' : (o.type || 'LIMIT');
+        return `<div class="trade-row" style="border-left:3px solid ${o.side==='BUY' ? '#22c55e' : '#ef4444'}; padding-left:6px;">
+          <span><b>${o.id}</b> ${typeLabel} ${o.side} ${o.quantity} @ ${price != null ? Number(price).toFixed(2) : '—'} <span class="${statusCls}">[${o.status}]</span><br/><small>${this._fmtTime(o.createdReplayTime)}</small></span>
+          <span><button class="btn btn-secondary" data-cancel-id="${o.id}" style="padding:2px 6px; min-height:24px; font-size:10px;">Cancel</button></span>
+        </div>`;
+      }).join('');
+    }
+    if (nonPending.length > 0) {
+      html += '<div style="margin-top:6px; font-size:10px; color:var(--text-muted); border-top:1px solid var(--border); padding-top:4px;">Recent</div>';
+      html += nonPending.map(o => {
+        let color = '#8a93a6';
+        if (o.status === 'FILLED') color = '#22c55e';
+        else if (o.status === 'CANCELLED') color = '#eab308';
+        else if (o.status === 'REJECTED') color = '#ef4444';
+        return `<div class="trade-row" style="opacity:0.85;">
+          <span><b>${o.id}</b> ${o.side} ${o.quantity} @ ${o.limitPrice != null ? Number(o.limitPrice).toFixed(2) : '—'} <span style="color:${color}">[${o.status}]</span></span>
+          <span style="font-size:10px;">${o.filledPrice != null ? '@'+Number(o.filledPrice).toFixed(2) : ''} ${o.rejectionReason || o.cancelReason || ''}</span>
+        </div>`;
+      }).join('');
+    }
+    this.pendingListEl.innerHTML = html;
+    // Bind cancel buttons
+    this.pendingListEl.querySelectorAll('[data-cancel-id]').forEach(btn => {
+      btn.addEventListener('click', () => this._cancelOrder(btn.getAttribute('data-cancel-id')));
+    });
   }
 
   render() {
@@ -117,7 +284,11 @@ export class TradingPanel {
       this.posCurrentEl.textContent = '—';
       this.posPnlEl.textContent = '—';
       this.posPnlEl.className = '';
+      if (this.posSlEl) this.posSlEl.textContent = '—';
+      if (this.posTpEl) this.posTpEl.textContent = '—';
       this.closeBtn.disabled = true;
+      if (this.setRiskBtn) this.setRiskBtn.disabled = true;
+      if (this.clearRiskBtn) this.clearRiskBtn.disabled = true;
     } else {
       const p = positions[0];
       this.posSymbolEl.textContent = p.symbol;
@@ -127,7 +298,11 @@ export class TradingPanel {
       this.posCurrentEl.textContent = this._fmtMoney(p.currentPrice);
       this.posPnlEl.textContent = this._fmtMoney(p.unrealizedPnL);
       this.posPnlEl.className = p.unrealizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
+      if (this.posSlEl) this.posSlEl.textContent = p.stopLossPrice != null ? this._fmtMoney(p.stopLossPrice) : '—';
+      if (this.posTpEl) this.posTpEl.textContent = p.takeProfitPrice != null ? this._fmtMoney(p.takeProfitPrice) : '—';
       this.closeBtn.disabled = false;
+      if (this.setRiskBtn) this.setRiskBtn.disabled = false;
+      if (this.clearRiskBtn) this.clearRiskBtn.disabled = false;
     }
 
     // Trades list with gross/fees/net
@@ -143,6 +318,8 @@ export class TradingPanel {
         return `<div class="trade-row"><span>${t.symbol} ${t.side} ${t.quantity} @ ${t.entryPrice.toFixed(2)}→${t.exitPrice.toFixed(2)}</span><span>${this._fmtMoney(gross)} / <span class="pnl-neg">${this._fmtMoney(fee)}</span> / <span class="${cls}">${this._fmtMoney(net)}</span></span></div>`;
       }).join('');
     }
+
+    this._renderPending();
 
     // Disable buy/sell if no market price
     const hasMarket = !!this.engine.getLatestCandle();

@@ -5,10 +5,24 @@ export class AppState extends EventEmitter {
     super();
     this.symbol = 'BTCUSD';
     this.timeframe = '1m';
-    this.candles = []; // normalized validated candles currently loaded (full dataset)
+    this._candles = []; // legacy direct storage (used when no store)
+    this._store = null; // CandleStore reference if available
     this.loading = false;
     this.error = null;
     this.replayState = null;
+  }
+
+  // Single source: if store attached, candles getter proxies to store
+  get candles() {
+    if (this._store) return this._store.getAll();
+    return this._candles;
+  }
+  set candles(val) { this._candles = val; }
+
+  setCandleStore(store) {
+    this._store = store;
+    this.emit('candles', this.candles);
+    this.emit('change', this.snapshot());
   }
 
   setLoading(v) {
@@ -28,8 +42,14 @@ export class AppState extends EventEmitter {
   }
 
   setCandles(candles) {
-    this.candles = candles;
-    this.emit('candles', candles);
+    if (this._store) {
+      // Single source is CandleStore; avoid duplicating full array in AppState
+      // Keep _candles empty, getter will proxy to store; just emit event
+      this._candles = [];
+    } else {
+      this._candles = candles;
+    }
+    this.emit('candles', this.candles);
     this.emit('change', this.snapshot());
   }
 

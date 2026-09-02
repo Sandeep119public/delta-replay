@@ -12,7 +12,7 @@ export class Position {
    * @param {number} p.openedAt - unix seconds
    * @param {number} [p.entryFee] - fee at entry (notional * rate)
    */
-  constructor({ symbol, side, quantity, entryPrice, currentPrice, openedAt, entryFee = 0 }) {
+  constructor({ symbol, side, quantity, entryPrice, currentPrice, openedAt, entryFee = 0, openedIndex = -1, stopLossPrice = null, takeProfitPrice = null, stopLossCreatedIndex = -1, takeProfitCreatedIndex = -1 }) {
     this.symbol = symbol;
     this.side = side;
     this.quantity = quantity;
@@ -20,6 +20,11 @@ export class Position {
     this.currentPrice = currentPrice;
     this.openedAt = openedAt;
     this.entryFee = entryFee;
+    this.openedIndex = openedIndex;
+    this.stopLossPrice = stopLossPrice;
+    this.takeProfitPrice = takeProfitPrice;
+    this.stopLossCreatedIndex = stopLossCreatedIndex;
+    this.takeProfitCreatedIndex = takeProfitCreatedIndex;
   }
 
   get unrealizedPnL() {
@@ -36,6 +41,11 @@ export class Position {
       currentPrice: this.currentPrice,
       openedAt: this.openedAt,
       entryFee: this.entryFee,
+      openedIndex: this.openedIndex,
+      stopLossPrice: this.stopLossPrice,
+      takeProfitPrice: this.takeProfitPrice,
+      stopLossCreatedIndex: this.stopLossCreatedIndex,
+      takeProfitCreatedIndex: this.takeProfitCreatedIndex,
     });
   }
 
@@ -48,6 +58,11 @@ export class Position {
       currentPrice: this.currentPrice,
       openedAt: this.openedAt,
       entryFee: this.entryFee,
+      openedIndex: this.openedIndex,
+      stopLossPrice: this.stopLossPrice,
+      takeProfitPrice: this.takeProfitPrice,
+      stopLossCreatedIndex: this.stopLossCreatedIndex,
+      takeProfitCreatedIndex: this.takeProfitCreatedIndex,
       unrealizedPnL: this.unrealizedPnL,
     };
   }

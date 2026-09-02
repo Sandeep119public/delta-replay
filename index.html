@@ -114,8 +114,9 @@
           </select>
         </div>
         <span id="replay-status" class="replay-status">idle</span>
+        <button id="btn-follow" class="btn btn-secondary hidden" title="Follow current replay candle">↗ FOLLOW</button>
       </div>
-      <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; → Step &nbsp;|&nbsp; R: Reset</p>
+      <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; → Step &nbsp;|&nbsp; R: Reset &nbsp;|&nbsp; Drag chart to pan history (auto-follow off)</p>
       <div id="error-banner" class="error-banner hidden"></div>
     </section>
 
@@ -142,22 +143,53 @@
           <div class="kv"><span>Entry</span><span id="pos-entry">—</span></div>
           <div class="kv"><span>Current</span><span id="pos-current">—</span></div>
           <div class="kv"><span>PnL</span><span id="pos-pnl">—</span></div>
+          <div class="kv"><span>Stop Loss</span><span id="pos-sl">—</span></div>
+          <div class="kv"><span>Take Profit</span><span id="pos-tp">—</span></div>
+          <div class="order-row" style="margin-top:8px; flex-direction: column; align-items: stretch; gap:4px;">
+            <label style="font-size:10px; color:var(--text-muted);">SET RISK (when position open)</label>
+            <input id="sl-price" type="number" min="0.0001" step="0.01" placeholder="Stop Loss price" />
+            <input id="tp-price" type="number" min="0.0001" step="0.01" placeholder="Take Profit price" />
+            <div style="display:flex; gap:6px;">
+              <button id="btn-set-risk" class="btn btn-secondary" style="flex:1;">SET SL/TP</button>
+              <button id="btn-clear-risk" class="btn" style="flex:1;">CLEAR</button>
+            </div>
+          </div>
         </div>
         <div class="order-panel">
           <h4>ORDER</h4>
           <div class="order-row">
+            <label for="order-type">Type</label>
+            <select id="order-type">
+              <option value="MARKET" selected>Market</option>
+              <option value="LIMIT">Limit</option>
+              <option value="STOP_MARKET">Stop</option>
+            </select>
+          </div>
+          <div class="order-row">
             <label for="trade-qty">Qty</label>
             <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" />
           </div>
+          <div class="order-row hidden" id="limit-price-row">
+            <label for="limit-price">Limit Price</label>
+            <input id="limit-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" />
+          </div>
+          <div class="order-row hidden" id="stop-price-row">
+            <label for="stop-price">Stop Price</label>
+            <input id="stop-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" />
+          </div>
           <div class="order-buttons">
-            <button id="btn-buy" class="btn btn-buy">BUY MARKET</button>
-            <button id="btn-sell" class="btn btn-sell">SELL MARKET</button>
+            <button id="btn-buy" class="btn btn-buy">BUY</button>
+            <button id="btn-sell" class="btn btn-sell">SELL</button>
           </div>
           <div class="order-buttons">
             <button id="btn-close" class="btn" disabled>CLOSE POSITION</button>
             <button id="btn-reset-acct" class="btn btn-secondary">RESET ACCOUNT</button>
           </div>
         </div>
+      </div>
+      <div class="pending-orders">
+        <h4>PENDING ORDERS</h4>
+        <div id="pending-orders-list" class="trades-list"><span class="empty-hint">No pending orders</span></div>
       </div>
       <div class="trades-history">
         <h4>TRADE HISTORY</h4>

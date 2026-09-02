@@ -1,5 +1,5 @@
 export class Trade {
-  constructor({ id, symbol, side, quantity, entryPrice, exitPrice, openedAt, closedAt, realizedPnL, grossPnL, entryFee, exitFee, totalFee, netPnL }) {
+  constructor({ id, symbol, side, quantity, entryPrice, exitPrice, openedAt, closedAt, realizedPnL, grossPnL, entryFee, exitFee, totalFee, netPnL, exitReason }) {
     this.id = id;
     this.symbol = symbol;
     this.side = side;
@@ -15,6 +15,7 @@ export class Trade {
     this.exitFee = exitFee ?? 0;
     this.totalFee = totalFee ?? (this.entryFee + this.exitFee);
     this.netPnL = netPnL ?? this.realizedPnL;
+    this.exitReason = exitReason ?? null; // MARKET, LIMIT, STOP, STOP_LOSS, TAKE_PROFIT
   }
 
   clone() {

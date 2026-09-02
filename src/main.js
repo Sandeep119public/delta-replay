@@ -18,10 +18,11 @@ import { TradingPanel } from './ui/TradingPanel.js';
 const VISIBLE_WINDOW = 1000;
 
 const appState = new AppState();
+const candleStore = new CandleStore();
+appState.setCandleStore(candleStore);
 const engine = new ReplayEngine();
 const deltaProvider = new DeltaCandleProvider();
 const localProvider = new LocalCandleProvider();
-const candleStore = new CandleStore();
 const candleCache = new CandleCache();
 const dataManager = new HistoricalDataManager({ provider: deltaProvider, store: candleStore, cache: candleCache, concurrency: 2, chunkSize: 2000 });
 
@@ -94,9 +95,51 @@ const stepBtn=document.getElementById('btn-step');
 const resetBtn=document.getElementById('btn-reset');
 const speedSelect=document.getElementById('speed-select');
 const statusEl=document.getElementById('replay-status');
+const followBtn=document.getElementById('btn-follow');
 
 new SymbolSelector(symbolSelect, appState);
 new TimeframeSelector(timeframeSelect, appState);
+// Symbol/timeframe changes invalidate active replay view (but not cache); clear chart preview until next load
+// Also invalidate old replay state, revealed boundary, auto-follow, and abort in-flight requests to prevent stale overwrite
+function handleSymbolTimeframeChange(kind){
+  if (tradingEngine.hasOpenPosition()) {
+    showError(`Cannot change ${kind} while a position is open — close position first.`);
+    const errEl=document.getElementById('trading-error');
+    if(errEl){ errEl.textContent=`Cannot change ${kind} while position open`; errEl.classList.remove('hidden'); setTimeout(()=>{errEl.textContent=''; errEl.classList.add('hidden');},3000); }
+    // revert selector to previous appState value
+    if(kind==='symbol') symbolSelect.value = appState.symbol;
+    else timeframeSelect.value = appState.timeframe;
+    return;
+  }
+  // Clear pending limit orders on symbol/timeframe change
+  try { tradingEngine.clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE'); } catch {}
+  // Abort any in-flight load to prevent stale overwrite (loadToken + AbortController)
+  loadToken++;
+  if(currentAbort){ try{ currentAbort.abort(); }catch{} currentAbort=null; }
+  // Reset replay engine (stop timer, clear state)
+  try { engine.stop(); } catch {}
+  // Clear store and AppState view (but keep cache)
+  candleStore.clear();
+  appState.setCandles([]);
+  timeline.setTotal(0,[]);
+  chartManager.clear();
+  chartManager.setRevealedMax(null);
+  chartManager.setAutoFollow(true);
+  pendingStartIndex = 0;
+  controls.setStartIndex(0);
+  startReplayBtn.disabled = true;
+  dataStatus.textContent = `${kind==='symbol'?'Symbol':'Timeframe'} changed — click LOAD DATA`;
+  updateModeBanner();
+  updateProgress();
+  // Ensure old auto-follow does not leak: reset chart follow
+  if(followBtn) followBtn.classList.add('hidden');
+}
+symbolSelect.addEventListener('change', ()=>{ if(candleStore.getCount()||appState.candles.length || engine.getState().status!=='idle'){ handleSymbolTimeframeChange('symbol'); } else { // even if no data, still need to reset revealed
+  try{ tradingEngine.clearPendingOrders('SYMBOL_CHANGE'); }catch{}
+  if(currentAbort){ try{currentAbort.abort();}catch{} } loadToken++; chartManager.setRevealedMax(null); chartManager.setAutoFollow(true);
+}});
+timeframeSelect.addEventListener('change', ()=>{ if(candleStore.getCount()||appState.candles.length || engine.getState().status!=='idle'){ handleSymbolTimeframeChange('timeframe'); } else { try{ tradingEngine.clearPendingOrders('TIMEFRAME_CHANGE'); }catch{}
+ if(currentAbort){ try{currentAbort.abort();}catch{} } loadToken++; chartManager.setRevealedMax(null); chartManager.setAutoFollow(true); } });
 const timeline=new Timeline({ sliderEl, startLabelEl, currentLabelEl, endLabelEl, indexLabelEl, timeLabelEl, startIndexLabelEl, appState, engine, startTimeLabelEl });
 const controls=new ReplayControls({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, engine });
 const tradingPanel=new TradingPanel({
@@ -119,11 +162,47 @@ const tradingPanel=new TradingPanel({
   resetBtn: document.getElementById('btn-reset-acct'),
   tradesListEl: document.getElementById('trades-list'),
   errorEl: document.getElementById('trading-error'),
+  orderTypeSelect: document.getElementById('order-type'),
+  limitPriceInput: document.getElementById('limit-price'),
+  stopPriceInput: document.getElementById('stop-price'),
+  pendingListEl: document.getElementById('pending-orders-list'),
+  posSlEl: document.getElementById('pos-sl'),
+  posTpEl: document.getElementById('pos-tp'),
+  slInput: document.getElementById('sl-price'),
+  tpInput: document.getElementById('tp-price'),
+  setRiskBtn: document.getElementById('btn-set-risk'),
+  clearRiskBtn: document.getElementById('btn-clear-risk'),
 });
 const chartManager=new ChartManager(chartContainer);
 try{ chartManager.init(); }catch(e){ showError('Chart initialization failed: '+e.message); }
 const adapter=new ChartAdapter(engine, chartManager);
 adapter.attach();
+
+// Auto-follow wiring
+chartManager.onAutoFollowChange((isFollow)=>{
+  if(followBtn){
+    if(isFollow) followBtn.classList.add('hidden');
+    else followBtn.classList.remove('hidden');
+  }
+});
+if(followBtn){
+  followBtn.addEventListener('click', ()=>{
+    chartManager.setAutoFollow(true);
+    const idx=engine.getState().currentIndex;
+    if(idx>=0){
+      const c=candleStore.get(idx);
+      if(c) chartManager.setRevealedMax(c.time);
+      const win=candleStore.sliceWindow(Math.max(0, idx - VISIBLE_WINDOW +1), idx);
+      chartManager.setData(win, {fit:false});
+      chartManager.followCurrent();
+    }
+    followBtn.classList.add('hidden');
+  });
+}
+function updateRevealedMax(idx){
+  const c=candleStore.get(idx);
+  if(c) chartManager.setRevealedMax(c.time);
+}
 
 // Patch adapter to use windowed preview for TradingView-style
 const origShowPreview = adapter.showPreview.bind(adapter);
@@ -146,6 +225,8 @@ function updatePreviewWindow(idx) {
   if (!candleStore.getCount()) return;
   const win = candleStore.sliceWindow(Math.max(0, idx - VISIBLE_WINDOW + 1), idx);
   chartManager.setData(win);
+  chartManager.setRevealedMax(candleStore.get(idx)?.time ?? null);
+  chartManager.setAutoFollow(true);
   // Timeline already reflects idx
 }
 // Override ChartAdapter STARTED/SEEKED to window
@@ -167,7 +248,16 @@ function setDefaultRange(){
   const fromSec=toSec-86400;
   const from=unixToDateTimeInput(fromSec);
   const to=unixToDateTimeInput(toSec);
-  if(fromDateEl&&toDateEl){ fromDateEl.value=from.date; fromTimeEl.value=from.time; toDateEl.value=to.date; toTimeEl.value=to.time; }
+  if(fromDateEl&&toDateEl){
+    fromDateEl.value=from.date; fromTimeEl.value=from.time; toDateEl.value=to.date; toTimeEl.value=to.time;
+    // Set min/max constraints to prevent invalid dates reaching API; also aids mobile rendering
+    const todayStr = new Date(toSec*1000).toISOString().slice(0,10);
+    const minStr = '2020-01-01';
+    for (const el of [fromDateEl, toDateEl]) { el.min = minStr; el.max = todayStr; }
+    // Ensure uniform input types are correct UTC (not local)
+    for (const el of [fromDateEl, toDateEl]) el.type = 'date';
+    for (const el of [fromTimeEl, toTimeEl]) { el.type = 'time'; el.step = '60'; }
+  }
 }
 setDefaultRange();
 
@@ -328,11 +418,45 @@ async function loadData(){
   }catch(err){
     dataManager.off(DataEvents.PROGRESS, onProgress);
     dataManager.off(DataEvents.CHUNK_RECEIVED, onChunk);
-    if(err?.name==='AbortError') return;
+    if(err?.name==='AbortError') {
+      // Distinct ABORTED state
+      if(token===loadToken){ dataStatus.textContent='ABORTED — load cancelled'; appState.setError('Aborted'); updateModeBanner(); }
+      return;
+    }
     if(token!==loadToken) return;
+    const code = err.code || err.name || 'ERROR';
+    const details = err.details || {};
     let msg=err.message||String(err);
-    if(err.code){ const map={'INVALID_REQUEST':'Invalid request','NO_DATA':'No data','TIMEOUT':'Request timeout','NETWORK_ERROR':'Network error','CORS_ERROR':'CORS/Network error','API_ERROR':'Exchange API error','INVALID_RESPONSE':'Invalid response'}; const prefix=map[err.code]?`${map[err.code]}: `:`[${err.code}] `; msg=prefix+msg; }
-    showError(msg); appState.setError(msg); dataStatus.textContent='Error loading candles'; updateModeBanner();
+    // Preserve actual cause and request context, do not mask Illegal invocation
+    let friendly;
+    const lowerMsg = msg.toLowerCase();
+    if (lowerMsg.includes('illegal invocation')) friendly = 'INVALID REQUEST (Illegal invocation)';
+    else if (code==='NO_DATA') friendly = 'EMPTY DATA';
+    else if (code==='TIMEOUT') friendly = 'NETWORK ERROR (Timeout)';
+    else if (code==='NETWORK_ERROR') friendly = 'NETWORK ERROR';
+    else if (code==='CORS_ERROR') friendly = 'NETWORK ERROR (CORS)';
+    else if (code==='API_ERROR') friendly = `HTTP ERROR${details.status ? ' '+details.status : ''}`;
+    else if (code==='INVALID_RESPONSE') friendly = 'INVALID DATA';
+    else if (code==='INVALID_REQUEST') friendly = 'INVALID REQUEST';
+    else friendly = code ? `[${code}]` : 'ERROR';
+    // Build contextual message: include URL/symbol/timeframe/start/end/status when available
+    const ctxParts = [];
+    if (details.url) ctxParts.push(`URL: ${details.url}`);
+    else if (from && to) ctxParts.push(`range: ${symbol} ${timeframe} ${from}→${to}`);
+    if (details.status) ctxParts.push(`status: ${details.status}`);
+    if (details.symbol || details.resolution) ctxParts.push(`${details.symbol||symbol} ${details.resolution||timeframe}`);
+    const ctx = ctxParts.length ? ` (${ctxParts.join(' | ')})` : '';
+    msg = `${friendly}: ${msg}${ctx}`;
+    if (details.cause?.message && !msg.includes(details.cause.message)) msg += ` | cause: ${details.cause.message}`;
+    showError(msg); appState.setError(msg);
+    // Distinct dataStatus per error type
+    if (code==='NO_DATA') dataStatus.textContent='EMPTY DATA — no candles in range';
+    else if (code==='API_ERROR') dataStatus.textContent=`HTTP ERROR ${details.status||''} — ${symbol} ${timeframe}`.trim();
+    else if (code==='NETWORK_ERROR' || code==='CORS_ERROR' || code==='TIMEOUT') dataStatus.textContent=`NETWORK ERROR — ${symbol} ${timeframe}`;
+    else if (code==='INVALID_RESPONSE') dataStatus.textContent='INVALID DATA — validation failed';
+    else if (code==='INVALID_REQUEST' && lowerMsg.includes('illegal invocation')) dataStatus.textContent='INVALID REQUEST — fetch binding error (Illegal invocation)';
+    else dataStatus.textContent=`Error loading candles [${code}]`;
+    updateModeBanner();
   }finally{
     if(token===loadToken){ appState.setLoading(false); loadBtn.disabled=false; loadBtn.textContent='LOAD DATA'; if(currentAbort===abortController) currentAbort=null; updateModeBanner(engine.getState()); }
   }
@@ -350,21 +474,32 @@ engine.on('stateChanged', (s)=>{
   if(s.status==='ended'){ dataStatus.textContent=`Replay ended at ${s.currentIndex+1} / ${s.totalCandles}`; }
 });
 engine.on('started', (payload)=>{
-  dataStatus.textContent=`Replaying from ${payload?.index ?? pendingStartIndex}`;
-  timeline.setPosition(payload?.index ?? pendingStartIndex);
+  const idx = payload?.index ?? pendingStartIndex;
+  dataStatus.textContent=`Replaying from ${idx}`;
+  timeline.setPosition(idx);
+  updateRevealedMax(idx);
   onReplayEventSync(engine.getState());
 });
 engine.on('played', ()=> onReplayEventSync(engine.getState()));
 engine.on('paused', ()=> onReplayEventSync(engine.getState()));
-engine.on('stepped', ()=> onReplayEventSync(engine.getState()));
-engine.on('seeked', ()=> onReplayEventSync(engine.getState()));
+engine.on('stepped', (p)=>{
+  onReplayEventSync(engine.getState());
+  if(p?.index!==undefined) updateRevealedMax(p.index);
+});
+engine.on('seeked', (p)=>{
+  onReplayEventSync(engine.getState());
+  if(p?.index!==undefined) updateRevealedMax(p.index);
+});
 engine.on('ended', ()=> onReplayEventSync(engine.getState()));
 engine.on('reset', (s)=>{
   if(s.status==='ready'){
     // preview window after reset
     updatePreviewWindow(pendingStartIndex);
+    updateRevealedMax(pendingStartIndex);
     timeline.setTotal(candleStore.getCount()||appState.candles.length, candleStore.getAll().length?candleStore.getAll():appState.candles);
     startReplayBtn.disabled=false;
+  } else if(s.index!==undefined){
+    updateRevealedMax(s.index);
   }
   onReplayEventSync(s);
 });

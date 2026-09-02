@@ -44,10 +44,47 @@ export class ChartManager {
       borderVisible: false
     });
 
+    // Revealed max and auto-follow
+    this._revealedMaxTime = null;
+    this._autoFollow = true;
+    this._isUserPanning = false;
+
     // Resize observer
     this._resizeObserver = new ResizeObserver(() => this.resize());
     this._resizeObserver.observe(this.container);
     window.addEventListener('resize', this._onWindowResize);
+
+    // Detect manual pan: if visible range moves away from revealed max, disable auto-follow
+    try {
+      this.chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
+        if (!range || this._revealedMaxTime == null) return;
+        if (this._isUserPanning) return; // avoid feedback loop
+        // If user pans left away from max (visible to < revealed - tolerance), disable autoFollow
+        const tolerance = 60; // 1m
+        if (range.to < this._revealedMaxTime - tolerance) {
+          if (this._autoFollow) {
+            this._autoFollow = false;
+            this._emitAutoFollowChanged();
+          }
+        } else if (Math.abs(range.to - this._revealedMaxTime) <= tolerance) {
+          if (!this._autoFollow) {
+            this._autoFollow = true;
+            this._emitAutoFollowChanged();
+          }
+        }
+        // Clamp future pan: never allow visible to exceed revealed
+        if (range.to > this._revealedMaxTime) {
+          this._isUserPanning = true;
+          try {
+            const from = range.from;
+            const clamped = { from, to: this._revealedMaxTime };
+            // Preserve from, clamp to
+            this.chart.timeScale().setVisibleRange(clamped);
+          } catch {}
+          setTimeout(() => { this._isUserPanning = false; }, 50);
+        }
+      });
+    } catch {}
   }
 
   _onWindowResize = () => this.resize();
@@ -68,8 +105,21 @@ export class ChartManager {
    */
   setData(candles, { fit = true } = {}) {
     if (!this.series) throw new Error('Chart not initialized');
-    this.series.setData(candles);
-    if (fit && candles.length) this.chart.timeScale().fitContent();
+    // Future protection: never display candles beyond revealedMax (programmatic + user path)
+    let filtered = candles;
+    if (this._revealedMaxTime != null && candles.length) {
+      filtered = candles.filter(c => c.time <= this._revealedMaxTime);
+      if (filtered.length !== candles.length) {
+        try { console.warn('[ChartManager] filtered future candles beyond revealedMax'); } catch {}
+      }
+    }
+    this._isUserPanning = true;
+    try {
+      this.series.setData(filtered);
+      if (fit && filtered.length) this.chart.timeScale().fitContent();
+    } finally {
+      setTimeout(() => { this._isUserPanning = false; }, 50);
+    }
   }
 
   /**
@@ -78,7 +128,23 @@ export class ChartManager {
    */
   update(candle) {
     if (!this.series) throw new Error('Chart not initialized');
+    if (this._revealedMaxTime != null && candle.time > this._revealedMaxTime) {
+      // Programmatic future update rejected
+      return;
+    }
     this.series.update(candle);
+  }
+
+  /**
+   * Programmatic range enforcement: clamp future pan attempts.
+   * Used for testing and for external callers that set visible range directly.
+   */
+  clampVisibleRange(range) {
+    if (!range || this._revealedMaxTime == null) return range;
+    if (range.to > this._revealedMaxTime) {
+      return { from: range.from, to: this._revealedMaxTime };
+    }
+    return range;
   }
 
   /**
@@ -86,14 +152,33 @@ export class ChartManager {
    * Uses scrollToRealTime which preserves logical range width.
    */
   followCurrent() {
-    if (!this.chart) return;
+    if (!this.chart || !this._autoFollow) return;
     try {
-      // Only auto-follow if user is not heavily scrolled back: check scrollPosition vs max.
-      // Lightweight-charts: if visible range includes near real time, scrolling is gentle.
-      // We simply call scrollToRealTime — it keeps zoom level.
       this.chart.timeScale().scrollToRealTime();
     } catch {}
   }
+
+  setRevealedMax(time) {
+    this._revealedMaxTime = time == null ? null : Number(time);
+    // If auto-follow is on, ensure we follow
+    if (this._autoFollow && this._revealedMaxTime != null) this.followCurrent();
+  }
+
+  setAutoFollow(v) {
+    this._autoFollow = !!v;
+    this._emitAutoFollowChanged();
+    if (this._autoFollow) this.followCurrent();
+  }
+
+  isAutoFollow() { return this._autoFollow; }
+
+  _emitAutoFollowChanged() {
+    try {
+      if (this._onAutoFollowChange) this._onAutoFollowChange(this._autoFollow);
+    } catch {}
+  }
+
+  onAutoFollowChange(cb) { this._onAutoFollowChange = cb; }
 
   /**
    * Scroll to specific index's time.

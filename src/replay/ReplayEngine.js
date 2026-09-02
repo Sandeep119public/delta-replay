@@ -13,11 +13,18 @@ import { logger } from '../core/Logger.js';
 export class ReplayEngine extends EventEmitter {
   constructor() {
     super();
+    // Datastore ownership note (Phase 6.6 audit):
+    // CandleStore is the canonical historical source; ReplayEngine keeps a second full copy via _candles.
+    // Duplication is intentional for mutation isolation: CandleStore is mutable via AppState/manager,
+    // ReplayEngine must never be mutated by external store edits during replay. A read-only view would
+    // break isolation if CandleStore is reloaded mid-replay. Keep two copies; AppState now proxies
+    // to CandleStore without duplicating (see AppState.setCandleStore), so total copies remain 2
+    // (CandleStore + ReplayEngine._candles) instead of 3. Safe read-only interface could eliminate
+    // one copy but would require freeze/immutability guarantees and refactor risk; not done now.
     this._candles = []; // all loaded candles (private, never exposed fully during replay)
     this._state = createInitialState();
     this._timer = null;
     this._lastTick = null;
-    // accumulator for fractional speeds
     this._accum = 0;
   }
 

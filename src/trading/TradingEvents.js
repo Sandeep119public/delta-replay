@@ -1,4 +1,8 @@
 export const TradingEvents = {
+  ORDER_PLACED: 'orderPlaced',
+  ORDER_TRIGGERED: 'orderTriggered',
+  ORDER_FILLED: 'orderFilled',
+  ORDER_CANCELLED: 'orderCancelled',
   ORDER_REJECTED: 'orderRejected',
   POSITION_OPENED: 'positionOpened',
   POSITION_CLOSED: 'positionClosed',
@@ -6,4 +10,6 @@ export const TradingEvents = {
   ACCOUNT_UPDATED: 'accountUpdated',
   TRADE_EXECUTED: 'tradeExecuted',
   ACCOUNT_RESET: 'accountReset',
+  STOP_LOSS_TRIGGERED: 'stopLossTriggered',
+  TAKE_PROFIT_TRIGGERED: 'takeProfitTriggered',
 };
