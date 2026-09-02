@@ -17,10 +17,21 @@ export class ChartManager {
       layout: { background: { type: ColorType.Solid, color: '#0e1116' }, textColor: '#8a93a6' },
       grid: { vertLines: { color: '#1e242f' }, horzLines: { color: '#1e242f' } },
       crosshair: { mode: 1 },
-      timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#2a3342' },
-      rightPriceScale: { borderColor: '#2a3342', autoScale: true },
-      width: this.container.clientWidth,
-      height: this.container.clientHeight || 400
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+        borderColor: '#2a3342',
+        rightOffset: 5,
+        barSpacing: 6,
+        minBarSpacing: 1.5,
+      },
+      rightPriceScale: {
+        borderColor: '#2a3342',
+        autoScale: true,
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
+      width: this.container.clientWidth || 800,
+      height: this.container.clientHeight || 450
     });
 
     this.series = this.chart.addCandlestickSeries({
@@ -73,7 +84,12 @@ export class ChartManager {
     this._isUserPanning = true;
     try {
       this.series.setData(filtered);
-      if (fit && filtered.length) this.chart.timeScale().fitContent();
+      try { this.chart.priceScale('right').applyOptions({ autoScale: true }); } catch {}
+      if (fit && filtered.length) {
+        this.chart.timeScale().fitContent();
+      } else if (this._autoFollow) {
+        this.chart.timeScale().scrollToPosition(3, false);
+      }
     } finally {
       setTimeout(() => { this._isUserPanning = false; }, 50);
     }
@@ -101,10 +117,10 @@ export class ChartManager {
       this.series.setData(valid);
       // Force the price scale to recalculate from the new dataset.
       try { this.chart.priceScale('right').applyOptions({ autoScale: true }); } catch {}
-      if (fit || !this._autoFollow) {
+      if (fit) {
         this.chart.timeScale().fitContent();
-      } else {
-        this.chart.timeScale().scrollToRealTime();
+      } else if (this._autoFollow) {
+        this.chart.timeScale().scrollToPosition(3, false);
       }
     } finally {
       setTimeout(() => { this._isUserPanning = false; }, 50);
@@ -143,7 +159,7 @@ export class ChartManager {
 
   followCurrent() {
     if (!this.chart || !this._autoFollow) return;
-    try { this.chart.timeScale().scrollToRealTime(); } catch {}
+    try { this.chart.timeScale().scrollToPosition(3, false); } catch {}
   }
 
   setRevealedMax(time) {
@@ -166,7 +182,7 @@ export class ChartManager {
 
   scrollToTime(unixSec) {
     if (!this.chart) return;
-    try { this.chart.timeScale().scrollToRealTime(); } catch {}
+    try { this.chart.timeScale().scrollToPosition(3, false); } catch {}
   }
 
   clear() {

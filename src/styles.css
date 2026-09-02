@@ -610,33 +610,42 @@ body {
 }
 .timeline-start-controls {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  margin-top: 8px;
+  margin-top: 6px;
   gap: var(--sp-3);
   flex-wrap: wrap;
   min-width: 0;
 }
 .start-info {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  flex: 1 1 140px;
+  flex: 0 1 auto;
 }
 #start-index-label { font-size: 12px; color: var(--text); white-space: nowrap; }
-.start-time-label { font-size: 11px; color: var(--accent); font-weight: 600; word-break: break-all; }
+.start-time-label { font-size: 11px; color: var(--accent); font-weight: 600; white-space: nowrap; }
 .jump-group {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  flex: 1 1 220px;
-  max-width: 320px;
 }
-.jump-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.jump-datetime { align-items: center; flex-wrap: wrap; min-width: 0; }
-.jump-datetime input { width: 130px; flex: 1 1 110px; min-width: 0; }
+.jump-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+.jump-datetime { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.jump-datetime input {
+  width: 125px;
+  min-height: 30px;
+  padding: 4px 8px;
+  background: var(--bg-input) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  color-scheme: dark;
+}
+.jump-datetime input[type="time"] {
+  width: 80px;
+}
 .jump-error { font-size: 11px; color: #fca5a5; word-break: break-word; }
 .btn-secondary { background: var(--bg-input); border-color: var(--border); }
 .btn-secondary:hover:not(:disabled) { border-color: var(--text-muted); }
