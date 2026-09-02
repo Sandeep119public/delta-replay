@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Delta Replay</title>
+  <title>Delta Replay - Historical Crypto Market Replay</title>
   <link rel="stylesheet" href="/src/styles.css" />
   <link rel="stylesheet" href="/src/ui-polish.css" />
   <link rel="stylesheet" href="/src/viewport-fit.css" />
@@ -13,42 +13,72 @@
     <!-- HEADER -->
     <header class="topbar" role="banner">
       <div class="topbar-left">
-        <h1 class="logo">DELTA REPLAY</h1>
-        <span class="phase-badge" aria-hidden="true">CHART REPLAY + PAPER TRADING</span>
+        <div class="logo-wrapper">
+          <h1 class="logo">DELTA REPLAY</h1>
+          <span class="phase-badge" aria-hidden="true">PRO REPLAY</span>
+        </div>
+        <div id="cache-badge" class="cache-badge hidden" title="Data loaded from local IndexedDB cache">💾 CACHED</div>
       </div>
-      <nav class="topbar-center" aria-label="Data controls">
-        <div class="selector-group">
+
+      <nav class="topbar-center" aria-label="Replay controls">
+        <!-- Symbol -->
+        <div class="selector-group symbol-group">
           <label for="symbol-select">Symbol</label>
           <select id="symbol-select" aria-label="Symbol"></select>
         </div>
-        <div class="selector-group">
+
+        <!-- Timeframe -->
+        <div class="selector-group tf-group">
           <label for="timeframe-select">Timeframe</label>
           <select id="timeframe-select" aria-label="Timeframe"></select>
         </div>
-        <div class="selector-group selector-datetime">
-          <label for="from-date">From (UTC)</label>
+
+        <!-- Replay Start Date Picker -->
+        <div class="selector-group selector-datetime replay-date-group">
+          <label for="replay-date">Replay From (UTC)</label>
           <div class="datetime-group">
-            <input type="date" id="from-date" aria-label="From date" />
-            <input type="time" id="from-time" step="60" aria-label="From time" />
+            <input type="date" id="replay-date" aria-label="Replay start date" />
+            <input type="time" id="replay-time" step="60" aria-label="Replay start time" />
           </div>
         </div>
-        <div class="selector-group selector-datetime">
-          <label for="to-date">To (UTC)</label>
-          <div class="datetime-group">
-            <input type="date" id="to-date" aria-label="To date" />
-            <input type="time" id="to-time" step="60" aria-label="To time" />
+
+        <!-- Quick Date Presets -->
+        <div class="preset-group">
+          <label>Quick Presets</label>
+          <div class="preset-chips">
+            <button type="button" class="preset-chip" data-preset="1d" title="Replay from 1 day ago">1D</button>
+            <button type="button" class="preset-chip" data-preset="3d" title="Replay from 3 days ago">3D</button>
+            <button type="button" class="preset-chip" data-preset="7d" title="Replay from 7 days ago">7D</button>
+            <button type="button" class="preset-chip" data-preset="30d" title="Replay from 30 days ago">30D</button>
+            <button type="button" class="preset-chip" data-preset="now" title="Replay from recent 24h">Live</button>
           </div>
         </div>
-        <button id="load-btn" class="btn btn-primary" aria-label="Load historical data">LOAD DATA</button>
+
+        <!-- Primary Start Button -->
+        <div class="header-action-group">
+          <button id="header-start-replay-btn" class="btn btn-primary btn-replay-accent" aria-label="Start replaying from selected date">
+            <span class="icon">▶</span> START REPLAY
+          </button>
+        </div>
+
+        <!-- Hidden legacy inputs for backwards-compatibility with tests -->
+        <div class="hidden" aria-hidden="true">
+          <input type="date" id="from-date" />
+          <input type="time" id="from-time" step="60" />
+          <input type="date" id="to-date" />
+          <input type="time" id="to-time" step="60" />
+          <button id="load-btn">LOAD DATA</button>
+        </div>
       </nav>
+
       <div class="topbar-right">
-        <span id="data-status" class="data-status" role="status" aria-live="polite">No data loaded</span>
+        <span id="data-status" class="data-status" role="status" aria-live="polite">Ready to replay</span>
       </div>
     </header>
 
     <!-- STATUS BAR -->
     <div id="mode-banner" class="mode-banner mode-idle" role="status" aria-live="polite">
-      <span id="mode-indicator" class="mode-indicator">NO DATA LOADED</span>
+      <span id="mode-indicator" class="mode-indicator">PREVIEW MODE — READY TO REPLAY</span>
       <span id="progress-panel" class="progress-panel hidden">
         <span id="progress-text">0 / 0</span>
         <span id="progress-pct">0%</span>
@@ -131,7 +161,14 @@
             </div>
             <div class="order-row">
               <label for="trade-qty">Qty</label>
-              <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" aria-label="Trade quantity" />
+              <div class="qty-input-wrap">
+                <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" aria-label="Trade quantity" />
+                <div class="qty-presets">
+                  <button type="button" class="qty-chip" data-qty="0.1">0.1</button>
+                  <button type="button" class="qty-chip" data-qty="0.5">0.5</button>
+                  <button type="button" class="qty-chip" data-qty="1">1.0</button>
+                </div>
+              </div>
             </div>
             <div class="order-row hidden" id="limit-price-row">
               <label for="limit-price">Limit Price</label>
@@ -178,11 +215,11 @@
       </div>
       <div class="timeline-start-controls">
         <div class="start-info">
-          <span id="start-index-label">No replay data</span>
+          <span id="start-index-label">Ready to replay</span>
           <span id="start-time-label" class="start-time-label">—</span>
         </div>
         <div class="jump-group">
-          <label for="jump-date" class="jump-label">Jump to (UTC)</label>
+          <label for="jump-date" class="jump-label">Jump to Time</label>
           <div class="datetime-group jump-datetime">
             <input type="date" id="jump-date" aria-label="Jump date" />
             <input type="time" id="jump-time" step="60" aria-label="Jump time" />
@@ -215,7 +252,7 @@
         <span id="replay-status" class="replay-status" aria-live="polite">idle</span>
         <button id="btn-follow" class="btn btn-secondary hidden" title="Follow current replay candle" aria-label="Follow current candle">&#8599; FOLLOW</button>
       </div>
-      <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; &rarr; Step &nbsp;|&nbsp; R: Reset &nbsp;|&nbsp; Drag chart to pan history (auto-follow off)</p>
+      <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; &rarr; Step &nbsp;|&nbsp; R: Reset &nbsp;|&nbsp; Drag chart to pan history</p>
     </section>
   </div>
   <script type="module" src="/src/main.js"></script>

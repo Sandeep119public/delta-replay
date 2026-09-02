@@ -17,51 +17,89 @@
 #app > .error-panel { grid-area: error; }
 
 /* Header: give the data controls a real layout instead of squeezing flex items. */
+/* Header: sleek, responsive flex layout for symbol, timeframe, replay date, and presets. */
 .topbar {
-  display: grid;
-  grid-template-columns: minmax(210px, auto) minmax(0, 1fr) minmax(180px, 240px);
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
-  padding: 10px 16px;
+  padding: 8px 16px;
+  background: #111622;
+  border-bottom: 1px solid var(--border);
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
-  min-width: 0;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .topbar-center {
-  display: grid;
-  grid-template-columns: minmax(110px, 140px) minmax(110px, 140px) minmax(230px, 1fr) minmax(230px, 1fr) auto;
-  align-items: end;
-  gap: 8px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
   min-width: 0;
-  width: 100%;
-  justify-content: stretch;
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.symbol-group {
+  width: 120px;
+  min-width: 100px;
+  flex: 0 0 auto;
+}
+
+.tf-group {
+  width: 90px;
+  min-width: 70px;
+  flex: 0 0 auto;
+}
+
+.replay-date-group {
+  min-width: 220px;
+  flex: 0 1 auto;
+}
+
+.preset-group {
+  flex-shrink: 0;
+}
+
+.header-action-group {
+  display: flex;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+#header-start-replay-btn {
+  min-height: 38px;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius);
 }
 
 .selector-group,
 .selector-datetime {
-  width: 100%;
   max-width: none;
   min-width: 0;
-  flex: none;
 }
 
 .selector-group select,
 .selector-group input[type="date"],
 .selector-group input[type="time"] {
-  width: 100%;
   min-height: 38px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   font-size: 13px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .datetime-group {
-  width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px;
+  grid-template-columns: minmax(0, 1fr) 90px;
   gap: 6px;
 }
 
@@ -79,17 +117,18 @@
 
 .topbar-right {
   min-width: 0;
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .data-status {
   display: block;
-  width: 100%;
-  max-width: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 12px;
   color: var(--text-muted);
   text-align: right;
+  white-space: nowrap;
 }
 
 .phase-badge {

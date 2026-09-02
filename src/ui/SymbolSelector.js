@@ -2,7 +2,7 @@ export class SymbolSelector {
   constructor(selectEl, appState, symbols = null) {
     this.el = selectEl;
     this.appState = appState;
-    this.symbols = symbols ?? ['BTCUSD', 'BTCUSDT', 'ETHUSD', 'ETHUSDT'];
+    this.symbols = symbols ?? ['BTCUSD', 'BTCUSDT', 'ETHUSD', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
     this._render();
   }
 

@@ -2,7 +2,7 @@ import { ReplayEngine } from './replay/ReplayEngine.js';
 import { ChartManager } from './chart/ChartManager.js';
 import { ChartAdapter } from './chart/ChartAdapter.js';
 import { LocalCandleProvider } from './data/LocalCandleProvider.js';
-import { DeltaCandleProvider } from './data/DeltaCandleProvider.js';
+import { DeltaCandleProvider, TIMEFRAME_SECONDS } from './data/DeltaCandleProvider.js';
 import { HistoricalDataManager, DataEvents } from './data/HistoricalDataManager.js';
 import { CandleStore } from './data/CandleStore.js';
 import { CandleCache } from './data/CandleCache.js';
@@ -58,6 +58,10 @@ const fromDateEl = document.getElementById('from-date');
 const fromTimeEl = document.getElementById('from-time');
 const toDateEl = document.getElementById('to-date');
 const toTimeEl = document.getElementById('to-time');
+const replayDateEl = document.getElementById('replay-date');
+const replayTimeEl = document.getElementById('replay-time');
+const headerStartReplayBtn = document.getElementById('header-start-replay-btn');
+const cacheBadge = document.getElementById('cache-badge');
 const modeBanner = document.getElementById('mode-banner');
 const modeIndicator = document.getElementById('mode-indicator');
 const progressPanel = document.getElementById('progress-panel');
@@ -186,21 +190,67 @@ function applyWindowedChart(idx) {
   chartManager.setData(win, { fit: false });
 }
 
-// ===== DATE DEFAULTS =====
+// ===== DATE & REPLAY RANGE DEFAULTS =====
+function getReplayTargetUnixSeconds() {
+  if (replayDateEl && replayDateEl.value) {
+    try {
+      return toUnixSeconds(replayDateEl.value, replayTimeEl?.value || '00:00');
+    } catch {}
+  }
+  if (fromDateEl && fromDateEl.value) {
+    try {
+      return toUnixSeconds(fromDateEl.value, fromTimeEl?.value || '00:00');
+    } catch {}
+  }
+  // Default to 1 day ago
+  return Math.floor(Date.now() / 1000) - 86400;
+}
+
+function calculateAutoRange(targetSec, timeframe = '1m') {
+  const tfSec = TIMEFRAME_SECONDS[timeframe] || 60;
+  const nowSec = Math.floor(Date.now() / 1000);
+  
+  // Prior historical context (e.g. 350 candles before target for chart background)
+  const contextCandles = 350;
+  const futureCandles = 1200;
+
+  let from = Math.floor(targetSec - contextCandles * tfSec);
+  let to = Math.min(nowSec, Math.floor(targetSec + futureCandles * tfSec));
+
+  // If target is near now, adjust window backwards so there's enough candles
+  if (to - from < 500 * tfSec) {
+    from = Math.max(0, to - 1500 * tfSec);
+  }
+
+  return { from, to };
+}
+
 function setDefaultRange() {
   const nowSec = Math.floor(Date.now() / 1000);
   const toSec = Math.floor(nowSec / 60) * 60;
-  const fromSec = toSec - 86400;
-  const from = unixToDateTimeInput(fromSec);
-  const to = unixToDateTimeInput(toSec);
-  if (fromDateEl && toDateEl) {
-    fromDateEl.value = from.date; fromTimeEl.value = from.time;
-    toDateEl.value = to.date; toTimeEl.value = to.time;
+  const replaySec = toSec - 86400; // 1 day ago default replay start
+  const replayInput = unixToDateTimeInput(replaySec);
+  const toInput = unixToDateTimeInput(toSec);
+  const fromInput = unixToDateTimeInput(toSec - 86400 * 2);
+
+  if (replayDateEl) {
+    replayDateEl.value = replayInput.date;
+    if (replayTimeEl) replayTimeEl.value = replayInput.time;
     const todayStr = new Date(toSec * 1000).toISOString().slice(0, 10);
-    const minStr = '2020-01-01';
-    for (const el of [fromDateEl, toDateEl]) { el.min = minStr; el.max = todayStr; }
-    for (const el of [fromDateEl, toDateEl]) el.type = 'date';
-    for (const el of [fromTimeEl, toTimeEl]) { el.type = 'time'; el.step = '60'; }
+    replayDateEl.min = '2020-01-01';
+    replayDateEl.max = todayStr;
+  }
+
+  if (fromDateEl && toDateEl) {
+    fromDateEl.value = fromInput.date;
+    if (fromTimeEl) fromTimeEl.value = fromInput.time;
+    toDateEl.value = toInput.date;
+    if (toTimeEl) toTimeEl.value = toInput.time;
+  }
+  
+  if (jumpDateEl) {
+    jumpDateEl.value = replayInput.date;
+    if (jumpTimeEl) jumpTimeEl.value = replayInput.time;
   }
 }
 setDefaultRange();
@@ -438,9 +488,12 @@ function handleSymbolTimeframeChange(kind) {
   pendingStartIndex = 0;
   controls.setStartIndex(0);
   startReplayBtn.disabled = true;
+  if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
   transitionLoadingState(LoadingState.IDLE);
-  dataStatus.textContent = `${kind === 'symbol' ? 'Symbol' : 'Timeframe'} changed — click LOAD DATA`;
   if (followBtn) followBtn.classList.add('hidden');
+
+  // Automatically load historical data for the new symbol/timeframe
+  loadAndPrepareReplay({ autoStart: false });
 }
 
 symbolSelect.addEventListener('change', () => {
@@ -449,14 +502,7 @@ symbolSelect.addEventListener('change', () => {
     symbolSelect.value = appState.symbol;
     return;
   }
-  if (candleStore.getCount() || appState.candles.length || engine.getState().status !== 'idle') {
-    handleSymbolTimeframeChange('symbol');
-  } else {
-    appState.symbol = symbolSelect.value;
-    try { tradingEngine.clearPendingOrders('SYMBOL_CHANGE'); } catch {}
-    if (currentAbort) { try { currentAbort.abort(); } catch {} } loadToken++;
-    chartManager.setRevealedMax(null); chartManager.setAutoFollow(true);
-  }
+  handleSymbolTimeframeChange('symbol');
 });
 
 timeframeSelect.addEventListener('change', () => {
@@ -465,14 +511,69 @@ timeframeSelect.addEventListener('change', () => {
     timeframeSelect.value = appState.timeframe;
     return;
   }
-  if (candleStore.getCount() || appState.candles.length || engine.getState().status !== 'idle') {
-    handleSymbolTimeframeChange('timeframe');
-  } else {
-    appState.timeframe = timeframeSelect.value;
-    try { tradingEngine.clearPendingOrders('TIMEFRAME_CHANGE'); } catch {}
-    if (currentAbort) { try { currentAbort.abort(); } catch {} } loadToken++;
-    chartManager.setRevealedMax(null); chartManager.setAutoFollow(true);
-  }
+  handleSymbolTimeframeChange('timeframe');
+});
+
+// ===== PRESET CHIPS =====
+const presetChips = document.querySelectorAll('.preset-chip');
+function selectPreset(presetKey) {
+  presetChips.forEach(chip => {
+    if (chip.dataset.preset === presetKey) chip.classList.add('active');
+    else chip.classList.remove('active');
+  });
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  let targetSec = nowSec - 86400;
+
+  if (presetKey === '1d') targetSec = nowSec - 86400;
+  else if (presetKey === '3d') targetSec = nowSec - 3 * 86400;
+  else if (presetKey === '7d') targetSec = nowSec - 7 * 86400;
+  else if (presetKey === '30d') targetSec = nowSec - 30 * 86400;
+  else if (presetKey === 'now') targetSec = nowSec - 12 * 3600;
+
+  const dt = unixToDateTimeInput(targetSec);
+  if (replayDateEl) replayDateEl.value = dt.date;
+  if (replayTimeEl) replayTimeEl.value = dt.time;
+  if (jumpDateEl) jumpDateEl.value = dt.date;
+  if (jumpTimeEl) jumpTimeEl.value = dt.time;
+
+  loadAndPrepareReplay({ targetSec, autoStart: false });
+}
+
+presetChips.forEach(chip => {
+  chip.addEventListener('click', () => {
+    selectPreset(chip.dataset.preset);
+  });
+});
+
+// Set default preset chip active
+const default1dChip = document.querySelector('.preset-chip[data-preset="1d"]');
+if (default1dChip) default1dChip.classList.add('active');
+
+// ===== DATE INPUT CHANGE LISTENERS =====
+let dateInputDebounce = null;
+function handleReplayDateInputChange() {
+  presetChips.forEach(c => c.classList.remove('active'));
+  clearTimeout(dateInputDebounce);
+  dateInputDebounce = setTimeout(() => {
+    const targetSec = getReplayTargetUnixSeconds();
+    loadAndPrepareReplay({ targetSec, autoStart: false });
+  }, 400);
+}
+
+if (replayDateEl) replayDateEl.addEventListener('change', handleReplayDateInputChange);
+if (replayTimeEl) replayTimeEl.addEventListener('change', handleReplayDateInputChange);
+
+// ===== QUICK QUANTITY CHIPS =====
+const qtyChips = document.querySelectorAll('.qty-chip');
+const qtyInput = document.getElementById('trade-qty');
+qtyChips.forEach(chip => {
+  chip.addEventListener('click', () => {
+    if (qtyInput && chip.dataset.qty) {
+      qtyInput.value = chip.dataset.qty;
+      qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
 });
 
 // ===== TRADING PANEL =====
@@ -538,10 +639,10 @@ function trySeek(idx) {
   catch (e) { showError(e.message); return false; }
 }
 
-// ===== LOAD DATA (with state machine + race protection + retry) =====
-async function loadData() {
+// ===== LOAD & PREPARE REPLAY =====
+async function loadAndPrepareReplay({ targetSec = null, autoStart = false } = {}) {
   if (tradingEngine.hasOpenPosition()) {
-    showTradingError('Cannot load new data while a position is open — close position or reset account first.');
+    showTradingError('Cannot change replay date while a position is open — close position or reset account first.');
     return;
   }
 
@@ -553,39 +654,25 @@ async function loadData() {
 
   const symbol = appState.symbol;
   const timeframe = appState.timeframe;
-  let from, to;
+  const resolvedTarget = targetSec ?? getReplayTargetUnixSeconds();
+  const { from, to } = calculateAutoRange(resolvedTarget, timeframe);
 
-  // Validate dates
-  try {
-    if (!fromDateEl.value || !toDateEl.value) throw new Error('Select both FROM and TO dates (UTC)');
-    from = toUnixSeconds(fromDateEl.value, fromTimeEl.value || '00:00');
-    to = toUnixSeconds(toDateEl.value, toTimeEl.value || '00:00');
-    if (!Number.isFinite(from) || !Number.isFinite(to)) throw new Error('Invalid date/time');
-    if (from >= to) throw new Error('FROM must be before TO');
-    const maxRangeSec = 365 * 86400 * 2;
-    if (to - from > maxRangeSec) throw new Error('Range too large (max ~730 days). Reduce range.');
-  } catch (err) {
-    const dataErr = new DataError({
-      category: ErrorCategory.INVALID_REQUEST,
-      technicalMessage: err.message,
-      context: { symbol, timeframe, from, to },
-    });
-    transitionLoadingState(LoadingState.INVALID_DATA, dataErr);
-    dataStatus.textContent = 'Invalid date range';
-    return;
-  }
+  // Sync inputs
+  const fromDt = unixToDateTimeInput(from);
+  const toDt = unixToDateTimeInput(to);
+  if (fromDateEl) { fromDateEl.value = fromDt.date; fromTimeEl.value = fromDt.time; }
+  if (toDateEl) { toDateEl.value = toDt.date; toTimeEl.value = toDt.time; }
 
   // Transition to LOADING
   transitionLoadingState(LoadingState.LOADING);
   dataStatus.textContent = `Loading ${symbol} ${timeframe}...`;
   hideError();
 
-  // Progress tracking
   const onProgress = ({ completed, totalChunks, pct, loaded }) => {
     if (token !== loadToken) return;
-    dataStatus.textContent = `Loading ${symbol} \u00b7 ${timeframe} \u2014 chunk ${completed}/${totalChunks} (${pct}%) \u2014 ${loaded} candles`;
+    dataStatus.textContent = `Loading ${symbol} · ${timeframe} — chunk ${completed}/${totalChunks} (${pct}%) — ${loaded} candles`;
   };
-  const onChunk = ({ index, count }) => {};
+  const onChunk = () => {};
   dataManager.on(DataEvents.PROGRESS, onProgress);
   dataManager.on(DataEvents.CHUNK_RECEIVED, onChunk);
 
@@ -604,26 +691,42 @@ async function loadData() {
     engine.load(candles);
     appState.setReplayState(engine.getState());
     timeline.setTotal(candles.length, candles);
-    pendingStartIndex = Number(timeline.getSelectedIndex());
+
+    // Find closest index for replay start point
+    let replayIdx = findClosestIndex(resolvedTarget);
+    if (replayIdx < 0) replayIdx = Math.max(0, Math.floor(candles.length * 0.25));
+    pendingStartIndex = replayIdx;
+
     controls.setStartIndex(pendingStartIndex);
+    timeline.setPosition(pendingStartIndex);
     updatePreviewWindow(pendingStartIndex);
     startReplayBtn.disabled = false;
+    if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
+
+    // Cache indicator
+    if (cacheBadge) {
+      if (metadata?.cached) cacheBadge.classList.remove('hidden');
+      else cacheBadge.classList.add('hidden');
+    }
 
     const fromLbl = new Date(from * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
     const toLbl = new Date(to * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-    const gapInfo = metadata.gaps?.length ? ` \u2022 ${metadata.gaps.length} gaps` : ' \u2022 no gaps';
-    const dupInfo = metadata.duplicatesRemoved ? ` \u2022 ${metadata.duplicatesRemoved} dups removed` : '';
-    dataStatus.textContent = `Loaded: ${symbol} ${timeframe} ${candles.length.toLocaleString()} candles (${fromLbl} \u2192 ${toLbl})${gapInfo}${dupInfo} \u2022 actual ${formatTime(metadata.actualFirst)} \u2192 ${formatTime(metadata.actualLast)}`;
+    const cachedTag = metadata?.cached ? ' [Cached]' : '';
+    dataStatus.textContent = `Ready: ${symbol} ${timeframe} (${candles.length.toLocaleString()} candles)${cachedTag}`;
+
     timeline.setEnabled(true);
     transitionLoadingState(LoadingState.SUCCESS);
     updateModeBanner(engine.getState());
     updateProgress(engine.getState());
 
+    if (autoStart) {
+      engine.start(pendingStartIndex);
+    }
+
   } catch (err) {
     dataManager.off(DataEvents.PROGRESS, onProgress);
     dataManager.off(DataEvents.CHUNK_RECEIVED, onChunk);
 
-    // Abort handling
     if (err?.name === 'AbortError') {
       if (token === loadToken) {
         transitionLoadingState(LoadingState.ABORTED);
@@ -634,7 +737,6 @@ async function loadData() {
 
     if (token !== loadToken) return;
 
-    // Build DataError
     let dataErr;
     if (err instanceof DataError) {
       dataErr = err;
@@ -643,13 +745,11 @@ async function loadData() {
     } else {
       dataErr = DataError.fromGenericError(err);
     }
-    // Enrich context
     dataErr.context.symbol = symbol;
     dataErr.context.timeframe = timeframe;
     dataErr.context.start = from;
     dataErr.context.end = to;
 
-    // Determine loading state from error category
     const stateMap = {
       [ErrorCategory.NETWORK]: LoadingState.NETWORK_ERROR,
       [ErrorCategory.TIMEOUT]: LoadingState.TIMEOUT,
@@ -664,27 +764,23 @@ async function loadData() {
     const newState = stateMap[dataErr.category] || LoadingState.UNKNOWN_ERROR;
     transitionLoadingState(newState, dataErr);
 
-    // Update data status
     if (dataErr.category === ErrorCategory.NO_DATA) {
-      dataStatus.textContent = 'No candles found for this range';
+      dataStatus.textContent = 'No candles found for this date';
     } else if (dataErr.category === ErrorCategory.HTTP) {
-      dataStatus.textContent = `HTTP ${dataErr.context.status || 'error'} \u2014 ${symbol} ${timeframe}`;
+      dataStatus.textContent = `HTTP ${dataErr.context.status || 'error'} — ${symbol} ${timeframe}`;
     } else if (dataErr.category === ErrorCategory.NETWORK || dataErr.category === ErrorCategory.CORS || dataErr.category === ErrorCategory.TIMEOUT) {
-      dataStatus.textContent = `Network error \u2014 ${symbol} ${timeframe}`;
-    } else if (dataErr.category === ErrorCategory.INVALID_REQUEST) {
-      dataStatus.textContent = 'Invalid request';
+      dataStatus.textContent = `Network error — ${symbol} ${timeframe}`;
     } else {
-      dataStatus.textContent = 'Error loading candles';
+      dataStatus.textContent = 'Error loading replay candles';
     }
 
-    // Auto-retry for retryable errors
     if (isRetryableCategory(dataErr.category) && retryCount < MAX_RETRIES) {
       retryCount++;
       const backoff = Math.min(5000, Math.pow(2, retryCount - 1) * 1000);
-      dataStatus.textContent = `Retrying\u2026 ${retryCount}/${MAX_RETRIES}`;
+      dataStatus.textContent = `Retrying… ${retryCount}/${MAX_RETRIES}`;
       transitionLoadingState(LoadingState.LOADING);
       setTimeout(() => {
-        if (token === loadToken) loadData();
+        if (token === loadToken) loadAndPrepareReplay({ targetSec: resolvedTarget, autoStart });
       }, backoff);
       return;
     }
@@ -695,15 +791,30 @@ async function loadData() {
     if (token === loadToken) {
       appState.setLoading(false);
       if (currentAbort === abortController) currentAbort = null;
-      if (loadingState !== LoadingState.ABORTED && loadingState !== LoadingState.SUCCESS && loadingState !== LoadingState.EMPTY) {
-        // Keep error state
-      } else if (loadingState === LoadingState.SUCCESS) {
-        // Already set
-      }
       updateLoadButton();
       updateModeBanner(engine.getState());
     }
   }
+}
+
+// Backward-compatible loadData function
+async function loadData() {
+  return loadAndPrepareReplay({ autoStart: false });
+}
+
+// ===== HEADER START REPLAY BUTTON =====
+if (headerStartReplayBtn) {
+  headerStartReplayBtn.addEventListener('click', () => {
+    const st = engine.getState();
+    const hasData = candleStore.getCount() > 0 || appState.candles.length > 0;
+    if (hasData && st.status === 'ready') {
+      engine.start(pendingStartIndex);
+    } else if (hasData && st.status === 'paused') {
+      engine.play();
+    } else {
+      loadAndPrepareReplay({ autoStart: true });
+    }
+  });
 }
 
 // ===== ENGINE EVENTS =====
@@ -711,13 +822,40 @@ engine.on('stateChanged', (s) => {
   appState.setReplayState(s);
   if (s.currentIndex >= 0) timeline.setPosition(s.currentIndex);
   onReplayEventSync(s);
-  if (s.status === 'ready') { timeline.setEnabled(true); startReplayBtn.disabled = false; }
-  else if (s.status === 'playing' || s.status === 'paused' || s.status === 'ended') { timeline.setEnabled(true); startReplayBtn.disabled = true; }
-  if (s.status === 'ended') { dataStatus.textContent = `Replay ended at ${s.currentIndex + 1} / ${s.totalCandles}`; }
+  if (s.status === 'ready') {
+    timeline.setEnabled(true);
+    startReplayBtn.disabled = false;
+    if (headerStartReplayBtn) {
+      headerStartReplayBtn.innerHTML = '<span class="icon">▶</span> START REPLAY';
+      headerStartReplayBtn.disabled = false;
+    }
+  } else if (s.status === 'playing') {
+    timeline.setEnabled(true);
+    startReplayBtn.disabled = true;
+    if (headerStartReplayBtn) {
+      headerStartReplayBtn.innerHTML = '<span class="icon">⏸</span> PAUSE';
+      headerStartReplayBtn.disabled = false;
+    }
+  } else if (s.status === 'paused') {
+    timeline.setEnabled(true);
+    startReplayBtn.disabled = true;
+    if (headerStartReplayBtn) {
+      headerStartReplayBtn.innerHTML = '<span class="icon">▶</span> RESUME';
+      headerStartReplayBtn.disabled = false;
+    }
+  } else if (s.status === 'ended') {
+    timeline.setEnabled(true);
+    startReplayBtn.disabled = true;
+    dataStatus.textContent = `Replay ended at ${s.currentIndex + 1} / ${s.totalCandles}`;
+    if (headerStartReplayBtn) {
+      headerStartReplayBtn.innerHTML = '<span class="icon">↺</span> REPLAY AGAIN';
+      headerStartReplayBtn.disabled = false;
+    }
+  }
 });
 engine.on('started', (payload) => {
   const idx = payload?.index ?? pendingStartIndex;
-  dataStatus.textContent = `Replaying from ${idx}`;
+  dataStatus.textContent = `Replaying from candle #${idx + 1}`;
   timeline.setPosition(idx);
   updateRevealedMax(idx);
   onReplayEventSync(engine.getState());
@@ -739,6 +877,10 @@ engine.on('reset', (s) => {
     updateRevealedMax(pendingStartIndex);
     timeline.setTotal(candleStore.getCount() || appState.candles.length, candleStore.getAll().length ? candleStore.getAll() : appState.candles);
     startReplayBtn.disabled = false;
+    if (headerStartReplayBtn) {
+      headerStartReplayBtn.innerHTML = '<span class="icon">▶</span> START REPLAY';
+      headerStartReplayBtn.disabled = false;
+    }
   } else if (s.index !== undefined) {
     updateRevealedMax(s.index);
   }
@@ -759,7 +901,7 @@ sliderEl.addEventListener('change', () => {
 });
 
 // ===== LOAD BUTTON =====
-loadBtn.addEventListener('click', () => { retryCount = 0; hideErrorPanel(); loadData(); });
+if (loadBtn) loadBtn.addEventListener('click', () => { retryCount = 0; hideErrorPanel(); loadData(); });
 
 // ===== KEYBOARD SHORTCUTS =====
 document.addEventListener('keydown', (e) => {
@@ -767,7 +909,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
     e.preventDefault();
     const s = engine.getState();
-    if (s.status === 'paused') engine.play();
+    if (s.status === 'paused' || s.status === 'ready') engine.play();
     else if (s.status === 'playing') engine.pause();
   } else if (e.code === 'ArrowRight') {
     e.preventDefault();
@@ -791,4 +933,4 @@ document.addEventListener('keydown', (e) => {
 // ===== INIT =====
 transitionLoadingState(LoadingState.IDLE);
 updateProgress();
-loadData();
+loadAndPrepareReplay({ autoStart: false });
