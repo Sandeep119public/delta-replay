@@ -21,7 +21,7 @@ export class ChartAdapter {
       return visible.length > WINDOW ? visible.slice(-WINDOW) : visible;
     };
 
-    const render = (index) => {
+    const render = (index, { fit = false } = {}) => {
       const window = visibleWindow();
       if (!window.length) {
         this.chart.clear();
@@ -33,21 +33,24 @@ export class ChartAdapter {
       // avoids lightweight-charts incremental-update state and guarantees the
       // chart contents match the replay cursor exactly.
       if (typeof this.chart.renderReplayWindow === 'function') {
-        this.chart.renderReplayWindow(window, { fit: true });
+        this.chart.renderReplayWindow(window, { fit });
       } else {
         this.chart.setRevealedMax?.(window[window.length - 1].time);
-        this.chart.setData(window, { fit: true });
+        this.chart.setData(window, { fit });
+        if (!fit && this.chart.followCurrent) {
+          this.chart.followCurrent();
+        }
       }
       this._lastRenderedIndex = index;
     };
 
-    this._unsubs.push(this.engine.on(ReplayEvents.STARTED, ({ index }) => render(index)));
-    this._unsubs.push(this.engine.on(ReplayEvents.SEEKED, ({ index }) => render(index)));
+    this._unsubs.push(this.engine.on(ReplayEvents.STARTED, ({ index }) => render(index, { fit: true })));
+    this._unsubs.push(this.engine.on(ReplayEvents.SEEKED, ({ index }) => render(index, { fit: true })));
     this._unsubs.push(this.engine.on(ReplayEvents.RESET, (payload) => {
-      render(payload?.index ?? this.engine.getState().currentIndex);
+      render(payload?.index ?? this.engine.getState().currentIndex, { fit: true });
     }));
     this._unsubs.push(this.engine.on(ReplayEvents.STEPPED, ({ index }) => {
-      if (index > this._lastRenderedIndex) render(index);
+      if (index > this._lastRenderedIndex) render(index, { fit: false });
     }));
   }
 

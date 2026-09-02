@@ -4,9 +4,6 @@ export class SymbolSelector {
     this.appState = appState;
     this.symbols = symbols ?? ['BTCUSD', 'BTCUSDT', 'ETHUSD', 'ETHUSDT'];
     this._render();
-    this.el.addEventListener('change', () => {
-      this.appState.symbol = this.el.value;
-    });
   }
 
   _render() {

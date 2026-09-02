@@ -36,6 +36,8 @@ export class Timeline {
       this.slider.min = 0;
       this.slider.max = 0;
       this.slider.value = 0;
+      this.startLabel.textContent = '—';
+      this.endLabel.textContent = '—';
       this._updateLabels(0);
       return;
     }

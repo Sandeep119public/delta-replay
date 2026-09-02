@@ -67,7 +67,7 @@ export class ReplayControls {
     this.statusEl.className = `replay-status ${state.status}`;
 
     this.startReplayBtn.disabled = !hasData || !isReady;
-    this.startReplayBtn.textContent = isReady ? 'START REPLAY' : 'START REPLAY';
+    this.startReplayBtn.textContent = 'START REPLAY';
 
     if (isPlaying) {
       this.playBtn.classList.add('hidden');

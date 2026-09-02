@@ -381,12 +381,17 @@ function isRetryableCategory(category) {
 }
 
 // ===== LEGACY ERROR DISPLAY (for backward compat) =====
-const errorBanner = document.getElementById('error-banner');
 function showError(msg) {
-  if (errorBanner) { errorBanner.textContent = msg; errorBanner.classList.remove('hidden'); }
+  if (!msg) { hideError(); return; }
+  const dataErr = new DataError({
+    category: ErrorCategory.UNKNOWN,
+    technicalMessage: msg,
+    userMessage: msg,
+  });
+  showErrorPanel(dataErr);
 }
 function hideError() {
-  if (errorBanner) { errorBanner.classList.add('hidden'); errorBanner.textContent = ''; }
+  hideErrorPanel();
 }
 
 function showTradingError(msg) {
@@ -417,6 +422,9 @@ function handleSymbolTimeframeChange(kind) {
     else timeframeSelect.value = appState.timeframe;
     return;
   }
+  if (kind === 'symbol') appState.symbol = symbolSelect.value;
+  else appState.timeframe = timeframeSelect.value;
+
   try { tradingEngine.clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE'); } catch {}
   loadToken++;
   if (currentAbort) { try { currentAbort.abort(); } catch {} currentAbort = null; }
@@ -436,9 +444,15 @@ function handleSymbolTimeframeChange(kind) {
 }
 
 symbolSelect.addEventListener('change', () => {
+  if (tradingEngine.hasOpenPosition()) {
+    showTradingError('Cannot change symbol while a position is open — close position first.');
+    symbolSelect.value = appState.symbol;
+    return;
+  }
   if (candleStore.getCount() || appState.candles.length || engine.getState().status !== 'idle') {
     handleSymbolTimeframeChange('symbol');
   } else {
+    appState.symbol = symbolSelect.value;
     try { tradingEngine.clearPendingOrders('SYMBOL_CHANGE'); } catch {}
     if (currentAbort) { try { currentAbort.abort(); } catch {} } loadToken++;
     chartManager.setRevealedMax(null); chartManager.setAutoFollow(true);
@@ -446,9 +460,15 @@ symbolSelect.addEventListener('change', () => {
 });
 
 timeframeSelect.addEventListener('change', () => {
+  if (tradingEngine.hasOpenPosition()) {
+    showTradingError('Cannot change timeframe while a position is open — close position first.');
+    timeframeSelect.value = appState.timeframe;
+    return;
+  }
   if (candleStore.getCount() || appState.candles.length || engine.getState().status !== 'idle') {
     handleSymbolTimeframeChange('timeframe');
   } else {
+    appState.timeframe = timeframeSelect.value;
     try { tradingEngine.clearPendingOrders('TIMEFRAME_CHANGE'); } catch {}
     if (currentAbort) { try { currentAbort.abort(); } catch {} } loadToken++;
     chartManager.setRevealedMax(null); chartManager.setAutoFollow(true);
@@ -514,7 +534,7 @@ function trySeek(idx) {
     showTradingError('Cannot seek while a position is open — close position first.');
     return false;
   }
-  try { engine.seek(idx); setTimeout(() => applyWindowedChart(idx), 0); return true; }
+  try { engine.seek(idx); return true; }
   catch (e) { showError(e.message); return false; }
 }
 

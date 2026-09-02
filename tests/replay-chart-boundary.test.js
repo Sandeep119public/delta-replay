@@ -38,8 +38,7 @@ describe('ChartAdapter revealed boundary', () => {
     engine.stepForward();
     engine.stepForward();
 
-    expect(chart.update).toHaveBeenCalledTimes(2);
-    expect(chart.update.mock.calls.map(([c]) => c.time)).toEqual([data[1].time, data[2].time]);
+    expect(chart.setData).toHaveBeenCalledTimes(3);
     expect(chart.setRevealedMax.mock.calls.map(([t]) => t)).toEqual([data[0].time, data[1].time, data[2].time]);
   });
 });

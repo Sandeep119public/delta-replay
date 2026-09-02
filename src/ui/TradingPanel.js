@@ -252,8 +252,10 @@ export class TradingPanel {
         if (o.status === 'FILLED') color = '#22c55e';
         else if (o.status === 'CANCELLED') color = '#eab308';
         else if (o.status === 'REJECTED') color = '#ef4444';
+        const price = o.stopPrice ?? o.limitPrice;
+        const typeLabel = o.type === 'STOP_MARKET' ? 'STOP ' : (o.type === 'LIMIT' ? 'LIMIT ' : '');
         return `<div class="trade-row" style="opacity:0.85;">
-          <span><b>${o.id}</b> ${o.side} ${o.quantity} @ ${o.limitPrice != null ? Number(o.limitPrice).toFixed(2) : '—'} <span style="color:${color}">[${o.status}]</span></span>
+          <span><b>${o.id}</b> ${typeLabel}${o.side} ${o.quantity} @ ${price != null ? Number(price).toFixed(2) : '—'} <span style="color:${color}">[${o.status}]</span></span>
           <span style="font-size:10px;">${o.filledPrice != null ? '@'+Number(o.filledPrice).toFixed(2) : ''} ${o.rejectionReason || o.cancelReason || ''}</span>
         </div>`;
       }).join('');

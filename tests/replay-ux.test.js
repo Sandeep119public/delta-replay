@@ -247,9 +247,9 @@ describe('Replay UX — future data regression', () => {
     expect(mockChart._calls.setData.length).toBe(1);
     expect(mockChart._calls.setData[0].length).toBe(2); // 0..1
     eng.stepForward();
-    // update called once
-    expect(mockChart._calls.update.length).toBe(1);
-    expect(mockChart._calls.setData[0].length).toBeLessThan(candles.length);
+    expect(mockChart._calls.setData.length).toBe(2);
+    expect(mockChart._calls.setData[1].length).toBe(3);
+    expect(mockChart._calls.setData[1].length).toBeLessThan(candles.length);
     adapter.detach();
   });
 
@@ -289,11 +289,7 @@ describe('Chart followCurrent', () => {
     adapter.attach();
     eng.load(makeCandles(5));
     eng.start(0);
-    // after step, followCurrent should be implied via update handler
-    // we check update was called and no extra fitContent (setData not called again)
-    const beforeSetDataCount = mockChart._calls.setData.length;
     eng.stepForward();
-    expect(mockChart._calls.update.length).toBe(1);
-    expect(mockChart._calls.setData.length).toBe(beforeSetDataCount);
+    expect(mockChart._calls.followCurrent).toBe(1);
   });
 });

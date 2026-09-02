@@ -197,8 +197,8 @@
 }
 
 .trading-panels {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
@@ -209,10 +209,6 @@
   border-radius: 8px;
   background: var(--bg-input);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.015);
-}
-
-.order-panel {
-  grid-column: 1 / -1;
 }
 
 .account-panel h3,

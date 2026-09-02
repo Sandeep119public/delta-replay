@@ -4,9 +4,6 @@ export class TimeframeSelector {
     this.appState = appState;
     this.timeframes = ['1m', '5m', '15m', '1h'];
     this._render();
-    this.el.addEventListener('change', () => {
-      this.appState.timeframe = this.el.value;
-    });
   }
 
   _render() {
