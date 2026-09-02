@@ -27,7 +27,7 @@ const engine = new ReplayEngine();
 const binanceProvider = new BinanceCandleProvider();
 const deltaProvider = new DeltaCandleProvider();
 const localProvider = new LocalCandleProvider();
-const candleCache = new CandleCache();
+const candleCache = new CandleCache({ dbName: 'delta-replay-futures-v1' });
 const dataManager = new HistoricalDataManager({ provider: binanceProvider, store: candleStore, cache: candleCache, concurrency: 2, chunkSize: 1000 });
 
 const tradingEngine = new PaperTradingEngine({ startingBalance: 10000, replayEngine: engine });

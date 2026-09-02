@@ -1,7 +1,8 @@
-export const BINANCE_DEFAULT_BASE = 'https://api.binance.com';
+export const BINANCE_FUTURES_BASE = 'https://fapi.binance.com';
+export const BINANCE_SPOT_BASE = 'https://api.binance.com';
 
 export class BinanceClient {
-  constructor({ baseUrl = BINANCE_DEFAULT_BASE, timeoutMs = 15000, fetchFn } = {}) {
+  constructor({ baseUrl = BINANCE_FUTURES_BASE, timeoutMs = 15000, fetchFn } = {}) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.timeoutMs = timeoutMs;
     if (fetchFn) {
@@ -26,7 +27,10 @@ export class BinanceClient {
 
     const startMs = Math.floor(start) * 1000;
     const endMs = Math.floor(end) * 1000;
-    const url = `${this.baseUrl}/api/v3/klines?symbol=${encodeURIComponent(mappedSymbol)}&interval=${encodeURIComponent(resolution)}&startTime=${startMs}&endTime=${endMs}&limit=1000`;
+    const isFutures = this.baseUrl.includes('fapi');
+    const endpoint = isFutures ? '/fapi/v1/klines' : '/api/v3/klines';
+    const limit = isFutures ? 1500 : 1000;
+    const url = `${this.baseUrl}${endpoint}?symbol=${encodeURIComponent(mappedSymbol)}&interval=${encodeURIComponent(resolution)}&startTime=${startMs}&endTime=${endMs}&limit=${limit}`;
 
     const controller = new AbortController();
     if (signal) {
@@ -36,7 +40,18 @@ export class BinanceClient {
 
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await this.fetchFn(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+      let res;
+      try {
+        res = await this.fetchFn(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+      } catch (err) {
+        // Fallback to spot if futures fails
+        if (isFutures) {
+          const fallbackUrl = `${BINANCE_SPOT_BASE}/api/v3/klines?symbol=${encodeURIComponent(mappedSymbol)}&interval=${encodeURIComponent(resolution)}&startTime=${startMs}&endTime=${endMs}&limit=1000`;
+          res = await this.fetchFn(fallbackUrl, { signal: controller.signal, headers: { Accept: 'application/json' } });
+        } else {
+          throw err;
+        }
+      }
       if (!res.ok) {
         throw new Error(`Binance API error: ${res.status} ${res.statusText}`);
       }
