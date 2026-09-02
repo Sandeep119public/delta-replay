@@ -3,6 +3,7 @@ import { ChartManager } from './chart/ChartManager.js';
 import { ChartAdapter } from './chart/ChartAdapter.js';
 import { LocalCandleProvider } from './data/LocalCandleProvider.js';
 import { DeltaCandleProvider, TIMEFRAME_SECONDS } from './data/DeltaCandleProvider.js';
+import { BinanceCandleProvider } from './data/BinanceCandleProvider.js';
 import { HistoricalDataManager, DataEvents } from './data/HistoricalDataManager.js';
 import { CandleStore } from './data/CandleStore.js';
 import { CandleCache } from './data/CandleCache.js';
@@ -23,10 +24,11 @@ const appState = new AppState();
 const candleStore = new CandleStore();
 appState.setCandleStore(candleStore);
 const engine = new ReplayEngine();
+const binanceProvider = new BinanceCandleProvider();
 const deltaProvider = new DeltaCandleProvider();
 const localProvider = new LocalCandleProvider();
 const candleCache = new CandleCache();
-const dataManager = new HistoricalDataManager({ provider: deltaProvider, store: candleStore, cache: candleCache, concurrency: 2, chunkSize: 2000 });
+const dataManager = new HistoricalDataManager({ provider: binanceProvider, store: candleStore, cache: candleCache, concurrency: 2, chunkSize: 1000 });
 
 const tradingEngine = new PaperTradingEngine({ startingBalance: 10000, replayEngine: engine });
 
