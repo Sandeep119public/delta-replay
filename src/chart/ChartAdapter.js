@@ -44,25 +44,20 @@ export class ChartAdapter {
       this._lastRenderedIndex = index;
     }));
 
-    // ReplayEngine emits STEPPED before main.js receives its own stepped
-    // listener. ChartManager rejects updates newer than its current
-    // revealedMax, so advance that boundary before every chart update.
-    // Without this ordering the replay index advances while the chart stays
-    // frozen at the starting candle.
+    // Forward replay is driven ONLY by STEPPED. MARKET_CANDLE is reserved for
+    // the trading boundary. Keeping chart rendering on one event removes the
+    // race/deduplication ambiguity between chart and paper-trading listeners.
     this._unsubs.push(this.engine.on(ReplayEvents.STEPPED, ({ candle, index }) => {
       if (index <= this._lastRenderedIndex) return;
-      this.chart.setRevealedMax?.(candle.time);
-      this.chart.update(candle);
+      const updated = this.chart.updateRevealedCandle
+        ? this.chart.updateRevealedCandle(candle)
+        : (this.chart.setRevealedMax?.(candle.time), this.chart.update(candle));
+      if (!updated) {
+        // Do not advance the rendered index if the chart rejected the candle.
+        // A subsequent state update can then attempt to recover deterministically.
+        return;
+      }
       this._lastRenderedIndex = index;
-      this.chart.followCurrent();
-    }));
-
-    this._unsubs.push(this.engine.on(ReplayEvents.MARKET_CANDLE, ({ candle, index }) => {
-      if (index <= this._lastRenderedIndex) return;
-      this.chart.setRevealedMax?.(candle.time);
-      this.chart.update(candle);
-      this._lastRenderedIndex = index;
-      this.chart.followCurrent();
     }));
   }
 
