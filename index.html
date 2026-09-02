@@ -218,22 +218,24 @@
     <!-- TIMELINE -->
     <section class="timeline-section" aria-label="Timeline">
       <div class="timeline-header">
-        <span id="timeline-start-label">—</span>
-        <span id="timeline-current-label" class="timeline-current">—</span>
-        <span id="timeline-end-label">—</span>
+        <span class="timeline-bound"><span class="bound-label">From:</span> <span id="timeline-start-label">—</span></span>
+        <span id="timeline-current-label" class="timeline-current hidden">—</span>
+        <span class="timeline-bound"><span class="bound-label">To:</span> <span id="timeline-end-label">—</span></span>
       </div>
       <div class="timeline-track-wrap">
         <input type="range" id="timeline-slider" min="0" max="100" value="0" disabled aria-label="Timeline position" />
         <div class="timeline-meta">
-          <span id="timeline-index-label">0 / 0</span>
-          <span id="timeline-time-label">—</span>
+          <div class="timeline-meta-left">
+            <span id="start-index-label">Ready to replay</span>
+            <span id="start-time-label" class="start-time-label">—</span>
+          </div>
+          <div class="timeline-meta-right">
+            <span id="timeline-index-label">0 / 0</span>
+            <span id="timeline-time-label" class="hidden">—</span>
+          </div>
         </div>
       </div>
-      <div class="timeline-start-controls">
-        <div class="start-info">
-          <span id="start-index-label">Ready to replay</span>
-          <span id="start-time-label" class="start-time-label">—</span>
-        </div>
+      <div class="timeline-start-controls hidden">
         <!-- Hidden/compact jump & start controls for test compatibility -->
         <div class="hidden" aria-hidden="true">
           <input type="date" id="jump-date" />
