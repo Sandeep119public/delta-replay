@@ -18,7 +18,7 @@ export class ChartManager {
       grid: { vertLines: { color: '#1e242f' }, horzLines: { color: '#1e242f' } },
       crosshair: { mode: 1 },
       timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#2a3342' },
-      rightPriceScale: { borderColor: '#2a3342' },
+      rightPriceScale: { borderColor: '#2a3342', autoScale: true },
       width: this.container.clientWidth,
       height: this.container.clientHeight || 400
     });
@@ -58,7 +58,10 @@ export class ChartManager {
 
   resize() {
     if (!this.chart) return;
-    this.chart.applyOptions({ width: this.container.clientWidth, height: this.container.clientHeight });
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+    if (width <= 0 || height <= 0) return;
+    this.chart.applyOptions({ width, height });
   }
 
   setData(candles, { fit = true } = {}) {
@@ -66,7 +69,7 @@ export class ChartManager {
     const source = Array.isArray(candles) ? candles : [];
     const filtered = this._revealedMaxTime == null
       ? source
-      : source.filter(c => c.time <= this._revealedMaxTime);
+      : source.filter(c => Number(c.time) <= this._revealedMaxTime);
     this._isUserPanning = true;
     try {
       this.series.setData(filtered);
@@ -77,18 +80,42 @@ export class ChartManager {
   }
 
   /**
-   * Atomically reveal and append one replay candle. This is the only method
-   * ChartAdapter should use for forward replay progression.
+   * Render the complete currently revealed replay window.
+   * The caller supplies only candles that are already known to the replay.
+   * Rebuilding a bounded window avoids incremental update state problems and
+   * guarantees the chart matches the replay cursor exactly.
    */
+  renderReplayWindow(candles, { fit = false } = {}) {
+    if (!this.series) throw new Error('Chart not initialized');
+    const source = Array.isArray(candles) ? candles : [];
+    const valid = source.filter(c => c && Number.isFinite(Number(c.time)));
+    if (!valid.length) {
+      this.series.setData([]);
+      return;
+    }
+
+    const last = valid[valid.length - 1];
+    this._revealedMaxTime = Number(last.time);
+    this._isUserPanning = true;
+    try {
+      this.series.setData(valid);
+      // Force the price scale to recalculate from the new dataset.
+      try { this.chart.priceScale('right').applyOptions({ autoScale: true }); } catch {}
+      if (fit || !this._autoFollow) {
+        this.chart.timeScale().fitContent();
+      } else {
+        this.chart.timeScale().scrollToRealTime();
+      }
+    } finally {
+      setTimeout(() => { this._isUserPanning = false; }, 50);
+    }
+  }
+
   updateRevealedCandle(candle) {
     if (!this.series || !candle) return false;
     const time = Number(candle.time);
     if (!Number.isFinite(time)) return false;
     if (this._revealedMaxTime != null && time < this._revealedMaxTime) return false;
-
-    // Set the boundary immediately before the chart operation. The previous
-    // implementation advanced this in main.js after the event had fired,
-    // creating an ordering race with the future-candle guard.
     this._revealedMaxTime = time;
     try {
       this.series.update(candle);
@@ -121,7 +148,6 @@ export class ChartManager {
 
   setRevealedMax(time) {
     this._revealedMaxTime = time == null ? null : Number(time);
-    if (this._autoFollow && this._revealedMaxTime != null) this.followCurrent();
   }
 
   setAutoFollow(v) {
@@ -140,7 +166,7 @@ export class ChartManager {
 
   scrollToTime(unixSec) {
     if (!this.chart) return;
-    try { this.chart.timeScale().scrollToPosition(5, false); } catch {}
+    try { this.chart.timeScale().scrollToRealTime(); } catch {}
   }
 
   clear() {
