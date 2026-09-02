@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Delta Replay</title>
   <link rel="stylesheet" href="/src/styles.css" />
+  <link rel="stylesheet" href="/src/ui-polish.css" />
 </head>
 <body>
   <div id="app">
@@ -12,7 +13,7 @@
     <header class="topbar" role="banner">
       <div class="topbar-left">
         <h1 class="logo">DELTA REPLAY</h1>
-        <span class="phase-badge" aria-hidden="true">PHASE 1 — HISTORICAL REPLAY</span>
+        <span class="phase-badge" aria-hidden="true">CHART REPLAY + PAPER TRADING</span>
       </div>
       <nav class="topbar-center" aria-label="Data controls">
         <div class="selector-group">
@@ -55,7 +56,7 @@
       <span id="market-time-full" class="market-time-full">CURRENT MARKET TIME: —</span>
     </div>
 
-    <!-- ERROR PANEL (replaces giant error banner) -->
+    <!-- ERROR PANEL -->
     <div id="error-panel" class="error-panel hidden" role="alert" aria-live="assertive">
       <div class="error-panel-header">
         <span class="error-panel-icon" aria-hidden="true">!</span>
