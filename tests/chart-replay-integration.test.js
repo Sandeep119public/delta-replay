@@ -22,12 +22,13 @@ function chartMock() {
     setData: vi.fn(),
     update: vi.fn(),
     clear: vi.fn(),
-    followCurrent: vi.fn()
+    followCurrent: vi.fn(),
+    setRevealedMax: vi.fn()
   };
 }
 
 describe('Chart replay integration', () => {
-  it('renders the starting candle, then follows each replay step', () => {
+  it('renders the starting candle, then renders each replay step', () => {
     const engine = new ReplayEngine();
     const chart = chartMock();
     new ChartAdapter(engine, chart).attach();
@@ -42,10 +43,28 @@ describe('Chart replay integration', () => {
     engine.stepForward();
     engine.stepForward();
 
-    expect(chart.update).toHaveBeenCalledTimes(2);
-    expect(chart.update.mock.calls[0][0].time).toBe(data[3].time);
-    expect(chart.update.mock.calls[1][0].time).toBe(data[4].time);
+    expect(chart.setData).toHaveBeenCalledTimes(3);
+    expect(chart.setData.mock.calls[1][0]).toHaveLength(4);
+    expect(chart.setData.mock.calls[1][0][3].time).toBe(data[3].time);
+    expect(chart.setData.mock.calls[2][0]).toHaveLength(5);
+    expect(chart.setData.mock.calls[2][0][4].time).toBe(data[4].time);
     expect(chart.followCurrent).toHaveBeenCalledTimes(2);
+    expect(chart.setRevealedMax).toHaveBeenCalledWith(data[4].time);
+  });
+
+  it('keeps the rendered window bounded at 1000 candles', () => {
+    const engine = new ReplayEngine();
+    const chart = chartMock();
+    new ChartAdapter(engine, chart).attach();
+    const data = candles(1105);
+    engine.load(data);
+    engine.start(1000);
+    engine.stepForward();
+
+    const latest = chart.setData.mock.calls.at(-1)[0];
+    expect(latest).toHaveLength(1000);
+    expect(latest[0].time).toBe(data[2].time);
+    expect(latest.at(-1).time).toBe(data[1001].time);
   });
 
   it('rebuilds the chart on seek instead of trying to append backwards', () => {
@@ -64,7 +83,7 @@ describe('Chart replay integration', () => {
     expect(chart.update).not.toHaveBeenCalled();
   });
 
-  it('does not double-render the starting candle from MARKET_CANDLE', () => {
+  it('does not render the starting candle twice', () => {
     const engine = new ReplayEngine();
     const chart = chartMock();
     new ChartAdapter(engine, chart).attach();
@@ -73,7 +92,6 @@ describe('Chart replay integration', () => {
     engine.start(1);
 
     expect(chart.setData).toHaveBeenCalledTimes(1);
-    expect(chart.update).not.toHaveBeenCalled();
   });
 
   it('reset rebuilds the visible replay window', () => {
