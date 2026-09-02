@@ -81,17 +81,55 @@ export class ChartManager {
     this.chart.applyOptions({ width, height });
   }
 
+  _prepareCandlesForChart(candles) {
+    if (!Array.isArray(candles) || candles.length === 0) return [];
+    const result = [];
+    for (let i = 0; i < candles.length; i++) {
+      const c = candles[i];
+      let time = Number(c.time);
+      let open = Number(c.open);
+      let high = Number(c.high);
+      let low = Number(c.low);
+      let close = Number(c.close);
+      const prev = i > 0 ? candles[i - 1] : null;
+
+      // When Delta returns sparse flat ticks where open == close and high == low:
+      if (high <= low || Math.abs(high - low) < 1e-4) {
+        if (prev && Number.isFinite(Number(prev.close)) && Math.abs(Number(prev.close) - close) > 0.01) {
+          open = Number(prev.close);
+        }
+        const tickSpread = Math.max(0.2, close * 0.00015);
+        high = Math.max(open, close) + tickSpread * 0.5;
+        low = Math.min(open, close) - tickSpread * 0.5;
+      } else if (open === close && prev && Math.abs(Number(prev.close) - close) > 0.01) {
+        open = Number(prev.close);
+        high = Math.max(high, open);
+        low = Math.min(low, open);
+      }
+
+      result.push({
+        time,
+        open: Number(open),
+        high: Number(high),
+        low: Number(low),
+        close: Number(close),
+      });
+    }
+    return result;
+  }
+
   setData(candles, { fit = true } = {}) {
     if (!this.series) throw new Error('Chart not initialized');
     const source = Array.isArray(candles) ? candles : [];
     const filtered = this._revealedMaxTime == null
       ? source
       : source.filter(c => Number(c.time) <= this._revealedMaxTime);
+    const prepared = this._prepareCandlesForChart(filtered);
     this._isUserPanning = true;
     try {
-      this.series.setData(filtered);
+      this.series.setData(prepared);
       try { this.chart.priceScale('right').applyOptions({ autoScale: true }); } catch {}
-      if (fit && filtered.length) {
+      if (fit && prepared.length) {
         this.chart.timeScale().fitContent();
       } else if (this._autoFollow) {
         this.chart.timeScale().scrollToPosition(3, false);
@@ -118,9 +156,10 @@ export class ChartManager {
 
     const last = valid[valid.length - 1];
     this._revealedMaxTime = Number(last.time);
+    const prepared = this._prepareCandlesForChart(valid);
     this._isUserPanning = true;
     try {
-      this.series.setData(valid);
+      this.series.setData(prepared);
       // Force the price scale to recalculate from the new dataset.
       try { this.chart.priceScale('right').applyOptions({ autoScale: true }); } catch {}
       if (fit) {
