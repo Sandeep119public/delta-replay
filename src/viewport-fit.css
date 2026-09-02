@@ -1,0 +1,140 @@
+/* Final viewport-fit layer. Keeps the desktop app inside the browser viewport. */
+
+@media (min-width: 1121px) {
+  html,
+  body {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #app {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows: auto auto auto minmax(0, 1fr) 132px 62px;
+  }
+
+  .main-layout {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .main,
+  .chart-container,
+  .trading-section {
+    min-height: 0;
+  }
+
+  .trading-section {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* The empty position state does not need blank SL/TP controls. */
+  .position-panel:has(#btn-set-risk:disabled) .risk-controls {
+    display: none;
+  }
+
+  .trading-panels {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .account-panel,
+  .position-panel,
+  .order-panel {
+    padding: 9px;
+  }
+
+  .account-panel h3,
+  .position-panel h3,
+  .order-panel h3,
+  .pending-orders h3,
+  .trades-history h3 {
+    margin-bottom: 6px;
+  }
+
+  .kv {
+    padding: 2px 0;
+    line-height: 1.2;
+  }
+
+  .order-row {
+    margin-bottom: 5px;
+  }
+
+  .order-row input,
+  .order-row select,
+  .order-buttons .btn,
+  .risk-buttons .btn {
+    min-height: 32px;
+  }
+
+  .pending-orders,
+  .trades-history {
+    min-height: 0;
+  }
+
+  .trades-list {
+    max-height: 46px;
+    min-height: 32px;
+    overflow: auto;
+    padding: 5px 7px;
+  }
+
+  .timeline-section {
+    min-height: 0;
+    height: 132px;
+    padding: 8px 16px;
+    overflow: hidden;
+  }
+
+  .timeline-track-wrap {
+    margin: 2px 0 4px;
+  }
+
+  #timeline-slider {
+    height: 22px;
+  }
+
+  .timeline-start-controls {
+    margin-top: 4px;
+    gap: 10px;
+  }
+
+  .controls-section {
+    min-height: 0;
+    height: 62px;
+    padding: 6px 16px 8px;
+    overflow: hidden;
+  }
+
+  .controls-row {
+    min-height: 32px;
+  }
+
+  .controls-row .btn,
+  #speed-select {
+    min-height: 32px;
+  }
+
+  .shortcuts-hint {
+    margin-top: 3px;
+    line-height: 1.2;
+  }
+}
+
+/* Error row must not push the rest of the desktop UI below the fold. */
+@media (min-width: 1121px) {
+  .error-panel {
+    max-height: 96px;
+    overflow: hidden;
+  }
+
+  .error-panel-context {
+    max-height: 36px;
+    overflow: auto;
+  }
+}
