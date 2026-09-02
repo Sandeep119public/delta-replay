@@ -45,8 +45,95 @@ export class TradingPanel {
 
     this._bindEvents();
     this._bindTabs();
+    this._bindSidebarTabs();
+    this._bindAccountControls();
     this._updateOrderTypeUI();
     this.render();
+  }
+
+  _bindSidebarTabs() {
+    try {
+      const tabBtns = document.querySelectorAll('.panel-tab-btn');
+      tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          tabBtns.forEach(b => {
+            b.classList.remove('active');
+            b.setAttribute('aria-selected', 'false');
+          });
+          btn.classList.add('active');
+          btn.setAttribute('aria-selected', 'true');
+          const targetTab = btn.getAttribute('data-tab');
+          document.querySelectorAll('.tab-panel').forEach(panel => {
+            if (panel.id === `tab-view-${targetTab}`) panel.classList.add('active');
+            else panel.classList.remove('active');
+          });
+        });
+      });
+    } catch {}
+  }
+
+  _bindAccountControls() {
+    try {
+      // Capital preset chips
+      const chips = document.querySelectorAll('.capital-chip');
+      chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          const balance = Number(chip.getAttribute('data-balance'));
+          if (this.engine.hasOpenPosition && this.engine.hasOpenPosition()) {
+            this.showError('Close position before changing starting balance');
+            return;
+          }
+          if (typeof this.engine.setStartingBalance === 'function') {
+            this.engine.setStartingBalance(balance);
+          } else {
+            this.engine.account.startingBalance = balance;
+            this.engine.resetAccount();
+          }
+          chips.forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          this.render();
+        });
+      });
+
+      // Custom capital input
+      const customInput = document.getElementById('custom-capital-input');
+      const setCapitalBtn = document.getElementById('btn-set-capital');
+      if (setCapitalBtn && customInput) {
+        setCapitalBtn.addEventListener('click', () => {
+          const val = parseFloat(customInput.value);
+          if (!Number.isFinite(val) || val <= 0) {
+            this.showError('Enter a valid capital amount (> 0)');
+            return;
+          }
+          if (this.engine.hasOpenPosition && this.engine.hasOpenPosition()) {
+            this.showError('Close position before changing starting balance');
+            return;
+          }
+          if (typeof this.engine.setStartingBalance === 'function') {
+            this.engine.setStartingBalance(val);
+          } else {
+            this.engine.account.startingBalance = val;
+            this.engine.resetAccount();
+          }
+          chips.forEach(c => c.classList.remove('active'));
+          customInput.value = '';
+          this.render();
+        });
+      }
+
+      // Fee tier selector
+      const feeSelect = document.getElementById('fee-tier-select');
+      if (feeSelect) {
+        feeSelect.addEventListener('change', () => {
+          const rate = parseFloat(feeSelect.value);
+          if (typeof this.engine.setFeeRate === 'function') {
+            this.engine.setFeeRate(rate);
+          } else {
+            this.engine.feeRate = rate;
+          }
+        });
+      }
+    } catch {}
   }
 
   _bindTabs() {
@@ -303,6 +390,7 @@ export class TradingPanel {
     this.unrealizedEl.className = acct.unrealizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
     this.realizedEl.className = acct.realizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
 
+    const posSideBadge = document.getElementById('pos-side-badge');
     const positions = this.engine.getPositions();
     if (positions.length === 0) {
       this.posSymbolEl.textContent = '—';
@@ -314,6 +402,7 @@ export class TradingPanel {
       this.posPnlEl.className = '';
       if (this.posSlEl) this.posSlEl.textContent = '—';
       if (this.posTpEl) this.posTpEl.textContent = '—';
+      if (posSideBadge) { posSideBadge.textContent = 'NO POSITION'; posSideBadge.className = 'pos-badge hidden'; }
       this.closeBtn.disabled = true;
       if (this.setRiskBtn) this.setRiskBtn.disabled = true;
       if (this.clearRiskBtn) this.clearRiskBtn.disabled = true;
@@ -326,6 +415,10 @@ export class TradingPanel {
       this.posCurrentEl.textContent = this._fmtMoney(p.currentPrice);
       this.posPnlEl.textContent = this._fmtMoney(p.unrealizedPnL);
       this.posPnlEl.className = p.unrealizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
+      if (posSideBadge) {
+        posSideBadge.textContent = p.side;
+        posSideBadge.className = `pos-badge ${p.side === 'LONG' ? 'pos-long' : 'pos-short'}`;
+      }
       if (this.posSlEl) this.posSlEl.textContent = p.stopLossPrice != null ? this._fmtMoney(p.stopLossPrice) : '—';
       if (this.posTpEl) this.posTpEl.textContent = p.takeProfitPrice != null ? this._fmtMoney(p.takeProfitPrice) : '—';
       this.closeBtn.disabled = false;
@@ -348,6 +441,40 @@ export class TradingPanel {
     }
 
     this._renderPending();
+
+    // Render Performance Metrics
+    try {
+      const stats = typeof this.engine.getPerformanceStats === 'function'
+        ? this.engine.getPerformanceStats()
+        : { totalTrades: trades.length, winRate: 0, profitFactor: 1, netReturn: 0 };
+      const winEl = document.getElementById('stat-winrate');
+      const pfEl = document.getElementById('stat-pf');
+      const trEl = document.getElementById('stat-trades');
+      const retEl = document.getElementById('stat-return');
+      if (winEl) winEl.textContent = `${stats.winRate.toFixed(1)}%`;
+      if (pfEl) pfEl.textContent = Number.isFinite(stats.profitFactor) ? `${stats.profitFactor.toFixed(2)}x` : '—';
+      if (trEl) trEl.textContent = String(stats.totalTrades);
+      if (retEl) {
+        retEl.textContent = `${stats.netReturn >= 0 ? '+' : ''}${stats.netReturn.toFixed(2)}%`;
+        retEl.className = `stat-val ${stats.netReturn >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
+      }
+
+      // Update Activity Badge
+      const pendingCount = (this.engine.getPendingOrders ? this.engine.getPendingOrders().length : 0);
+      const activityBadge = document.getElementById('activity-badge');
+      if (activityBadge) {
+        const totalActivity = pendingCount + trades.length;
+        activityBadge.textContent = String(totalActivity);
+        activityBadge.classList.toggle('has-pending', pendingCount > 0);
+      }
+
+      // Sync active capital chip
+      const startingBal = this.engine.account.startingBalance;
+      document.querySelectorAll('.capital-chip').forEach(chip => {
+        if (Number(chip.getAttribute('data-balance')) === startingBal) chip.classList.add('active');
+        else chip.classList.remove('active');
+      });
+    } catch {}
 
     // Disable buy/sell if no market price
     const hasMarket = !!this.engine.getLatestCandle();

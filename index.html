@@ -116,101 +116,192 @@
 
       <!-- TRADING SIDEBAR -->
       <aside id="trading-panel" class="trading-section" aria-label="Paper trading">
-        <div class="trading-header">
-          <h2 class="trading-title">⚡ PAPER TRADING</h2>
-          <span id="trading-error" class="trading-error hidden" role="alert"></span>
-        </div>
-        <div class="trading-panels">
-          <div class="account-panel">
-            <div class="panel-header">
-              <h3>ACCOUNT EQUITY</h3>
+        <!-- Live Sticky Account Header -->
+        <div class="trading-top-summary">
+          <div class="trading-header">
+            <h2 class="trading-title">⚡ PAPER TRADING</h2>
+            <span id="trading-error" class="trading-error hidden" role="alert"></span>
+          </div>
+          <div class="equity-hero-bar">
+            <div class="equity-main">
+              <span class="equity-caption">EQUITY</span>
               <span id="acct-equity" class="equity-highlight">$10,000.00</span>
             </div>
-            <div class="kv-grid">
-              <div class="kv"><span>Balance</span><span id="acct-balance">$10,000.00</span></div>
-              <div class="kv"><span>Realized PnL</span><span id="acct-realized">$0.00</span></div>
-              <div class="kv"><span>Unrealized PnL</span><span id="acct-unrealized">$0.00</span></div>
-              <div class="kv"><span>Total Fees</span><span id="acct-fees">$0.00</span></div>
+            <div class="pnl-hero-pill">
+              <span class="pnl-caption">UNREALIZED</span>
+              <span id="acct-unrealized" class="pnl-val">$0.00</span>
             </div>
           </div>
-          <div class="position-panel">
-            <div class="panel-header">
-              <h3>ACTIVE POSITION</h3>
-              <span id="pos-side-badge" class="pos-badge hidden">—</span>
-            </div>
-            <div class="kv-grid">
-              <div class="kv"><span>Symbol</span><span id="pos-symbol">—</span></div>
-              <div class="kv"><span>Side</span><span id="pos-side">—</span></div>
-              <div class="kv"><span>Size</span><span id="pos-qty">—</span></div>
-              <div class="kv"><span>Entry Price</span><span id="pos-entry">—</span></div>
-              <div class="kv"><span>Mark Price</span><span id="pos-current">—</span></div>
-              <div class="kv"><span>Unrealized PnL</span><span id="pos-pnl">—</span></div>
-              <div class="kv"><span>Stop Loss</span><span id="pos-sl">—</span></div>
-              <div class="kv"><span>Take Profit</span><span id="pos-tp">—</span></div>
-            </div>
-            <div class="risk-controls">
-              <label class="risk-label" for="sl-price">Set Position Risk</label>
-              <div class="risk-inputs">
-                <input id="sl-price" type="number" min="0.0001" step="0.01" placeholder="Stop Loss (SL)" aria-label="Stop Loss price" />
-                <input id="tp-price" type="number" min="0.0001" step="0.01" placeholder="Take Profit (TP)" aria-label="Take Profit price" />
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="trading-tab-nav" role="tablist">
+          <button type="button" class="panel-tab-btn active" data-tab="trade" role="tab" aria-selected="true">⚡ TRADE</button>
+          <button type="button" class="panel-tab-btn" data-tab="account" role="tab" aria-selected="false">📊 ACCOUNT</button>
+          <button type="button" class="panel-tab-btn" data-tab="activity" role="tab" aria-selected="false">📋 ACTIVITY <span id="activity-badge" class="tab-badge">0</span></button>
+        </div>
+
+        <div class="trading-tab-contents">
+          <!-- TAB 1: TRADE VIEW -->
+          <div id="tab-view-trade" class="tab-panel active" role="tabpanel">
+            <!-- Active Position Card -->
+            <div class="position-panel compact-card">
+              <div class="card-header-row">
+                <span class="card-title">ACTIVE POSITION</span>
+                <span id="pos-side-badge" class="pos-badge hidden">—</span>
               </div>
-              <div class="risk-buttons">
-                <button id="btn-set-risk" class="btn btn-primary" disabled>SET SL/TP</button>
-                <button id="btn-clear-risk" class="btn btn-secondary" disabled>CLEAR</button>
+              <div class="pos-compact-grid">
+                <div class="pos-metric"><span class="lbl">Symbol</span><span id="pos-symbol" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">Side</span><span id="pos-side" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">Size</span><span id="pos-qty" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">Entry</span><span id="pos-entry" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">Mark</span><span id="pos-current" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">PnL</span><span id="pos-pnl" class="val">—</span></div>
               </div>
-            </div>
-          </div>
-          <div class="order-panel">
-            <div class="panel-header">
-              <h3>PLACE ORDER</h3>
-            </div>
-            <div class="order-type-tabs">
-              <button type="button" class="order-tab active" data-type="MARKET">Market</button>
-              <button type="button" class="order-tab" data-type="LIMIT">Limit</button>
-              <button type="button" class="order-tab" data-type="STOP_MARKET">Stop</button>
-            </div>
-            <select id="order-type" class="hidden" aria-label="Order type">
-              <option value="MARKET" selected>Market</option>
-              <option value="LIMIT">Limit</option>
-              <option value="STOP_MARKET">Stop</option>
-            </select>
-            <div class="order-row">
-              <label for="trade-qty">Quantity</label>
-              <div class="qty-input-wrap">
-                <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" aria-label="Trade quantity" />
-                <div class="qty-presets">
-                  <button type="button" class="qty-chip" data-qty="0.05">0.05</button>
-                  <button type="button" class="qty-chip" data-qty="0.1">0.1</button>
-                  <button type="button" class="qty-chip" data-qty="0.5">0.5</button>
-                  <button type="button" class="qty-chip" data-qty="1">1.0</button>
+              <!-- Hidden for compatibility / updated via JS -->
+              <div class="hidden">
+                <span id="pos-sl">—</span>
+                <span id="pos-tp">—</span>
+              </div>
+              <!-- Inline SL/TP Controls -->
+              <div class="risk-controls-compact">
+                <div class="risk-inputs-row">
+                  <input id="sl-price" type="number" min="0.0001" step="0.01" placeholder="SL Price" aria-label="Stop Loss price" />
+                  <input id="tp-price" type="number" min="0.0001" step="0.01" placeholder="TP Price" aria-label="Take Profit price" />
+                  <button id="btn-set-risk" class="btn btn-sm btn-primary" disabled>SET</button>
+                  <button id="btn-clear-risk" class="btn btn-sm btn-secondary" disabled>✕</button>
                 </div>
               </div>
             </div>
-            <div class="order-row hidden" id="limit-price-row">
-              <label for="limit-price">Limit Price</label>
-              <input id="limit-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" aria-label="Limit price" />
-            </div>
-            <div class="order-row hidden" id="stop-price-row">
-              <label for="stop-price">Stop Price</label>
-              <input id="stop-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" aria-label="Stop price" />
-            </div>
-            <div class="order-actions-grid">
-              <button id="btn-buy" class="btn btn-buy-main" disabled>BUY / LONG</button>
-              <button id="btn-sell" class="btn btn-sell-main" disabled>SELL / SHORT</button>
-            </div>
-            <div class="order-secondary-grid">
-              <button id="btn-close" class="btn btn-close-pos" disabled>CLOSE POSITION</button>
-              <button id="btn-reset-acct" class="btn btn-secondary">RESET ACCT</button>
+
+            <!-- Order Placement Card -->
+            <div class="order-panel compact-card">
+              <div class="order-type-tabs">
+                <button type="button" class="order-tab active" data-type="MARKET">Market</button>
+                <button type="button" class="order-tab" data-type="LIMIT">Limit</button>
+                <button type="button" class="order-tab" data-type="STOP_MARKET">Stop</button>
+              </div>
+              <select id="order-type" class="hidden" aria-label="Order type">
+                <option value="MARKET" selected>Market</option>
+                <option value="LIMIT">Limit</option>
+                <option value="STOP_MARKET">Stop</option>
+              </select>
+
+              <div class="order-form-compact">
+                <div class="order-row-compact">
+                  <div class="qty-field-wrap">
+                    <label for="trade-qty">Qty</label>
+                    <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" aria-label="Trade quantity" />
+                  </div>
+                  <div class="qty-presets-compact">
+                    <button type="button" class="qty-chip" data-qty="0.05">0.05</button>
+                    <button type="button" class="qty-chip" data-qty="0.1">0.1</button>
+                    <button type="button" class="qty-chip" data-qty="0.5">0.5</button>
+                    <button type="button" class="qty-chip" data-qty="1">1.0</button>
+                  </div>
+                </div>
+
+                <div class="order-row hidden" id="limit-price-row">
+                  <label for="limit-price">Limit Price</label>
+                  <input id="limit-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" aria-label="Limit price" />
+                </div>
+                <div class="order-row hidden" id="stop-price-row">
+                  <label for="stop-price">Stop Price</label>
+                  <input id="stop-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" aria-label="Stop price" />
+                </div>
+
+                <div class="order-actions-grid">
+                  <button id="btn-buy" class="btn btn-buy-main" disabled>BUY / LONG</button>
+                  <button id="btn-sell" class="btn btn-sell-main" disabled>SELL / SHORT</button>
+                </div>
+                <div class="order-secondary-grid">
+                  <button id="btn-close" class="btn btn-close-pos" disabled>CLOSE POSITION</button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="pending-orders">
-          <h3>PENDING ORDERS</h3>
-          <div id="pending-orders-list" class="trades-list"><span class="empty-hint">No pending orders</span></div>
-        </div>
-        <div class="trades-history">
-          <h3>TRADE HISTORY</h3>
-          <div id="trades-list" class="trades-list"><span class="empty-hint">No trades yet</span></div>
+
+          <!-- TAB 2: ACCOUNT & RISK MANAGEMENT -->
+          <div id="tab-view-account" class="tab-panel" role="tabpanel">
+            <div class="account-details-card compact-card">
+              <span class="card-title">ACCOUNT OVERVIEW</span>
+              <div class="kv-grid">
+                <div class="kv"><span>Cash Balance</span><span id="acct-balance">$10,000.00</span></div>
+                <div class="kv"><span>Realized PnL</span><span id="acct-realized">$0.00</span></div>
+                <div class="kv"><span>Total Fees</span><span id="acct-fees">$0.00</span></div>
+              </div>
+            </div>
+
+            <!-- Performance Metrics -->
+            <div class="performance-card compact-card">
+              <span class="card-title">PERFORMANCE METRICS</span>
+              <div class="stats-mini-grid">
+                <div class="stat-tile">
+                  <span class="stat-lbl">Win Rate</span>
+                  <span id="stat-winrate" class="stat-val">0.0%</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-lbl">Profit Factor</span>
+                  <span id="stat-pf" class="stat-val">—</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-lbl">Total Trades</span>
+                  <span id="stat-trades" class="stat-val">0</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-lbl">Net Return</span>
+                  <span id="stat-return" class="stat-val">0.0%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Capital & Fee Settings -->
+            <div class="acct-settings-card compact-card">
+              <span class="card-title">CAPITAL & FEE SETTINGS</span>
+              <div class="setting-item">
+                <label>Starting Capital</label>
+                <div class="capital-presets">
+                  <button type="button" class="capital-chip" data-balance="1000">$1K</button>
+                  <button type="button" class="capital-chip" data-balance="5000">$5K</button>
+                  <button type="button" class="capital-chip active" data-balance="10000">$10K</button>
+                  <button type="button" class="capital-chip" data-balance="25000">$25K</button>
+                  <button type="button" class="capital-chip" data-balance="50000">$50K</button>
+                  <button type="button" class="capital-chip" data-balance="100000">$100K</button>
+                </div>
+                <div class="custom-capital-row">
+                  <input id="custom-capital-input" type="number" min="100" step="100" placeholder="Custom USD" />
+                  <button id="btn-set-capital" type="button" class="btn btn-sm btn-secondary">Set</button>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <label for="fee-tier-select">Fee Tier</label>
+                <select id="fee-tier-select" class="select-sm">
+                  <option value="0.0005" selected>Standard Futures (0.05%)</option>
+                  <option value="0.0003">VIP / Delta (0.03%)</option>
+                  <option value="0.0000">Zero Fee / Backtest (0.00%)</option>
+                </select>
+              </div>
+
+              <div class="reset-action-row">
+                <button id="btn-reset-acct" class="btn btn-secondary btn-full">RESET ACCOUNT (RESTART)</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: ACTIVITY & LOGS -->
+          <div id="tab-view-activity" class="tab-panel" role="tabpanel">
+            <div class="activity-card compact-card">
+              <div class="activity-section">
+                <span class="card-title">PENDING ORDERS</span>
+                <div id="pending-orders-list" class="trades-list"><span class="empty-hint">No pending orders</span></div>
+              </div>
+              <div class="activity-section">
+                <span class="card-title">TRADE LOG</span>
+                <div id="trades-list" class="trades-list"><span class="empty-hint">No trades yet</span></div>
+              </div>
+            </div>
+          </div>
         </div>
       </aside>
     </div>

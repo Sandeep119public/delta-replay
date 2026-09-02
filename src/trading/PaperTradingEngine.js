@@ -958,6 +958,64 @@ export class PaperTradingEngine extends EventEmitter {
     return this.getAccountSnapshot();
   }
 
+  setStartingBalance(newBalance) {
+    const val = Number(newBalance);
+    if (!Number.isFinite(val) || val <= 0) return { success: false, message: 'Invalid starting balance' };
+    this.account.startingBalance = val;
+    this.account.cashBalance = val;
+    this.account.realizedPnL = 0;
+    this.account.unrealizedPnL = 0;
+    this.account.totalFees = 0;
+    this._positions.clear();
+    this._trades = [];
+    this._clearPendingOrders('BALANCE_CHANGED');
+    this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot());
+    this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+    return { success: true, balance: val };
+  }
+
+  setFeeRate(newRate) {
+    const val = Number(newRate);
+    if (!Number.isFinite(val) || val < 0) return { success: false, message: 'Invalid fee rate' };
+    this.feeRate = val;
+    return { success: true, feeRate: val };
+  }
+
+  getPerformanceStats() {
+    const trades = this._trades;
+    const totalTrades = trades.length;
+    let winningTrades = 0;
+    let losingTrades = 0;
+    let grossProfit = 0;
+    let grossLoss = 0;
+    for (const t of trades) {
+      const net = t.netPnL ?? t.realizedPnL ?? 0;
+      if (net > 0) {
+        winningTrades++;
+        grossProfit += net;
+      } else if (net < 0) {
+        losingTrades++;
+        grossLoss += Math.abs(net);
+      }
+    }
+    const winRate = totalTrades > 0 ? (winningTrades / totalTrades * 100) : 0;
+    const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? Infinity : 1);
+    const netReturn = this.account.startingBalance > 0
+      ? ((this.account.equity - this.account.startingBalance) / this.account.startingBalance * 100)
+      : 0;
+    return {
+      totalTrades,
+      winningTrades,
+      losingTrades,
+      winRate,
+      profitFactor,
+      grossProfit,
+      grossLoss,
+      netReturn,
+      totalFees: this.account.totalFees,
+    };
+  }
+
   getAccountSnapshot() {
     const snap = this.account.snapshot();
     // return deep clone to prevent mutation

@@ -29,38 +29,7 @@
 
   .trading-section {
     height: 100%;
-    overflow-y: auto !important;
-    overflow-x: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-
-  /* The empty position state does not need blank SL/TP controls. */
-  .position-panel:has(#btn-set-risk:disabled) .risk-controls {
-    display: none;
-  }
-
-  .trading-panels {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .account-panel,
-  .position-panel,
-  .order-panel,
-  .pending-orders,
-  .trades-history {
-    padding: 10px;
-    flex-shrink: 0;
-  }
-
-  .account-panel h3,
-  .position-panel h3,
-  .order-panel h3,
-  .pending-orders h3,
-  .trades-history h3 {
-    margin-bottom: 6px;
+    overflow: hidden;
   }
 
   .kv {

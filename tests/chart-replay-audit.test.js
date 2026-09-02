@@ -122,4 +122,58 @@ describe('Chart and Replay Deep Audit Fixes', () => {
       expect(engine.getState().status).toBe(ReplayStatus.PAUSED);
     });
   });
+
+  describe('PaperTradingEngine Account Management & Performance Stats', () => {
+    it('supports customizable starting balance', async () => {
+      const { PaperTradingEngine } = await import('../src/trading/PaperTradingEngine.js');
+      const trading = new PaperTradingEngine({ startingBalance: 10000 });
+      expect(trading.account.cashBalance).toBe(10000);
+
+      const res = trading.setStartingBalance(50000);
+      expect(res.success).toBe(true);
+      expect(trading.account.startingBalance).toBe(50000);
+      expect(trading.account.cashBalance).toBe(50000);
+      expect(trading.account.equity).toBe(50000);
+    });
+
+    it('supports customizable fee rates', async () => {
+      const { PaperTradingEngine } = await import('../src/trading/PaperTradingEngine.js');
+      const trading = new PaperTradingEngine();
+      expect(trading.feeRate).toBe(0.0005);
+
+      trading.setFeeRate(0.0003);
+      expect(trading.feeRate).toBe(0.0003);
+
+      trading.setFeeRate(0.0);
+      expect(trading.feeRate).toBe(0.0);
+    });
+
+    it('calculates performance statistics accurately', async () => {
+      const { PaperTradingEngine } = await import('../src/trading/PaperTradingEngine.js');
+      const trading = new PaperTradingEngine({ startingBalance: 10000, feeRate: 0.0 });
+      
+      // Feed candle 1
+      trading.onMarketCandle({ candle: { time: 1700000000, open: 100, high: 105, low: 95, close: 100 }, index: 0 });
+      
+      // Trade 1: Win $500
+      trading.placeOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 10 }); // entry 100
+      trading.onMarketCandle({ candle: { time: 1700000060, open: 100, high: 160, low: 100, close: 150 }, index: 1 });
+      trading.closePosition('BTCUSDT'); // exit 150 -> gross 500
+
+      // Trade 2: Loss $200
+      trading.placeOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 10 }); // entry 150
+      trading.onMarketCandle({ candle: { time: 1700000120, open: 150, high: 150, low: 120, close: 130 }, index: 2 });
+      trading.closePosition('BTCUSDT'); // exit 130 -> loss 200
+
+      const stats = trading.getPerformanceStats();
+      expect(stats.totalTrades).toBe(2);
+      expect(stats.winningTrades).toBe(1);
+      expect(stats.losingTrades).toBe(1);
+      expect(stats.winRate).toBe(50);
+      expect(stats.grossProfit).toBe(500);
+      expect(stats.grossLoss).toBe(200);
+      expect(stats.profitFactor).toBeCloseTo(2.5, 1);
+      expect(stats.netReturn).toBeCloseTo(3.0, 1); // 300 / 10000 * 100 = 3%
+    });
+  });
 });
