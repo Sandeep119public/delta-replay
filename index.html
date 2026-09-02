@@ -8,44 +8,44 @@
 </head>
 <body>
   <div id="app">
-    <!-- TOP BAR -->
-    <header class="topbar">
+    <!-- HEADER -->
+    <header class="topbar" role="banner">
       <div class="topbar-left">
         <h1 class="logo">DELTA REPLAY</h1>
-        <span class="phase-badge">PHASE 1 — HISTORICAL REPLAY</span>
+        <span class="phase-badge" aria-hidden="true">PHASE 1 — HISTORICAL REPLAY</span>
       </div>
-      <div class="topbar-center">
+      <nav class="topbar-center" aria-label="Data controls">
         <div class="selector-group">
           <label for="symbol-select">Symbol</label>
-          <select id="symbol-select"></select>
+          <select id="symbol-select" aria-label="Symbol"></select>
         </div>
         <div class="selector-group">
           <label for="timeframe-select">Timeframe</label>
-          <select id="timeframe-select"></select>
+          <select id="timeframe-select" aria-label="Timeframe"></select>
         </div>
-        <div class="selector-group">
+        <div class="selector-group selector-datetime">
           <label for="from-date">From (UTC)</label>
           <div class="datetime-group">
-            <input type="date" id="from-date" />
-            <input type="time" id="from-time" step="60" />
+            <input type="date" id="from-date" aria-label="From date" />
+            <input type="time" id="from-time" step="60" aria-label="From time" />
           </div>
         </div>
-        <div class="selector-group">
+        <div class="selector-group selector-datetime">
           <label for="to-date">To (UTC)</label>
           <div class="datetime-group">
-            <input type="date" id="to-date" />
-            <input type="time" id="to-time" step="60" />
+            <input type="date" id="to-date" aria-label="To date" />
+            <input type="time" id="to-time" step="60" aria-label="To time" />
           </div>
         </div>
-        <button id="load-btn" class="btn btn-primary">LOAD DATA</button>
-      </div>
+        <button id="load-btn" class="btn btn-primary" aria-label="Load historical data">LOAD DATA</button>
+      </nav>
       <div class="topbar-right">
-        <span id="data-status" class="data-status">No data loaded</span>
+        <span id="data-status" class="data-status" role="status" aria-live="polite">No data loaded</span>
       </div>
     </header>
 
-    <!-- MODE BANNER -->
-    <div id="mode-banner" class="mode-banner mode-idle">
+    <!-- STATUS BAR -->
+    <div id="mode-banner" class="mode-banner mode-idle" role="status" aria-live="polite">
       <span id="mode-indicator" class="mode-indicator">NO DATA LOADED</span>
       <span id="progress-panel" class="progress-panel hidden">
         <span id="progress-text">0 / 0</span>
@@ -55,23 +55,120 @@
       <span id="market-time-full" class="market-time-full">CURRENT MARKET TIME: —</span>
     </div>
 
-    <!-- MAIN CHART AREA -->
-    <main class="main">
-      <div id="chart-container" class="chart-container"></div>
-      <div id="chart-overlay" class="chart-overlay hidden">
-        <p id="overlay-text"></p>
+    <!-- ERROR PANEL (replaces giant error banner) -->
+    <div id="error-panel" class="error-panel hidden" role="alert" aria-live="assertive">
+      <div class="error-panel-header">
+        <span class="error-panel-icon" aria-hidden="true">!</span>
+        <span id="error-panel-title" class="error-panel-title">Data Error</span>
+        <button id="error-panel-dismiss" class="error-panel-dismiss" aria-label="Dismiss error">&times;</button>
       </div>
-    </main>
+      <p id="error-panel-message" class="error-panel-message"></p>
+      <div id="error-panel-context" class="error-panel-context hidden"></div>
+      <div class="error-panel-actions">
+        <button id="error-panel-retry" class="btn btn-secondary btn-sm">Retry</button>
+        <button id="error-panel-details" class="btn btn-sm">Details</button>
+      </div>
+    </div>
+
+    <!-- MAIN LAYOUT: CHART + SIDEBAR -->
+    <div class="main-layout">
+      <!-- CHART AREA -->
+      <main class="main" role="main" aria-label="Chart">
+        <div id="chart-container" class="chart-container"></div>
+        <div id="chart-overlay" class="chart-overlay hidden">
+          <div class="chart-overlay-content">
+            <p id="overlay-text"></p>
+          </div>
+        </div>
+      </main>
+
+      <!-- TRADING SIDEBAR -->
+      <aside id="trading-panel" class="trading-section" aria-label="Paper trading">
+        <div class="trading-header">
+          <h2 class="trading-title">PAPER TRADING</h2>
+          <span id="trading-error" class="trading-error hidden" role="alert"></span>
+        </div>
+        <div class="trading-panels">
+          <div class="account-panel">
+            <h3>ACCOUNT</h3>
+            <div class="kv"><span>Balance</span><span id="acct-balance">$10,000.00</span></div>
+            <div class="kv"><span>Equity</span><span id="acct-equity">$10,000.00</span></div>
+            <div class="kv"><span>Realized PnL</span><span id="acct-realized">$0.00</span></div>
+            <div class="kv"><span>Unrealized PnL</span><span id="acct-unrealized">$0.00</span></div>
+            <div class="kv"><span>Fees</span><span id="acct-fees">$0.00</span></div>
+          </div>
+          <div class="position-panel">
+            <h3>POSITION</h3>
+            <div class="kv"><span>Symbol</span><span id="pos-symbol">—</span></div>
+            <div class="kv"><span>Side</span><span id="pos-side">—</span></div>
+            <div class="kv"><span>Qty</span><span id="pos-qty">—</span></div>
+            <div class="kv"><span>Entry</span><span id="pos-entry">—</span></div>
+            <div class="kv"><span>Current</span><span id="pos-current">—</span></div>
+            <div class="kv"><span>PnL</span><span id="pos-pnl">—</span></div>
+            <div class="kv"><span>Stop Loss</span><span id="pos-sl">—</span></div>
+            <div class="kv"><span>Take Profit</span><span id="pos-tp">—</span></div>
+            <div class="risk-controls">
+              <label class="risk-label" for="sl-price">Set Risk (when position open)</label>
+              <input id="sl-price" type="number" min="0.0001" step="0.01" placeholder="Stop Loss price" aria-label="Stop Loss price" />
+              <input id="tp-price" type="number" min="0.0001" step="0.01" placeholder="Take Profit price" aria-label="Take Profit price" />
+              <div class="risk-buttons">
+                <button id="btn-set-risk" class="btn btn-secondary" disabled>SET SL/TP</button>
+                <button id="btn-clear-risk" class="btn" disabled>CLEAR</button>
+              </div>
+            </div>
+          </div>
+          <div class="order-panel">
+            <h3>ORDER</h3>
+            <div class="order-row">
+              <label for="order-type">Type</label>
+              <select id="order-type" aria-label="Order type">
+                <option value="MARKET" selected>Market</option>
+                <option value="LIMIT">Limit</option>
+                <option value="STOP_MARKET">Stop</option>
+              </select>
+            </div>
+            <div class="order-row">
+              <label for="trade-qty">Qty</label>
+              <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" aria-label="Trade quantity" />
+            </div>
+            <div class="order-row hidden" id="limit-price-row">
+              <label for="limit-price">Limit Price</label>
+              <input id="limit-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" aria-label="Limit price" />
+            </div>
+            <div class="order-row hidden" id="stop-price-row">
+              <label for="stop-price">Stop Price</label>
+              <input id="stop-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" aria-label="Stop price" />
+            </div>
+            <div class="order-buttons">
+              <button id="btn-buy" class="btn btn-buy" disabled>BUY MARKET</button>
+              <button id="btn-sell" class="btn btn-sell" disabled>SELL MARKET</button>
+            </div>
+            <div class="order-buttons">
+              <button id="btn-close" class="btn" disabled>CLOSE POSITION</button>
+              <button id="btn-reset-acct" class="btn btn-secondary">RESET ACCOUNT</button>
+            </div>
+          </div>
+        </div>
+        <div class="pending-orders">
+          <h3>PENDING ORDERS</h3>
+          <div id="pending-orders-list" class="trades-list"><span class="empty-hint">No pending orders</span></div>
+        </div>
+        <div class="trades-history">
+          <h3>TRADE HISTORY</h3>
+          <div id="trades-list" class="trades-list"><span class="empty-hint">No trades yet</span></div>
+        </div>
+      </aside>
+    </div>
 
     <!-- TIMELINE -->
-    <section class="timeline-section">
+    <section class="timeline-section" aria-label="Timeline">
       <div class="timeline-header">
         <span id="timeline-start-label">—</span>
         <span id="timeline-current-label" class="timeline-current">—</span>
         <span id="timeline-end-label">—</span>
       </div>
       <div class="timeline-track-wrap">
-        <input type="range" id="timeline-slider" min="0" max="100" value="0" disabled />
+        <input type="range" id="timeline-slider" min="0" max="100" value="0" disabled aria-label="Timeline position" />
         <div class="timeline-meta">
           <span id="timeline-index-label">0 / 0</span>
           <span id="timeline-time-label">—</span>
@@ -79,32 +176,32 @@
       </div>
       <div class="timeline-start-controls">
         <div class="start-info">
-          <span id="start-index-label">Replay start: 0</span>
+          <span id="start-index-label">No replay data</span>
           <span id="start-time-label" class="start-time-label">—</span>
         </div>
         <div class="jump-group">
           <label for="jump-date" class="jump-label">Jump to (UTC)</label>
           <div class="datetime-group jump-datetime">
-            <input type="date" id="jump-date" />
-            <input type="time" id="jump-time" step="60" />
+            <input type="date" id="jump-date" aria-label="Jump date" />
+            <input type="time" id="jump-time" step="60" aria-label="Jump time" />
             <button id="jump-btn" class="btn btn-secondary">JUMP</button>
           </div>
-          <span id="jump-error" class="jump-error hidden"></span>
+          <span id="jump-error" class="jump-error hidden" role="alert"></span>
         </div>
         <button id="start-replay-btn" class="btn btn-accent" disabled>START REPLAY</button>
       </div>
     </section>
 
     <!-- REPLAY CONTROLS -->
-    <section class="controls-section">
+    <section class="controls-section" aria-label="Replay controls">
       <div class="controls-row">
-        <button id="btn-reset" class="btn" disabled title="R (Reset)">RESET</button>
-        <button id="btn-play" class="btn" disabled title="Space (Play/Pause)">PLAY</button>
-        <button id="btn-pause" class="btn hidden" disabled>PAUSE</button>
-        <button id="btn-step" class="btn" disabled title="→ (Step)">STEP</button>
+        <button id="btn-reset" class="btn" disabled title="R (Reset)" aria-label="Reset replay">RESET</button>
+        <button id="btn-play" class="btn" disabled title="Space (Play/Pause)" aria-label="Play">PLAY</button>
+        <button id="btn-pause" class="btn hidden" disabled aria-label="Pause">PAUSE</button>
+        <button id="btn-step" class="btn" disabled title="Arrow Right (Step)" aria-label="Step forward">STEP</button>
         <div class="speed-group">
           <label for="speed-select">Speed</label>
-          <select id="speed-select" disabled>
+          <select id="speed-select" disabled aria-label="Playback speed">
             <option value="0.25">0.25x</option>
             <option value="0.5">0.5x</option>
             <option value="1" selected>1x</option>
@@ -113,88 +210,10 @@
             <option value="10">10x</option>
           </select>
         </div>
-        <span id="replay-status" class="replay-status">idle</span>
-        <button id="btn-follow" class="btn btn-secondary hidden" title="Follow current replay candle">↗ FOLLOW</button>
+        <span id="replay-status" class="replay-status" aria-live="polite">idle</span>
+        <button id="btn-follow" class="btn btn-secondary hidden" title="Follow current replay candle" aria-label="Follow current candle">&#8599; FOLLOW</button>
       </div>
-      <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; → Step &nbsp;|&nbsp; R: Reset &nbsp;|&nbsp; Drag chart to pan history (auto-follow off)</p>
-      <div id="error-banner" class="error-banner hidden"></div>
-    </section>
-
-    <!-- PAPER TRADING PANEL -->
-    <section id="trading-panel" class="trading-section">
-      <div class="trading-header">
-        <h3>PAPER TRADING</h3>
-        <span id="trading-error" class="trading-error hidden"></span>
-      </div>
-      <div class="trading-grid">
-        <div class="account-panel">
-          <h4>ACCOUNT</h4>
-          <div class="kv"><span>Balance</span><span id="acct-balance">$10,000.00</span></div>
-          <div class="kv"><span>Equity</span><span id="acct-equity">$10,000.00</span></div>
-          <div class="kv"><span>Realized PnL</span><span id="acct-realized">$0.00</span></div>
-          <div class="kv"><span>Unrealized PnL</span><span id="acct-unrealized">$0.00</span></div>
-          <div class="kv"><span>Fees</span><span id="acct-fees">$0.00</span></div>
-        </div>
-        <div class="position-panel">
-          <h4>POSITION</h4>
-          <div class="kv"><span>Symbol</span><span id="pos-symbol">—</span></div>
-          <div class="kv"><span>Side</span><span id="pos-side">—</span></div>
-          <div class="kv"><span>Qty</span><span id="pos-qty">—</span></div>
-          <div class="kv"><span>Entry</span><span id="pos-entry">—</span></div>
-          <div class="kv"><span>Current</span><span id="pos-current">—</span></div>
-          <div class="kv"><span>PnL</span><span id="pos-pnl">—</span></div>
-          <div class="kv"><span>Stop Loss</span><span id="pos-sl">—</span></div>
-          <div class="kv"><span>Take Profit</span><span id="pos-tp">—</span></div>
-          <div class="order-row" style="margin-top:8px; flex-direction: column; align-items: stretch; gap:4px;">
-            <label style="font-size:10px; color:var(--text-muted);">SET RISK (when position open)</label>
-            <input id="sl-price" type="number" min="0.0001" step="0.01" placeholder="Stop Loss price" />
-            <input id="tp-price" type="number" min="0.0001" step="0.01" placeholder="Take Profit price" />
-            <div style="display:flex; gap:6px;">
-              <button id="btn-set-risk" class="btn btn-secondary" style="flex:1;">SET SL/TP</button>
-              <button id="btn-clear-risk" class="btn" style="flex:1;">CLEAR</button>
-            </div>
-          </div>
-        </div>
-        <div class="order-panel">
-          <h4>ORDER</h4>
-          <div class="order-row">
-            <label for="order-type">Type</label>
-            <select id="order-type">
-              <option value="MARKET" selected>Market</option>
-              <option value="LIMIT">Limit</option>
-              <option value="STOP_MARKET">Stop</option>
-            </select>
-          </div>
-          <div class="order-row">
-            <label for="trade-qty">Qty</label>
-            <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" />
-          </div>
-          <div class="order-row hidden" id="limit-price-row">
-            <label for="limit-price">Limit Price</label>
-            <input id="limit-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" />
-          </div>
-          <div class="order-row hidden" id="stop-price-row">
-            <label for="stop-price">Stop Price</label>
-            <input id="stop-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" />
-          </div>
-          <div class="order-buttons">
-            <button id="btn-buy" class="btn btn-buy">BUY</button>
-            <button id="btn-sell" class="btn btn-sell">SELL</button>
-          </div>
-          <div class="order-buttons">
-            <button id="btn-close" class="btn" disabled>CLOSE POSITION</button>
-            <button id="btn-reset-acct" class="btn btn-secondary">RESET ACCOUNT</button>
-          </div>
-        </div>
-      </div>
-      <div class="pending-orders">
-        <h4>PENDING ORDERS</h4>
-        <div id="pending-orders-list" class="trades-list"><span class="empty-hint">No pending orders</span></div>
-      </div>
-      <div class="trades-history">
-        <h4>TRADE HISTORY</h4>
-        <div id="trades-list" class="trades-list"><span class="empty-hint">No trades yet</span></div>
-      </div>
+      <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; &rarr; Step &nbsp;|&nbsp; R: Reset &nbsp;|&nbsp; Drag chart to pan history (auto-follow off)</p>
     </section>
   </div>
   <script type="module" src="/src/main.js"></script>

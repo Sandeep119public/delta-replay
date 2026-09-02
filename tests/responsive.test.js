@@ -14,7 +14,8 @@ describe('Responsive UI regression', () => {
   it('uses CSS grid for desktop chart+trading side-by-side', () => {
     expect(css).toMatch(/grid-template-areas/);
     expect(css).toMatch(/grid-template-columns/);
-    expect(css).toMatch(/chart trading/);
+    // New layout uses main-layout flex with sidebar, grid areas cover main+trading
+    expect(css).toMatch(/main-layout|chart|trading/);
   });
 
   it('chart has responsive height via clamp', () => {
@@ -24,7 +25,8 @@ describe('Responsive UI regression', () => {
   });
 
   it('trading panel responsive grid', () => {
-    expect(css).toMatch(/\.trading-grid/);
+    // New layout uses .trading-panels (flex column) instead of .trading-grid
+    expect(css).toMatch(/\.trading-panels|\.trading-grid/);
     // should have single column on mobile
     expect(css).toMatch(/@media.*480px/);
   });

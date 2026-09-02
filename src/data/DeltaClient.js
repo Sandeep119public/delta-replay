@@ -52,25 +52,20 @@ export class DeltaClient {
   constructor({ baseUrl = DELTA_DEFAULT_BASE, timeoutMs = 15000, fetchFn } = {}) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.timeoutMs = timeoutMs;
-    // Use the safest browser-compatible fetch invocation.
-    // Storing an unbound reference to globalThis.fetch causes "Illegal invocation"
-    // in browsers because fetch requires `this === window`. We must bind it.
     if (fetchFn) {
       this.fetchFn = fetchFn;
     } else {
       if (typeof globalThis.fetch !== 'function') {
         throw new DeltaError('INVALID_REQUEST', 'global fetch not available', {});
       }
-      // Bind to globalThis (window in browsers) so detached calls remain valid.
-      // Also wrap in arrow to guarantee correct receiver even if bind is unavailable.
-      try {
-        this.fetchFn = globalThis.fetch.bind(globalThis);
-      } catch {
-        const g = globalThis;
-        this.fetchFn = (...args) => g.fetch(...args);
-      }
+      // CRITICAL: Always use arrow function wrapper to preserve globalThis context.
+      // .bind() can fail in some browser extensions / service worker contexts.
+      // Arrow function captures globalThis reference and forwards all arguments
+      // including second `init` argument with signal, headers, etc.
+      const _fetch = globalThis.fetch;
+      const _g = globalThis;
+      this.fetchFn = (url, init) => _fetch.call(_g, url, init);
     }
-    // Marker to detect unbound misuse in tests (A/B)
     this._fetchIsBound = true;
   }
 
@@ -107,13 +102,13 @@ export class DeltaClient {
 
     let timeoutId;
     let abortHandler;
+    let timedOut = false;
     const controller = new AbortController();
 
     // Wire external signal to internal controller
     if (signal) {
       if (signal.aborted) {
         controller.abort();
-        // ensure reason name is AbortError for catch logic
         try { controller.signal.reason = new DOMException('Aborted', 'AbortError'); } catch {}
       } else {
         abortHandler = () => controller.abort();
@@ -122,6 +117,7 @@ export class DeltaClient {
     }
 
     const timeoutSignal = () => {
+      timedOut = true;
       controller.abort();
       try { controller.signal.reason = new DOMException('Timeout', 'TimeoutError'); } catch {}
     };
@@ -143,7 +139,7 @@ export class DeltaClient {
           throw new DOMException('Aborted', 'AbortError');
         }
         if (err?.name === 'AbortError' || err?.name === 'TimeoutError' || controller.signal.aborted) {
-          const isTimeout = err?.name === 'TimeoutError' || controller.signal.reason?.name === 'TimeoutError';
+          const isTimeout = timedOut || err?.name === 'TimeoutError' || controller.signal.reason?.name === 'TimeoutError';
           if (isTimeout) {
             throw new DeltaError('TIMEOUT', `Request timed out after ${this.timeoutMs}ms`, { url, symbol, resolution, start, end });
           }
