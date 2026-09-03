@@ -37,13 +37,14 @@ export class DeltaCandleProvider extends CandleProvider {
    * @param {number} [opts.chunkSize]
    * @param {number} [opts.cacheSize]
    */
-  constructor({ baseUrl = DELTA_DEFAULT_BASE, client = null, maxCandles = MAX_CANDLES, chunkSize = CHUNK_SIZE, cacheSize = 20 } = {}) {
+  constructor({ baseUrl = DELTA_DEFAULT_BASE, client = null, maxCandles = MAX_CANDLES, chunkSize = CHUNK_SIZE, cacheSize = 20, gridOrigin = null } = {}) {
     super();
     this.baseUrl = baseUrl;
     this.client = client ?? new DeltaClient({ baseUrl });
     this.maxCandles = maxCandles;
     this.chunkSize = chunkSize;
     this.cacheSize = cacheSize;
+    this.gridOrigin = gridOrigin ?? (this.client?.gridOrigin ?? 0);
     this._cache = new Map(); // key -> canonical candles array
   }
 

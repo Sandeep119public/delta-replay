@@ -109,7 +109,7 @@ describe('Cache coverage gap-aware', () => {
     const { HistoricalDataManager } = await import('../src/data/HistoricalDataManager.js');
     const { DeltaCandleProvider } = await import('../src/data/DeltaCandleProvider.js');
     let fetches=0;
-    const client = { fetchCandles: async ({start})=>{ fetches++; return start===1000? [c(1000,100)]:[c(1120,102)]; } };
+    const client = { gridOrigin: 1000, fetchCandles: async ({start})=>{ fetches++; return start===1000? [c(1000,100)]:[c(1120,102)]; } };
     const provider = new DeltaCandleProvider({ client, maxCandles:100000 });
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB:false });

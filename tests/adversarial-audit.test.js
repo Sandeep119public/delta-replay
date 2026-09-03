@@ -110,6 +110,7 @@ describe('Adversarial Audit — Provider Decoupling & Market Source Integrity (P
 
   it('HistoricalDataManager calls provider.getCandles directly without reaching into provider.client', async () => {
     const mockProvider = {
+      gridOrigin: 1000,
       getCandles: vi.fn(async () => [
         { time: 1000, open: 100, high: 105, low: 95, close: 102, volume: 10 },
         { time: 1060, open: 102, high: 108, low: 101, close: 106, volume: 15 },
@@ -329,6 +330,7 @@ describe('Adversarial Audit — Residual Correctness Hardening (Points 1-6)', ()
     });
 
     const mockProvider = {
+      gridOrigin: 1000,
       fetchChunk: vi.fn(async () => []),
       getCandles: vi.fn(async () => []),
     };
@@ -358,6 +360,7 @@ describe('Adversarial Audit — Residual Correctness Hardening (Points 1-6)', ()
 
     // Provider returns the missing candle at 1060
     const mockProvider = {
+      gridOrigin: 1000,
       fetchChunk: vi.fn(async () => [
         { time: 1060, open: 102, high: 108, low: 101, close: 106, volume: 15 },
       ]),

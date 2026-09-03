@@ -9,9 +9,10 @@ import { DeltaCandleProvider, TIMEFRAME_SECONDS } from '../src/data/DeltaCandleP
 function candle(time, close) { return { time, open: close, high: close+1, low: close-1, close, volume: 10 }; }
 const c = candle;
 
-function mockClient(responses) {
+function mockClient(responses, gridOrigin = 1000) {
   // responses: Map key `${start}-${end}` -> array or function
   return {
+    gridOrigin,
     fetchCandles: async ({ start, end, signal }) => {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       const key = `${start}-${end}`;
@@ -93,12 +94,12 @@ describe('CandleCache', () => {
   });
   it('overlapping merge', () => {
     const cache = new CandleCache({ enableIDB: false });
-    cache.set('BTCUSD', '1m', 1000, 1060, [c(1000,100)]);
-    cache.set('BTCUSD', '1m', 1060, 1120, [c(1060,101)]);
+    cache.set('BTCUSD', '1m', 1000, 1060, [c(1000, 100), c(1060, 101)]);
+    cache.set('BTCUSD', '1m', 1060, 1120, [c(1060, 101), c(1120, 102)]);
     const entry = cache._memory.get('BTCUSD|1m');
     expect(entry.intervals.length).toBe(1);
     expect(entry.intervals[0]).toEqual({ from: 1000, to: 1120 });
-    expect(entry.candles.length).toBe(2);
+    expect(entry.candles.length).toBe(3);
   });
 });
 
@@ -120,6 +121,7 @@ describe('HistoricalDataManager — fetching', () => {
     const cache = new CandleCache({ enableIDB: false });
     // chunkSize 2 => each chunk 2*60 sec range
     const client = {
+      gridOrigin: 1000,
       fetchCandles: async ({ start, end }) => {
         const tf = 60;
         const res = [];
@@ -157,6 +159,7 @@ describe('HistoricalDataManager — fetching', () => {
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const client = {
+      gridOrigin: 1000,
       fetchCandles: async ({ signal }) => {
         await new Promise((res, rej) => {
           const t = setTimeout(()=>res([c(1000,100)]), 100);
@@ -178,6 +181,7 @@ describe('HistoricalDataManager — fetching', () => {
   it('retry on network error', async () => {
     let calls = 0;
     const client = {
+      gridOrigin: 1000,
       fetchCandles: async () => {
         calls++;
         if (calls < 3) {
@@ -198,8 +202,8 @@ describe('HistoricalDataManager — fetching', () => {
   it('stale abort does not overwrite newer', async () => {
     const store1 = new CandleStore();
     const cache1 = new CandleCache({ enableIDB: false });
-    const clientSlow = { fetchCandles: async ({signal})=>{ await new Promise(r=>setTimeout(r,60)); if(signal?.aborted) throw new DOMException('Aborted','AbortError'); return [c(1000,100)]; } };
-    const clientFast = { fetchCandles: async ()=> [c(2000,200)] };
+    const clientSlow = { gridOrigin: 1000, fetchCandles: async ({signal})=>{ await new Promise(r=>setTimeout(r,60)); if(signal?.aborted) throw new DOMException('Aborted','AbortError'); return [c(1000,100)]; } };
+    const clientFast = { gridOrigin: 2000, fetchCandles: async ()=> [c(2000,200)] };
     const providerSlow = new DeltaCandleProvider({ client: clientSlow, maxCandles: 100000 });
     const providerFast = new DeltaCandleProvider({ client: clientFast, maxCandles: 100000 });
     const mgrSlow = new HistoricalDataManager({ provider: providerSlow, store: store1, cache: cache1 });
@@ -215,7 +219,7 @@ describe('HistoricalDataManager — fetching', () => {
 
   it('caching hit avoids fetch', async () => {
     let fetches = 0;
-    const client = { fetchCandles: async ({ start, end })=>{ fetches++; const res=[]; for(let t=start; t<=end; t+=60) if(t===1000||t===1060) res.push(c(t,100)); return res; } };
+    const client = { gridOrigin: 1000, fetchCandles: async ({ start, end })=>{ fetches++; const res=[]; for(let t=start; t<=end; t+=60) if(t===1000||t===1060) res.push(c(t,100)); return res; } };
     const provider = new DeltaCandleProvider({ client, maxCandles: 100000 });
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
@@ -230,6 +234,7 @@ describe('HistoricalDataManager — fetching', () => {
   it('partial cache reuses hit part', async () => {
     let fetches = 0;
     const client = {
+      gridOrigin: 1000,
       fetchCandles: async ({ start, end })=>{
         fetches++;
         const res=[];

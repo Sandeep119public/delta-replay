@@ -40,6 +40,7 @@ describe('High-Value Invariant Tests (Audit Section 18 & Second-Pass Hardening)'
         timeframe: '1m',
         from: 1000,
         to: 1180,
+        origin: 1000,
       });
 
       const timestamps = candles.map(c => c.time);
@@ -54,11 +55,22 @@ describe('High-Value Invariant Tests (Audit Section 18 & Second-Pass Hardening)'
     });
 
     it('normalizeRange aligns unaligned boundaries and produces requested vs effective ranges', () => {
-      const range = normalizeRange(1001, 1181, 60);
+      const range = normalizeRange(1001, 1181, 60, 0);
       expect(range.requestedFrom).toBe(1001);
       expect(range.requestedTo).toBe(1181);
       expect(range.effectiveFrom).toBe(1020);
       expect(range.effectiveTo).toBe(1140);
+      expect(range.hasCandle).toBe(true);
+
+      // Invariant: effectiveFrom >= requestedFrom && effectiveTo <= requestedTo
+      expect(range.effectiveFrom).toBeGreaterThanOrEqual(range.requestedFrom);
+      expect(range.effectiveTo).toBeLessThanOrEqual(range.requestedTo);
+
+      // Narrow range containing no candle
+      const narrow = normalizeRange(1001, 1010, 60, 0);
+      expect(narrow.hasCandle).toBe(false);
+      expect(narrow.effectiveFrom).toBe(1020);
+      expect(narrow.effectiveTo).toBe(960);
     });
 
     it('computeGridMissing returns exact discrete grid intervals instead of arbitrary seconds', () => {
@@ -316,12 +328,92 @@ describe('High-Value Invariant Tests (Audit Section 18 & Second-Pass Hardening)'
         from: 1000,
         to: 1120,
         policy: 'REPAIR',
+        origin: 1000,
       });
 
       expect(repairRefetchCalled).toBe(true);
       expect(candles.length).toBe(3);
       expect(candles.map(c => c.time)).toEqual([1000, 1060, 1120]);
-      expect(metadata.repairedCount).toBe(1);
+      expect(metadata.repairRequested).toBe(1);
+      expect(metadata.repairSucceeded).toBe(1);
+      expect(metadata.repairFailed).toBe(0);
+      expect(metadata.repairSuccess).toBe(true);
+      expect(metadata.integrityStatus).toBe(INTEGRITY_STATUS.VALID);
+    });
+
+    it('failed repair marks dataset DEGRADED and does NOT contaminate cache', async () => {
+      const mockFailingProvider = {
+        fetchChunk: vi.fn(async ({ from, to }) => {
+          if (from === 1060 && to === 1060) {
+            // Repair fetch fails
+            throw new Error('Exchange 500 error on repair');
+          }
+          return [
+            makeCandle(1000, 100),
+            { time: 1060, open: 100, high: 90, low: 95, close: 98, volume: 10 },
+            makeCandle(1120, 102),
+          ];
+        }),
+      };
+
+      const cache = new CandleCache({ enableIDB: false });
+      const mgr = new HistoricalDataManager({
+        provider: mockFailingProvider,
+        store: new CandleStore(),
+        cache,
+      });
+
+      const { candles, metadata } = await mgr.load({
+        symbol: 'BTCUSD',
+        timeframe: '1m',
+        from: 1000,
+        to: 1120,
+        policy: 'REPAIR',
+        origin: 1000,
+      });
+
+      expect(candles.length).toBe(2);
+      expect(metadata.repairSuccess).toBe(false);
+      expect(metadata.integrityStatus).toBe(INTEGRITY_STATUS.DEGRADED);
+
+      // Verify cache was NOT populated with degraded/failed coverage
+      const cached = cache.get('BTCUSD', '1m', 1000, 1120, { timeframeSec: 60 });
+      expect(cached.hit).toBe(false);
+      expect(cached.candles.length).toBe(0);
+    });
+
+    it('repair replacement normalizes array-form and millisecond responses before matching', async () => {
+      const mockArrayProvider = {
+        fetchChunk: vi.fn(async ({ from, to }) => {
+          if (from === 1060 && to === 1060) {
+            // Returns raw array form candle
+            return [[1060, '101.0', '102.0', '100.0', '101.5', '15.0']];
+          }
+          return [
+            makeCandle(1000, 100),
+            { time: 1060, open: 100, high: 90, low: 95, close: 98, volume: 10 },
+            makeCandle(1120, 102),
+          ];
+        }),
+      };
+
+      const mgr = new HistoricalDataManager({
+        provider: mockArrayProvider,
+        store: new CandleStore(),
+        cache: new CandleCache({ enableIDB: false }),
+      });
+
+      const { candles, metadata } = await mgr.load({
+        symbol: 'BTCUSD',
+        timeframe: '1m',
+        from: 1000,
+        to: 1120,
+        policy: 'REPAIR',
+        origin: 1000,
+      });
+
+      expect(candles.length).toBe(3);
+      expect(candles.map(c => c.time)).toEqual([1000, 1060, 1120]);
       expect(metadata.repairSuccess).toBe(true);
       expect(metadata.integrityStatus).toBe(INTEGRITY_STATUS.VALID);
     });

@@ -223,7 +223,7 @@ describe('PHASE 6.6A — Regression: Illegal invocation & data path', () => {
 
     it('does NOT retry 400 API_ERROR', async () => {
       let calls=0;
-      const client = { fetchCandles: async()=>{ calls++; throw new DeltaError('API_ERROR','bad', {status:400, url:'https://api.delta.exchange/x'}); } };
+      const client = { gridOrigin: 1000, fetchCandles: async()=>{ calls++; throw new DeltaError('API_ERROR','bad', {status:400, url:'https://api.delta.exchange/x'}); } };
       const provider=new DeltaCandleProvider({client}); const mgr=new HistoricalDataManager({provider, store:new CandleStore(), cache:new CandleCache({enableIDB:false}), maxRetries:3, concurrency:1});
       await expect(mgr.load({symbol:'BTCUSD', timeframe:'1m', from:1000,to:1060})).rejects.toMatchObject({code:'API_ERROR'});
       expect(calls).toBe(1);
@@ -231,7 +231,7 @@ describe('PHASE 6.6A — Regression: Illegal invocation & data path', () => {
 
     it('does retry NETWORK_ERROR', async () => {
       let calls=0;
-      const client = { fetchCandles: async()=>{ calls++; if(calls<3){ throw new DeltaError('NETWORK_ERROR','net',{url:'https://api/x'});} return [c(1000,100)]; } };
+      const client = { gridOrigin: 1000, fetchCandles: async()=>{ calls++; if(calls<3){ throw new DeltaError('NETWORK_ERROR','net',{url:'https://api/x'});} return [c(1000,100)]; } };
       const provider=new DeltaCandleProvider({client}); const mgr=new HistoricalDataManager({provider, store:new CandleStore(), cache:new CandleCache({enableIDB:false}), maxRetries:3, concurrency:1});
       const {candles}=await mgr.load({symbol:'BTCUSD', timeframe:'1m', from:1000,to:1060});
       expect(calls).toBe(3);
@@ -241,7 +241,7 @@ describe('PHASE 6.6A — Regression: Illegal invocation & data path', () => {
     it('does retry 408, 429, 5xx', async () => {
       for (const status of [408,429,500,502,503]) {
         let calls=0;
-        const client={ fetchCandles: async()=>{ calls++; if(calls===1) throw new DeltaError('API_ERROR',`err ${status}`,{status, url:'https://api/x'}); return [c(1000,100)]; } };
+        const client={ gridOrigin: 1000, fetchCandles: async()=>{ calls++; if(calls===1) throw new DeltaError('API_ERROR',`err ${status}`,{status, url:'https://api/x'}); return [c(1000,100)]; } };
         const mgr=new HistoricalDataManager({ provider:new DeltaCandleProvider({client}), store:new CandleStore(), cache:new CandleCache({enableIDB:false}), maxRetries:2, concurrency:1 });
         const {candles}=await mgr.load({symbol:'BTCUSD', timeframe:'1m', from:1000,to:1060});
         expect(calls).toBe(2);
@@ -251,7 +251,7 @@ describe('PHASE 6.6A — Regression: Illegal invocation & data path', () => {
 
     it('does NOT retry INVALID_RESPONSE', async () => {
       let calls=0;
-      const client={ fetchCandles: async()=>{ calls++; throw new DeltaError('INVALID_RESPONSE','bad',{url:'https://api/x'}); } };
+      const client={ gridOrigin: 1000, fetchCandles: async()=>{ calls++; throw new DeltaError('INVALID_RESPONSE','bad',{url:'https://api/x'}); } };
       const mgr=new HistoricalDataManager({ provider:new DeltaCandleProvider({client}), store:new CandleStore(), cache:new CandleCache({enableIDB:false}), maxRetries:3, concurrency:1 });
       await expect(mgr.load({symbol:'BTCUSD', timeframe:'1m', from:1000,to:1060})).rejects.toMatchObject({code:'INVALID_RESPONSE'});
       expect(calls).toBe(1);
@@ -259,7 +259,7 @@ describe('PHASE 6.6A — Regression: Illegal invocation & data path', () => {
 
     it('retries TIMEOUT', async () => {
       let calls=0;
-      const client={ fetchCandles: async()=>{ calls++; if(calls<2) throw new DeltaError('TIMEOUT','timeout',{url:'https://api/x'}); return [c(1000,100)]; } };
+      const client={ gridOrigin: 1000, fetchCandles: async()=>{ calls++; if(calls<2) throw new DeltaError('TIMEOUT','timeout',{url:'https://api/x'}); return [c(1000,100)]; } };
       const mgr=new HistoricalDataManager({ provider:new DeltaCandleProvider({client}), store:new CandleStore(), cache:new CandleCache({enableIDB:false}), maxRetries:3, concurrency:1 });
       const {candles}=await mgr.load({symbol:'BTCUSD', timeframe:'1m', from:1000,to:1060});
       expect(calls).toBe(2);
@@ -297,6 +297,7 @@ describe('PHASE 6.6A — Regression: Illegal invocation & data path', () => {
       ];
       const fetchFn = mockFetchResponse({ jsonData:{ success:true, result: raw }});
       const client = new DeltaClient({ fetchFn, timeoutMs:0 });
+      client.gridOrigin = 1700000000;
       const provider = new DeltaCandleProvider({ client });
       const mgr = new HistoricalDataManager({ provider, store:new CandleStore(), cache:new CandleCache({enableIDB:false}) });
       const { candles } = await mgr.load({ symbol:'BTCUSD', timeframe:'1m', from:1700000000, to:1700000200 });
@@ -306,6 +307,7 @@ describe('PHASE 6.6A — Regression: Illegal invocation & data path', () => {
     it('handles chunked multi-fetch still sorted', async () => {
       const tfSec=60;
       const client = {
+        gridOrigin: 1000,
         fetchCandles: async ({ start, end }) => {
           const res=[];
           for(let t=start; t<=end; t+=tfSec){

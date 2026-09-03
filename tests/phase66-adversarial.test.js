@@ -28,7 +28,7 @@ describe('Phase 6.6 Part 1 — Cache Coverage Adversarial', () => {
     // Remove Jan5 (index 4)
     const gapped = all.filter((_, i) => i !== 4);
     // Initially store as if full coverage (false interval)
-    cache.set('BTCUSD', '1m', base, base + 9 * 60, gapped, { intervals: [{ from: base, to: base + 9 * 60 }] });
+    cache.set('BTCUSD', '1m', base, base + 9 * 60, gapped, { intervals: [{ from: base, to: base + 9 * 60 }], allowUnverifiedIntervals: true });
     let res = cache.get('BTCUSD', '1m', base, base + 9 * 60);
     expect(res.hit).toBe(true); // before revalidation, stale claims hit
     // Simulate HistoricalDataManager revalidation step
@@ -49,6 +49,7 @@ describe('Phase 6.6 Part 1 — Cache Coverage Adversarial', () => {
     const store = new CandleStore();
     let fetches = 0;
     const client = {
+      gridOrigin: base,
       fetchCandles: async ({ start }) => {
         fetches++;
         // Return the missing Jan5 candle
@@ -405,8 +406,8 @@ describe('Phase 6.6 Part 12 — Symbol/Timeframe isolation', () => {
     const store=new CandleStore();
     const cache=new CandleCache({enableIDB:false});
     let btcFetch=false, ethFetch=false;
-    const clientBTC={ fetchCandles: async()=>{ await new Promise(r=>setTimeout(r,30)); btcFetch=true; return [c(1000,100)]; } };
-    const clientETH={ fetchCandles: async()=>{ ethFetch=true; return [c(2000,200)]; } };
+    const clientBTC={ gridOrigin: 1000, fetchCandles: async()=>{ await new Promise(r=>setTimeout(r,30)); btcFetch=true; return [c(1000,100)]; } };
+    const clientETH={ gridOrigin: 2000, fetchCandles: async()=>{ ethFetch=true; return [c(2000,200)]; } };
     const providerBTC=new DeltaCandleProvider({client:clientBTC, maxCandles:100000});
     const providerETH=new DeltaCandleProvider({client:clientETH, maxCandles:100000});
     const mgrBTC=new HistoricalDataManager({provider:providerBTC, store, cache});

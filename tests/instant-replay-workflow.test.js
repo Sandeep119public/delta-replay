@@ -54,6 +54,7 @@ describe('Instant Historical Replay Workflow & Persistent Caching', () => {
 
     let fetchCount = 0;
     const mockClient = {
+      gridOrigin: baseTime,
       fetchCandles: async () => {
         fetchCount++;
         return testCandles;

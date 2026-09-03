@@ -91,11 +91,10 @@ export class CandleCache {
       .sort((a, b) => a.time - b.time);
 
     const truthfulIntervals = CandleCache.intervalsFromCandles(canonical, tf);
-    const merged = intervals ? this._mergeIntervals(intervals, tf) : truthfulIntervals;
 
     const entry = {
       candles: canonical,
-      intervals: merged,
+      intervals: truthfulIntervals,
       timeframeSec: tf,
       ts: Date.now(),
       version: CACHE_VERSION,
@@ -119,7 +118,7 @@ export class CandleCache {
     this._persistIDB(key, entry).catch(() => {});
   }
 
-  set(symbol, timeframe, from, to, candles = [], { intervals = null, timeframeSec = null } = {}) {
+  set(symbol, timeframe, from, to, candles = [], { intervals = null, timeframeSec = null, allowUnverifiedIntervals = false } = {}) {
     const key = this._key(symbol, timeframe);
     const entry = this._memory.get(key) ?? {
       candles: [],
@@ -137,8 +136,9 @@ export class CandleCache {
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.timeframeSec = tf;
 
-    const candidate = intervals ?? (candles && candles.length ? [{ from, to }] : CandleCache.intervalsFromCandles(entry.candles, tf));
-    entry.intervals = this._mergeIntervals([...entry.intervals, ...candidate], tf);
+    entry.intervals = (allowUnverifiedIntervals && intervals)
+      ? intervals
+      : CandleCache.intervalsFromCandles(entry.candles, tf);
     entry.version = CACHE_VERSION;
     entry.ts = Date.now();
 

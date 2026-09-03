@@ -1,7 +1,9 @@
 import { EventEmitter } from '../core/EventEmitter.js';
 import { CandleStore } from './CandleStore.js';
 import { CandleCache } from './CandleCache.js';
-import { CandleIntegrity } from './CandleIntegrity.js';
+import { CandleIntegrity, INTEGRITY_STATUS } from './CandleIntegrity.js';
+import { CandleNormalizer } from './CandleNormalizer.js';
+import { CandleValidator } from './CandleValidator.js';
 import { TIMEFRAME_SECONDS, normalizeRange } from './CandleGrid.js';
 
 export const DataEvents = {
@@ -48,9 +50,10 @@ export class HistoricalDataManager extends EventEmitter {
    * @param {boolean} [params.allowGaps=false]
    * @param {boolean} [params.halfOpen=false]
    * @param {string} [params.policy] - 'STRICT' | 'REPAIR' | 'LENIENT'
+   * @param {number} [params.origin] - optional grid origin override
    * @returns {Promise<{ candles: Array, metadata: object }>}
    */
-  async load({ symbol, timeframe, from, to, signal, strict = this.strictMode, allowGaps = false, halfOpen = false, policy = null } = {}) {
+  async load({ symbol, timeframe, from, to, signal, strict = this.strictMode, allowGaps = false, halfOpen = false, policy = null, origin = null } = {}) {
     if (!symbol || !timeframe) throw new Error('symbol and timeframe required');
     if (!Number.isFinite(from) || !Number.isFinite(to)) throw new Error('from/to must be numbers');
     if (from >= to) throw new Error('from must be < to');
@@ -59,7 +62,14 @@ export class HistoricalDataManager extends EventEmitter {
     const tfSec = TIMEFRAME_SECONDS[timeframe];
     if (!tfSec) throw new Error(`Unsupported timeframe ${timeframe}`);
 
-    const range = normalizeRange(from, to, tfSec);
+    const gridOrigin = origin ?? this.provider?.gridOrigin ?? (this.provider?.client?.gridOrigin ?? 0);
+    const range = normalizeRange(from, to, tfSec, gridOrigin);
+    if (!range.hasCandle) {
+      const err = new Error(`Requested range [${from}, ${to}] contains no complete candle for timeframe ${timeframe}`);
+      err.code = 'INVALID_REQUEST';
+      this.emit(DataEvents.ERROR, err);
+      throw err;
+    }
     const { requestedFrom, requestedTo, effectiveFrom, effectiveTo } = range;
 
     this.emit(DataEvents.LOADING_STARTED, {
@@ -322,27 +332,89 @@ export class HistoricalDataManager extends EventEmitter {
     // Active REPAIR pipeline: targeted refetch for corrupted candles
     const effectivePolicy = policy ?? (strict ? 'STRICT' : 'REPAIR');
     if (effectivePolicy === 'REPAIR' && metadata.repairRanges && metadata.repairRanges.length > 0) {
-      try {
-        const repairedCandles = [];
-        for (const rRange of metadata.repairRanges) {
+      const repairRequested = metadata.repairRanges.length;
+      const repairedMap = new Map();
+
+      for (const rRange of metadata.repairRanges) {
+        try {
           const freshRaw = await fetchChunkWithRetry(rRange);
           if (Array.isArray(freshRaw) && freshRaw.length > 0) {
-            repairedCandles.push(...freshRaw);
+            const normalizedChunk = CandleNormalizer.normalizeBatch(freshRaw, { timestampUnit: 'seconds' });
+            for (const c of normalizedChunk) {
+              const v = CandleValidator.validate(c);
+              if (v.valid && c.time >= rRange.from && c.time <= rRange.to) {
+                repairedMap.set(c.time, c);
+              }
+            }
           }
+        } catch {
+          // targeted refetch failed
         }
-        if (repairedCandles.length > 0) {
-          const repairTimes = new Set(metadata.repairRanges.map(r => r.from));
-          const combinedRaw = allRaw.filter(c => !repairTimes.has(c.time)).concat(repairedCandles);
-          const recheck = CandleIntegrity.process(combinedRaw, integrityOptions);
-          validCandles = recheck.validCandles;
-          metadata = {
-            ...recheck.metadata,
-            repairedCount: metadata.repairRanges.length - recheck.metadata.invalidCount,
-            repairSuccess: recheck.metadata.invalidCount === 0,
-          };
-        }
+      }
+
+      // Normalize allRaw to canonical seconds before replacement
+      let allNormalized = [];
+      try {
+        allNormalized = CandleNormalizer.normalizeBatch(allRaw, { timestampUnit: 'seconds' });
       } catch {
-        metadata.repairSuccess = false;
+        allNormalized = allRaw;
+      }
+
+      const repairTimes = new Set(metadata.repairRanges.map(r => r.from));
+      const combined = allNormalized
+        .filter(c => !repairTimes.has(c.time))
+        .concat([...repairedMap.values()]);
+
+      let recheck;
+      try {
+        recheck = CandleIntegrity.process(combined, integrityOptions);
+      } catch (err) {
+        if (strict) {
+          this.emit(DataEvents.ERROR, err);
+          throw err;
+        }
+        recheck = { validCandles, metadata: { ...metadata, invalidCount: repairRequested } };
+      }
+
+      const repairSucceeded = metadata.repairRanges.filter(r => repairedMap.has(r.from)).length;
+      const repairFailed = repairRequested - repairSucceeded;
+      const repairCompletelySuccessful = recheck.metadata.invalidCount === 0 && repairFailed === 0;
+
+      if (repairCompletelySuccessful) {
+        validCandles = recheck.validCandles;
+        metadata = {
+          ...recheck.metadata,
+          requestedFrom,
+          requestedTo,
+          effectiveFrom,
+          effectiveTo,
+          repairRequested,
+          repairSucceeded,
+          repairFailed,
+          repairSuccess: true,
+          integrityStatus: INTEGRITY_STATUS.VALID,
+        };
+      } else {
+        validCandles = recheck.validCandles;
+        metadata = {
+          ...recheck.metadata,
+          requestedFrom,
+          requestedTo,
+          effectiveFrom,
+          effectiveTo,
+          repairRequested,
+          repairSucceeded,
+          repairFailed,
+          repairSuccess: false,
+          integrityStatus: INTEGRITY_STATUS.DEGRADED,
+        };
+
+        if (strict) {
+          const err = new Error(`Integrity error: repair failed for ${repairFailed} candle(s)`);
+          err.code = 'INTEGRITY_ERROR';
+          this.emit(DataEvents.ERROR, err);
+          throw err;
+        }
       }
     }
 
@@ -353,12 +425,12 @@ export class HistoricalDataManager extends EventEmitter {
       throw err;
     }
 
-    // Update cache with gap-aware intervals (verified coverage, not just requested)
-    const actualIntervals = CandleCache.intervalsFromCandles(validCandles, tfSec);
-    this.cache.set(symbol, timeframe, effectiveFrom, effectiveTo, validCandles, {
-      intervals: actualIntervals.length ? actualIntervals : [{ from: effectiveFrom, to: effectiveTo }],
-      timeframeSec: tfSec,
-    });
+    // Update cache with verified coverage only if dataset is valid and repair did not fail
+    if (metadata.repairSuccess !== false && metadata.integrityStatus !== INTEGRITY_STATUS.DEGRADED) {
+      this.cache.set(symbol, timeframe, effectiveFrom, effectiveTo, validCandles, {
+        timeframeSec: tfSec,
+      });
+    }
 
     // Load store
     this.store.load(validCandles, {

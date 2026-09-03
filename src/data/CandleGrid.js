@@ -2,7 +2,7 @@
  * CandleGrid — Discrete lattice and candle-grid utilities.
  *
  * Ensures all historical data ranges, chunk boundaries, and cache coverage
- * operate in discrete candle-grid space (k * tfSec), not arbitrary Unix seconds.
+ * operate in discrete candle-grid space (origin + k * tfSec), not arbitrary Unix seconds.
  */
 
 export const TIMEFRAME_SECONDS = Object.freeze({
@@ -24,24 +24,29 @@ export const TIMEFRAME_SECONDS = Object.freeze({
  * @param {number} timestamp - Unix seconds
  * @param {number} tfSec - Timeframe in seconds
  * @param {'floor'|'ceil'|'round'} [mode='floor']
+ * @param {number} [origin=0] - Grid origin / anchor
  * @returns {number}
  */
-export function alignToGrid(timestamp, tfSec, mode = 'floor') {
+export function alignToGrid(timestamp, tfSec, mode = 'floor', origin = 0) {
   if (!Number.isFinite(timestamp) || !Number.isFinite(tfSec) || tfSec <= 0) return timestamp;
-  if (mode === 'ceil') return Math.ceil(timestamp / tfSec) * tfSec;
-  if (mode === 'round') return Math.round(timestamp / tfSec) * tfSec;
-  return Math.floor(timestamp / tfSec) * tfSec;
+  const rel = timestamp - origin;
+  if (mode === 'ceil') return origin + Math.ceil(rel / tfSec) * tfSec;
+  if (mode === 'round') return origin + Math.round(rel / tfSec) * tfSec;
+  return origin + Math.floor(rel / tfSec) * tfSec;
 }
 
 /**
  * Normalize requested user range into discrete candle lattice boundaries.
- * Returns both requested and effective boundaries.
+ * Invariant: effectiveFrom >= requestedFrom AND effectiveTo <= requestedTo.
+ * If no complete candle exists in [from, to], hasCandle is false.
+ *
  * @param {number} from - Requested start unix seconds
  * @param {number} to - Requested end unix seconds
  * @param {number} tfSec - Timeframe in seconds
- * @returns {{ requestedFrom: number, requestedTo: number, effectiveFrom: number, effectiveTo: number }}
+ * @param {number} [origin=0] - Grid origin / anchor
+ * @returns {{ requestedFrom: number, requestedTo: number, effectiveFrom: number, effectiveTo: number, hasCandle: boolean }}
  */
-export function normalizeRange(from, to, tfSec) {
+export function normalizeRange(from, to, tfSec, origin = 0) {
   if (!Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(tfSec) || tfSec <= 0) {
     throw new Error('from, to, and tfSec must be valid numbers');
   }
@@ -49,31 +54,16 @@ export function normalizeRange(from, to, tfSec) {
     throw new Error('from must be < to');
   }
 
-  let effectiveFrom, effectiveTo;
-  if (from % tfSec === 0) {
-    // Standard epoch-0 aligned market data
-    effectiveFrom = from;
-    effectiveTo = Math.floor(to / tfSec) * tfSec;
-  } else if (from % 10 === 0) {
-    // Aligned custom/test fixture lattice anchored at from (e.g. 1000..1180 or 1700000000)
-    effectiveFrom = from;
-    const span = Math.floor((to - from) / tfSec) * tfSec;
-    effectiveTo = from + Math.max(0, span);
-  } else {
-    // Unaligned request (e.g., from = 1001, to = 1181): snap to discrete candle grid
-    effectiveFrom = Math.ceil(from / tfSec) * tfSec;
-    effectiveTo = Math.floor(to / tfSec) * tfSec;
-  }
-
-  if (effectiveFrom > effectiveTo) {
-    effectiveTo = effectiveFrom;
-  }
+  const effectiveFrom = origin + Math.ceil((from - origin) / tfSec) * tfSec;
+  const effectiveTo = origin + Math.floor((to - origin) / tfSec) * tfSec;
+  const hasCandle = effectiveFrom <= effectiveTo;
 
   return {
     requestedFrom: from,
     requestedTo: to,
     effectiveFrom,
     effectiveTo,
+    hasCandle,
   };
 }
 

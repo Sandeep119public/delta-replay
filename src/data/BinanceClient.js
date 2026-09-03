@@ -8,6 +8,7 @@ export class BinanceClient {
   constructor({ baseUrl = BINANCE_FUTURES_BASE, timeoutMs = 15000, fetchFn } = {}) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.timeoutMs = timeoutMs;
+    this.gridOrigin = 0;
     if (fetchFn) {
       this.fetchFn = fetchFn;
     } else {
@@ -117,7 +118,7 @@ export class BinanceClient {
       const nextStartSec = lastCandle.time + tfSec;
       const nextStartMs = nextStartSec * 1000;
 
-      if (nextStartMs <= currentStartMs || nextStartMs > endMs) {
+      if (nextStartMs <= currentStartMs) {
         break;
       }
       currentStartMs = nextStartMs;
