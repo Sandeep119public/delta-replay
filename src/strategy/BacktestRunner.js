@@ -1,4 +1,4 @@
-import { PaperTradingEngine, EXECUTION_PROFILE } from '../trading/PaperTradingEngine.js';
+import { PaperTradingEngine, EXECUTION_PROFILE, EXECUTION_TIMING } from '../trading/PaperTradingEngine.js';
 import { TradingEvents } from '../trading/TradingEvents.js';
 import { ORDER_STATUSES } from '../trading/Order.js';
 
@@ -23,10 +23,10 @@ export class BacktestRunner {
     });
 
     // An injected engine is part of the experiment definition. Do not silently
-    // accept manual-replay semantics here, because IMMEDIATE_CLOSE can turn a
-    // strategy signal into same-bar execution and introduce lookahead bias.
-    if (this.engine.executionProfile !== EXECUTION_PROFILE.RESEARCH_BACKTEST) {
-      throw new Error(`BacktestRunner requires execution profile ${EXECUTION_PROFILE.RESEARCH_BACKTEST}`);
+    // accept manual-replay semantics or same-bar timing here, because that can
+    // turn a strategy signal into lookahead execution.
+    if (this.engine.executionProfile !== EXECUTION_PROFILE.RESEARCH_BACKTEST || this.engine.executionTiming !== EXECUTION_TIMING.NEXT_BAR_OPEN) {
+      throw new Error(`BacktestRunner requires ${EXECUTION_PROFILE.RESEARCH_BACKTEST} with ${EXECUTION_TIMING.NEXT_BAR_OPEN} timing`);
     }
 
     // Single canonical orchestration path: subscribe strategy strictly to PaperTradingEngine's BAR_CLOSE.
