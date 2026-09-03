@@ -1,14 +1,14 @@
 import { CandleProvider } from './CandleProvider.js';
+import { BinanceClient } from './BinanceClient.js';
 
 /**
- * BinanceCandleProvider exposes raw canonical-ish candle chunks to
- * HistoricalDataManager. Chunking, retries, integrity and caching belong to
- * the manager, so this provider deliberately has one responsibility: I/O.
+ * BinanceCandleProvider exposes raw candle chunks to HistoricalDataManager.
+ * Chunking, retries, integrity and caching belong to the manager.
  */
 export class BinanceCandleProvider extends CandleProvider {
   constructor({ client = null, chunkSize = 1000 } = {}) {
     super();
-    this.client = client || new (await import('./BinanceClient.js')).BinanceClient();
+    this.client = client || new BinanceClient();
     this.chunkSize = chunkSize;
   }
 
@@ -23,8 +23,7 @@ export class BinanceCandleProvider extends CandleProvider {
   }
 
   /**
-   * Legacy provider interface. The return type is intentionally an array,
-   * matching fetchChunk and the CandleProvider contract.
+   * Legacy provider interface. Return type intentionally matches fetchChunk.
    */
   async getCandles({ symbol, timeframe, from, to, signal } = {}) {
     return this.fetchChunk({ symbol, timeframe, from, to, signal });
