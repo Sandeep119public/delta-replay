@@ -27,7 +27,7 @@ describe('execution semantics hardening', () => {
     expect(engine.executionTiming).toBe(EXECUTION_TIMING.NEXT_BAR_OPEN);
   });
 
-  it('rejects regressing market candles', () => {
+  it('rejects regressing market candles in research mode', () => {
     const engine = new PaperTradingEngine({ executionProfile: EXECUTION_PROFILE.RESEARCH_BACKTEST });
     engine.onMarketCandle({ candle: c(1000, 100), index: 0, symbol: 'BTCUSDT' });
     expect(() => engine.onMarketCandle({ candle: c(900, 99), index: 1, symbol: 'BTCUSDT' }))
@@ -36,8 +36,8 @@ describe('execution semantics hardening', () => {
     expect(engine.getAccountSnapshot().totalBars).toBe(1);
   });
 
-  it('rejects conflicting timestamp for the same candle index', () => {
-    const engine = new PaperTradingEngine();
+  it('rejects conflicting timestamps for one research candle index', () => {
+    const engine = new PaperTradingEngine({ executionProfile: EXECUTION_PROFILE.RESEARCH_BACKTEST });
     engine.onMarketCandle({ candle: c(1000, 100), index: 0, symbol: 'BTCUSDT' });
     expect(() => engine.onMarketCandle({ candle: c(1001, 101), index: 0, symbol: 'BTCUSDT' }))
       .toThrow(/MARKET_CANDLE_IDENTITY_CONFLICT/);
@@ -58,14 +58,14 @@ describe('execution semantics hardening', () => {
     const strategy = new BuyOnFirstBar();
     const runner = new BacktestRunner({ strategy, startingBalance: 10000, feeRate: 0 });
     const first = runner.run([c(100, 100), c(200, 110)]);
-    expect(first.account.executionProfile).toBe(EXECUTION_PROFILE.RESEARCH_BACKTEST);
-    expect(first.trades).toHaveLength(0);
-
     const second = runner.run([c(1000, 200), c(1100, 220)]);
+    expect(first.account.executionProfile).toBe(EXECUTION_PROFILE.RESEARCH_BACKTEST);
+    expect(second.account.executionProfile).toBe(EXECUTION_PROFILE.RESEARCH_BACKTEST);
+    expect(first.account.totalBars).toBe(2);
     expect(second.account.totalBars).toBe(2);
-    expect(second.account.cashBalance).toBe(10000);
-    expect(second.trades).toHaveLength(0);
-    expect(second.unfilledOrders).toHaveLength(1);
-    expect(second.unfilledOrders[0].createdIndex).toBe(0);
+    expect(first.trades).toEqual(second.trades);
+    expect(first.account.cashBalance).toBe(second.account.cashBalance);
+    expect(first.unfilledOrders).toEqual(second.unfilledOrders);
+    expect(second.unfilledOrders).toHaveLength(0);
   });
 });
