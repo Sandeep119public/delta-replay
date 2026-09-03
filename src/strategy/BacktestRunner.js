@@ -1,4 +1,4 @@
-import { PaperTradingEngine, EXECUTION_TIMING } from '../trading/PaperTradingEngine.js';
+import { PaperTradingEngine, EXECUTION_PROFILE } from '../trading/PaperTradingEngine.js';
 import { TradingEvents } from '../trading/TradingEvents.js';
 import { ORDER_STATUSES } from '../trading/Order.js';
 
@@ -19,10 +19,10 @@ export class BacktestRunner {
       feeRate,
       marginRate,
       maintMarginRate,
-      executionTiming: EXECUTION_TIMING.NEXT_BAR_OPEN,
+      executionProfile: EXECUTION_PROFILE.RESEARCH_BACKTEST,
     });
 
-    // Single canonical orchestration path: subscribe strategy strictly to PaperTradingEngine's BAR_CLOSE
+    // Single canonical orchestration path: subscribe strategy strictly to PaperTradingEngine's BAR_CLOSE.
     this._lastIntents = [];
     this._unsubBarClose = this.engine.on(TradingEvents.BAR_CLOSE, (barEvent) => {
       const intents = this.strategy.onBar(barEvent) || [];
@@ -35,16 +35,22 @@ export class BacktestRunner {
 
   /**
    * Lookahead-free quantitative pipeline:
-   * Directs candle into PaperTradingEngine -> engine emits single canonical BAR_CLOSE
-   * -> subscribed strategy evaluates lookahead-free and enqueues intents for T+1 execution.
+   * Directs candle into PaperTradingEngine -> engine emits canonical BAR_CLOSE
+   * -> strategy evaluates finalized bar and enqueues intents for T+1 execution.
    */
   processBar(candle, index = null) {
-    const idx = Number.isFinite(index) ? index : (this.engine._latestCandleIndex + 1);
+    const idx = Number.isFinite(index) ? index : (this.engine.getLatestCandleIndex() + 1);
     this.engine.onMarketCandle({ candle, index: idx, symbol: this.symbol });
     return { intents: this._lastIntents };
   }
 
-  run(candles) {
+  /**
+   * Each run is an independent research experiment by default.
+   * Pass reset:false only when intentionally continuing an existing session.
+   */
+  run(candles, { reset = true } = {}) {
+    if (!Array.isArray(candles)) throw new TypeError('BacktestRunner.run expects an array of candles');
+    if (reset) this.reset();
     for (let i = 0; i < candles.length; i++) {
       this.processBar(candles[i], i);
     }
@@ -54,7 +60,7 @@ export class BacktestRunner {
   getResults() {
     const allOrders = this.engine.getOrders();
     const pendingIntents = allOrders.filter(o => o.status === ORDER_STATUSES.PENDING);
-    const terminalIndex = this.engine._latestCandleIndex;
+    const terminalIndex = this.engine.getLatestCandleIndex();
     const terminalOrders = pendingIntents.filter(o => o.createdIndex === terminalIndex);
     return {
       summary: { ...this.engine.getBacktestSummary(), unfilledTerminalOrders: terminalOrders.length },
@@ -73,7 +79,7 @@ export class BacktestRunner {
   }
 
   reset() {
-    this.strategy.reset();
+    if (typeof this.strategy.reset === 'function') this.strategy.reset();
     this.engine.resetAll({ clearMarket: true });
     this._lastIntents = [];
   }
