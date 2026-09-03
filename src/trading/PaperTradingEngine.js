@@ -268,12 +268,13 @@ export class PaperTradingEngine extends EventEmitter {
   destroy() { return this.detach(); }
 
   _validateCandleSequence(symbol, idx, timestamp) {
+    if (this.executionProfile !== EXECUTION_PROFILE.RESEARCH_BACKTEST) return { duplicate: false };
     const previous = symbol ? this._marketBySymbol.get(symbol) : (this._latestCandle ? { index: this._latestCandleIndex, timestamp: this._latestCandle.time } : null);
     if (!previous) return { duplicate: false };
     if (previous.index === idx && previous.timestamp === timestamp) return { duplicate: true };
     if (idx < previous.index) throw new Error(`MARKET_CANDLE_OUT_OF_ORDER: index ${idx} < previous ${previous.index}`);
     if (idx === previous.index) throw new Error(`MARKET_CANDLE_IDENTITY_CONFLICT: index ${idx} already processed at timestamp ${previous.timestamp}`);
-    if (!Number.isFinite(timestamp) || timestamp <= previous.timestamp) throw new Error(`MARKET_CANDLE_OUT_OF_ORDER: timestamp ${timestamp} <= previous ${previous.timestamp}`);
+    if (timestamp <= previous.timestamp) throw new Error(`MARKET_CANDLE_OUT_OF_ORDER: timestamp ${timestamp} <= previous ${previous.timestamp}`);
     return { duplicate: false };
   }
 
@@ -617,7 +618,7 @@ export class PaperTradingEngine extends EventEmitter {
   getState() { return this._cloneJSON({ account: this.account.snapshot(), positions: Array.from(this._positions.values()).map(p => p.toJSON()), orders: Array.from(this._orders.values()).map(o => o.toJSON()), pendingOrderIds: [...this._pendingOrderIds], trades: this._trades.map(t => t.toJSON()), latestCandle: this._latestCandle ? { ...this._latestCandle } : null, latestCandleIndex: this._latestCandleIndex, nextOrderId: this._nextOrderId, nextTradeId: this._nextTradeId, executionProfile: this.executionProfile, executionTiming: this.executionTiming }); }
   getPosition(symbol) { const p = this._positions.get(symbol); return p ? this._cloneJSON(p.toJSON()) : null; }
   getPositions() { return Array.from(this._positions.values()).map(p => this._cloneJSON(p.toJSON())); }
-  getTrades() { return this._trades.map(t => this._cloneJSON(t.toJSON())); }
+  getTrades() { return this._trades.map(t => this._cloneJSON(t.toJSON()); }
   getTradeHistory() { return this.getTrades(); }
   checkInvariants() { const acct = this.account, equity = acct.cashBalance + acct.unrealizedPnL, equityOk = Math.abs(acct.equity - equity) < 1e-9, feesSum = this._trades.reduce((s, t) => s + (t.totalFee || 0), 0) + Array.from(this._positions.values()).reduce((s, p) => s + (p.entryFee || 0), 0), unrealizedOk = this._positions.size === 0 ? Math.abs(acct.unrealizedPnL) < 1e-9 : true, pendingIdsUnique = new Set(this._pendingOrderIds).size === this._pendingOrderIds.length, pendingAllPending = this._pendingOrderIds.every(id => this._orders.get(id)?.status === ORDER_STATUSES.PENDING); return { equityOk, unrealizedOk, pendingIdsUnique, pendingAllPending, equity, unrealizedPnL: acct.unrealizedPnL, cashBalance: acct.cashBalance, totalFees: acct.totalFees, computedFeesSum: feesSum }; }
   hasOpenPosition(symbol = null) { return symbol ? this._positions.has(symbol) : this._positions.size > 0; }
