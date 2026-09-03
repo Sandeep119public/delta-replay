@@ -56,7 +56,7 @@ describe('execution semantics hardening', () => {
 
   it('starts each backtest run from a clean research session', () => {
     const strategy = new BuyOnFirstBar();
-    const runner = new BacktestRunner({ strategy, startingBalance: 10000, feeRate: 0 });
+    const runner = new BacktestRunner({ strategy, symbol: 'BTCUSDT', startingBalance: 10000, feeRate: 0 });
     const first = runner.run([c(100, 100), c(200, 110)]);
     const second = runner.run([c(1000, 200), c(1100, 220)]);
     expect(first.account.executionProfile).toBe(EXECUTION_PROFILE.RESEARCH_BACKTEST);
