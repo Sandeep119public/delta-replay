@@ -7,6 +7,18 @@ import { TradingValidator } from './TradingValidator.js';
 import { TRADING_CONFIG, calcFee } from './TradingConfig.js';
 import { Order, ORDER_TYPES, ORDER_STATUSES } from './Order.js';
 
+export const AMBIGUITY_POLICY = Object.freeze({
+  CONSERVATIVE: 'CONSERVATIVE',
+  SL_FIRST: 'SL_FIRST',
+  TP_FIRST: 'TP_FIRST',
+  OPEN_PROXIMITY: 'OPEN_PROXIMITY',
+});
+
+export const EXECUTION_POLICY = Object.freeze({
+  SIMPLIFIED: 'SIMPLIFIED', // stop/limit fill at trigger price
+  REALISTIC: 'REALISTIC',   // gap-through orders fill at candle open
+});
+
 /**
  * PaperTradingEngine — consumes MARKET_CANDLE only.
  * Never touches AppState.candles, ReplayEngine._candles, Chart data, Timeline.
@@ -20,11 +32,18 @@ export class PaperTradingEngine extends EventEmitter {
    * @param {number} [opts.startingBalance=10000]
    * @param {number} [opts.feeRate] - taker fee rate, defaults to TRADING_CONFIG
    * @param {import('../replay/ReplayEngine.js').ReplayEngine} [opts.replayEngine] - optional auto-wire
+   * @param {string} [opts.ambiguityPolicy=AMBIGUITY_POLICY.CONSERVATIVE]
+   * @param {string} [opts.executionPolicy=EXECUTION_POLICY.SIMPLIFIED]
+   * @param {boolean} [opts.realisticExecution=false]
+   * @param {number} [opts.marginRate=0] - initial margin rate (0 = fee-only check, 1 = full cash)
    */
-  constructor({ startingBalance = 10000, feeRate = TRADING_CONFIG.TAKER_FEE_RATE, replayEngine = null } = {}) {
+  constructor({ startingBalance = 10000, feeRate = TRADING_CONFIG.TAKER_FEE_RATE, replayEngine = null, ambiguityPolicy = AMBIGUITY_POLICY.CONSERVATIVE, executionPolicy = null, realisticExecution = false, marginRate = 0 } = {}) {
     super();
     this.account = new TradingAccount({ startingBalance });
     this.feeRate = feeRate;
+    this.ambiguityPolicy = ambiguityPolicy;
+    this.executionPolicy = executionPolicy ?? (realisticExecution ? EXECUTION_POLICY.REALISTIC : EXECUTION_POLICY.SIMPLIFIED);
+    this.marginRate = marginRate;
     this._positions = new Map(); // symbol -> Position
     this._trades = [];
     this._nextTradeId = 1;
@@ -41,6 +60,20 @@ export class PaperTradingEngine extends EventEmitter {
     if (replayEngine) this.attachToReplay(replayEngine);
   }
 
+  setAmbiguityPolicy(policy) {
+    if (!Object.values(AMBIGUITY_POLICY).includes(policy)) {
+      throw new Error(`Invalid ambiguity policy: ${policy}`);
+    }
+    this.ambiguityPolicy = policy;
+  }
+
+  setExecutionPolicy(policy) {
+    if (!Object.values(EXECUTION_POLICY).includes(policy)) {
+      throw new Error(`Invalid execution policy: ${policy}`);
+    }
+    this.executionPolicy = policy;
+  }
+
   attachToReplay(replayEngine) {
     if (this._replayEngine === replayEngine && this._unsubs.length > 0) return; // idempotent
     this.detach();
@@ -54,8 +87,20 @@ export class PaperTradingEngine extends EventEmitter {
     const unsubReset = replayEngine.on('reset', clearOnLifecycle);
     this._lifecycleUnsubs.push(unsubLoad, unsubReset);
 
-    // Engine-level guard: block seek/reset/start/load while position open (not UI-only)
-    if (!replayEngine._tradingGuardInstalled) {
+    // Engine-level guard: block seek/reset/start/load while position open
+    if (typeof replayEngine.registerActionGuard === 'function') {
+      const self = this;
+      const unguard = replayEngine.registerActionGuard((action) => {
+        if (self.hasOpenPosition()) {
+          const code = `${action.toUpperCase()}_BLOCKED`;
+          const message = `${action.charAt(0).toUpperCase() + action.slice(1)} blocked: close open position first`;
+          self.emit(TradingEvents.ORDER_REJECTED, { code, message });
+          return { allowed: false, reason: message, code };
+        }
+        return { allowed: true };
+      });
+      this._lifecycleUnsubs.push(unguard);
+    } else if (!replayEngine._tradingGuardInstalled) {
       replayEngine._tradingGuardInstalled = true;
       replayEngine._origSeekPaper = replayEngine.seek.bind(replayEngine);
       replayEngine._origResetPaper = replayEngine.reset.bind(replayEngine);
@@ -128,16 +173,20 @@ export class PaperTradingEngine extends EventEmitter {
   onMarketCandle(payload) {
     if (!payload || !payload.candle) return;
     const c = payload.candle;
+    const symbol = payload.symbol || payload.candle?.symbol || null;
     const idx = Number.isFinite(payload.index) ? payload.index : this._latestCandleIndex + 1;
     // clone
     this._latestCandle = { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
     this._latestCandleIndex = idx;
-    // Update all open positions currentPrice
+    if (symbol) this._latestSymbolContext = symbol;
+    // Update matching open positions currentPrice
     let totalUnrealized = 0;
     for (const pos of this._positions.values()) {
-      pos.currentPrice = this._latestCandle.close;
+      if (!symbol || pos.symbol === symbol) {
+        pos.currentPrice = this._latestCandle.close;
+        this.emit(TradingEvents.POSITION_UPDATED, { position: this._cloneJSON(pos.toJSON()) });
+      }
       totalUnrealized += pos.unrealizedPnL;
-      this.emit(TradingEvents.POSITION_UPDATED, { position: this._cloneJSON(pos.toJSON()) });
     }
     this.account.unrealizedPnL = totalUnrealized;
     this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
@@ -150,7 +199,7 @@ export class PaperTradingEngine extends EventEmitter {
     // This order is deterministic and hindsight-safe: only current candle OHLC is used.
     // Evaluate SL/TP before entry orders — deterministic risk exits have priority
     // Same-candle protection: position and SL/TP become eligible at next candle
-    const closedThisCandle = this._processStopLossTakeProfit(this._latestCandle, idx);
+    const closedThisCandle = this._processStopLossTakeProfit(this._latestCandle, idx, symbol);
     // Stale-exit protection: if SL/TP closed a position this candle, pending opposite-side
     // orders that existed before this candle are stale exits — they must not open a reversal.
     if (closedThisCandle && closedThisCandle.size > 0) {
@@ -158,7 +207,7 @@ export class PaperTradingEngine extends EventEmitter {
     }
 
     // Evaluate pending entry orders (LIMIT and STOP_MARKET) with next-candle protection
-    this._processPendingOrders(this._latestCandle, idx);
+    this._processPendingOrders(this._latestCandle, idx, symbol);
   }
 
   _cloneJSON(obj) {
@@ -227,6 +276,10 @@ export class PaperTradingEngine extends EventEmitter {
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
     const entryNotional = execPrice * q;
     const entryFee = calcFee(entryNotional, this.feeRate);
+    const requiredCash = (entryNotional * (this.marginRate > 0 ? this.marginRate : 0)) + entryFee;
+    if (this.account.cashBalance < requiredCash) {
+      return this._reject('INSUFFICIENT_CASH', `Insufficient cash to place ${side} order: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);
+    }
     // deduct entry fee immediately
     this.account.cashBalance -= entryFee;
     this.account.totalFees += entryFee;
@@ -416,7 +469,7 @@ export class PaperTradingEngine extends EventEmitter {
     return { success: true, order: this._cloneJSON(order.toJSON()) };
   }
 
-  _processPendingOrders(candle, candleIndex) {
+  _processPendingOrders(candle, candleIndex, targetSymbol = null) {
     if (this._pendingOrderIds.length === 0) return;
     // O(p) per candle: iterate snapshot, collect removals, single filter at end to avoid O(p²)
     const snapshot = [...this._pendingOrderIds];
@@ -426,6 +479,7 @@ export class PaperTradingEngine extends EventEmitter {
       const order = this._orders.get(id);
       if (!order) { toRemove.add(id); continue; }
       if (order.status !== ORDER_STATUSES.PENDING) { toRemove.add(id); continue; }
+      if (targetSymbol && order.symbol !== targetSymbol) continue;
       if (order.createdIndex >= candleIndex) continue;
       let shouldFill = false;
       if (order.type === ORDER_TYPES.LIMIT) {
@@ -489,8 +543,15 @@ export class PaperTradingEngine extends EventEmitter {
         this._emitOrderRejected(order, 'POSITION_ALREADY_OPEN', `Position already open for ${symbol} (${existing.side}). Close it first.`);
         return { success: false, code: 'POSITION_ALREADY_OPEN' };
       }
-      // Opposite side -> close existing at limitPrice
-      const filledPrice = limitPrice;
+      // Opposite side -> close existing at limitPrice or gap-through open
+      let filledPrice = limitPrice;
+      if (this.executionPolicy === EXECUTION_POLICY.REALISTIC) {
+        if (side === 'BUY' && Number.isFinite(candle.open) && candle.open < limitPrice) {
+          filledPrice = candle.open;
+        } else if (side === 'SELL' && Number.isFinite(candle.open) && candle.open > limitPrice) {
+          filledPrice = candle.open;
+        }
+      }
       order.status = ORDER_STATUSES.FILLED;
       order.filledAt = fillTime;
       order.filledPrice = filledPrice;
@@ -537,11 +598,19 @@ export class PaperTradingEngine extends EventEmitter {
       return { success: true, filled: true };
     }
 
-    // No existing position -> open new
+    // No existing position -> open new with gap-through price improvement
+    let filledPrice = limitPrice;
+    if (this.executionPolicy === EXECUTION_POLICY.REALISTIC) {
+      if (side === 'BUY' && Number.isFinite(candle.open) && candle.open < limitPrice) {
+        filledPrice = candle.open;
+      } else if (side === 'SELL' && Number.isFinite(candle.open) && candle.open > limitPrice) {
+        filledPrice = candle.open;
+      }
+    }
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
-    const notional = limitPrice * qty;
+    const notional = filledPrice * qty;
     const entryFee = calcFee(notional, this.feeRate);
-    const requiredCash = notional + entryFee;
+    const requiredCash = (notional * (this.marginRate > 0 ? this.marginRate : 1)) + entryFee;
     if (this.account.cashBalance < requiredCash) {
       order.status = ORDER_STATUSES.REJECTED;
       order.rejectionReason = 'INSUFFICIENT_CASH';
@@ -554,8 +623,8 @@ export class PaperTradingEngine extends EventEmitter {
       symbol,
       side: posSide,
       quantity: qty,
-      entryPrice: limitPrice,
-      currentPrice: limitPrice,
+      entryPrice: filledPrice,
+      currentPrice: filledPrice,
       openedAt: fillTime,
       entryFee,
       openedIndex: candle.time ? this._latestCandleIndex : -1,
@@ -565,7 +634,7 @@ export class PaperTradingEngine extends EventEmitter {
     this._positions.set(symbol, position);
     order.status = ORDER_STATUSES.FILLED;
     order.filledAt = fillTime;
-    order.filledPrice = limitPrice;
+    order.filledPrice = filledPrice;
     order.entryFee = entryFee;
     this._emitOrderTriggeredIfNeeded(order);
     this._recalcUnrealized();
@@ -598,7 +667,15 @@ export class PaperTradingEngine extends EventEmitter {
         this._emitOrderRejected(order, 'POSITION_ALREADY_OPEN', `Position already open for ${symbol} (${existing.side}). Close it first.`);
         return { success: false, code: 'POSITION_ALREADY_OPEN' };
       }
-      const filledPrice = stopPrice;
+      // Deterministic gap-through slippage
+      let filledPrice = stopPrice;
+      if (this.executionPolicy === EXECUTION_POLICY.REALISTIC) {
+        if (side === 'BUY' && Number.isFinite(candle.open) && candle.open > stopPrice) {
+          filledPrice = candle.open;
+        } else if (side === 'SELL' && Number.isFinite(candle.open) && candle.open < stopPrice) {
+          filledPrice = candle.open;
+        }
+      }
       order.status = ORDER_STATUSES.FILLED;
       order.filledAt = fillTime;
       order.filledPrice = filledPrice;
@@ -642,10 +719,19 @@ export class PaperTradingEngine extends EventEmitter {
       this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
       return { success: true, filled: true };
     }
+    // No existing position -> open new with gap-through slippage
+    let filledPrice = stopPrice;
+    if (this.executionPolicy === EXECUTION_POLICY.REALISTIC) {
+      if (side === 'BUY' && Number.isFinite(candle.open) && candle.open > stopPrice) {
+        filledPrice = candle.open;
+      } else if (side === 'SELL' && Number.isFinite(candle.open) && candle.open < stopPrice) {
+        filledPrice = candle.open;
+      }
+    }
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
-    const notional = stopPrice * qty;
+    const notional = filledPrice * qty;
     const entryFee = calcFee(notional, this.feeRate);
-    const requiredCash = notional + entryFee;
+    const requiredCash = (notional * (this.marginRate > 0 ? this.marginRate : 1)) + entryFee;
     if (this.account.cashBalance < requiredCash) {
       order.status = ORDER_STATUSES.REJECTED;
       order.rejectionReason = 'INSUFFICIENT_CASH';
@@ -658,8 +744,8 @@ export class PaperTradingEngine extends EventEmitter {
       symbol,
       side: posSide,
       quantity: qty,
-      entryPrice: stopPrice,
-      currentPrice: stopPrice,
+      entryPrice: filledPrice,
+      currentPrice: filledPrice,
       openedAt: fillTime,
       entryFee,
       openedIndex: this._latestCandleIndex,
@@ -668,7 +754,7 @@ export class PaperTradingEngine extends EventEmitter {
     this._positions.set(symbol, position);
     order.status = ORDER_STATUSES.FILLED;
     order.filledAt = fillTime;
-    order.filledPrice = stopPrice;
+    order.filledPrice = filledPrice;
     order.entryFee = entryFee;
     this._recalcUnrealized();
     this._emitOrderFilled(order);
@@ -716,10 +802,11 @@ export class PaperTradingEngine extends EventEmitter {
     }
   }
 
-  _processStopLossTakeProfit(candle, candleIndex) {
+  _processStopLossTakeProfit(candle, candleIndex, targetSymbol = null) {
     const closed = new Map(); // symbol -> side
     // iterate positions snapshot
     for (const [symbol, pos] of [...this._positions.entries()]) {
+      if (targetSymbol && symbol !== targetSymbol) continue;
       // same-candle protection: position must not use entry candle
       if (pos.openedIndex >= candleIndex) continue;
       const sl = pos.stopLossPrice;
@@ -737,17 +824,43 @@ export class PaperTradingEngine extends EventEmitter {
         if (pos.side === 'SHORT' && candle.low <= tp) triggerTP = true;
       }
       if (triggerSL && triggerTP) {
-        // deterministic: SL wins
-        triggerTP = false;
+        if (this.ambiguityPolicy === AMBIGUITY_POLICY.TP_FIRST) {
+          triggerSL = false;
+        } else if (this.ambiguityPolicy === AMBIGUITY_POLICY.OPEN_PROXIMITY && Number.isFinite(candle.open)) {
+          const slDist = Math.abs(candle.open - sl);
+          const tpDist = Math.abs(candle.open - tp);
+          if (tpDist < slDist) {
+            triggerSL = false;
+          } else {
+            triggerTP = false;
+          }
+        } else {
+          // Default CONSERVATIVE / SL_FIRST
+          triggerTP = false;
+        }
       }
       if (triggerSL) {
-        const price = sl;
+        let price = sl;
+        if (this.executionPolicy === EXECUTION_POLICY.REALISTIC) {
+          if (pos.side === 'LONG' && Number.isFinite(candle.open) && candle.open < sl) {
+            price = candle.open;
+          } else if (pos.side === 'SHORT' && Number.isFinite(candle.open) && candle.open > sl) {
+            price = candle.open;
+          }
+        }
         const sideBefore = pos.side;
         this.emit(TradingEvents.STOP_LOSS_TRIGGERED, { symbol, price, position: this._cloneJSON(pos.toJSON()), candle: this._cloneJSON(candle) });
         this._closePositionWithReason(symbol, price, candle.time, 'STOP_LOSS');
         closed.set(symbol, sideBefore);
       } else if (triggerTP) {
-        const price = tp;
+        let price = tp;
+        if (this.executionPolicy === EXECUTION_POLICY.REALISTIC) {
+          if (pos.side === 'LONG' && Number.isFinite(candle.open) && candle.open > tp) {
+            price = candle.open;
+          } else if (pos.side === 'SHORT' && Number.isFinite(candle.open) && candle.open < tp) {
+            price = candle.open;
+          }
+        }
         const sideBefore = pos.side;
         this.emit(TradingEvents.TAKE_PROFIT_TRIGGERED, { symbol, price, position: this._cloneJSON(pos.toJSON()), candle: this._cloneJSON(candle) });
         this._closePositionWithReason(symbol, price, candle.time, 'TAKE_PROFIT');

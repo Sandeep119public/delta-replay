@@ -2,6 +2,15 @@ import { CandleNormalizer } from './CandleNormalizer.js';
 import { CandleValidator } from './CandleValidator.js';
 
 /**
+ * Dataset integrity status classification.
+ */
+export const INTEGRITY_STATUS = Object.freeze({
+  VALID: 'VALID',
+  VALID_WITH_GAPS: 'VALID_WITH_GAPS',
+  INVALID: 'INVALID',
+});
+
+/**
  * CandleIntegrity — dedup, sort, validate, gap detection.
  * No invention of candles; reports missing intervals.
  */
@@ -13,9 +22,12 @@ export class CandleIntegrity {
    * @param {number} opts.from - requested from sec
    * @param {number} opts.to - requested to sec
    * @param {number} opts.timeframeSec
+   * @param {boolean} [opts.strict=false] - reject dataset if invalid or gapped
+   * @param {boolean} [opts.allowGaps=false] - when strict, allow gaps but reject invalid
+   * @param {boolean} [opts.halfOpen=false] - use [from, to) half-open interval
    * @returns {{ validCandles: Array, metadata: object }}
    */
-  static process(rawCandles, { from, to, timeframeSec }) {
+  static process(rawCandles, { from, to, timeframeSec, strict = false, allowGaps = false, halfOpen = false } = {}) {
     if (!Array.isArray(rawCandles)) throw new Error('rawCandles must be array');
 
     // 1. Normalize
@@ -48,8 +60,8 @@ export class CandleIntegrity {
       seen.add(c.time);
     }
 
-    // 4. Range filter
-    const ranged = deduped.filter(c => c.time >= from && c.time <= to);
+    // 4. Range filter (supports standard [from, to) half-open or legacy [from, to] closed)
+    const ranged = deduped.filter(c => halfOpen ? (c.time >= from && c.time < to) : (c.time >= from && c.time <= to));
 
     // 5. Validate
     const { validCandles, errors } = CandleValidator.validateBatch(ranged);
@@ -79,6 +91,24 @@ export class CandleIntegrity {
       }
     }
 
+    // Explicit integrity status
+    let integrityStatus = INTEGRITY_STATUS.VALID;
+    if (invalidCount > 0) {
+      integrityStatus = INTEGRITY_STATUS.INVALID;
+    } else if (gaps.length > 0) {
+      integrityStatus = INTEGRITY_STATUS.VALID_WITH_GAPS;
+    }
+
+    // Strict validation enforcement
+    if (strict) {
+      if (invalidCount > 0) {
+        throw new Error(`Integrity error: dataset contains ${invalidCount} invalid candle(s)`);
+      }
+      if (!allowGaps && gaps.length > 0) {
+        throw new Error(`Integrity error: dataset contains ${gaps.length} candle gap(s); contiguous market time required`);
+      }
+    }
+
     const metadata = {
       requestedFrom: from,
       requestedTo: to,
@@ -88,6 +118,7 @@ export class CandleIntegrity {
       duplicatesRemoved,
       invalidCount,
       gaps,
+      integrityStatus,
       errors: errors.slice(0, 5),
     };
 

@@ -98,33 +98,26 @@ export class ChartManager {
     const result = [];
     for (let i = 0; i < candles.length; i++) {
       const c = candles[i];
-      let time = Number(c.time);
-      let open = Number(c.open);
+      const time = Number(c.time);
+      const open = Number(c.open);
       let high = Number(c.high);
       let low = Number(c.low);
-      let close = Number(c.close);
-      const prev = i > 0 ? candles[i - 1] : null;
+      const close = Number(c.close);
 
-      // When Delta/providers return sparse flat ticks where open == close and high == low:
+      // Visual safety: when high <= low, provide a minimal visual spread so the chart renderer
+      // displays flat candles correctly, while strictly preserving canonical open/close prices.
       if (high <= low || Math.abs(high - low) < 1e-4) {
-        if (prev && Number.isFinite(Number(prev.close)) && Math.abs(Number(prev.close) - close) > 0.01) {
-          open = Number(prev.close);
-        }
         const tickSpread = Math.max(close * 0.00015, Math.abs(close) > 0 ? Math.abs(close) * 0.00001 : 0.0001);
         high = Math.max(open, close) + tickSpread * 0.5;
         low = Math.min(open, close) - tickSpread * 0.5;
-      } else if (open === close && prev && Math.abs(Number(prev.close) - close) > 0.01) {
-        open = Number(prev.close);
-        high = Math.max(high, open);
-        low = Math.min(low, open);
       }
 
       result.push({
         time,
-        open: Number(open),
-        high: Number(high),
-        low: Number(low),
-        close: Number(close),
+        open,
+        high,
+        low,
+        close,
       });
     }
     return result;
@@ -254,8 +247,21 @@ export class ChartManager {
   onAutoFollowChange(cb) { this._onAutoFollowChange = cb; }
 
   scrollToTime(unixSec) {
-    if (!this.chart) return;
-    try { this.chart.timeScale().scrollToPosition(3, false); } catch {}
+    if (!this.chart || !Number.isFinite(unixSec)) return;
+    try {
+      const timeScale = this.chart.timeScale();
+      const coord = timeScale.timeToCoordinate(unixSec);
+      if (coord !== null && Number.isFinite(coord)) {
+        const logical = timeScale.coordinateToLogical(coord);
+        if (logical !== null && Number.isFinite(logical)) {
+          timeScale.scrollToPosition(logical, false);
+          return;
+        }
+      }
+      timeScale.scrollToPosition(3, false);
+    } catch {
+      try { this.chart.timeScale().scrollToPosition(3, false); } catch {}
+    }
   }
 
   coordinateToPrice(y) {
@@ -445,9 +451,16 @@ export class ChartManager {
   destroy() {
     this.clearTradingLines();
     window.removeEventListener('resize', this._onWindowResize);
-    if (this._resizeObserver) this._resizeObserver.disconnect();
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    this._onChartClickCallbacks = [];
+    this._onAutoFollowChange = null;
     if (this.chart) {
-      this.chart.remove();
+      try {
+        this.chart.remove();
+      } catch {}
       this.chart = null;
       this.series = null;
     }

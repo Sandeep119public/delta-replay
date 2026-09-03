@@ -103,31 +103,17 @@ const errorPanelDetails = document.getElementById('error-panel-details');
 new SymbolSelector(symbolSelect, appState);
 new TimeframeSelector(timeframeSelect, appState);
 
-// ===== GUARDS =====
-const _origSeek = engine.seek.bind(engine);
-const _origReset = engine.reset.bind(engine);
-const _origStart = engine.start.bind(engine);
-const _origLoad = engine.load.bind(engine);
-
-function _guardBlocked(action) {
+// ===== ACTION GUARDS =====
+engine.registerActionGuard((action) => {
   if (tradingEngine.hasOpenPosition()) {
-    const msg = `Cannot ${action} while a position is open — close position first.`;
+    const msg = action === 'load'
+      ? 'Cannot load new data while a position is open — close position or reset account first.'
+      : `Cannot ${action} while a position is open — close position first.`;
     showTradingError(msg);
-    return true;
+    return { allowed: false, reason: msg };
   }
-  return false;
-}
-
-engine.seek = (idx) => _guardBlocked('seek') ? engine.getState() : _origSeek(idx);
-engine.reset = () => _guardBlocked('reset replay') ? engine.getState() : _origReset();
-engine.start = (idx) => _guardBlocked('start replay') ? engine.getState() : _origStart(idx);
-engine.load = (candles) => {
-  if (tradingEngine.hasOpenPosition()) {
-    showTradingError('Cannot load new data while a position is open — close position or reset account first.');
-    return engine.getState();
-  }
-  return _origLoad(candles);
-};
+  return { allowed: true };
+});
 
 // ===== CHART + TIMELINE =====
 const chartManager = new ChartManager(chartContainer);

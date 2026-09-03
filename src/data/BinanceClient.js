@@ -40,18 +40,7 @@ export class BinanceClient {
 
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      let res;
-      try {
-        res = await this.fetchFn(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
-      } catch (err) {
-        // Fallback to spot if futures fails
-        if (isFutures) {
-          const fallbackUrl = `${BINANCE_SPOT_BASE}/api/v3/klines?symbol=${encodeURIComponent(mappedSymbol)}&interval=${encodeURIComponent(resolution)}&startTime=${startMs}&endTime=${endMs}&limit=1000`;
-          res = await this.fetchFn(fallbackUrl, { signal: controller.signal, headers: { Accept: 'application/json' } });
-        } else {
-          throw err;
-        }
-      }
+      const res = await this.fetchFn(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
       if (!res.ok) {
         throw new Error(`Binance API error: ${res.status} ${res.statusText}`);
       }

@@ -22,6 +22,8 @@ export class ReplayEngine extends EventEmitter {
     // (CandleStore + ReplayEngine._candles) instead of 3. Safe read-only interface could eliminate
     // one copy but would require freeze/immutability guarantees and refactor risk; not done now.
     this._candles = []; // all loaded candles (private, never exposed fully during replay)
+    this._symbol = null;
+    this._actionGuards = [];
     this._state = createInitialState();
     this._timer = null;
     this._lastTick = null;
@@ -30,11 +32,40 @@ export class ReplayEngine extends EventEmitter {
 
   // ---------- Public API ----------
 
+  registerActionGuard(guardFn) {
+    if (typeof guardFn !== 'function') throw new Error('guardFn must be a function');
+    this._actionGuards.push(guardFn);
+    return () => {
+      this._actionGuards = this._actionGuards.filter(g => g !== guardFn);
+    };
+  }
+
+  _checkGuards(action, payload) {
+    for (const guard of this._actionGuards) {
+      try {
+        const res = guard(action, payload);
+        if (res && res.allowed === false) {
+          return res;
+        }
+      } catch (err) {
+        return { allowed: false, reason: err.message };
+      }
+    }
+    return { allowed: true };
+  }
+
+  setSymbol(symbol) { this._symbol = symbol; }
+  getSymbol() { return this._symbol; }
+
   _cloneCandle(c) {
     return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
   }
 
-  load(candles) {
+  load(candles, { symbol } = {}) {
+    const check = this._checkGuards('load', { candles, symbol });
+    if (!check.allowed) {
+      return this.getState();
+    }
     this._clearTimer();
     if (!Array.isArray(candles) || candles.length === 0) {
       throw new Error('load: candles must be a non-empty array');
@@ -52,6 +83,7 @@ export class ReplayEngine extends EventEmitter {
 
     // Defensive deep clone: prevent caller mutation from reaching engine
     this._candles = candles.map(c => this._cloneCandle(c));
+    this._symbol = symbol || candles[0]?.symbol || this._symbol || null;
     this._state = {
       ...createInitialState(),
       status: ReplayStatus.READY,
@@ -67,6 +99,10 @@ export class ReplayEngine extends EventEmitter {
   }
 
   start(startIndex) {
+    const check = this._checkGuards('start', { startIndex });
+    if (!check.allowed) {
+      return this.getState();
+    }
     if (this._candles.length === 0) throw new Error('No candles loaded');
     if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= this._candles.length) {
       throw new Error(`Invalid startIndex: ${startIndex}`);
@@ -157,6 +193,10 @@ export class ReplayEngine extends EventEmitter {
   }
 
   seek(index) {
+    const check = this._checkGuards('seek', { index });
+    if (!check.allowed) {
+      return this.getState();
+    }
     if (this._candles.length === 0) throw new Error('No candles loaded');
     if (!Number.isInteger(index) || index < 0 || index >= this._candles.length) {
       throw new Error(`Invalid seek index: ${index}`);
@@ -209,6 +249,10 @@ export class ReplayEngine extends EventEmitter {
   }
 
   reset() {
+    const check = this._checkGuards('reset', {});
+    if (!check.allowed) {
+      return this.getState();
+    }
     // Reset to startIndex if exists, otherwise to initial ready
     if (this._candles.length === 0) {
       return this.stop();
@@ -253,6 +297,55 @@ export class ReplayEngine extends EventEmitter {
   }
 
   /**
+   * Returns the current candle at cursor index or null.
+   */
+  getCurrentCandle() {
+    if (this._state.currentIndex < 0 || this._state.currentIndex >= this._candles.length) return null;
+    return this._cloneCandle(this._candles[this._state.currentIndex]);
+  }
+
+  /**
+   * Returns visible index and time range metadata without cloning candle objects.
+   */
+  getVisibleRange() {
+    if (this._state.currentIndex < 0) {
+      return { fromIndex: -1, toIndex: -1, fromTime: null, toTime: null, count: 0 };
+    }
+    return {
+      fromIndex: 0,
+      toIndex: this._state.currentIndex,
+      fromTime: this._candles[0]?.time ?? null,
+      toTime: this._candles[this._state.currentIndex]?.time ?? null,
+      count: this._state.currentIndex + 1,
+    };
+  }
+
+  /**
+   * Returns bounded window of up to `size` visible candles, avoiding O(N) full clones.
+   */
+  getVisibleWindow(size = 1000) {
+    if (this._state.currentIndex < 0) return [];
+    const from = Math.max(0, this._state.currentIndex - size + 1);
+    return this._candles.slice(from, this._state.currentIndex + 1).map(c => this._cloneCandle(c));
+  }
+
+  /**
+   * Returns context candles that existed prior to replay start (0 .. startIndex - 1).
+   */
+  getContextCandles() {
+    if (this._state.startIndex <= 0) return [];
+    return this._candles.slice(0, this._state.startIndex).map(c => this._cloneCandle(c));
+  }
+
+  /**
+   * Returns candles revealed exclusively during replay progression (startIndex .. currentIndex).
+   */
+  getRevealedCandles() {
+    if (this._state.startIndex < 0 || this._state.currentIndex < this._state.startIndex) return [];
+    return this._candles.slice(this._state.startIndex, this._state.currentIndex + 1).map(c => this._cloneCandle(c));
+  }
+
+  /**
    * For internal/debug only: total candles count without exposing future via visible API.
    * Tests should verify future not exposed via getVisibleCandles.
    */
@@ -265,6 +358,7 @@ export class ReplayEngine extends EventEmitter {
   _emitCandle(candle, index) {
     const cloned = this._cloneCandle(candle);
     const payload = {
+      symbol: this._symbol || candle.symbol || null,
       candle: cloned,
       index,
       timestamp: cloned.time,

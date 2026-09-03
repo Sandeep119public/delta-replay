@@ -21,8 +21,9 @@ export class HistoricalDataManager extends EventEmitter {
    * @param {number} [opts.concurrency=2]
    * @param {number} [opts.maxRetries=3]
    * @param {number} [opts.chunkSize=2000]
+   * @param {boolean} [opts.strictMode=false]
    */
-  constructor({ provider, store = null, cache = null, concurrency = 2, maxRetries = 3, chunkSize = 2000 } = {}) {
+  constructor({ provider, store = null, cache = null, concurrency = 2, maxRetries = 3, chunkSize = 2000, strictMode = false } = {}) {
     super();
     if (!provider) throw new Error('HistoricalDataManager requires provider');
     this.provider = provider;
@@ -31,6 +32,7 @@ export class HistoricalDataManager extends EventEmitter {
     this.concurrency = concurrency;
     this.maxRetries = maxRetries;
     this.chunkSize = chunkSize;
+    this.strictMode = strictMode;
   }
 
   /**
@@ -41,9 +43,12 @@ export class HistoricalDataManager extends EventEmitter {
    * @param {number} params.from - unix sec
    * @param {number} params.to - unix sec
    * @param {AbortSignal} [params.signal]
+   * @param {boolean} [params.strict]
+   * @param {boolean} [params.allowGaps=false]
+   * @param {boolean} [params.halfOpen=false]
    * @returns {Promise<{ candles: Array, metadata: object }>}
    */
-  async load({ symbol, timeframe, from, to, signal } = {}) {
+  async load({ symbol, timeframe, from, to, signal, strict = this.strictMode, allowGaps = false, halfOpen = false } = {}) {
     if (!symbol || !timeframe) throw new Error('symbol and timeframe required');
     if (!Number.isFinite(from) || !Number.isFinite(to)) throw new Error('from/to must be numbers');
     if (from >= to) throw new Error('from must be < to');
@@ -191,13 +196,22 @@ export class HistoricalDataManager extends EventEmitter {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       const apiSymbol = symbol === 'BTCUSD' ? 'BTCUSDT' : (symbol === 'ETHUSD' ? 'ETHUSDT' : symbol);
       try {
-        const raw = await this.provider.client.fetchCandles({
-          symbol: apiSymbol,
-          resolution: timeframe,
-          start: chunk.from,
-          end: chunk.to,
-          signal,
-        });
+        let raw;
+        if (typeof this.provider.fetchChunk === 'function') {
+          raw = await this.provider.fetchChunk({ symbol: apiSymbol, timeframe, from: chunk.from, to: chunk.to, signal });
+        } else if (this.provider.client && typeof this.provider.client.fetchCandles === 'function') {
+          raw = await this.provider.client.fetchCandles({
+            symbol: apiSymbol,
+            resolution: timeframe,
+            start: chunk.from,
+            end: chunk.to,
+            signal,
+          });
+        } else if (typeof this.provider.getCandles === 'function') {
+          raw = await this.provider.getCandles({ symbol: apiSymbol, timeframe, from: chunk.from, to: chunk.to, signal });
+        } else {
+          throw new Error('Provider does not support fetching candles');
+        }
         return raw;
       } catch (err) {
         if (err?.name === 'AbortError') throw err;
@@ -245,11 +259,6 @@ export class HistoricalDataManager extends EventEmitter {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
     // Process integrity: merge cached + fetched raw
-    // rawCollected currently contains cached raw (?) cached were already normalized? We stored cached candles as canonical, not raw.
-    // For cached part we added sliced canonical candles (already canonical) to rawCollected; for fetched we added raw.
-    // To avoid double normalize, we need to handle: cached candles are canonical, fetched raw are raw.
-    // Normalize all as if raw: canonical candles will be re-normalized but idempotent (numbers already).
-    // So just process full rawCollected as if raw (CandleIntegrity will normalize).
     const allRaw = rawCollected;
 
     if (allRaw.length === 0) {
@@ -259,7 +268,22 @@ export class HistoricalDataManager extends EventEmitter {
       throw err;
     }
 
-    const { validCandles, metadata } = CandleIntegrity.process(allRaw, { from, to, timeframeSec: tfSec });
+    let validCandles, metadata;
+    try {
+      const integrityRes = CandleIntegrity.process(allRaw, {
+        from,
+        to,
+        timeframeSec: tfSec,
+        strict,
+        allowGaps,
+        halfOpen,
+      });
+      validCandles = integrityRes.validCandles;
+      metadata = integrityRes.metadata;
+    } catch (err) {
+      this.emit(DataEvents.ERROR, err);
+      throw err;
+    }
 
     if (validCandles.length === 0) {
       const err = new Error('No valid candles after integrity');
