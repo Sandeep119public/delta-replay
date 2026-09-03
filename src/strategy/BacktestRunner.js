@@ -22,29 +22,24 @@ export class BacktestRunner {
       executionProfile: EXECUTION_PROFILE.RESEARCH_BACKTEST,
     });
 
-    // An injected engine is part of the experiment definition. Do not silently
-    // accept manual-replay semantics or same-bar timing here, because that can
-    // turn a strategy signal into lookahead execution.
     if (this.engine.executionProfile !== EXECUTION_PROFILE.RESEARCH_BACKTEST || this.engine.executionTiming !== EXECUTION_TIMING.NEXT_BAR_OPEN) {
       throw new Error(`BacktestRunner requires ${EXECUTION_PROFILE.RESEARCH_BACKTEST} with ${EXECUTION_TIMING.NEXT_BAR_OPEN} timing`);
     }
 
-    // Single canonical orchestration path: subscribe strategy strictly to PaperTradingEngine's BAR_CLOSE.
     this._lastIntents = [];
     this._unsubBarClose = this.engine.on(TradingEvents.BAR_CLOSE, (barEvent) => {
       const intents = this.strategy.onBar(barEvent) || [];
       this._lastIntents = intents;
       for (const intent of intents) {
-        this.engine.submitIntent(intent);
+        if (intent?.symbol != null && intent.symbol !== this.symbol) {
+          this.engine._reject?.('SYMBOL_MISMATCH', `BacktestRunner symbol mismatch: expected ${this.symbol}, got ${intent.symbol}`);
+          continue;
+        }
+        this.engine.submitIntent({ ...intent, symbol: this.symbol });
       }
     });
   }
 
-  /**
-   * Lookahead-free quantitative pipeline:
-   * Directs candle into PaperTradingEngine -> engine emits canonical BAR_CLOSE
-   * -> strategy evaluates finalized bar and enqueues intents for T+1 execution.
-   */
   processBar(candle, index = null) {
     if (!candle || typeof candle !== 'object') throw new TypeError('BacktestRunner.processBar expects a candle object');
     if (candle.symbol != null && candle.symbol !== this.symbol) {
@@ -55,15 +50,13 @@ export class BacktestRunner {
     return { intents: this._lastIntents };
   }
 
-  /**
-   * Each run is an independent research experiment by default.
-   * Pass reset:false only when intentionally continuing an existing session.
-   */
+  /** Each run is an independent research experiment by default. Pass reset:false to continue an existing session. */
   run(candles, { reset = true } = {}) {
     if (!Array.isArray(candles)) throw new TypeError('BacktestRunner.run expects an array of candles');
     if (reset) this.reset();
+    const startIndex = reset ? 0 : this.engine.getLatestCandleIndex() + 1;
     for (let i = 0; i < candles.length; i++) {
-      this.processBar(candles[i], i);
+      this.processBar(candles[i], startIndex + i);
     }
     return this.getResults();
   }
