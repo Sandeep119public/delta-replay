@@ -9,27 +9,31 @@ export class TimeframeSelector {
     this._onChange = null;
     this._handleChange = () => this._onChange?.(this.el.value);
     this._render();
-    this.el.addEventListener('change', this._handleChange);
+    if (typeof this.el.addEventListener === 'function') this.el.addEventListener('change', this._handleChange);
   }
 
   _render() {
-    this.el.replaceChildren();
-    const fragment = document.createDocumentFragment();
-    for (const timeframe of this.timeframes) {
-      const option = document.createElement('option');
-      option.value = timeframe;
-      option.textContent = timeframe;
-      option.selected = timeframe === this.appState.timeframe;
-      fragment.appendChild(option);
+    if (typeof this.el.replaceChildren === 'function' && typeof document !== 'undefined') {
+      this.el.replaceChildren();
+      const fragment = document.createDocumentFragment();
+      for (const timeframe of this.timeframes) {
+        const option = document.createElement('option');
+        option.value = timeframe;
+        option.textContent = timeframe;
+        option.selected = timeframe === this.appState.timeframe;
+        fragment.appendChild(option);
+      }
+      this.el.appendChild(fragment);
+      return;
     }
-    this.el.appendChild(fragment);
+    this.el.innerHTML = this.timeframes
+      .map(timeframe => `<option value="${String(timeframe).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;') }"${timeframe === this.appState.timeframe ? ' selected' : ''}>${String(timeframe).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`)
+      .join('');
   }
 
   onChange(fn) {
     this._onChange = typeof fn === 'function' ? fn : null;
-    return () => {
-      if (this._onChange === fn) this._onChange = null;
-    };
+    return () => { if (this._onChange === fn) this._onChange = null; };
   }
 
   setTimeframes(timeframes) {
@@ -39,7 +43,7 @@ export class TimeframeSelector {
   }
 
   destroy() {
-    this.el.removeEventListener('change', this._handleChange);
+    if (typeof this.el.removeEventListener === 'function') this.el.removeEventListener('change', this._handleChange);
     this._onChange = null;
   }
 }
