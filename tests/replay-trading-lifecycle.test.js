@@ -52,7 +52,9 @@ describe('replay/trading lifecycle hardening', () => {
     expect(trading.getTrades()).toHaveLength(0);
     expect(trading.getPositions()).toHaveLength(0);
     expect(trading.getAccountSnapshot().cashBalance).toBeCloseTo(10000, 10);
-    expect(trading.getLatestCandle()).toBeNull();
+    // Replay reset returns to the start candle, so the trading feed receives that candle again.
+    expect(trading.getLatestCandleIndex()).toBe(0);
+    expect(trading.getLatestCandle().time).toBe(100);
   });
 });
 
