@@ -12,4 +12,7 @@ export const TradingEvents = {
   ACCOUNT_RESET: 'accountReset',
   STOP_LOSS_TRIGGERED: 'stopLossTriggered',
   TAKE_PROFIT_TRIGGERED: 'takeProfitTriggered',
+  BAR_CLOSE: 'barClose',
+  POSITION_LIQUIDATED: 'positionLiquidated',
+  FUNDING_PAYMENT: 'fundingPayment',
 };

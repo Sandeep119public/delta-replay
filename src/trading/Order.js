@@ -11,6 +11,11 @@ export const ORDER_STATUSES = {
   REJECTED: 'REJECTED',
 };
 
+export const EXECUTION_TIMING = Object.freeze({
+  NEXT_BAR_OPEN: 'NEXT_BAR_OPEN',
+  IMMEDIATE_CLOSE: 'IMMEDIATE_CLOSE',
+});
+
 /**
  * Immutable order model. Engine owns mutation via status transitions.
  */
@@ -23,6 +28,7 @@ export class Order {
     quantity,
     limitPrice = null,
     stopPrice = null,
+    timing = EXECUTION_TIMING.IMMEDIATE_CLOSE,
     status = ORDER_STATUSES.PENDING,
     createdAt = null,
     createdReplayTime = null,
@@ -41,6 +47,7 @@ export class Order {
     this.quantity = quantity;
     this.limitPrice = limitPrice;
     this.stopPrice = stopPrice;
+    this.timing = timing;
     this.status = status;
     this.createdAt = createdAt;
     this.createdReplayTime = createdReplayTime;

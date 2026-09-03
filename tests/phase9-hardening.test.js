@@ -261,8 +261,8 @@ describe('Phase9 — Event sequence', () => {
     expect(seqAll).toEqual(['ORDER_PLACED']);
     seqAll.length = 0;
     send(t, c(1001, 100, 101, 89, 90), 1);
-    // onMarketCandle emits ACCOUNT_UPDATED for price update before processing pendings
-    expect(seqAll).toEqual(['ACCOUNT_UPDATED','ORDER_FILLED','POSITION_OPENED','ACCOUNT_UPDATED']);
+    // Intrabar execution occurs first, followed by single canonical ACCOUNT_UPDATED at bar close
+    expect(seqAll).toEqual(['ORDER_FILLED','POSITION_OPENED','ACCOUNT_UPDATED']);
   });
   it('LIMIT exit: ORDER_FILLED -> POSITION_CLOSED -> TRADE_EXECUTED -> ACCOUNT_UPDATED', () => {
     const t = new PaperTradingEngine({ feeRate: 0 });
@@ -276,7 +276,7 @@ describe('Phase9 — Event sequence', () => {
     t.on(TradingEvents.TRADE_EXECUTED, () => seq.push('TRADE_EXECUTED'));
     t.on(TradingEvents.ACCOUNT_UPDATED, () => seq.push('ACCOUNT_UPDATED'));
     send(t, c(1002, 100, 115, 99, 110), 2);
-    expect(seq).toEqual(['ACCOUNT_UPDATED','ORDER_FILLED','POSITION_CLOSED','TRADE_EXECUTED','ACCOUNT_UPDATED']);
+    expect(seq).toEqual(['ORDER_FILLED','POSITION_CLOSED','TRADE_EXECUTED','ACCOUNT_UPDATED']);
   });
   it('STOP entry: ORDER_PLACED -> ORDER_TRIGGERED -> ORDER_FILLED -> POSITION_OPENED', () => {
     const t = new PaperTradingEngine({ feeRate: 0 });

@@ -5,7 +5,9 @@ import { Trade } from './Trade.js';
 import { TradingEvents } from './TradingEvents.js';
 import { TradingValidator } from './TradingValidator.js';
 import { TRADING_CONFIG, calcFee } from './TradingConfig.js';
-import { Order, ORDER_TYPES, ORDER_STATUSES } from './Order.js';
+import { Order, ORDER_TYPES, ORDER_STATUSES, EXECUTION_TIMING } from './Order.js';
+
+export { EXECUTION_TIMING };
 
 export const AMBIGUITY_POLICY = Object.freeze({
   CONSERVATIVE: 'CONSERVATIVE',
@@ -36,14 +38,24 @@ export class PaperTradingEngine extends EventEmitter {
    * @param {string} [opts.executionPolicy=EXECUTION_POLICY.SIMPLIFIED]
    * @param {boolean} [opts.realisticExecution=false]
    * @param {number} [opts.marginRate=1.0] - initial margin rate (1.0 = full cash, 0 = unlimited leverage/fee only)
+   * @param {string} [opts.executionTiming=EXECUTION_TIMING.IMMEDIATE_CLOSE] - NEXT_BAR_OPEN | IMMEDIATE_CLOSE
    */
-  constructor({ startingBalance = 10000, feeRate = TRADING_CONFIG.TAKER_FEE_RATE, replayEngine = null, ambiguityPolicy = AMBIGUITY_POLICY.CONSERVATIVE, executionPolicy = null, realisticExecution = false, marginRate = 1.0 } = {}) {
+  constructor({ startingBalance = 10000, feeRate = TRADING_CONFIG.TAKER_FEE_RATE, replayEngine = null, ambiguityPolicy = AMBIGUITY_POLICY.CONSERVATIVE, executionPolicy = null, realisticExecution = false, marginRate = 1.0, maintMarginRate = null, executionTiming = EXECUTION_TIMING.IMMEDIATE_CLOSE, fundingSchedule = null } = {}) {
     super();
     this.account = new TradingAccount({ startingBalance });
     this.feeRate = feeRate;
     this.ambiguityPolicy = ambiguityPolicy;
     this.executionPolicy = executionPolicy ?? (realisticExecution ? EXECUTION_POLICY.REALISTIC : EXECUTION_POLICY.SIMPLIFIED);
     this.marginRate = marginRate;
+    this.maintMarginRate = maintMarginRate ?? (marginRate * 0.5);
+    this.executionTiming = executionTiming;
+    this._fundingSchedule = fundingSchedule;
+    this._fundingHistory = [];
+    this._lastFundingTimestamp = null;
+    this._ambiguousBarCount = 0;
+    this._totalBarsEvaluated = 0;
+    this._isProcessingCandle = false;
+    this._accountNeedsUpdate = false;
     this._positions = new Map(); // symbol -> Position
     this._trades = [];
     this._nextTradeId = 1;
@@ -75,11 +87,156 @@ export class PaperTradingEngine extends EventEmitter {
     this.executionPolicy = policy;
   }
 
+  setExecutionTiming(timing) {
+    if (!Object.values(EXECUTION_TIMING).includes(timing)) {
+      throw new Error(`Invalid execution timing: ${timing}`);
+    }
+    this.executionTiming = timing;
+  }
+
+  submitIntent({ symbol, side, type = ORDER_TYPES.MARKET, quantity, limitPrice = null, stopPrice = null } = {}) {
+    if (type === ORDER_TYPES.MARKET) {
+      return this.placeOrder({ symbol, side, quantity, timing: EXECUTION_TIMING.NEXT_BAR_OPEN });
+    } else if (type === ORDER_TYPES.LIMIT) {
+      return this.placeLimitOrder({ symbol, side, quantity, limitPrice });
+    } else if (type === ORDER_TYPES.STOP_MARKET) {
+      return this.placeStopOrder({ symbol, side, quantity, stopPrice });
+    }
+    return this._reject('INVALID_ORDER_TYPE', `Unknown order type: ${type}`);
+  }
+
+  setFundingSchedule(schedule) {
+    this._fundingSchedule = schedule;
+  }
+
+  applyFundingRate({ symbol = null, fundingRate = 0.0001, timestamp = null } = {}) {
+    const ts = timestamp ?? (this._latestCandle ? this._latestCandle.time : Date.now());
+    const rate = Number(fundingRate);
+    if (!Number.isFinite(rate)) return [];
+
+    const payments = [];
+    for (const [sym, pos] of this._positions.entries()) {
+      if (symbol && sym !== symbol) continue;
+      const markPrice = Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice;
+      const notional = markPrice * pos.quantity;
+      // When fundingRate > 0: Longs pay Shorts (payment negative for Long, positive for Short)
+      // When fundingRate < 0: Shorts pay Longs (payment positive for Long, negative for Short)
+      const payment = (pos.side === 'LONG' ? -1 : 1) * notional * rate;
+
+      // Invariant 7: Keep funding completely outside trade realizedPnL
+      // walletBalance ± funding payment
+      this.account.walletBalance += payment;
+      this.account.totalFundingPaid += (payment < 0 ? -payment : 0);
+
+      const record = {
+        id: this._fundingHistory.length + 1,
+        timestamp: ts,
+        symbol: sym,
+        side: pos.side,
+        quantity: pos.quantity,
+        markPrice,
+        fundingRate: rate,
+        payment,
+      };
+      this._fundingHistory.push(record);
+      payments.push(record);
+      this.emit(TradingEvents.FUNDING_PAYMENT, this._cloneJSON(record));
+    }
+    if (payments.length > 0) {
+      this._emitAccountUpdated();
+    }
+    return payments;
+  }
+
+  getFundingHistory() {
+    return this._fundingHistory.map(f => this._cloneJSON(f));
+  }
+
+  _emitAccountUpdated() {
+    if (this._isProcessingCandle) {
+      this._accountNeedsUpdate = true;
+      return;
+    }
+    this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+  }
+
   _getRequiredEntryCash(price, quantity) {
     const notional = price * quantity;
     const fee = calcFee(notional, this.feeRate);
     const marginRatio = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
     return (notional * marginRatio) + fee;
+  }
+
+  _calcPositionMargins(price, quantity, side) {
+    const notional = price * quantity;
+    const imRate = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
+    const mmRate = (typeof this.maintMarginRate === 'number' && this.maintMarginRate >= 0) ? this.maintMarginRate : (imRate * 0.5);
+    const initialMargin = notional * imRate;
+    const maintenanceMargin = notional * mmRate;
+
+    let liquidationPrice = null;
+    if (imRate < 1.0 || mmRate < imRate) {
+      if (side === 'LONG') {
+        liquidationPrice = Math.max(0, price * (1 - imRate + mmRate));
+      } else {
+        liquidationPrice = price * (1 + imRate - mmRate);
+      }
+    }
+    return { initialMargin, maintenanceMargin, liquidationPrice };
+  }
+
+  _recalcMargins() {
+    let usedIM = 0;
+    let totalMM = 0;
+    for (const p of this._positions.values()) {
+      usedIM += p.initialMargin || 0;
+      totalMM += p.maintenanceMargin || 0;
+    }
+    this.account.usedMargin = usedIM;
+    this.account.maintenanceMargin = totalMM;
+  }
+
+  _processLiquidations(candle, candleIndex, symbol) {
+    const toLiquidate = [];
+    for (const [sym, pos] of this._positions.entries()) {
+      if (symbol && sym !== symbol) continue;
+      if (!Number.isFinite(pos.liquidationPrice)) continue;
+
+      let isLiquidated = false;
+      let exitPrice = pos.liquidationPrice;
+
+      if (pos.side === 'LONG') {
+        if (Number.isFinite(candle.low) && candle.low <= pos.liquidationPrice) {
+          isLiquidated = true;
+          if (this.executionPolicy === EXECUTION_POLICY.REALISTIC && Number.isFinite(candle.open) && candle.open < pos.liquidationPrice) {
+            exitPrice = candle.open;
+          }
+        }
+      } else if (pos.side === 'SHORT') {
+        if (Number.isFinite(candle.high) && candle.high >= pos.liquidationPrice) {
+          isLiquidated = true;
+          if (this.executionPolicy === EXECUTION_POLICY.REALISTIC && Number.isFinite(candle.open) && candle.open > pos.liquidationPrice) {
+            exitPrice = candle.open;
+          }
+        }
+      }
+
+      if (isLiquidated) {
+        toLiquidate.push({ symbol: sym, exitPrice, candleTime: candle.time, pos });
+      }
+    }
+
+    for (const item of toLiquidate) {
+      const { symbol: sym, exitPrice, candleTime, pos } = item;
+      this.emit(TradingEvents.POSITION_LIQUIDATED, {
+        symbol: sym,
+        liquidationPrice: exitPrice,
+        position: this._cloneJSON(pos.toJSON()),
+        candle: this._cloneJSON(candle),
+      });
+      this._closePositionInternal(sym, exitPrice, candleTime, 'LIQUIDATION');
+      this._cancelIncompatiblePendings(sym);
+    }
   }
 
   clearMarketContext() {
@@ -208,7 +365,27 @@ export class PaperTradingEngine extends EventEmitter {
       this._latestSymbolContext = symbol;
       this._marketBySymbol.set(symbol, { candle: this._latestCandle, index: idx, timestamp: c.time });
     }
-    // Update matching open positions currentPrice
+
+    this._isProcessingCandle = true;
+    this._accountNeedsUpdate = false;
+    this._totalBarsEvaluated++;
+
+    // 1. INTRABAR: Process eligible pending NEXT_BAR_OPEN market orders at candle.open
+    this._processPendingMarketOrders(this._latestCandle, idx, symbol);
+
+    // 2. INTRABAR: Process liquidation triggers against candle OHLC
+    this._processLiquidations(this._latestCandle, idx, symbol);
+
+    // 3. INTRABAR: Evaluate SL/TP risk triggers against candle OHLC
+    const closedThisCandle = this._processStopLossTakeProfit(this._latestCandle, idx, symbol);
+    if (closedThisCandle && closedThisCandle.size > 0) {
+      this._cancelStaleExitPendings(closedThisCandle, idx);
+    }
+
+    // 3. INTRABAR: Evaluate pending entry/exit orders (LIMIT and STOP_MARKET) with next-candle protection
+    this._processPendingOrders(this._latestCandle, idx, symbol);
+
+    // 4. PORTFOLIO FINALIZATION: Mark remaining open positions to candle.close
     let totalUnrealized = 0;
     for (const pos of this._positions.values()) {
       if (!symbol || pos.symbol === symbol) {
@@ -218,25 +395,119 @@ export class PaperTradingEngine extends EventEmitter {
       totalUnrealized += pos.unrealizedPnL;
     }
     this.account.unrealizedPnL = totalUnrealized;
-    this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
 
-    // Execution order (documented):
-    // 1) market candle arrives (above: currentPrice + ACCOUNT_UPDATED)
-    // 2) position SL/TP evaluated (risk exits have priority)
-    // 3) pending LIMIT/STOP orders evaluated (entry/exit)
-    // 4) position/account updates + events emitted inside each step
-    // This order is deterministic and hindsight-safe: only current candle OHLC is used.
-    // Evaluate SL/TP before entry orders — deterministic risk exits have priority
-    // Same-candle protection: position and SL/TP become eligible at next candle
-    const closedThisCandle = this._processStopLossTakeProfit(this._latestCandle, idx, symbol);
-    // Stale-exit protection: if SL/TP closed a position this candle, pending opposite-side
-    // orders that existed before this candle are stale exits — they must not open a reversal.
-    if (closedThisCandle && closedThisCandle.size > 0) {
-      this._cancelStaleExitPendings(closedThisCandle, idx);
+    // 5. Automatic funding evaluation at scheduled boundaries
+    if (this._fundingSchedule && Number.isFinite(c.time)) {
+      const interval = this._fundingSchedule.intervalSec || (8 * 3600);
+      const prevBucket = this._lastFundingTimestamp != null ? Math.floor(this._lastFundingTimestamp / interval) : null;
+      const currentBucket = Math.floor(c.time / interval);
+      if (prevBucket != null && currentBucket > prevBucket) {
+        const rate = typeof this._fundingSchedule.rateProvider === 'function'
+          ? this._fundingSchedule.rateProvider(c.time, symbol)
+          : (this._fundingSchedule.defaultRate ?? 0.0001);
+        this.applyFundingRate({ symbol, fundingRate: rate, timestamp: c.time });
+      }
+      this._lastFundingTimestamp = c.time;
     }
 
-    // Evaluate pending entry orders (LIMIT and STOP_MARKET) with next-candle protection
-    this._processPendingOrders(this._latestCandle, idx, symbol);
+    this._isProcessingCandle = false;
+
+    // 6. CANONICAL EMISSION: Exactly one finalized portfolio snapshot per completed bar
+    this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+
+    // 7. BAR_CLOSE: Emit immutable frozen bar-close event
+    this.emit(TradingEvents.BAR_CLOSE, {
+      index: idx,
+      timestamp: c.time,
+      candle: Object.freeze({ ...this._latestCandle }),
+      phase: 'BAR_CLOSE',
+    });
+  }
+
+  _processPendingMarketOrders(candle, candleIndex, symbol) {
+    if (!this._pendingOrderIds.length) return;
+    const remaining = [];
+    for (const id of this._pendingOrderIds) {
+      const order = this._orders.get(id);
+      if (!order || order.status !== ORDER_STATUSES.PENDING) continue;
+      if (order.type !== ORDER_TYPES.MARKET) {
+        remaining.push(id);
+        continue;
+      }
+      if (symbol && order.symbol !== symbol) {
+        remaining.push(id);
+        continue;
+      }
+      // Centralized eligibility rule: cannot execute on creation candle
+      if (order.createdIndex >= candleIndex) {
+        remaining.push(id);
+        continue;
+      }
+
+      // Execute market order at candle.open
+      const filledPrice = Number.isFinite(candle.open) ? candle.open : candle.close;
+      const fillTime = candle.time;
+      const qty = order.quantity;
+      const side = order.side;
+      const existing = this._positions.get(order.symbol);
+
+      if (existing) {
+        const isOpposite = (existing.side === 'LONG' && side === 'SELL') || (existing.side === 'SHORT' && side === 'BUY');
+        if (isOpposite) {
+          this._closePositionInternal(existing.symbol, filledPrice, fillTime, 'MARKET');
+          order.status = ORDER_STATUSES.FILLED;
+          order.filledAt = fillTime;
+          order.filledPrice = filledPrice;
+          this._emitOrderFilled(order);
+          continue;
+        } else {
+          order.status = ORDER_STATUSES.REJECTED;
+          order.rejectionReason = 'POSITION_ALREADY_OPEN';
+          this._emitOrderRejected(order, 'POSITION_ALREADY_OPEN', `Position already open for ${order.symbol}`);
+          continue;
+        }
+      }
+
+      const notional = filledPrice * qty;
+      const entryFee = calcFee(notional, this.feeRate);
+      const requiredCash = this._getRequiredEntryCash(filledPrice, qty);
+
+      if (this.account.cashBalance < requiredCash) {
+        order.status = ORDER_STATUSES.REJECTED;
+        order.rejectionReason = 'INSUFFICIENT_CASH';
+        this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient cash to fill MARKET: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);
+        continue;
+      }
+
+      this.account.cashBalance -= entryFee;
+      this.account.totalFees += entryFee;
+      const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
+      const { initialMargin, maintenanceMargin, liquidationPrice } = this._calcPositionMargins(filledPrice, qty, posSide);
+      const position = new Position({
+        symbol: order.symbol,
+        side: posSide,
+        quantity: qty,
+        entryPrice: filledPrice,
+        currentPrice: filledPrice,
+        openedAt: fillTime,
+        entryFee,
+        openedIndex: candleIndex,
+        initialMargin,
+        maintenanceMargin,
+        liquidationPrice,
+      });
+      this._positions.set(order.symbol, position);
+      this._recalcMargins();
+      order.status = ORDER_STATUSES.FILLED;
+      order.filledAt = fillTime;
+      order.filledPrice = filledPrice;
+      order.entryFee = entryFee;
+
+      this._emitOrderFilled(order);
+      this.emit(TradingEvents.POSITION_OPENED, { position: this._cloneJSON(position.toJSON()), entryFee });
+      this._cancelIncompatiblePendings(order.symbol);
+    }
+    this._pendingOrderIds = remaining;
   }
 
   _cloneJSON(obj) {
@@ -268,7 +539,7 @@ export class PaperTradingEngine extends EventEmitter {
   }
 
   // ============ MARKET ORDERS ============
-  placeOrder({ symbol, side, quantity }) {
+  placeOrder({ symbol, side, quantity, timing = this.executionTiming }) {
     // Validation
     const sideRes = TradingValidator.validateSide(side);
     if (!sideRes.valid) return this._reject(sideRes.code, sideRes.message);
@@ -298,6 +569,24 @@ export class PaperTradingEngine extends EventEmitter {
       if ((existingLong && incomingLong) || (!existingLong && !incomingLong)) {
         return this._reject('POSITION_ALREADY_OPEN', `Position already open for ${symbol} (${existing.side}). Close it first.`, { symbol });
       }
+      if (timing === EXECUTION_TIMING.NEXT_BAR_OPEN) {
+        const order = new Order({
+          id: this._nextOrderId++,
+          symbol,
+          side,
+          type: ORDER_TYPES.MARKET,
+          quantity: q,
+          timing: EXECUTION_TIMING.NEXT_BAR_OPEN,
+          status: ORDER_STATUSES.PENDING,
+          createdAt: Date.now(),
+          createdReplayTime: time,
+          createdIndex: candleIndex,
+        });
+        this._orders.set(order.id, order);
+        this._pendingOrderIds.push(order.id);
+        this._emitOrderPlaced(order);
+        return { success: true, order: this._cloneJSON(order.toJSON()), status: ORDER_STATUSES.PENDING };
+      }
       // Opposite direction: close existing (do not auto-reverse)
       const result = this._closePositionInternal(symbol, execPrice, time);
       // After market close, cancel incompatible limit pendings
@@ -305,7 +594,27 @@ export class PaperTradingEngine extends EventEmitter {
       return result;
     }
 
-    // No existing position: open new
+    // No existing position:
+    if (timing === EXECUTION_TIMING.NEXT_BAR_OPEN) {
+      const order = new Order({
+        id: this._nextOrderId++,
+        symbol,
+        side,
+        type: ORDER_TYPES.MARKET,
+        quantity: q,
+        timing: EXECUTION_TIMING.NEXT_BAR_OPEN,
+        status: ORDER_STATUSES.PENDING,
+        createdAt: Date.now(),
+        createdReplayTime: time,
+        createdIndex: candleIndex,
+      });
+      this._orders.set(order.id, order);
+      this._pendingOrderIds.push(order.id);
+      this._emitOrderPlaced(order);
+      return { success: true, order: this._cloneJSON(order.toJSON()), status: ORDER_STATUSES.PENDING };
+    }
+
+    // IMMEDIATE_CLOSE mode: open new position immediately at current close
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
     const entryNotional = execPrice * q;
     const entryFee = calcFee(entryNotional, this.feeRate);
@@ -316,6 +625,7 @@ export class PaperTradingEngine extends EventEmitter {
     // deduct entry fee immediately
     this.account.cashBalance -= entryFee;
     this.account.totalFees += entryFee;
+    const { initialMargin, maintenanceMargin, liquidationPrice } = this._calcPositionMargins(execPrice, q, posSide);
     const position = new Position({
       symbol,
       side: posSide,
@@ -325,12 +635,16 @@ export class PaperTradingEngine extends EventEmitter {
       openedAt: time,
       entryFee,
       openedIndex: candleIndex,
+      initialMargin,
+      maintenanceMargin,
+      liquidationPrice,
     });
     this._positions.set(symbol, position);
+    this._recalcMargins();
     // unrealized 0 at open
     this._recalcUnrealized();
     this.emit(TradingEvents.POSITION_OPENED, { position: this._cloneJSON(position.toJSON()), entryFee });
-    this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+    this._emitAccountUpdated();
     // After market open, reject incompatible pendings
     this._cancelIncompatiblePendings(symbol);
     return { success: true, position: this._cloneJSON(position.toJSON()), entryFee };
@@ -359,7 +673,7 @@ export class PaperTradingEngine extends EventEmitter {
     return res;
   }
 
-  _closePositionInternal(symbol, exitPrice, closedAt, exitReason = null) {
+  _closePositionInternal(symbol, exitPrice, closedAt, exitReason = null, ambiguityResolution = 'NONE') {
     const pos = this._positions.get(symbol);
     if (!pos) return this._reject('NO_POSITION', `No open position for ${symbol}`);
     const gross = pos.side === 'LONG'
@@ -392,20 +706,22 @@ export class PaperTradingEngine extends EventEmitter {
       totalFee,
       netPnL: net,
       exitReason,
+      ambiguityResolution,
     });
     this._trades.push(trade);
 
     this._positions.delete(symbol);
     this._recalcUnrealized();
+    this._recalcMargins();
 
     this.emit(TradingEvents.POSITION_CLOSED, { symbol, realizedPnL: net, grossPnL: gross, entryFee, exitFee, totalFee, exitPrice, exitReason, trade: this._cloneJSON(trade.toJSON()) });
     this.emit(TradingEvents.TRADE_EXECUTED, { trade: this._cloneJSON(trade.toJSON()) });
-    this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+    this._emitAccountUpdated();
     return { success: true, exitPrice, realizedPnL: net, grossPnL: gross, entryFee, exitFee, totalFee, netPnL: net, exitReason, trade: this._cloneJSON(trade.toJSON()), closedPosition: this._cloneJSON(pos.toJSON()) };
   }
 
-  _closePositionWithReason(symbol, exitPrice, closedAt, exitReason) {
-    return this._closePositionInternal(symbol, exitPrice, closedAt, exitReason);
+  _closePositionWithReason(symbol, exitPrice, closedAt, exitReason, ambiguityResolution = 'NONE') {
+    return this._closePositionInternal(symbol, exitPrice, closedAt, exitReason, ambiguityResolution);
   }
 
   _recalcUnrealized() {
@@ -639,7 +955,7 @@ export class PaperTradingEngine extends EventEmitter {
       this._emitOrderFilled(order);
       this.emit(TradingEvents.POSITION_CLOSED, { symbol, realizedPnL: net, grossPnL: gross, entryFee, exitFee, totalFee, exitPrice: filledPrice, exitReason: 'LIMIT', trade: this._cloneJSON(trade.toJSON()) });
       this.emit(TradingEvents.TRADE_EXECUTED, { trade: this._cloneJSON(trade.toJSON()) });
-      this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+      this._emitAccountUpdated();
       return { success: true, filled: true };
     }
 
@@ -664,6 +980,7 @@ export class PaperTradingEngine extends EventEmitter {
     }
     this.account.cashBalance -= entryFee;
     this.account.totalFees += entryFee;
+    const { initialMargin, maintenanceMargin, liquidationPrice } = this._calcPositionMargins(filledPrice, qty, posSide);
     const position = new Position({
       symbol,
       side: posSide,
@@ -673,10 +990,14 @@ export class PaperTradingEngine extends EventEmitter {
       openedAt: fillTime,
       entryFee,
       openedIndex: candle.time ? this._latestCandleIndex : -1,
+      initialMargin,
+      maintenanceMargin,
+      liquidationPrice,
     });
     // ensure openedIndex tracks candle index for SL/TP protection
     position.openedIndex = this._latestCandleIndex;
     this._positions.set(symbol, position);
+    this._recalcMargins();
     order.status = ORDER_STATUSES.FILLED;
     order.filledAt = fillTime;
     order.filledPrice = filledPrice;
@@ -685,7 +1006,7 @@ export class PaperTradingEngine extends EventEmitter {
     this._recalcUnrealized();
     this._emitOrderFilled(order);
     this.emit(TradingEvents.POSITION_OPENED, { position: this._cloneJSON(position.toJSON()), entryFee });
-    this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+    this._emitAccountUpdated();
     this._cancelIncompatiblePendings(symbol);
     return { success: true, filled: true };
   }
@@ -761,7 +1082,7 @@ export class PaperTradingEngine extends EventEmitter {
       this._emitOrderFilled(order);
       this.emit(TradingEvents.POSITION_CLOSED, { symbol, realizedPnL: net, grossPnL: gross, entryFee, exitFee, totalFee, exitPrice: filledPrice, exitReason: 'STOP', trade: this._cloneJSON(trade.toJSON()) });
       this.emit(TradingEvents.TRADE_EXECUTED, { trade: this._cloneJSON(trade.toJSON()) });
-      this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+      this._emitAccountUpdated();
       return { success: true, filled: true };
     }
     // No existing position -> open new with gap-through slippage
@@ -785,6 +1106,7 @@ export class PaperTradingEngine extends EventEmitter {
     }
     this.account.cashBalance -= entryFee;
     this.account.totalFees += entryFee;
+    const { initialMargin, maintenanceMargin, liquidationPrice } = this._calcPositionMargins(filledPrice, qty, posSide);
     const position = new Position({
       symbol,
       side: posSide,
@@ -794,9 +1116,13 @@ export class PaperTradingEngine extends EventEmitter {
       openedAt: fillTime,
       entryFee,
       openedIndex: this._latestCandleIndex,
+      initialMargin,
+      maintenanceMargin,
+      liquidationPrice,
     });
     position.openedIndex = this._latestCandleIndex;
     this._positions.set(symbol, position);
+    this._recalcMargins();
     order.status = ORDER_STATUSES.FILLED;
     order.filledAt = fillTime;
     order.filledPrice = filledPrice;
@@ -804,7 +1130,7 @@ export class PaperTradingEngine extends EventEmitter {
     this._recalcUnrealized();
     this._emitOrderFilled(order);
     this.emit(TradingEvents.POSITION_OPENED, { position: this._cloneJSON(position.toJSON()), entryFee });
-    this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+    this._emitAccountUpdated();
     this._cancelIncompatiblePendings(symbol);
     return { success: true, filled: true };
   }
@@ -868,7 +1194,10 @@ export class PaperTradingEngine extends EventEmitter {
         if (pos.side === 'LONG' && candle.high >= tp) triggerTP = true;
         if (pos.side === 'SHORT' && candle.low <= tp) triggerTP = true;
       }
+      let ambiguityResolution = 'NONE';
       if (triggerSL && triggerTP) {
+        this._ambiguousBarCount++;
+        ambiguityResolution = this.ambiguityPolicy;
         if (this.ambiguityPolicy === AMBIGUITY_POLICY.TP_FIRST) {
           triggerSL = false;
         } else if (this.ambiguityPolicy === AMBIGUITY_POLICY.OPEN_PROXIMITY && Number.isFinite(candle.open)) {
@@ -895,7 +1224,7 @@ export class PaperTradingEngine extends EventEmitter {
         }
         const sideBefore = pos.side;
         this.emit(TradingEvents.STOP_LOSS_TRIGGERED, { symbol, price, position: this._cloneJSON(pos.toJSON()), candle: this._cloneJSON(candle) });
-        this._closePositionWithReason(symbol, price, candle.time, 'STOP_LOSS');
+        this._closePositionWithReason(symbol, price, candle.time, 'STOP_LOSS', ambiguityResolution);
         closed.set(symbol, sideBefore);
       } else if (triggerTP) {
         let price = tp;
@@ -908,7 +1237,7 @@ export class PaperTradingEngine extends EventEmitter {
         }
         const sideBefore = pos.side;
         this.emit(TradingEvents.TAKE_PROFIT_TRIGGERED, { symbol, price, position: this._cloneJSON(pos.toJSON()), candle: this._cloneJSON(candle) });
-        this._closePositionWithReason(symbol, price, candle.time, 'TAKE_PROFIT');
+        this._closePositionWithReason(symbol, price, candle.time, 'TAKE_PROFIT', ambiguityResolution);
         closed.set(symbol, sideBefore);
       }
     }
@@ -1093,6 +1422,10 @@ export class PaperTradingEngine extends EventEmitter {
     this._positions.clear();
     this._trades = [];
     this._nextTradeId = 1;
+    this._ambiguousBarCount = 0;
+    this._totalBarsEvaluated = 0;
+    this._fundingHistory = [];
+    this._lastFundingTimestamp = null;
     this.clearMarketContext();
     // ID determinism note: _nextOrderId is intentionally NOT reset to avoid collision
     // with preserved order history (orders remain in _orders Map as CANCELLED).
@@ -1115,6 +1448,10 @@ export class PaperTradingEngine extends EventEmitter {
     this._nextOrderId = 1;
     this._orders.clear();
     this._pendingOrderIds = [];
+    this._ambiguousBarCount = 0;
+    this._totalBarsEvaluated = 0;
+    this._fundingHistory = [];
+    this._lastFundingTimestamp = null;
     if (clearMarket) this.clearMarketContext();
     this.account.reset();
     this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot());
@@ -1182,8 +1519,25 @@ export class PaperTradingEngine extends EventEmitter {
 
   getAccountSnapshot() {
     const snap = this.account.snapshot();
+    snap.ambiguousBars = this._ambiguousBarCount;
+    snap.totalBars = this._totalBarsEvaluated;
+    snap.ambiguousBarRate = this._totalBarsEvaluated > 0 ? (this._ambiguousBarCount / this._totalBarsEvaluated) : 0;
     // return deep clone to prevent mutation
     return this._cloneJSON(snap);
+  }
+
+  getBacktestSummary() {
+    return {
+      totalBars: this._totalBarsEvaluated,
+      ambiguousBars: this._ambiguousBarCount,
+      ambiguousBarRate: this._totalBarsEvaluated > 0 ? (this._ambiguousBarCount / this._totalBarsEvaluated) : 0,
+      totalTrades: this._trades.length,
+      realizedPnL: this.account.realizedPnL,
+      totalFees: this.account.totalFees,
+      totalFundingPaid: this.account.totalFundingPaid,
+      walletBalance: this.account.walletBalance,
+      equity: this.account.equity,
+    };
   }
 
   // Comprehensive state for immutability audits (Phase 9)
