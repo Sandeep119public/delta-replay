@@ -18,6 +18,18 @@ export class BinanceClient {
     }
   }
 
+  get venue() {
+    return this.baseUrl.includes('fapi') ? VENUES.BINANCE_FUTURES : VENUES.BINANCE_SPOT;
+  }
+
+  getGridSpec() {
+    return {
+      origin: 0,
+      timeframeUnit: 'seconds',
+      alignment: 'UTC',
+    };
+  }
+
   /**
    * Fetches candles from Binance API, handling pagination across page limits
    * and accurately classifying timeouts vs caller cancellation.

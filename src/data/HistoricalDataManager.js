@@ -11,6 +11,7 @@ export const DataEvents = {
   CHUNK_RECEIVED: 'dataChunkReceived',
   PROGRESS: 'dataProgress',
   READY: 'dataReady',
+  READY_DEGRADED: 'dataReadyDegraded',
   ERROR: 'dataError',
 };
 
@@ -51,9 +52,10 @@ export class HistoricalDataManager extends EventEmitter {
    * @param {boolean} [params.halfOpen=false]
    * @param {string} [params.policy] - 'STRICT' | 'REPAIR' | 'LENIENT'
    * @param {number} [params.origin] - optional grid origin override
-   * @returns {Promise<{ candles: Array, metadata: object }>}
+   * @param {string} [params.venue] - optional venue override
+   * @returns {Promise<{ candles: Array, metadata: object, quality: string }>}
    */
-  async load({ symbol, timeframe, from, to, signal, strict = this.strictMode, allowGaps = false, halfOpen = false, policy = null, origin = null } = {}) {
+  async load({ symbol, timeframe, from, to, signal, strict = this.strictMode, allowGaps = false, halfOpen = false, policy = null, origin = null, venue = null } = {}) {
     if (!symbol || !timeframe) throw new Error('symbol and timeframe required');
     if (!Number.isFinite(from) || !Number.isFinite(to)) throw new Error('from/to must be numbers');
     if (from >= to) throw new Error('from must be < to');
@@ -62,7 +64,10 @@ export class HistoricalDataManager extends EventEmitter {
     const tfSec = TIMEFRAME_SECONDS[timeframe];
     if (!tfSec) throw new Error(`Unsupported timeframe ${timeframe}`);
 
-    const gridOrigin = origin ?? this.provider?.gridOrigin ?? (this.provider?.client?.gridOrigin ?? 0);
+    const gridSpec = typeof this.provider?.getGridSpec === 'function' ? this.provider.getGridSpec() : null;
+    const gridOrigin = origin ?? gridSpec?.origin ?? this.provider?.gridOrigin ?? (this.provider?.client?.gridOrigin ?? 0);
+    const resolvedVenue = venue ?? this.provider?.venue ?? 'DEFAULT';
+
     const range = normalizeRange(from, to, tfSec, gridOrigin);
     if (!range.hasCandle) {
       const err = new Error(`Requested range [${from}, ${to}] contains no complete candle for timeframe ${timeframe}`);
@@ -79,6 +84,8 @@ export class HistoricalDataManager extends EventEmitter {
       to: requestedTo,
       effectiveFrom,
       effectiveTo,
+      venue: resolvedVenue,
+      gridOrigin,
     });
 
     // Estimated size check before network (protect browser)
@@ -103,10 +110,18 @@ export class HistoricalDataManager extends EventEmitter {
     };
 
     // Try IDB if memory miss
-    let cacheRes = this.cache.get(symbol, timeframe, effectiveFrom, effectiveTo, { timeframeSec: tfSec });
+    let cacheRes = this.cache.get(symbol, timeframe, effectiveFrom, effectiveTo, {
+      timeframeSec: tfSec,
+      venue: resolvedVenue,
+      gridOrigin,
+    });
     if (!cacheRes.hit && this.cache.enableIDB) {
-      const idb = await this.cache.loadFromIDB(symbol, timeframe);
-      if (idb) cacheRes = this.cache.get(symbol, timeframe, effectiveFrom, effectiveTo, { timeframeSec: tfSec });
+      const idb = await this.cache.loadFromIDB(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
+      if (idb) cacheRes = this.cache.get(symbol, timeframe, effectiveFrom, effectiveTo, {
+        timeframeSec: tfSec,
+        venue: resolvedVenue,
+        gridOrigin,
+      });
     }
 
     // If cache claims hit, verify via integrity that it actually covers range without gaps/corruption
@@ -124,7 +139,7 @@ export class HistoricalDataManager extends EventEmitter {
       const isClean = metadata.invalidCount === 0 && (!strict || allowGaps || metadata.gaps.length === 0);
 
       if (validCandles.length === 0) {
-        const key = this.cache._key(symbol, timeframe);
+        const key = this.cache._key(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
         this.cache._memory.delete(key);
         if (this.cache.enableIDB) this.cache._deleteIDBEntry(key).catch(() => {});
         cacheRes = { hit: false, candles: [], missing: [{ from: effectiveFrom, to: effectiveTo }], intervals: [] };
@@ -136,7 +151,7 @@ export class HistoricalDataManager extends EventEmitter {
         }
 
         if (realMissing.length === 0 && isClean) {
-          const key = this.cache._key(symbol, timeframe);
+          const key = this.cache._key(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
           const entry = this.cache._memory.get(key);
           if (entry && JSON.stringify(entry.intervals) !== JSON.stringify(actualIntervals)) {
             entry.intervals = actualIntervals;
@@ -150,14 +165,17 @@ export class HistoricalDataManager extends EventEmitter {
             requestedTo,
             effectiveFrom,
             effectiveTo,
+            venue: resolvedVenue,
+            gridOrigin,
+            quality: 'VALID',
             ...metadata,
             cached: true,
           });
-          this.emit(DataEvents.READY, { candles: validCandles, metadata: this.store.getMetadata() });
+          this.emit(DataEvents.READY, { candles: validCandles, metadata: this.store.getMetadata(), quality: 'VALID' });
           this.emit(DataEvents.PROGRESS, { loaded: validCandles.length, total: validCandles.length, pct: 100 });
-          return { candles: validCandles, metadata: this.store.getMetadata() };
+          return { candles: validCandles, metadata: this.store.getMetadata(), quality: 'VALID' };
         } else {
-          const key = this.cache._key(symbol, timeframe);
+          const key = this.cache._key(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
           const entry = this.cache._memory.get(key);
           if (entry) {
             entry.intervals = actualIntervals;
@@ -192,7 +210,7 @@ export class HistoricalDataManager extends EventEmitter {
           cacheRes.missing = realMissing;
           cacheRes.intervals = actualCachedIntervals;
 
-          const key = this.cache._key(symbol, timeframe);
+          const key = this.cache._key(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
           const entry = this.cache._memory.get(key);
           if (entry) {
             const truthful = CandleCache.intervalsFromCandles(entry.candles.filter(c => Number.isFinite(c.time)), tfSec);
@@ -429,8 +447,13 @@ export class HistoricalDataManager extends EventEmitter {
     if (metadata.repairSuccess !== false && metadata.integrityStatus !== INTEGRITY_STATUS.DEGRADED) {
       this.cache.set(symbol, timeframe, effectiveFrom, effectiveTo, validCandles, {
         timeframeSec: tfSec,
+        venue: resolvedVenue,
+        gridOrigin,
       });
     }
+
+    const isDegraded = metadata.integrityStatus === INTEGRITY_STATUS.DEGRADED || metadata.repairSuccess === false;
+    const quality = isDegraded ? 'DEGRADED' : 'VALID';
 
     // Load store
     this.store.load(validCandles, {
@@ -440,11 +463,18 @@ export class HistoricalDataManager extends EventEmitter {
       requestedTo,
       effectiveFrom,
       effectiveTo,
+      venue: resolvedVenue,
+      gridOrigin,
+      quality,
       ...metadata,
     });
-    this.emit(DataEvents.READY, { candles: validCandles, metadata: this.store.getMetadata() });
+
+    this.emit(DataEvents.READY, { candles: validCandles, metadata: this.store.getMetadata(), quality });
+    if (isDegraded) {
+      this.emit(DataEvents.READY_DEGRADED, { candles: validCandles, metadata: this.store.getMetadata(), quality });
+    }
     emitProgress();
-    return { candles: validCandles, metadata: this.store.getMetadata() };
+    return { candles: validCandles, metadata: this.store.getMetadata(), quality };
   }
 
   getStore() { return this.store; }

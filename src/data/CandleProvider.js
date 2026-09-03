@@ -3,6 +3,25 @@
  */
 export class CandleProvider {
   /**
+   * Venue identifier for cache scoping and symbol resolution.
+   */
+  get venue() {
+    return 'DEFAULT';
+  }
+
+  /**
+   * Grid specification for timeframe lattice calculation.
+   * @returns {{ origin: number, timeframeUnit: string, alignment: string }}
+   */
+  getGridSpec() {
+    return {
+      origin: 0,
+      timeframeUnit: 'seconds',
+      alignment: 'UTC',
+    };
+  }
+
+  /**
    * @param {object} params
    * @param {string} params.symbol
    * @param {string} params.timeframe - e.g. '1m', '5m', '1h'

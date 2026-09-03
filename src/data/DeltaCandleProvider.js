@@ -48,6 +48,18 @@ export class DeltaCandleProvider extends CandleProvider {
     this._cache = new Map(); // key -> canonical candles array
   }
 
+  get venue() {
+    return VENUES.DELTA_EXCHANGE;
+  }
+
+  getGridSpec() {
+    return {
+      origin: this.gridOrigin ?? 0,
+      timeframeUnit: 'seconds',
+      alignment: 'UTC',
+    };
+  }
+
   _cacheKey(symbol, timeframe, from, to) {
     return `${symbol}|${timeframe}|${from ?? ''}|${to ?? ''}`;
   }

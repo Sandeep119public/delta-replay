@@ -24,8 +24,11 @@ export class CandleCache {
     this._version = CACHE_VERSION;
   }
 
-  _key(symbol, timeframe) {
-    return `${symbol}|${timeframe}`;
+  _key(symbol, timeframe, { venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    if ((venue === 'DEFAULT' || !venue) && (gridOrigin === 0 || gridOrigin === null || gridOrigin === undefined)) {
+      return `${symbol}|${timeframe}`;
+    }
+    return `${symbol}|${venue ?? 'DEFAULT'}|${timeframe}|${gridOrigin ?? 0}`;
   }
 
   _getTimeframeSeconds(timeframe, explicit = null, entry = null) {
@@ -47,15 +50,22 @@ export class CandleCache {
     return computeGridMissing(requestedFrom, requestedTo, cachedIntervals, tf);
   }
 
-  get(symbol, timeframe, from, to, { timeframeSec = null } = {}) {
-    const key = this._key(symbol, timeframe);
-    const entry = this._memory.get(key);
+  get(symbol, timeframe, from, to, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    let key = this._key(symbol, timeframe, { venue, gridOrigin });
+    let entry = this._memory.get(key);
+    if (!entry && key !== `${symbol}|${timeframe}`) {
+      const fallbackKey = `${symbol}|${timeframe}`;
+      if (this._memory.has(fallbackKey)) {
+        key = fallbackKey;
+        entry = this._memory.get(key);
+      }
+    }
     if (!entry || entry.version !== CACHE_VERSION) {
       if (entry) this._memory.delete(key);
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
     if (!Array.isArray(entry.candles) || !Array.isArray(entry.intervals)) {
-      this.invalidate(symbol, timeframe);
+      this.invalidate(symbol, timeframe, { venue, gridOrigin });
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
 
@@ -77,13 +87,13 @@ export class CandleCache {
     };
   }
 
-  invalidate(symbol, timeframe) {
-    const key = this._key(symbol, timeframe);
+  invalidate(symbol, timeframe, { venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    const key = this._key(symbol, timeframe, { venue, gridOrigin });
     this._memory.delete(key);
     if (this.enableIDB) this._deleteIDBEntry(key).catch(() => {});
   }
 
-  replace(symbol, timeframe, candles = [], { timeframeSec = null, intervals = null } = {}) {
+  replace(symbol, timeframe, candles = [], { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec);
     const canonical = (Array.isArray(candles) ? candles : [])
       .filter(c => this._isCanonicalCandle(c))
@@ -98,19 +108,21 @@ export class CandleCache {
       timeframeSec: tf,
       ts: Date.now(),
       version: CACHE_VERSION,
+      venue,
+      gridOrigin,
     };
-    const key = this._key(symbol, timeframe);
+    const key = this._key(symbol, timeframe, { venue, gridOrigin });
     this._lruTouch(key, entry);
     this._persistIDB(key, entry).catch(() => {});
     return entry;
   }
 
-  repairIntervals(symbol, timeframe, actualIntervals, { timeframeSec = null } = {}) {
-    const key = this._key(symbol, timeframe);
+  repairIntervals(symbol, timeframe, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    const key = this._key(symbol, timeframe, { venue, gridOrigin });
     const entry = this._memory.get(key);
     if (!entry) return;
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
-    entry.intervals = this._mergeIntervals(actualIntervals, tf);
+    entry.intervals = CandleCache.intervalsFromCandles(entry.candles, tf);
     entry.timeframeSec = tf;
     entry.ts = Date.now();
     entry.version = CACHE_VERSION;
@@ -118,14 +130,16 @@ export class CandleCache {
     this._persistIDB(key, entry).catch(() => {});
   }
 
-  set(symbol, timeframe, from, to, candles = [], { intervals = null, timeframeSec = null, allowUnverifiedIntervals = false } = {}) {
-    const key = this._key(symbol, timeframe);
+  set(symbol, timeframe, from, to, candles = [], { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    const key = this._key(symbol, timeframe, { venue, gridOrigin });
     const entry = this._memory.get(key) ?? {
       candles: [],
       intervals: [],
       ts: Date.now(),
       version: CACHE_VERSION,
       timeframeSec: null,
+      venue,
+      gridOrigin,
     };
 
     const byTime = new Map();
@@ -136,9 +150,7 @@ export class CandleCache {
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.timeframeSec = tf;
 
-    entry.intervals = (allowUnverifiedIntervals && intervals)
-      ? intervals
-      : CandleCache.intervalsFromCandles(entry.candles, tf);
+    entry.intervals = CandleCache.intervalsFromCandles(entry.candles, tf);
     entry.version = CACHE_VERSION;
     entry.ts = Date.now();
 
@@ -227,9 +239,9 @@ export class CandleCache {
     } catch {}
   }
 
-  async loadFromIDB(symbol, timeframe) {
+  async loadFromIDB(symbol, timeframe, { venue = 'DEFAULT', gridOrigin = 0 } = {}) {
     if (!this.enableIDB) return null;
-    const key = this._key(symbol, timeframe);
+    const key = this._key(symbol, timeframe, { venue, gridOrigin });
     try {
       const db = await this._openIDB();
       const request = db.transaction('candles', 'readonly').objectStore('candles').get(key);

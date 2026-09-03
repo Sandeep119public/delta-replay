@@ -27,8 +27,9 @@ describe('Phase 6.6 Part 1 — Cache Coverage Adversarial', () => {
     const all = makeCandles(10, base, 60);
     // Remove Jan5 (index 4)
     const gapped = all.filter((_, i) => i !== 4);
-    // Initially store as if full coverage (false interval)
-    cache.set('BTCUSD', '1m', base, base + 9 * 60, gapped, { intervals: [{ from: base, to: base + 9 * 60 }], allowUnverifiedIntervals: true });
+    // Initially store as if full coverage (simulate stale false interval in cache entry)
+    cache.set('BTCUSD', '1m', base, base + 9 * 60, gapped);
+    cache._memory.get(cache._key('BTCUSD', '1m')).intervals = [{ from: base, to: base + 9 * 60 }];
     let res = cache.get('BTCUSD', '1m', base, base + 9 * 60);
     expect(res.hit).toBe(true); // before revalidation, stale claims hit
     // Simulate HistoricalDataManager revalidation step
@@ -157,7 +158,7 @@ describe('Phase 6.6 Part 4 — Range Merging', () => {
     expect(res.missing[0].from).toBeGreaterThan(base+5*60);
     // Via manager
     let fetchedRanges=[];
-    const client={ fetchCandles: async({start,end})=>{ fetchedRanges.push({start,end}); const out=[]; for(let t=start;t<=end;t+=tf) if(t>base+5*60) out.push(c(t,100)); return out; } };
+    const client={ gridOrigin: base, fetchCandles: async({start,end})=>{ fetchedRanges.push({start,end}); const out=[]; for(let t=start;t<=end;t+=tf) if(t>base+5*60) out.push(c(t,100)); return out; } };
     const provider=new DeltaCandleProvider({client, maxCandles:100000, chunkSize:2000});
     const store=new CandleStore();
     const mgr=new HistoricalDataManager({provider, store, cache, chunkSize:2000});

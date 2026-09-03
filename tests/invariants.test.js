@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { CandleStore } from '../src/data/CandleStore.js';
 import { CandleCache } from '../src/data/CandleCache.js';
 import { CandleIntegrity, DATA_POLICY, INTEGRITY_STATUS } from '../src/data/CandleIntegrity.js';
-import { HistoricalDataManager } from '../src/data/HistoricalDataManager.js';
+import { HistoricalDataManager, DataEvents } from '../src/data/HistoricalDataManager.js';
+import { CandleValidator } from '../src/data/CandleValidator.js';
 import { BinanceClient } from '../src/data/BinanceClient.js';
 import { ReplayEngine } from '../src/replay/ReplayEngine.js';
 import { resolveVenueSymbol, VENUES } from '../src/data/InstrumentConfig.js';
@@ -453,6 +454,188 @@ describe('High-Value Invariant Tests (Audit Section 18 & Second-Pass Hardening)'
       expect(resolveVenueSymbol('BTCUSD', VENUES.DELTA_EXCHANGE)).toBe('BTCUSD');
       expect(resolveVenueSymbol('ETHUSD', VENUES.BINANCE_FUTURES)).toBe('ETHUSDT');
       expect(resolveVenueSymbol('CUSTOM_PAIR', VENUES.BINANCE_FUTURES)).toBe('CUSTOM_PAIR');
+    });
+  });
+
+  describe('9. Dataset Contract Invariants (Production Research Engine)', () => {
+    it('verifies all 10 dataset invariants end-to-end on clean and degraded pipelines', async () => {
+      const tfSec = 60;
+      const origin = 1000;
+      const cleanCandles = [
+        makeCandle(1000, 100),
+        makeCandle(1060, 101),
+        makeCandle(1120, 102),
+        makeCandle(1180, 103),
+      ];
+
+      const provider = {
+        venue: 'TEST_VENUE',
+        getGridSpec() {
+          return { origin, timeframeUnit: 'seconds', alignment: 'CUSTOM' };
+        },
+        fetchChunk: vi.fn(async ({ from, to }) => {
+          return cleanCandles.filter(c => c.time >= from && c.time <= to);
+        }),
+      };
+
+      const cache = new CandleCache({ enableIDB: false });
+      const store = new CandleStore();
+      const mgr = new HistoricalDataManager({ provider, store, cache });
+
+      let readyEmitted = null;
+      let readyDegradedEmitted = false;
+      mgr.on(DataEvents.READY, (evt) => { readyEmitted = evt; });
+      mgr.on(DataEvents.READY_DEGRADED, () => { readyDegradedEmitted = true; });
+
+      // Unaligned request [995, 1185]
+      const { candles, metadata, quality } = await mgr.load({
+        symbol: 'BTCUSD',
+        timeframe: '1m',
+        from: 995,
+        to: 1185,
+        origin,
+      });
+
+      // 1. effectiveFrom <= every candle.time <= effectiveTo
+      expect(metadata.effectiveFrom).toBe(1000);
+      expect(metadata.effectiveTo).toBe(1180);
+      for (const c of candles) {
+        expect(c.time).toBeGreaterThanOrEqual(metadata.effectiveFrom);
+        expect(c.time).toBeLessThanOrEqual(metadata.effectiveTo);
+      }
+
+      // 2. Every candle.time is on the provider grid
+      for (const c of candles) {
+        expect((c.time - origin) % tfSec).toBe(0);
+      }
+
+      // 3. Timestamps are strictly increasing
+      for (let i = 1; i < candles.length; i++) {
+        expect(candles[i].time).toBeGreaterThan(candles[i - 1].time);
+      }
+
+      // 4. No duplicate timestamps
+      const uniqueTimes = new Set(candles.map(c => c.time));
+      expect(uniqueTimes.size).toBe(candles.length);
+
+      // 5. No invalid OHLCV candle exists
+      for (const c of candles) {
+        const v = CandleValidator.validate(c);
+        expect(v.valid).toBe(true);
+      }
+
+      // 6. Cache coverage exactly equals candle-derived coverage
+      const cached = cache.get('BTCUSD', '1m', 1000, 1180, {
+        timeframeSec: tfSec,
+        venue: 'TEST_VENUE',
+        gridOrigin: origin,
+      });
+      expect(cached.hit).toBe(true);
+      expect(cached.intervals).toEqual(CandleCache.intervalsFromCandles(candles, tfSec));
+
+      // 7. VALID means complete for requested effective range
+      expect(quality).toBe('VALID');
+      expect(metadata.integrityStatus).toBe(INTEGRITY_STATUS.VALID);
+      expect(readyDegradedEmitted).toBe(false);
+
+      // 10. Replay receives exactly the Store dataset, with no future leak
+      const engine = new ReplayEngine();
+      engine.load(store.getAll(), { symbol: 'BTCUSD' });
+      engine.start(0);
+      // Index 0 only sees the first candle
+      const stream0 = [];
+      engine.on('marketCandle', (c) => stream0.push(c));
+      expect(engine.getCurrentCandle().time).toBe(1000);
+      expect(stream0.length).toBe(0); // initial candle already emitted on start
+      // Step forward 1
+      engine.step();
+      expect(engine.getCurrentCandle().time).toBe(1060);
+      expect(stream0.length).toBe(1);
+      expect(stream0[0].candle.time).toBe(1060);
+    });
+
+    it('asserts invariants 8 & 9: DEGRADED status, explicit READY_DEGRADED event, and exact repair accounting', async () => {
+      const origin = 1000;
+      const gappedProvider = {
+        venue: 'TEST_VENUE',
+        getGridSpec() { return { origin, timeframeUnit: 'seconds', alignment: 'CUSTOM' }; },
+        fetchChunk: vi.fn(async ({ from, to }) => {
+          if (from === 1060 && to === 1060) {
+            throw new Error('Exchange unavailable for repair');
+          }
+          return [
+            makeCandle(1000, 100),
+            { time: 1060, open: 100, high: 90, low: 95, close: 95, volume: 10 }, // corrupt candle
+            makeCandle(1120, 102),
+          ];
+        }),
+      };
+
+      const cache = new CandleCache({ enableIDB: false });
+      const store = new CandleStore();
+      const mgr = new HistoricalDataManager({ provider: gappedProvider, store, cache });
+
+      let readyDegradedFired = false;
+      mgr.on(DataEvents.READY_DEGRADED, () => { readyDegradedFired = true; });
+
+      const { candles, metadata, quality } = await mgr.load({
+        symbol: 'BTCUSD',
+        timeframe: '1m',
+        from: 1000,
+        to: 1120,
+        policy: 'REPAIR',
+        origin,
+      });
+
+      // 8. DEGRADED means explicitly incomplete/corrupt
+      expect(quality).toBe('DEGRADED');
+      expect(metadata.integrityStatus).toBe(INTEGRITY_STATUS.DEGRADED);
+      expect(readyDegradedFired).toBe(true);
+
+      // 9. READY never conceals a failed repair
+      expect(metadata.repairRequested).toBe(1);
+      expect(metadata.repairSucceeded).toBe(0);
+      expect(metadata.repairFailed).toBe(1);
+      expect(metadata.repairSuccess).toBe(false);
+
+      // Failed repair never contaminated cache
+      const cached = cache.get('BTCUSD', '1m', 1000, 1120, {
+        timeframeSec: 60,
+        venue: 'TEST_VENUE',
+        gridOrigin: origin,
+      });
+      expect(cached.hit).toBe(false);
+      expect(cached.candles.length).toBe(0);
+    });
+
+    it('isolates cache namespace by venue and gridOrigin', () => {
+      const cache = new CandleCache({ enableIDB: false });
+      const candles = [makeCandle(1000, 100), makeCandle(1060, 101)];
+
+      // Cache for Delta with origin 1000
+      cache.set('BTCUSD', '1m', 1000, 1060, candles, {
+        timeframeSec: 60,
+        venue: VENUES.DELTA_EXCHANGE,
+        gridOrigin: 1000,
+      });
+
+      // Cache lookup for Binance with origin 0 should be a MISS
+      const binanceLookup = cache.get('BTCUSD', '1m', 1000, 1060, {
+        timeframeSec: 60,
+        venue: VENUES.BINANCE_FUTURES,
+        gridOrigin: 0,
+      });
+      expect(binanceLookup.hit).toBe(false);
+      expect(binanceLookup.candles.length).toBe(0);
+
+      // Cache lookup for Delta with origin 1000 should be a HIT
+      const deltaLookup = cache.get('BTCUSD', '1m', 1000, 1060, {
+        timeframeSec: 60,
+        venue: VENUES.DELTA_EXCHANGE,
+        gridOrigin: 1000,
+      });
+      expect(deltaLookup.hit).toBe(true);
+      expect(deltaLookup.candles.length).toBe(2);
     });
   });
 });
