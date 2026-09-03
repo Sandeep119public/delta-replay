@@ -24,8 +24,11 @@ export class BinanceClient {
    * Contract: guarantees returning ALL candles in [start, end].
    */
   async fetchCandles({ symbol, resolution, start, end, signal }) {
-    if (!symbol) throw new Error('symbol required');
-    if (!resolution) throw new Error('resolution required');
+    if (!symbol || typeof symbol !== 'string') throw new Error('symbol is required and must be a string');
+    if (!resolution || typeof resolution !== 'string') throw new Error('resolution is required and must be a string');
+    if (!Number.isFinite(start)) throw new Error('start must be unix seconds');
+    if (!Number.isFinite(end)) throw new Error('end must be unix seconds');
+    if (start > end) throw new Error('start must be <= end');
 
     const isFutures = this.baseUrl.includes('fapi');
     const venue = isFutures ? VENUES.BINANCE_FUTURES : VENUES.BINANCE_SPOT;
@@ -106,15 +109,15 @@ export class BinanceClient {
 
       allCandles.push(...page);
 
-      if (page.length < limit) {
+      const lastCandle = page[page.length - 1];
+      if (lastCandle && lastCandle.time >= Math.floor(end)) {
         break;
       }
 
-      const lastCandle = page[page.length - 1];
       const nextStartSec = lastCandle.time + tfSec;
       const nextStartMs = nextStartSec * 1000;
 
-      if (nextStartMs <= currentStartMs) {
+      if (nextStartMs <= currentStartMs || nextStartMs > endMs) {
         break;
       }
       currentStartMs = nextStartMs;

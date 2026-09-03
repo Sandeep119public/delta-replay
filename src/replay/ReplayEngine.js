@@ -61,7 +61,9 @@ export class ReplayEngine extends EventEmitter {
     return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
   }
 
-  load(candles, { symbol } = {}) {
+  load(candles, meta = {}) {
+    const opts = typeof meta === 'string' ? { symbol: meta } : (meta ?? {});
+    const symbol = opts.symbol ?? null;
     const check = this._checkGuards('load', { candles, symbol });
     if (!check.allowed) {
       return this.getState();
@@ -204,6 +206,9 @@ export class ReplayEngine extends EventEmitter {
    * @param {number} count
    */
   stepCount(count = 1) {
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error(`Invalid step count: ${count}. Must be a non-negative integer.`);
+    }
     let state = this.getState();
     for (let i = 0; i < count; i++) {
       if (this._state.status === ReplayStatus.ENDED) break;
@@ -219,6 +224,9 @@ export class ReplayEngine extends EventEmitter {
   stepTo(targetIndex) {
     if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= this._candles.length) {
       throw new Error(`Invalid targetIndex: ${targetIndex}`);
+    }
+    if (targetIndex < this._state.currentIndex) {
+      throw new Error(`Cannot stepTo backwards (target: ${targetIndex}, current: ${this._state.currentIndex}). Use seek() for backwards navigation.`);
     }
     let state = this.getState();
     while (this._state.currentIndex < targetIndex && this._state.status !== ReplayStatus.ENDED) {

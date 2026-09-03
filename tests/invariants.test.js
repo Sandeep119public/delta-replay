@@ -6,13 +6,13 @@ import { HistoricalDataManager } from '../src/data/HistoricalDataManager.js';
 import { BinanceClient } from '../src/data/BinanceClient.js';
 import { ReplayEngine } from '../src/replay/ReplayEngine.js';
 import { resolveVenueSymbol, VENUES } from '../src/data/InstrumentConfig.js';
-import { computeGridMissing, mergeGridIntervals, intervalsFromCandles } from '../src/data/CandleGrid.js';
+import { computeGridMissing, mergeGridIntervals, intervalsFromCandles, normalizeRange } from '../src/data/CandleGrid.js';
 
 function makeCandle(time, close = 100) {
   return { time, open: close, high: close + 1, low: close - 1, close, volume: 10 };
 }
 
-describe('High-Value Invariant Tests (Audit Section 18)', () => {
+describe('High-Value Invariant Tests (Audit Section 18 & Second-Pass Hardening)', () => {
   describe('1. Range Grid & Discrete Lattice Invariants', () => {
     it('request [1000, 1180] produces only discrete timestamps on the 1m grid (never 1061)', async () => {
       const tfSec = 60;
@@ -32,7 +32,7 @@ describe('High-Value Invariant Tests (Audit Section 18)', () => {
         provider: mockProvider,
         store: new CandleStore(),
         cache: new CandleCache({ enableIDB: false }),
-        chunkSize: 2, // 2 candles per chunk
+        chunkSize: 2,
       });
 
       const { candles } = await mgr.load({
@@ -42,22 +42,27 @@ describe('High-Value Invariant Tests (Audit Section 18)', () => {
         to: 1180,
       });
 
-      // Expected timestamps: 1000, 1060, 1120, 1180
       const timestamps = candles.map(c => c.time);
       expect(timestamps).toEqual([1000, 1060, 1120, 1180]);
       expect(timestamps).not.toContain(1061);
       expect(timestamps).not.toContain(1062);
 
-      // Verify every chunk boundary requested from provider is an exact candle timestamp
       for (const chunk of requestedChunks) {
         expect((chunk.from - 1000) % tfSec).toBe(0);
         expect((chunk.to - 1000) % tfSec).toBe(0);
       }
     });
 
+    it('normalizeRange aligns unaligned boundaries and produces requested vs effective ranges', () => {
+      const range = normalizeRange(1001, 1181, 60);
+      expect(range.requestedFrom).toBe(1001);
+      expect(range.requestedTo).toBe(1181);
+      expect(range.effectiveFrom).toBe(1020);
+      expect(range.effectiveTo).toBe(1140);
+    });
+
     it('computeGridMissing returns exact discrete grid intervals instead of arbitrary seconds', () => {
       const tfSec = 60;
-      // Cached: 1000 and 1060. Missing: 1120..1180
       const cached = [{ from: 1000, to: 1060 }];
       const missing = computeGridMissing(1000, 1180, cached, tfSec);
 
@@ -88,14 +93,20 @@ describe('High-Value Invariant Tests (Audit Section 18)', () => {
       const runs = intervalsFromCandles(candles, 60);
 
       expect(runs).toEqual([{ from: 1000, to: 1120 }]);
-      // Invariant: count === ((end - start) / tf) + 1
       const count = runs[0].count;
       expect(count).toBe(((1120 - 1000) / 60) + 1);
       expect(count).toBe(3);
     });
   });
 
-  describe('3. Binance Client Complete Pagination Invariant', () => {
+  describe('3. Binance Client Complete Pagination & Validation Invariants', () => {
+    it('validates parameters strictly before making requests', async () => {
+      const client = new BinanceClient();
+      await expect(client.fetchCandles({ symbol: '', resolution: '1m', start: 1000, end: 2000 })).rejects.toThrow(/symbol is required/);
+      await expect(client.fetchCandles({ symbol: 'BTCUSD', resolution: '', start: 1000, end: 2000 })).rejects.toThrow(/resolution is required/);
+      await expect(client.fetchCandles({ symbol: 'BTCUSD', resolution: '1m', start: 2000, end: 1000 })).rejects.toThrow(/start must be <= end/);
+    });
+
     it('paginates across 1500-candle page limit and returns all contiguous requested candles', async () => {
       const totalRequested = 3500;
       const startSec = 1700000000;
@@ -143,7 +154,6 @@ describe('High-Value Invariant Tests (Audit Section 18)', () => {
         end: endSec,
       });
 
-      // Page limit is 1500: 3500 candles require ceil(3500 / 1500) = 3 pages
       expect(callCount).toBe(3);
       expect(candles.length).toBe(3500);
       expect(candles[0].time).toBe(startSec);
@@ -165,7 +175,7 @@ describe('High-Value Invariant Tests (Audit Section 18)', () => {
 
       const client = new BinanceClient({
         baseUrl: 'https://fapi.binance.com',
-        timeoutMs: 20, // 20ms timeout
+        timeoutMs: 20,
         fetchFn: mockSlowFetch,
       });
 
@@ -218,24 +228,24 @@ describe('High-Value Invariant Tests (Audit Section 18)', () => {
       expect(store.findExactIndexByTime(900)).toBe(-1);
 
       // Nearest query
-      expect(store.findNearestIndexByTime(1070)).toBe(1); // 1060 is closer to 1070 than 1120
-      expect(store.findNearestIndexByTime(1110)).toBe(2); // 1120 is closer to 1110 than 1060
+      expect(store.findNearestIndexByTime(1070)).toBe(1);
+      expect(store.findNearestIndexByTime(1110)).toBe(2);
 
       // Range boundary queries
-      expect(store.findAtOrAfterIndex(1070)).toBe(2); // 1120
-      expect(store.findAtOrAfterIndex(1120)).toBe(2); // 1120
-      expect(store.findAtOrAfterIndex(1200)).toBe(-1); // out of upper range
+      expect(store.findAtOrAfterIndex(1070)).toBe(2);
+      expect(store.findAtOrAfterIndex(1120)).toBe(2);
+      expect(store.findAtOrAfterIndex(1200)).toBe(-1);
 
-      expect(store.findAtOrBeforeIndex(1070)).toBe(1); // 1060
-      expect(store.findAtOrBeforeIndex(1000)).toBe(0); // 1000
-      expect(store.findAtOrBeforeIndex(950)).toBe(-1); // out of lower range
+      expect(store.findAtOrBeforeIndex(1070)).toBe(1);
+      expect(store.findAtOrBeforeIndex(1000)).toBe(0);
+      expect(store.findAtOrBeforeIndex(950)).toBe(-1);
     });
   });
 
-  describe('6. Data Integrity Policy Invariants (STRICT, REPAIR, LENIENT)', () => {
+  describe('6. Data Integrity Policy & Active REPAIR Invariants', () => {
     const corruptDataset = [
       makeCandle(1000),
-      { time: 1060, open: 100, high: 90, low: 95, close: 98, volume: 10 }, // corrupt: high < open/low
+      { time: 1060, open: 100, high: 90, low: 95, close: 98, volume: 10 },
       makeCandle(1120),
     ];
 
@@ -277,15 +287,54 @@ describe('High-Value Invariant Tests (Audit Section 18)', () => {
       expect(res.metadata.invalidCount).toBe(1);
       expect(res.metadata.integrityStatus).toBe(INTEGRITY_STATUS.DEGRADED);
     });
+
+    it('HistoricalDataManager actively refetches repairRanges and repairs dataset to VALID', async () => {
+      let repairRefetchCalled = false;
+      const mockProvider = {
+        fetchChunk: vi.fn(async ({ from, to }) => {
+          if (from === 1060 && to === 1060) {
+            repairRefetchCalled = true;
+            return [makeCandle(1060, 101)]; // clean replacement candle
+          }
+          return [
+            makeCandle(1000, 100),
+            { time: 1060, open: 100, high: 90, low: 95, close: 98, volume: 10 }, // corrupt
+            makeCandle(1120, 102),
+          ];
+        }),
+      };
+
+      const mgr = new HistoricalDataManager({
+        provider: mockProvider,
+        store: new CandleStore(),
+        cache: new CandleCache({ enableIDB: false }),
+      });
+
+      const { candles, metadata } = await mgr.load({
+        symbol: 'BTCUSD',
+        timeframe: '1m',
+        from: 1000,
+        to: 1120,
+        policy: 'REPAIR',
+      });
+
+      expect(repairRefetchCalled).toBe(true);
+      expect(candles.length).toBe(3);
+      expect(candles.map(c => c.time)).toEqual([1000, 1060, 1120]);
+      expect(metadata.repairedCount).toBe(1);
+      expect(metadata.repairSuccess).toBe(true);
+      expect(metadata.integrityStatus).toBe(INTEGRITY_STATUS.VALID);
+    });
   });
 
   describe('7. Synchronous Simulation Step Invariant', () => {
     it('step(), stepCount(n), and stepTo(index) advance replay synchronously without setTimeout', () => {
       const engine = new ReplayEngine();
       const candles = Array.from({ length: 10 }, (_, i) => makeCandle(1000 + i * 60));
-      engine.load(candles, 'BTCUSD');
-      engine.start(0);
+      engine.load(candles, { symbol: 'BTCUSD' });
+      expect(engine.getSymbol()).toBe('BTCUSD');
 
+      engine.start(0);
       expect(engine.getState().currentIndex).toBe(0);
 
       // Single synchronous step
@@ -299,6 +348,10 @@ describe('High-Value Invariant Tests (Audit Section 18)', () => {
       // Step to specific index
       engine.stepTo(8);
       expect(engine.getState().currentIndex).toBe(8);
+
+      // Step backwards should throw and direct caller to seek
+      expect(() => engine.stepTo(5)).toThrow(/Cannot stepTo backwards/);
+      expect(() => engine.stepCount(-2)).toThrow(/Invalid step count/);
     });
   });
 

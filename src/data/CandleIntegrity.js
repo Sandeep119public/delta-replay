@@ -41,7 +41,7 @@ export class CandleIntegrity {
    * @param {string} [opts.policy] - 'STRICT' | 'REPAIR' | 'LENIENT'
    * @returns {{ validCandles: Array, metadata: object }}
    */
-  static process(rawCandles, { from, to, timeframeSec, strict = false, allowGaps = false, halfOpen = false, policy = null } = {}) {
+  static process(rawCandles, { from, to, timeframeSec, strict = false, allowGaps = false, halfOpen = false, policy = null, timestampUnit = 'auto' } = {}) {
     if (!Array.isArray(rawCandles)) throw new Error('rawCandles must be array');
 
     const effectivePolicy = policy ?? (strict ? DATA_POLICY.STRICT : DATA_POLICY.REPAIR);
@@ -49,7 +49,7 @@ export class CandleIntegrity {
     // 1. Normalize
     let normalized;
     try {
-      normalized = CandleNormalizer.normalizeBatch(rawCandles);
+      normalized = CandleNormalizer.normalizeBatch(rawCandles, { timestampUnit });
     } catch (err) {
       throw new Error(`Normalization failed: ${err.message}`);
     }

@@ -2,6 +2,7 @@ import { CandleProvider } from './CandleProvider.js';
 import { CandleNormalizer } from './CandleNormalizer.js';
 import { CandleValidator } from './CandleValidator.js';
 import { DeltaClient, DeltaError, DELTA_DEFAULT_BASE } from './DeltaClient.js';
+import { resolveVenueSymbol, VENUES } from './InstrumentConfig.js';
 
 /**
  * DeltaCandleProvider - fetches real historical candles from Delta Exchange.
@@ -85,7 +86,8 @@ export class DeltaCandleProvider extends CandleProvider {
   }
 
   async fetchChunk({ symbol, timeframe, from, to, signal } = {}) {
-    return this.client.fetchCandles({ symbol, resolution: timeframe, start: from, end: to, signal });
+    const apiSymbol = resolveVenueSymbol(symbol, VENUES.DELTA_EXCHANGE);
+    return this.client.fetchCandles({ symbol: apiSymbol, resolution: timeframe, start: from, end: to, signal });
   }
 
   // Legacy interface: getCandles
@@ -132,7 +134,7 @@ export class DeltaCandleProvider extends CandleProvider {
       if (chunkEnd <= chunkStart) chunkEnd = resolvedTo;
 
       let rawChunk;
-      const apiSymbol = symbol === 'BTCUSD' ? 'BTCUSDT' : (symbol === 'ETHUSD' ? 'ETHUSDT' : symbol);
+      const apiSymbol = resolveVenueSymbol(symbol, VENUES.DELTA_EXCHANGE);
       try {
         rawChunk = await this.client.fetchCandles({
           symbol: apiSymbol,

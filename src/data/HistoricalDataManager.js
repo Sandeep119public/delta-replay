@@ -2,7 +2,7 @@ import { EventEmitter } from '../core/EventEmitter.js';
 import { CandleStore } from './CandleStore.js';
 import { CandleCache } from './CandleCache.js';
 import { CandleIntegrity } from './CandleIntegrity.js';
-import { TIMEFRAME_SECONDS } from './CandleGrid.js';
+import { TIMEFRAME_SECONDS, normalizeRange } from './CandleGrid.js';
 
 export const DataEvents = {
   LOADING_STARTED: 'dataLoadingStarted',
@@ -36,8 +36,8 @@ export class HistoricalDataManager extends EventEmitter {
   }
 
   /**
-   * Load historical data for range, with cache, chunking, retry, abort, progress.
-   * Operates on discrete candle lattice boundaries.
+   * Load historical data for range, with cache, chunking, retry, abort, progress, and active repair.
+   * Enforces discrete candle lattice boundaries via normalizeRange.
    * @param {object} params
    * @param {string} params.symbol
    * @param {string} params.timeframe
@@ -59,10 +59,20 @@ export class HistoricalDataManager extends EventEmitter {
     const tfSec = TIMEFRAME_SECONDS[timeframe];
     if (!tfSec) throw new Error(`Unsupported timeframe ${timeframe}`);
 
-    this.emit(DataEvents.LOADING_STARTED, { symbol, timeframe, from, to });
+    const range = normalizeRange(from, to, tfSec);
+    const { requestedFrom, requestedTo, effectiveFrom, effectiveTo } = range;
+
+    this.emit(DataEvents.LOADING_STARTED, {
+      symbol,
+      timeframe,
+      from: requestedFrom,
+      to: requestedTo,
+      effectiveFrom,
+      effectiveTo,
+    });
 
     // Estimated size check before network (protect browser)
-    const estimated = Math.ceil((to - from) / tfSec);
+    const estimated = Math.ceil((effectiveTo - effectiveFrom) / tfSec);
     const MAX_ALLOWED = 100000;
     if (estimated > MAX_ALLOWED) {
       const err = new Error(`Requested range would require ~${estimated} candles (max ${MAX_ALLOWED} for ${timeframe}). Use a larger timeframe or smaller date range.`);
@@ -72,30 +82,32 @@ export class HistoricalDataManager extends EventEmitter {
     }
 
     const integrityOptions = {
-      from,
-      to,
+      from: effectiveFrom,
+      to: effectiveTo,
       timeframeSec: tfSec,
       strict,
       allowGaps,
       halfOpen,
       policy: policy ?? (strict ? 'STRICT' : 'REPAIR'),
+      timestampUnit: 'seconds',
     };
 
     // Try IDB if memory miss
-    let cacheRes = this.cache.get(symbol, timeframe, from, to, { timeframeSec: tfSec });
+    let cacheRes = this.cache.get(symbol, timeframe, effectiveFrom, effectiveTo, { timeframeSec: tfSec });
     if (!cacheRes.hit && this.cache.enableIDB) {
       const idb = await this.cache.loadFromIDB(symbol, timeframe);
-      if (idb) cacheRes = this.cache.get(symbol, timeframe, from, to, { timeframeSec: tfSec });
+      if (idb) cacheRes = this.cache.get(symbol, timeframe, effectiveFrom, effectiveTo, { timeframeSec: tfSec });
     }
 
     // If cache claims hit, verify via integrity that it actually covers range without gaps/corruption
     if (cacheRes.hit) {
       const integrityCheck = CandleIntegrity.process(cacheRes.candles, {
-        from,
-        to,
+        from: effectiveFrom,
+        to: effectiveTo,
         timeframeSec: tfSec,
         halfOpen,
         policy: 'REPAIR',
+        timestampUnit: 'seconds',
       });
       const validCandles = integrityCheck.validCandles;
       const metadata = integrityCheck.metadata;
@@ -105,10 +117,10 @@ export class HistoricalDataManager extends EventEmitter {
         const key = this.cache._key(symbol, timeframe);
         this.cache._memory.delete(key);
         if (this.cache.enableIDB) this.cache._deleteIDBEntry(key).catch(() => {});
-        cacheRes = { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
+        cacheRes = { hit: false, candles: [], missing: [{ from: effectiveFrom, to: effectiveTo }], intervals: [] };
       } else {
         const actualIntervals = CandleCache.intervalsFromCandles(validCandles, tfSec);
-        let realMissing = this.cache._computeMissing(from, to, actualIntervals, tfSec);
+        let realMissing = this.cache._computeMissing(effectiveFrom, effectiveTo, actualIntervals, tfSec);
         if (realMissing.length === 0 && !isClean && metadata.gaps.length > 0) {
           realMissing = metadata.gaps.map(g => ({ from: g.from, to: g.to + (halfOpen ? tfSec : 0) }));
         }
@@ -121,7 +133,16 @@ export class HistoricalDataManager extends EventEmitter {
             entry.version = this.cache._version;
             if (this.cache.enableIDB) this.cache._persistIDB(key, entry).catch(() => {});
           }
-          this.store.load(validCandles, { symbol, timeframe, requestedFrom: from, requestedTo: to, ...metadata, cached: true });
+          this.store.load(validCandles, {
+            symbol,
+            timeframe,
+            requestedFrom,
+            requestedTo,
+            effectiveFrom,
+            effectiveTo,
+            ...metadata,
+            cached: true,
+          });
           this.emit(DataEvents.READY, { candles: validCandles, metadata: this.store.getMetadata() });
           this.emit(DataEvents.PROGRESS, { loaded: validCandles.length, total: validCandles.length, pct: 100 });
           return { candles: validCandles, metadata: this.store.getMetadata() };
@@ -137,7 +158,7 @@ export class HistoricalDataManager extends EventEmitter {
           cacheRes = {
             hit: false,
             candles: validCandles,
-            missing: realMissing.length > 0 ? realMissing : [{ from, to }],
+            missing: realMissing.length > 0 ? realMissing : [{ from: effectiveFrom, to: effectiveTo }],
             intervals: actualIntervals,
           };
         }
@@ -147,10 +168,16 @@ export class HistoricalDataManager extends EventEmitter {
     // For partial hits, re-validate cached slice to detect corruption and adjust missing
     if (!cacheRes.hit && cacheRes.candles.length > 0) {
       try {
-        const { validCandles: cachedValid } = CandleIntegrity.process(cacheRes.candles, { from, to, timeframeSec: tfSec, policy: 'REPAIR' });
+        const { validCandles: cachedValid } = CandleIntegrity.process(cacheRes.candles, {
+          from: effectiveFrom,
+          to: effectiveTo,
+          timeframeSec: tfSec,
+          policy: 'REPAIR',
+          timestampUnit: 'seconds',
+        });
         if (cachedValid.length !== cacheRes.candles.length) {
           const actualCachedIntervals = CandleCache.intervalsFromCandles(cachedValid, tfSec);
-          const realMissing = this.cache._computeMissing(from, to, actualCachedIntervals, tfSec);
+          const realMissing = this.cache._computeMissing(effectiveFrom, effectiveTo, actualCachedIntervals, tfSec);
           cacheRes.candles = cachedValid;
           cacheRes.missing = realMissing;
           cacheRes.intervals = actualCachedIntervals;
@@ -169,7 +196,7 @@ export class HistoricalDataManager extends EventEmitter {
     }
 
     // Determine missing ranges (if partial hit, we still need to fetch missing)
-    const missingRanges = cacheRes.missing.length ? cacheRes.missing : [{ from, to }];
+    const missingRanges = cacheRes.missing.length ? cacheRes.missing : [{ from: effectiveFrom, to: effectiveTo }];
 
     // Build chunk list for missing ranges on discrete lattice
     const chunks = [];
@@ -292,6 +319,33 @@ export class HistoricalDataManager extends EventEmitter {
       throw err;
     }
 
+    // Active REPAIR pipeline: targeted refetch for corrupted candles
+    const effectivePolicy = policy ?? (strict ? 'STRICT' : 'REPAIR');
+    if (effectivePolicy === 'REPAIR' && metadata.repairRanges && metadata.repairRanges.length > 0) {
+      try {
+        const repairedCandles = [];
+        for (const rRange of metadata.repairRanges) {
+          const freshRaw = await fetchChunkWithRetry(rRange);
+          if (Array.isArray(freshRaw) && freshRaw.length > 0) {
+            repairedCandles.push(...freshRaw);
+          }
+        }
+        if (repairedCandles.length > 0) {
+          const repairTimes = new Set(metadata.repairRanges.map(r => r.from));
+          const combinedRaw = allRaw.filter(c => !repairTimes.has(c.time)).concat(repairedCandles);
+          const recheck = CandleIntegrity.process(combinedRaw, integrityOptions);
+          validCandles = recheck.validCandles;
+          metadata = {
+            ...recheck.metadata,
+            repairedCount: metadata.repairRanges.length - recheck.metadata.invalidCount,
+            repairSuccess: recheck.metadata.invalidCount === 0,
+          };
+        }
+      } catch {
+        metadata.repairSuccess = false;
+      }
+    }
+
     if (validCandles.length === 0) {
       const err = new Error('No valid candles after integrity');
       err.code = 'NO_DATA';
@@ -301,13 +355,21 @@ export class HistoricalDataManager extends EventEmitter {
 
     // Update cache with gap-aware intervals (verified coverage, not just requested)
     const actualIntervals = CandleCache.intervalsFromCandles(validCandles, tfSec);
-    this.cache.set(symbol, timeframe, from, to, validCandles, {
-      intervals: actualIntervals.length ? actualIntervals : [{ from, to }],
+    this.cache.set(symbol, timeframe, effectiveFrom, effectiveTo, validCandles, {
+      intervals: actualIntervals.length ? actualIntervals : [{ from: effectiveFrom, to: effectiveTo }],
       timeframeSec: tfSec,
     });
 
     // Load store
-    this.store.load(validCandles, { symbol, timeframe, requestedFrom: from, requestedTo: to, ...metadata });
+    this.store.load(validCandles, {
+      symbol,
+      timeframe,
+      requestedFrom,
+      requestedTo,
+      effectiveFrom,
+      effectiveTo,
+      ...metadata,
+    });
     this.emit(DataEvents.READY, { candles: validCandles, metadata: this.store.getMetadata() });
     emitProgress();
     return { candles: validCandles, metadata: this.store.getMetadata() };

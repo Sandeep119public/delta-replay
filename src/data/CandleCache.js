@@ -137,10 +137,8 @@ export class CandleCache {
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.timeframeSec = tf;
 
-    entry.intervals = this._mergeIntervals(
-      [...entry.intervals, ...(intervals ?? [{ from, to }])],
-      tf
-    );
+    const candidate = intervals ?? (candles && candles.length ? [{ from, to }] : CandleCache.intervalsFromCandles(entry.candles, tf));
+    entry.intervals = this._mergeIntervals([...entry.intervals, ...candidate], tf);
     entry.version = CACHE_VERSION;
     entry.ts = Date.now();
 
