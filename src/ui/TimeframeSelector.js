@@ -7,10 +7,7 @@ export class TimeframeSelector {
     this.appState = appState;
     this.timeframes = timeframes ?? Object.keys(TIMEFRAME_SECONDS).filter(tf => tf !== '1w');
     this._onChange = null;
-    this._handleChange = () => {
-      this.appState.timeframe = this.el.value;
-      this._onChange?.(this.el.value);
-    };
+    this._handleChange = () => this._onChange?.(this.el.value);
     this._render();
     this.el.addEventListener('change', this._handleChange);
   }
