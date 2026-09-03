@@ -1,4 +1,6 @@
 import { PaperTradingEngine, EXECUTION_TIMING } from '../trading/PaperTradingEngine.js';
+import { TradingEvents } from '../trading/TradingEvents.js';
+import { ORDER_STATUSES } from '../trading/Order.js';
 
 export class BacktestRunner {
   constructor({
@@ -19,37 +21,27 @@ export class BacktestRunner {
       maintMarginRate,
       executionTiming: EXECUTION_TIMING.NEXT_BAR_OPEN,
     });
+
+    // Single canonical orchestration path: subscribe strategy strictly to PaperTradingEngine's BAR_CLOSE
+    this._lastIntents = [];
+    this._unsubBarClose = this.engine.on(TradingEvents.BAR_CLOSE, (barEvent) => {
+      const intents = this.strategy.onBar(barEvent) || [];
+      this._lastIntents = intents;
+      for (const intent of intents) {
+        this.engine.submitIntent(intent);
+      }
+    });
   }
 
   /**
    * Lookahead-free quantitative pipeline:
-   * 1. Feed candle to trading engine (which fills eligible pending orders at T+1 Open and finalizes bar T)
-   * 2. Feed immutable finalized bar into strategy -> produces OrderIntents
-   * 3. Submit intents to trading engine (fill eligibility begins strictly on T+1)
+   * Directs candle into PaperTradingEngine -> engine emits single canonical BAR_CLOSE
+   * -> subscribed strategy evaluates lookahead-free and enqueues intents for T+1 execution.
    */
   processBar(candle, index = null) {
     const idx = Number.isFinite(index) ? index : (this.engine._latestCandleIndex + 1);
-
-    // 1. Process bar on PaperTradingEngine
     this.engine.onMarketCandle({ candle, index: idx, symbol: this.symbol });
-
-    // 2. Frozen canonical bar event for Strategy & Indicators (Invariant 9 & 10)
-    const barEvent = Object.freeze({
-      index: idx,
-      timestamp: candle.time,
-      candle: Object.freeze({ ...candle }),
-      phase: 'BAR_CLOSE',
-    });
-
-    // 3. Strategy evaluates on finalized bar
-    const intents = this.strategy.onBar(barEvent) || [];
-
-    // 4. Submit intents into engine (fill eligibility begins strictly on T+1)
-    for (const intent of intents) {
-      this.engine.submitIntent(intent);
-    }
-
-    return { barEvent, intents };
+    return { intents: this._lastIntents };
   }
 
   run(candles) {
@@ -60,15 +52,29 @@ export class BacktestRunner {
   }
 
   getResults() {
+    const allOrders = this.engine.getOrders();
+    const pendingIntents = allOrders.filter(o => o.status === ORDER_STATUSES.PENDING);
     return {
-      summary: this.engine.getBacktestSummary(),
+      summary: {
+        ...this.engine.getBacktestSummary(),
+        unfilledTerminalOrders: pendingIntents.length,
+      },
       trades: this.engine.getTrades(),
+      unfilledOrders: pendingIntents,
       account: this.engine.getAccountSnapshot(),
     };
+  }
+
+  destroy() {
+    if (this._unsubBarClose) {
+      this._unsubBarClose();
+      this._unsubBarClose = null;
+    }
   }
 
   reset() {
     this.strategy.reset();
     this.engine.resetAll({ clearMarket: true });
+    this._lastIntents = [];
   }
 }

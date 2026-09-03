@@ -101,5 +101,39 @@ describe('Phase 3 — Independent Funding Rate Mechanism', () => {
       expect(fundingEvents[0].payment).toBe(-1);
       expect(engine.getAccountSnapshot().walletBalance).toBe(9999);
     });
+
+    it('applies all funding boundaries when replay jumps across multiple funding intervals', () => {
+      const engine = new PaperTradingEngine({
+        startingBalance: 10000,
+        feeRate: 0,
+        fundingSchedule: {
+          intervalSec: 28800, // 8 hours
+          defaultRate: 0.001, // 0.1% = -1 payment per boundary on 1000 notional
+        },
+        executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE,
+      });
+
+      // Initial bar at time 60 (00:01): Open LONG 10 @ 100
+      engine.onMarketCandle({ candle: makeCandle(60, 100, 105, 95, 100), index: 0 });
+      engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 10 });
+
+      const fundingEvents = [];
+      engine.on(TradingEvents.FUNDING_PAYMENT, (e) => fundingEvents.push(e));
+
+      // Replay jumps to time 86460 (24:01) -> crosses 3 boundaries: 28800 (08:00), 57600 (16:00), 86400 (24:00)
+      engine.onMarketCandle({ candle: makeCandle(86460, 100, 105, 95, 100), index: 1 });
+
+      // Must apply exactly 3 payments
+      expect(fundingEvents.length).toBe(3);
+      expect(fundingEvents[0].timestamp).toBe(28800);
+      expect(fundingEvents[0].payment).toBe(-1);
+      expect(fundingEvents[1].timestamp).toBe(57600);
+      expect(fundingEvents[1].payment).toBe(-1);
+      expect(fundingEvents[2].timestamp).toBe(86400);
+      expect(fundingEvents[2].payment).toBe(-1);
+
+      // Wallet balance decreased by 3
+      expect(engine.getAccountSnapshot().walletBalance).toBe(9997);
+    });
   });
 });

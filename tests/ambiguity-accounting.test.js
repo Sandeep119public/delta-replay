@@ -26,8 +26,7 @@ describe('Phase 4 — Ambiguity Accounting & Metrics Tracking', () => {
     const trades = engine.getTrades();
     expect(trades.length).toBe(1);
     expect(trades[0].exitReason).toBe('STOP_LOSS');
-    // Invariant 8: Dual-touch resolution recorded on resulting Trade
-    expect(trades[0].ambiguityResolution).toBe('CONSERVATIVE');
+    expect(trades[0].ambiguityResolution).toBe('SL_FIRST');
 
     const summary = engine.getBacktestSummary();
     expect(summary.ambiguousBars).toBe(1);

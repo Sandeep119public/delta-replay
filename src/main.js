@@ -13,7 +13,7 @@ import { TimeframeSelector } from './ui/TimeframeSelector.js';
 import { Timeline } from './ui/Timeline.js';
 import { ReplayControls } from './ui/ReplayControls.js';
 import { toUnixSeconds, unixToDateTimeInput, formatTime } from './utils/time.js';
-import { PaperTradingEngine } from './trading/PaperTradingEngine.js';
+import { PaperTradingEngine, EXECUTION_TIMING } from './trading/PaperTradingEngine.js';
 import { TradingPanel } from './ui/TradingPanel.js';
 import { DataError, ErrorCategory, LoadingState } from './data/DataError.js';
 
@@ -30,7 +30,7 @@ const localProvider = new LocalCandleProvider();
 const candleCache = new CandleCache({ dbName: 'delta-replay-futures-v1' });
 const dataManager = new HistoricalDataManager({ provider: binanceProvider, store: candleStore, cache: candleCache, concurrency: 2, chunkSize: 1000, strictMode: true });
 
-const tradingEngine = new PaperTradingEngine({ startingBalance: 10000, replayEngine: engine });
+const tradingEngine = new PaperTradingEngine({ startingBalance: 10000, replayEngine: engine, executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE });
 
 // ===== LOADING STATE MACHINE =====
 let loadingState = LoadingState.IDLE;

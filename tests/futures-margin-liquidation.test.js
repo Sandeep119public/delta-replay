@@ -29,8 +29,8 @@ describe('Phase 2 — Full Futures Margin & Liquidation Accounting', () => {
       const pos = engine.getPosition('BTCUSD');
       expect(pos.initialMargin).toBe(100);
       expect(pos.maintenanceMargin).toBe(50);
-      // Liquidation price for LONG: 100 * (1 - 0.1 + 0.05) = 95
-      expect(pos.liquidationPrice).toBe(95);
+      // In Cross-Margin with $10,000 wallet and $1,000 notional, position cannot be liquidated (liqPrice is null)
+      expect(pos.liquidationPrice).toBeNull();
 
       const acct = engine.getAccountSnapshot();
       expect(acct.walletBalance).toBe(10000);
@@ -61,12 +61,40 @@ describe('Phase 2 — Full Futures Margin & Liquidation Accounting', () => {
       expect(acct2.maintenanceMargin).toBe(0);
       expect(acct2.availableMargin).toBe(10100);
     });
-  });
 
-  describe('2. Intrabar Deterministic Liquidation', () => {
-    it('triggers liquidation when adverse candle price touches liquidation price', () => {
+    it('adversarial 10x long with large wallet is NOT liquidated on 5% adverse move', () => {
       const engine = new PaperTradingEngine({
         startingBalance: 10000,
+        feeRate: 0,
+        marginRate: 0.1, // 10%
+        maintMarginRate: 0.05, // 5%
+        executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE,
+      });
+
+      engine.onMarketCandle({ candle: makeCandle(1000, 100, 105, 95, 100), index: 0 });
+      engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 10 }); // 1000 notional
+
+      const liqEvents = [];
+      engine.on(TradingEvents.POSITION_LIQUIDATED, (e) => liqEvents.push(e));
+
+      // Bar drops to 95 (-5% adverse move)
+      engine.onMarketCandle({ candle: makeCandle(1060, 99, 101, 95, 95), index: 1 });
+
+      // Invariant: Account has $9,950 equity >> $50 maintenance margin -> NO liquidation!
+      expect(liqEvents.length).toBe(0);
+      expect(engine.getPosition('BTCUSD')).not.toBeNull();
+      expect(engine.getAccountSnapshot().walletBalance).toBe(10000);
+      expect(engine.getAccountSnapshot().unrealizedPnL).toBe(-50);
+      expect(engine.getAccountSnapshot().equity).toBe(9950);
+    });
+  });
+
+  describe('2. Intrabar Deterministic Cross-Margin Liquidation', () => {
+    it('triggers liquidation when adverse candle price breaches portfolio maintenance margin', () => {
+      // High leverage: wallet = 100, notional = 1000 (10 units @ 100), mmRate = 0.05
+      // Cross-margin liqPrice = (1000 - 100) / (10 * 0.95) = 900 / 9.5 = 94.7368
+      const engine = new PaperTradingEngine({
+        startingBalance: 100,
         feeRate: 0,
         marginRate: 0.1, // 10%
         maintMarginRate: 0.05, // 5%
@@ -77,35 +105,34 @@ describe('Phase 2 — Full Futures Margin & Liquidation Accounting', () => {
       engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 10 });
 
       const pos = engine.getPosition('BTCUSD');
-      expect(pos.liquidationPrice).toBe(95);
+      expect(pos.liquidationPrice).toBeCloseTo(94.7368, 3);
 
       const liqEvents = [];
       engine.on(TradingEvents.POSITION_LIQUIDATED, (e) => liqEvents.push(e));
 
-      // Bar 1 drops to Low = 94, crossing 95 liquidation threshold
+      // Bar 1 drops to Low = 94, crossing 94.7368 liquidation threshold
       engine.onMarketCandle({ candle: makeCandle(1060, 99, 101, 94, 96), index: 1 });
 
       // Invariant 6: Liquidation occurred and was recorded
       expect(liqEvents.length).toBe(1);
       expect(liqEvents[0].symbol).toBe('BTCUSD');
-      expect(liqEvents[0].liquidationPrice).toBe(95);
+      expect(liqEvents[0].liquidationPrice).toBeCloseTo(94.7368, 3);
 
       // Position should be closed
       expect(engine.getPosition('BTCUSD')).toBeNull();
 
-      // Trade must reflect LIQUIDATION exit reason and exitPrice = 95
+      // Trade must reflect LIQUIDATION exit reason
       const trades = engine.getTrades();
       expect(trades.length).toBe(1);
       expect(trades[0].exitReason).toBe('LIQUIDATION');
-      expect(trades[0].exitPrice).toBe(95);
-      expect(trades[0].grossPnL).toBe(-50); // (95 - 100) * 10
-      expect(engine.getAccountSnapshot().walletBalance).toBe(9950);
+      expect(trades[0].exitPrice).toBeCloseTo(94.7368, 3);
+      expect(trades[0].grossPnL).toBeCloseTo(-52.632, 2);
       expect(engine.getAccountSnapshot().usedMargin).toBe(0);
     });
 
     it('realistic gap-through liquidation fills at Open if open gapped beyond liquidation price', () => {
       const engine = new PaperTradingEngine({
-        startingBalance: 10000,
+        startingBalance: 100,
         feeRate: 0,
         marginRate: 0.1,
         maintMarginRate: 0.05,
@@ -115,22 +142,24 @@ describe('Phase 2 — Full Futures Margin & Liquidation Accounting', () => {
 
       engine.onMarketCandle({ candle: makeCandle(1000, 100, 105, 95, 100), index: 0 });
       engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 10 });
-      // Liq price is 95
+      // Liq price is ~94.7368
 
-      // Bar 1 opens with gap down at 92 (open < 95)
-      engine.onMarketCandle({ candle: makeCandle(1060, 92, 93, 88, 90), index: 1 });
+      // Bar 1 opens with gap down at 90 (open < 94.7368)
+      engine.onMarketCandle({ candle: makeCandle(1060, 90, 91, 88, 89), index: 1 });
 
       const trades = engine.getTrades();
       expect(trades.length).toBe(1);
       expect(trades[0].exitReason).toBe('LIQUIDATION');
-      // Gap-through slippage filled at candle.open (92)
-      expect(trades[0].exitPrice).toBe(92);
-      expect(trades[0].grossPnL).toBe(-80); // (92 - 100) * 10
+      // Gap-through slippage filled at candle.open (90)
+      expect(trades[0].exitPrice).toBe(90);
+      expect(trades[0].grossPnL).toBe(-100); // (90 - 100) * 10
     });
 
     it('liquidation for SHORT position triggers when candle High touches liquidation price', () => {
+      // High leverage short: wallet = 100, notional = 1000 (10 units @ 100), mmRate = 0.05
+      // LiqPrice = (100 + 1000) / (10 * 1.05) = 1100 / 10.5 = 104.7619
       const engine = new PaperTradingEngine({
-        startingBalance: 10000,
+        startingBalance: 100,
         feeRate: 0,
         marginRate: 0.1,
         maintMarginRate: 0.05,
@@ -138,12 +167,10 @@ describe('Phase 2 — Full Futures Margin & Liquidation Accounting', () => {
       });
 
       engine.onMarketCandle({ candle: makeCandle(1000, 100, 105, 95, 100), index: 0 });
-      // Open SHORT: 10 units @ 100
       engine.placeOrder({ symbol: 'BTCUSD', side: 'SELL', quantity: 10 });
 
       const pos = engine.getPosition('BTCUSD');
-      // For SHORT: 100 * (1 + 0.1 - 0.05) = 105
-      expect(pos.liquidationPrice).toBe(105);
+      expect(pos.liquidationPrice).toBeCloseTo(104.7619, 3);
 
       // Bar 1 rallies to High = 106
       engine.onMarketCandle({ candle: makeCandle(1060, 101, 106, 100, 104), index: 1 });
@@ -151,8 +178,8 @@ describe('Phase 2 — Full Futures Margin & Liquidation Accounting', () => {
       expect(engine.getPosition('BTCUSD')).toBeNull();
       const trades = engine.getTrades();
       expect(trades[0].exitReason).toBe('LIQUIDATION');
-      expect(trades[0].exitPrice).toBe(105);
-      expect(trades[0].grossPnL).toBe(-50); // (100 - 105) * 10
+      expect(trades[0].exitPrice).toBeCloseTo(104.7619, 3);
+      expect(trades[0].grossPnL).toBeCloseTo(-47.619, 2);
     });
   });
 });

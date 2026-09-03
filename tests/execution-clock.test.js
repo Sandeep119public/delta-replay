@@ -188,4 +188,58 @@ describe('Phase 1 — Unified Execution Clock & Canonical Emission', () => {
       expect(Object.isFrozen(barCloseEvents[0].candle)).toBe(true);
     });
   });
+
+  describe('5. Execution Clock Compliance for Orders and Exits', () => {
+    it('closePosition() in NEXT_BAR_OPEN creates pending order and executes at T+1 Open', () => {
+      const engine = new PaperTradingEngine({
+        startingBalance: 10000,
+        feeRate: 0,
+        executionTiming: EXECUTION_TIMING.NEXT_BAR_OPEN,
+      });
+
+      // Bar 0: Market order submitted at T=0
+      engine.onMarketCandle({ candle: makeCandle(1000, 100, 105, 95, 100), index: 0 });
+      engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
+
+      // Bar 1: Fills at Open(T+1) = 101
+      engine.onMarketCandle({ candle: makeCandle(1060, 101, 108, 100, 105), index: 1 });
+      expect(engine.getPosition('BTCUSD')).not.toBeNull();
+      expect(engine.getPosition('BTCUSD').entryPrice).toBe(101);
+
+      // Submit closePosition at Bar 1
+      const closeRes = engine.closePosition('BTCUSD');
+      expect(closeRes.success).toBe(true);
+      expect(closeRes.status).toBe('PENDING');
+      // Position is NOT closed yet on Bar 1
+      expect(engine.getPosition('BTCUSD')).not.toBeNull();
+      expect(engine.getTrades().length).toBe(0);
+
+      // Bar 2: Executes exit at Open(T+2) = 106
+      engine.onMarketCandle({ candle: makeCandle(1120, 106, 110, 104, 108), index: 2 });
+      expect(engine.getPosition('BTCUSD')).toBeNull();
+      const trades = engine.getTrades();
+      expect(trades.length).toBe(1);
+      expect(trades[0].exitPrice).toBe(106); // Open of Bar 2!
+      expect(trades[0].realizedPnL).toBe(5); // 106 - 101
+    });
+
+    it('closePositionImmediate() executes immediately at Bar T close', () => {
+      const engine = new PaperTradingEngine({
+        startingBalance: 10000,
+        feeRate: 0,
+        executionTiming: EXECUTION_TIMING.NEXT_BAR_OPEN,
+      });
+
+      // Entry filled at Bar 1 Open = 100
+      engine.onMarketCandle({ candle: makeCandle(1000, 100, 105, 95, 100), index: 0 });
+      engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
+      engine.onMarketCandle({ candle: makeCandle(1060, 100, 105, 99, 103), index: 1 });
+
+      // Immediate close executed at Bar 1 Close = 103
+      const res = engine.closePositionImmediate('BTCUSD');
+      expect(res.success).toBe(true);
+      expect(engine.getPosition('BTCUSD')).toBeNull();
+      expect(res.exitPrice).toBe(103);
+    });
+  });
 });

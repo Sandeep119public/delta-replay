@@ -9,6 +9,13 @@ import { Order, ORDER_TYPES, ORDER_STATUSES, EXECUTION_TIMING } from './Order.js
 
 export { EXECUTION_TIMING };
 
+export const AMBIGUITY_RESOLUTION = Object.freeze({
+  NONE: 'NONE',
+  SL_FIRST: 'SL_FIRST',
+  TP_FIRST: 'TP_FIRST',
+  HEURISTIC_PROXIMITY: 'HEURISTIC_PROXIMITY',
+});
+
 export const AMBIGUITY_POLICY = Object.freeze({
   CONSERVATIVE: 'CONSERVATIVE',
   SL_FIRST: 'SL_FIRST',
@@ -29,6 +36,8 @@ export const EXECUTION_POLICY = Object.freeze({
  * One position per symbol.
  */
 export class PaperTradingEngine extends EventEmitter {
+  static defaultExecutionTiming = EXECUTION_TIMING.NEXT_BAR_OPEN;
+
   /**
    * @param {object} opts
    * @param {number} [opts.startingBalance=10000]
@@ -38,9 +47,9 @@ export class PaperTradingEngine extends EventEmitter {
    * @param {string} [opts.executionPolicy=EXECUTION_POLICY.SIMPLIFIED]
    * @param {boolean} [opts.realisticExecution=false]
    * @param {number} [opts.marginRate=1.0] - initial margin rate (1.0 = full cash, 0 = unlimited leverage/fee only)
-   * @param {string} [opts.executionTiming=EXECUTION_TIMING.IMMEDIATE_CLOSE] - NEXT_BAR_OPEN | IMMEDIATE_CLOSE
+   * @param {string} [opts.executionTiming=EXECUTION_TIMING.NEXT_BAR_OPEN] - NEXT_BAR_OPEN | IMMEDIATE_CLOSE
    */
-  constructor({ startingBalance = 10000, feeRate = TRADING_CONFIG.TAKER_FEE_RATE, replayEngine = null, ambiguityPolicy = AMBIGUITY_POLICY.CONSERVATIVE, executionPolicy = null, realisticExecution = false, marginRate = 1.0, maintMarginRate = null, executionTiming = EXECUTION_TIMING.IMMEDIATE_CLOSE, fundingSchedule = null } = {}) {
+  constructor({ startingBalance = 10000, feeRate = TRADING_CONFIG.TAKER_FEE_RATE, replayEngine = null, ambiguityPolicy = AMBIGUITY_POLICY.CONSERVATIVE, executionPolicy = null, realisticExecution = false, marginRate = 1.0, maintMarginRate = null, executionTiming = PaperTradingEngine.defaultExecutionTiming, fundingSchedule = null } = {}) {
     super();
     this.account = new TradingAccount({ startingBalance });
     this.feeRate = feeRate;
@@ -167,7 +176,60 @@ export class PaperTradingEngine extends EventEmitter {
     return (notional * marginRatio) + fee;
   }
 
-  _calcPositionMargins(price, quantity, side) {
+  _checkMarginAvailable(price, quantity) {
+    const notional = price * quantity;
+    const fee = calcFee(notional, this.feeRate);
+    const imRate = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
+    const requiredInitialMargin = notional * imRate;
+    const requiredMargin = requiredInitialMargin + fee;
+    // Cross-margin invariant: availableMargin must cover requiredInitialMargin + fee,
+    // and walletBalance must cover entry fee
+    const hasMargin = this.account.availableMargin >= requiredMargin && this.account.walletBalance >= fee;
+    return {
+      valid: hasMargin,
+      requiredMargin,
+      availableMargin: this.account.availableMargin,
+      fee,
+      initialMargin: requiredInitialMargin,
+    };
+  }
+
+  getLiquidationPrice(symbol) {
+    const pos = this._positions.get(symbol);
+    if (!pos) return null;
+    const imRate = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
+    const mmRate = (typeof this.maintMarginRate === 'number' && this.maintMarginRate >= 0) ? this.maintMarginRate : (imRate * 0.5);
+
+    // Cross-margin liquidation price calculation
+    let otherUnrealized = 0;
+    let otherMM = 0;
+    for (const [sym, other] of this._positions.entries()) {
+      if (sym === symbol) continue;
+      otherUnrealized += other.unrealizedPnL;
+      const mark = Number.isFinite(other.currentPrice) ? other.currentPrice : other.entryPrice;
+      otherMM += other.quantity * mark * mmRate;
+    }
+
+    const W = this.account.walletBalance + otherUnrealized;
+    const Q = pos.quantity;
+    const P_entry = pos.entryPrice;
+
+    if (pos.side === 'LONG') {
+      const denom = Q * (1 - mmRate);
+      if (denom <= 0) return null;
+      const num = P_entry * Q + otherMM - W;
+      const liqPrice = num / denom;
+      return liqPrice > 0 ? liqPrice : null;
+    } else {
+      const denom = Q * (1 + mmRate);
+      if (denom <= 0) return null;
+      const num = W + P_entry * Q - otherMM;
+      const liqPrice = num / denom;
+      return liqPrice > 0 ? liqPrice : null;
+    }
+  }
+
+  _calcPositionMargins(price, quantity, side, symbol = null) {
     const notional = price * quantity;
     const imRate = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
     const mmRate = (typeof this.maintMarginRate === 'number' && this.maintMarginRate >= 0) ? this.maintMarginRate : (imRate * 0.5);
@@ -175,14 +237,33 @@ export class PaperTradingEngine extends EventEmitter {
     const maintenanceMargin = notional * mmRate;
 
     let liquidationPrice = null;
-    if (imRate < 1.0 || mmRate < imRate) {
+    if (symbol && this._positions.has(symbol)) {
+      liquidationPrice = this.getLiquidationPrice(symbol);
+    } else {
+      const W = this.account.walletBalance;
+      const Q = quantity;
+      const P_entry = price;
       if (side === 'LONG') {
-        liquidationPrice = Math.max(0, price * (1 - imRate + mmRate));
+        const denom = Q * (1 - mmRate);
+        if (denom > 0) {
+          const liq = (P_entry * Q - W) / denom;
+          liquidationPrice = liq > 0 ? liq : null;
+        }
       } else {
-        liquidationPrice = price * (1 + imRate - mmRate);
+        const denom = Q * (1 + mmRate);
+        if (denom > 0) {
+          const liq = (W + P_entry * Q) / denom;
+          liquidationPrice = liq > 0 ? liq : null;
+        }
       }
     }
     return { initialMargin, maintenanceMargin, liquidationPrice };
+  }
+
+  _updateLiquidationPrices() {
+    for (const [sym, pos] of this._positions.entries()) {
+      pos.liquidationPrice = this.getLiquidationPrice(sym);
+    }
   }
 
   _recalcMargins() {
@@ -194,13 +275,15 @@ export class PaperTradingEngine extends EventEmitter {
     }
     this.account.usedMargin = usedIM;
     this.account.maintenanceMargin = totalMM;
+    this._updateLiquidationPrices();
   }
 
   _processLiquidations(candle, candleIndex, symbol) {
+    this._updateLiquidationPrices();
     const toLiquidate = [];
     for (const [sym, pos] of this._positions.entries()) {
       if (symbol && sym !== symbol) continue;
-      if (!Number.isFinite(pos.liquidationPrice)) continue;
+      if (!pos.liquidationPrice || !Number.isFinite(pos.liquidationPrice)) continue;
 
       let isLiquidated = false;
       let exitPrice = pos.liquidationPrice;
@@ -396,18 +479,25 @@ export class PaperTradingEngine extends EventEmitter {
     }
     this.account.unrealizedPnL = totalUnrealized;
 
-    // 5. Automatic funding evaluation at scheduled boundaries
+    // 5. Automatic funding evaluation at scheduled boundaries across the chronological interval
     if (this._fundingSchedule && Number.isFinite(c.time)) {
       const interval = this._fundingSchedule.intervalSec || (8 * 3600);
-      const prevBucket = this._lastFundingTimestamp != null ? Math.floor(this._lastFundingTimestamp / interval) : null;
-      const currentBucket = Math.floor(c.time / interval);
-      if (prevBucket != null && currentBucket > prevBucket) {
-        const rate = typeof this._fundingSchedule.rateProvider === 'function'
-          ? this._fundingSchedule.rateProvider(c.time, symbol)
-          : (this._fundingSchedule.defaultRate ?? 0.0001);
-        this.applyFundingRate({ symbol, fundingRate: rate, timestamp: c.time });
+      const origin = this._fundingSchedule.origin || 0;
+
+      if (this._lastFundingTimestamp == null) {
+        this._lastFundingTimestamp = c.time;
+      } else if (c.time > this._lastFundingTimestamp) {
+        const prevTime = this._lastFundingTimestamp;
+        let nextBoundary = origin + Math.floor((prevTime - origin) / interval + 1) * interval;
+        while (nextBoundary <= c.time) {
+          const rate = typeof this._fundingSchedule.rateProvider === 'function'
+            ? this._fundingSchedule.rateProvider(nextBoundary, symbol)
+            : (this._fundingSchedule.defaultRate ?? 0.0001);
+          this.applyFundingRate({ symbol, fundingRate: rate, timestamp: nextBoundary });
+          nextBoundary += interval;
+        }
+        this._lastFundingTimestamp = c.time;
       }
-      this._lastFundingTimestamp = c.time;
     }
 
     this._isProcessingCandle = false;
@@ -653,7 +743,7 @@ export class PaperTradingEngine extends EventEmitter {
   /**
    * Close position for symbol at current market price.
    */
-  closePosition(symbol) {
+  closePosition(symbol, { timing = this.executionTiming } = {}) {
     const symRes = TradingValidator.validateSymbol(symbol);
     if (!symRes.valid) return this._reject(symRes.code, symRes.message);
     const existing = this._positions.get(symbol);
@@ -666,11 +756,35 @@ export class PaperTradingEngine extends EventEmitter {
       return this._reject('NO_MARKET_PRICE', `No market price available to close position for ${symbol}.`);
     }
 
+    if (timing === EXECUTION_TIMING.NEXT_BAR_OPEN) {
+      const closeSide = existing.side === 'LONG' ? 'SELL' : 'BUY';
+      const order = new Order({
+        id: this._nextOrderId++,
+        symbol,
+        side: closeSide,
+        type: ORDER_TYPES.MARKET,
+        quantity: existing.quantity,
+        timing: EXECUTION_TIMING.NEXT_BAR_OPEN,
+        status: ORDER_STATUSES.PENDING,
+        createdAt: Date.now(),
+        createdReplayTime: market.candle.time,
+        createdIndex: market.index,
+      });
+      this._orders.set(order.id, order);
+      this._pendingOrderIds.push(order.id);
+      this._emitOrderPlaced(order);
+      return { success: true, order: this._cloneJSON(order.toJSON()), status: ORDER_STATUSES.PENDING };
+    }
+
     const execPrice = market.candle.close;
     const time = market.candle.time;
-    const res = this._closePositionInternal(symbol, execPrice, time);
+    const res = this._closePositionInternal(symbol, execPrice, time, null);
     this._cancelIncompatiblePendings(symbol);
     return res;
+  }
+
+  closePositionImmediate(symbol) {
+    return this.closePosition(symbol, { timing: EXECUTION_TIMING.IMMEDIATE_CLOSE });
   }
 
   _closePositionInternal(symbol, exitPrice, closedAt, exitReason = null, ambiguityResolution = 'NONE') {
@@ -1194,13 +1308,14 @@ export class PaperTradingEngine extends EventEmitter {
         if (pos.side === 'LONG' && candle.high >= tp) triggerTP = true;
         if (pos.side === 'SHORT' && candle.low <= tp) triggerTP = true;
       }
-      let ambiguityResolution = 'NONE';
+      let ambiguityResolution = AMBIGUITY_RESOLUTION.NONE;
       if (triggerSL && triggerTP) {
         this._ambiguousBarCount++;
-        ambiguityResolution = this.ambiguityPolicy;
         if (this.ambiguityPolicy === AMBIGUITY_POLICY.TP_FIRST) {
+          ambiguityResolution = AMBIGUITY_RESOLUTION.TP_FIRST;
           triggerSL = false;
         } else if (this.ambiguityPolicy === AMBIGUITY_POLICY.OPEN_PROXIMITY && Number.isFinite(candle.open)) {
+          ambiguityResolution = AMBIGUITY_RESOLUTION.HEURISTIC_PROXIMITY;
           const slDist = Math.abs(candle.open - sl);
           const tpDist = Math.abs(candle.open - tp);
           if (tpDist < slDist) {
@@ -1210,6 +1325,7 @@ export class PaperTradingEngine extends EventEmitter {
           }
         } else {
           // Default CONSERVATIVE / SL_FIRST
+          ambiguityResolution = AMBIGUITY_RESOLUTION.SL_FIRST;
           triggerTP = false;
         }
       }
