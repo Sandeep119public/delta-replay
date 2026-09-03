@@ -18,7 +18,7 @@ describe('deep-audit refactor regressions', () => {
     const result = cache.get('BTCUSDT', '1m', 1000, 1120, { timeframeSec: 60 });
 
     expect(result.hit).toBe(false);
-    expect(result.missing).toEqual([{ from: 1001, to: 1119 }]);
+    expect(result.missing).toEqual([{ from: 1060, to: 1060 }]);
   });
 
   it('cache recognizes contiguous explicit coverage', () => {

@@ -53,7 +53,7 @@ export class CandleValidator {
         validCandles.push(candles[i]);
         prevTime = candles[i].time;
       } else {
-        errors.push({ index: i, reason: res.reason });
+        errors.push({ index: i, reason: res.reason, candle: candles[i] });
       }
     }
     return { validCandles, errors };

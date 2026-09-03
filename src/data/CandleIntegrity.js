@@ -7,11 +7,24 @@ import { CandleValidator } from './CandleValidator.js';
 export const INTEGRITY_STATUS = Object.freeze({
   VALID: 'VALID',
   VALID_WITH_GAPS: 'VALID_WITH_GAPS',
+  DEGRADED: 'DEGRADED',
   INVALID: 'INVALID',
 });
 
 /**
- * CandleIntegrity — dedup, sort, validate, gap detection.
+ * Explicit dataset integrity policies.
+ * STRICT: any invalid candle or gap aborts dataset processing.
+ * REPAIR: invalid candles are dropped and flagged for refetching/repair.
+ * LENIENT: invalid candles are dropped and dataset is flagged as degraded.
+ */
+export const DATA_POLICY = Object.freeze({
+  STRICT: 'STRICT',
+  REPAIR: 'REPAIR',
+  LENIENT: 'LENIENT',
+});
+
+/**
+ * CandleIntegrity — linear dedup, sort, validate, gap detection, policy enforcement.
  * No invention of candles; reports missing intervals.
  */
 export class CandleIntegrity {
@@ -25,10 +38,13 @@ export class CandleIntegrity {
    * @param {boolean} [opts.strict=false] - reject dataset if invalid or gapped
    * @param {boolean} [opts.allowGaps=false] - when strict, allow gaps but reject invalid
    * @param {boolean} [opts.halfOpen=false] - use [from, to) half-open interval
+   * @param {string} [opts.policy] - 'STRICT' | 'REPAIR' | 'LENIENT'
    * @returns {{ validCandles: Array, metadata: object }}
    */
-  static process(rawCandles, { from, to, timeframeSec, strict = false, allowGaps = false, halfOpen = false } = {}) {
+  static process(rawCandles, { from, to, timeframeSec, strict = false, allowGaps = false, halfOpen = false, policy = null } = {}) {
     if (!Array.isArray(rawCandles)) throw new Error('rawCandles must be array');
+
+    const effectivePolicy = policy ?? (strict ? DATA_POLICY.STRICT : DATA_POLICY.REPAIR);
 
     // 1. Normalize
     let normalized;
@@ -41,9 +57,8 @@ export class CandleIntegrity {
     // 2. Sort ascending
     normalized.sort((a, b) => a.time - b.time);
 
-    // 3. Dedup (keep last)
+    // 3. Dedup (keep last) - O(N) adjacent check since normalized array is sorted
     const deduped = [];
-    const seen = new Set();
     let duplicatesRemoved = 0;
     for (const c of normalized) {
       if (deduped.length && deduped[deduped.length - 1].time === c.time) {
@@ -51,13 +66,7 @@ export class CandleIntegrity {
         duplicatesRemoved++;
         continue;
       }
-      if (seen.has(c.time)) {
-        const idx = deduped.findIndex(x => x.time === c.time);
-        if (idx >= 0) { deduped[idx] = c; duplicatesRemoved++; }
-        continue;
-      }
       deduped.push(c);
-      seen.add(c.time);
     }
 
     // 4. Range filter (supports standard [from, to) half-open or legacy [from, to] closed)
@@ -170,16 +179,29 @@ export class CandleIntegrity {
       }
     }
 
-    // Explicit integrity status
+    // Collect repair intervals for any corrupt candles
+    const repairRanges = [];
+    if (invalidCount > 0) {
+      for (const err of errors) {
+        const c = err.candle ?? ranged[err.index];
+        if (c && Number.isFinite(c.time)) {
+          repairRanges.push({ from: c.time, to: c.time });
+        }
+      }
+    }
+
+    // Explicit integrity status classification
     let integrityStatus = INTEGRITY_STATUS.VALID;
     if (invalidCount > 0) {
-      integrityStatus = INTEGRITY_STATUS.INVALID;
+      integrityStatus = (effectivePolicy === DATA_POLICY.LENIENT)
+        ? INTEGRITY_STATUS.DEGRADED
+        : INTEGRITY_STATUS.INVALID;
     } else if (gaps.length > 0) {
       integrityStatus = INTEGRITY_STATUS.VALID_WITH_GAPS;
     }
 
-    // Strict validation enforcement
-    if (strict) {
+    // Policy enforcement
+    if (effectivePolicy === DATA_POLICY.STRICT) {
       if (invalidCount > 0) {
         throw new Error(`Integrity error: dataset contains ${invalidCount} invalid candle(s)`);
       }
@@ -206,11 +228,13 @@ export class CandleIntegrity {
         validCount: validCandles.length,
         count: validCandles.length,
         gaps,
+        repairRanges,
         hasStartGap,
         hasEndGap,
         hasInternalGaps,
         coverageType,
         integrityStatus,
+        policy: effectivePolicy,
         errors: errors.slice(0, 5),
       },
     };

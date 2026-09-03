@@ -192,6 +192,41 @@ export class ReplayEngine extends EventEmitter {
     return this.getState();
   }
 
+  /**
+   * Synchronous single step for backtesting / clock advancement without wall-clock timer.
+   */
+  step() {
+    return this.stepForward();
+  }
+
+  /**
+   * Synchronous multi-step advancement.
+   * @param {number} count
+   */
+  stepCount(count = 1) {
+    let state = this.getState();
+    for (let i = 0; i < count; i++) {
+      if (this._state.status === ReplayStatus.ENDED) break;
+      state = this.stepForward();
+    }
+    return state;
+  }
+
+  /**
+   * Synchronously step until targetIndex is reached.
+   * @param {number} targetIndex
+   */
+  stepTo(targetIndex) {
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= this._candles.length) {
+      throw new Error(`Invalid targetIndex: ${targetIndex}`);
+    }
+    let state = this.getState();
+    while (this._state.currentIndex < targetIndex && this._state.status !== ReplayStatus.ENDED) {
+      state = this.stepForward();
+    }
+    return state;
+  }
+
   seek(index) {
     const check = this._checkGuards('seek', { index });
     if (!check.allowed) {

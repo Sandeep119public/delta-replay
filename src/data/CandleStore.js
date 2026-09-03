@@ -37,11 +37,14 @@ export class CandleStore {
   }
 
   getCount() { return this._candles.length; }
+
   get(index) {
     const c = this._candles[index];
     return c ? { ...c } : null;
   }
+
   getAll() { return this._candles.map(c => ({ ...c })); }
+
   sliceWindow(startIdx, endIdx) {
     // inclusive endIdx
     const s = Math.max(0, startIdx);
@@ -49,13 +52,28 @@ export class CandleStore {
     if (s > e) return [];
     return this._candles.slice(s, e + 1).map(c => ({ ...c }));
   }
+
   sliceFromStart(count) {
     return this.sliceWindow(0, count - 1);
   }
+
   /**
-   * Binary search for closest index >= target or nearest.
+   * Exact index lookup by candle timestamp.
+   * Returns index in O(1) or -1 if no candle exists at exact timestamp.
+   * @param {number} targetSec
+   * @returns {number}
    */
-  findIndexByTime(targetSec) {
+  findExactIndexByTime(targetSec) {
+    return this._byTime.has(targetSec) ? this._byTime.get(targetSec) : -1;
+  }
+
+  /**
+   * Binary search for nearest candle timestamp.
+   * Intended for UI navigation / timeline scrubbing.
+   * @param {number} targetSec
+   * @returns {number}
+   */
+  findNearestIndexByTime(targetSec) {
     if (!this._candles.length) return -1;
     let lo = 0, hi = this._candles.length - 1, best = 0, minDiff = Infinity;
     while (lo <= hi) {
@@ -71,9 +89,56 @@ export class CandleStore {
     return best;
   }
 
+  /**
+   * Find index of first candle with time >= targetSec.
+   * @param {number} targetSec
+   * @returns {number} Index or -1 if no candle is at or after targetSec
+   */
+  findAtOrAfterIndex(targetSec) {
+    if (!this._candles.length) return -1;
+    let lo = 0, hi = this._candles.length - 1, ans = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this._candles[mid].time >= targetSec) {
+        ans = mid;
+        hi = mid - 1;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    return ans;
+  }
+
+  /**
+   * Find index of last candle with time <= targetSec.
+   * @param {number} targetSec
+   * @returns {number} Index or -1 if no candle is at or before targetSec
+   */
+  findAtOrBeforeIndex(targetSec) {
+    if (!this._candles.length) return -1;
+    let lo = 0, hi = this._candles.length - 1, ans = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this._candles[mid].time <= targetSec) {
+        ans = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return ans;
+  }
+
+  /**
+   * Backward-compatible alias for findNearestIndexByTime.
+   */
+  findIndexByTime(targetSec) {
+    return this.findNearestIndexByTime(targetSec);
+  }
+
   getRange(from, to) {
-    const s = this.findIndexByTime(from);
-    const e = this.findIndexByTime(to);
+    const s = this.findNearestIndexByTime(from);
+    const e = this.findNearestIndexByTime(to);
     if (s === -1 || e === -1) return [];
     return this.sliceWindow(Math.min(s, e), Math.max(s, e));
   }

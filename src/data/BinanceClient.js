@@ -1,3 +1,6 @@
+import { resolveVenueSymbol, VENUES } from './InstrumentConfig.js';
+import { TIMEFRAME_SECONDS } from './CandleGrid.js';
+
 export const BINANCE_FUTURES_BASE = 'https://fapi.binance.com';
 export const BINANCE_SPOT_BASE = 'https://api.binance.com';
 
@@ -14,54 +17,109 @@ export class BinanceClient {
     }
   }
 
+  /**
+   * Fetches candles from Binance API, handling pagination across page limits
+   * and accurately classifying timeouts vs caller cancellation.
+   *
+   * Contract: guarantees returning ALL candles in [start, end].
+   */
   async fetchCandles({ symbol, resolution, start, end, signal }) {
     if (!symbol) throw new Error('symbol required');
     if (!resolution) throw new Error('resolution required');
 
-    let mappedSymbol = symbol.replace(/[^A-Z0-9]/g, '').toUpperCase();
-    if (mappedSymbol === 'BTCUSD') mappedSymbol = 'BTCUSDT';
-    if (mappedSymbol === 'ETHUSD') mappedSymbol = 'ETHUSDT';
-    if (mappedSymbol === 'SOLUSD') mappedSymbol = 'SOLUSDT';
-    if (mappedSymbol === 'XRPUSD') mappedSymbol = 'XRPUSDT';
-    if (mappedSymbol === 'DOGEUSD') mappedSymbol = 'DOGEUSDT';
-
-    const startMs = Math.floor(start) * 1000;
-    const endMs = Math.floor(end) * 1000;
     const isFutures = this.baseUrl.includes('fapi');
+    const venue = isFutures ? VENUES.BINANCE_FUTURES : VENUES.BINANCE_SPOT;
+    const mappedSymbol = resolveVenueSymbol(symbol, venue);
+
+    const tfSec = TIMEFRAME_SECONDS[resolution] ?? 60;
     const endpoint = isFutures ? '/fapi/v1/klines' : '/api/v3/klines';
     const limit = isFutures ? 1500 : 1000;
-    const url = `${this.baseUrl}${endpoint}?symbol=${encodeURIComponent(mappedSymbol)}&interval=${encodeURIComponent(resolution)}&startTime=${startMs}&endTime=${endMs}&limit=${limit}`;
 
-    const controller = new AbortController();
-    if (signal) {
-      if (signal.aborted) controller.abort();
-      else signal.addEventListener('abort', () => controller.abort(), { once: true });
-    }
+    let currentStartMs = Math.floor(start) * 1000;
+    const endMs = Math.floor(end) * 1000;
+    const allCandles = [];
 
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      const res = await this.fetchFn(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
-      if (!res.ok) {
-        throw new Error(`Binance API error: ${res.status} ${res.statusText}`);
+    while (currentStartMs <= endMs) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+      const url = `${this.baseUrl}${endpoint}?symbol=${encodeURIComponent(mappedSymbol)}&interval=${encodeURIComponent(resolution)}&startTime=${currentStartMs}&endTime=${endMs}&limit=${limit}`;
+
+      const controller = new AbortController();
+      let timedOut = false;
+      const onAbort = () => controller.abort();
+      if (signal) {
+        if (signal.aborted) controller.abort();
+        else signal.addEventListener('abort', onAbort, { once: true });
       }
-      const data = await res.json();
-      if (!Array.isArray(data)) return [];
 
-      return data.map(item => {
-        if (Array.isArray(item)) {
-          return {
-            time: Math.floor(Number(item[0]) / 1000),
-            open: parseFloat(item[1]),
-            high: parseFloat(item[2]),
-            low: parseFloat(item[3]),
-            close: parseFloat(item[4]),
-            volume: parseFloat(item[5])
-          };
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, this.timeoutMs);
+
+      let page;
+      try {
+        const res = await this.fetchFn(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+        if (!res.ok) {
+          const err = new Error(`Binance API error: ${res.status} ${res.statusText}`);
+          err.code = 'API_ERROR';
+          err.status = res.status;
+          throw err;
         }
-        return item;
-      });
-    } finally {
-      clearTimeout(timeoutId);
+        const data = await res.json();
+        if (!Array.isArray(data)) break;
+
+        page = data.map(item => {
+          if (Array.isArray(item)) {
+            return {
+              time: Math.floor(Number(item[0]) / 1000),
+              open: parseFloat(item[1]),
+              high: parseFloat(item[2]),
+              low: parseFloat(item[3]),
+              close: parseFloat(item[4]),
+              volume: parseFloat(item[5])
+            };
+          }
+          return item;
+        });
+      } catch (err) {
+        if (timedOut) {
+          const timeoutErr = new Error(`Binance request timed out after ${this.timeoutMs}ms`);
+          timeoutErr.code = 'TIMEOUT';
+          timeoutErr.name = 'TimeoutError';
+          throw timeoutErr;
+        }
+        if (signal?.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+        if (signal && typeof signal.removeEventListener === 'function') {
+          signal.removeEventListener('abort', onAbort);
+        }
+      }
+
+      if (!page || page.length === 0) {
+        break;
+      }
+
+      allCandles.push(...page);
+
+      if (page.length < limit) {
+        break;
+      }
+
+      const lastCandle = page[page.length - 1];
+      const nextStartSec = lastCandle.time + tfSec;
+      const nextStartMs = nextStartSec * 1000;
+
+      if (nextStartMs <= currentStartMs) {
+        break;
+      }
+      currentStartMs = nextStartMs;
     }
+
+    return allCandles;
   }
 }

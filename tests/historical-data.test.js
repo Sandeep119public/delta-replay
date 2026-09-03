@@ -87,7 +87,8 @@ describe('CandleCache', () => {
     const res = cache.get('BTCUSD', '1m', 1000, 1180);
     expect(res.hit).toBe(false);
     expect(res.missing.length).toBe(1);
-    expect(res.missing[0].from).toBe(1061);
+    expect(res.missing[0].from).toBe(1120);
+    expect(res.missing[0].to).toBe(1180);
     expect(res.candles.length).toBe(2);
   });
   it('overlapping merge', () => {
