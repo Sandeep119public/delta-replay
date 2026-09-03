@@ -12,11 +12,9 @@ describe('replay/trading lifecycle hardening', () => {
     const trading = new PaperTradingEngine({ replayEngine: replay });
     const candles = [candle(100, 100), candle(200, 101), candle(300, 102)];
     replay.load(candles);
-
     trading.onMarketCandle({ candle: candles[1], index: 1, symbol: 'BTCUSDT', timestamp: 200 });
     expect(trading.getLatestCandleIndex()).toBe(1);
     expect(trading.getAccountSnapshot().totalBars).toBe(1);
-
     replay.start(1);
     expect(trading.getLatestCandleIndex()).toBe(1);
     expect(trading.getAccountSnapshot().totalBars).toBe(1);
@@ -33,7 +31,6 @@ describe('replay/trading lifecycle hardening', () => {
     expect(trading.getTrades()).toHaveLength(0);
     trading.closePositionImmediate('BTCUSDT');
     expect(trading.getTrades()).toHaveLength(1);
-
     replay.load([candle(1000, 200), candle(1100, 201)]);
     expect(trading.getTrades()).toHaveLength(0);
     expect(trading.getPositions()).toHaveLength(0);
@@ -51,7 +48,6 @@ describe('replay/trading lifecycle hardening', () => {
     expect(trading.placeOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 1 }).success).toBe(true);
     trading.closePositionImmediate('BTCUSDT');
     expect(trading.getTrades()).toHaveLength(1);
-
     replay.reset();
     expect(trading.getTrades()).toHaveLength(0);
     expect(trading.getPositions()).toHaveLength(0);
@@ -59,3 +55,5 @@ describe('replay/trading lifecycle hardening', () => {
     expect(trading.getLatestCandle()).toBeNull();
   });
 });
+
+// Preserve this coverage as a regression guard for replay session boundaries.
