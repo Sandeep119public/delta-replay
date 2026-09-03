@@ -7,27 +7,31 @@ export class SymbolSelector {
     this._onChange = null;
     this._handleChange = () => this._onChange?.(this.el.value);
     this._render();
-    this.el.addEventListener('change', this._handleChange);
+    if (typeof this.el.addEventListener === 'function') this.el.addEventListener('change', this._handleChange);
   }
 
   _render() {
-    this.el.replaceChildren();
-    const fragment = document.createDocumentFragment();
-    for (const symbol of this.symbols) {
-      const option = document.createElement('option');
-      option.value = symbol;
-      option.textContent = symbol;
-      option.selected = symbol === this.appState.symbol;
-      fragment.appendChild(option);
+    if (typeof this.el.replaceChildren === 'function' && typeof document !== 'undefined') {
+      this.el.replaceChildren();
+      const fragment = document.createDocumentFragment();
+      for (const symbol of this.symbols) {
+        const option = document.createElement('option');
+        option.value = symbol;
+        option.textContent = symbol;
+        option.selected = symbol === this.appState.symbol;
+        fragment.appendChild(option);
+      }
+      this.el.appendChild(fragment);
+      return;
     }
-    this.el.appendChild(fragment);
+    this.el.innerHTML = this.symbols
+      .map(symbol => `<option value="${String(symbol).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;') }"${symbol === this.appState.symbol ? ' selected' : ''}>${String(symbol).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`)
+      .join('');
   }
 
   onChange(fn) {
     this._onChange = typeof fn === 'function' ? fn : null;
-    return () => {
-      if (this._onChange === fn) this._onChange = null;
-    };
+    return () => { if (this._onChange === fn) this._onChange = null; };
   }
 
   setSymbols(symbols) {
@@ -37,7 +41,7 @@ export class SymbolSelector {
   }
 
   destroy() {
-    this.el.removeEventListener('change', this._handleChange);
+    if (typeof this.el.removeEventListener === 'function') this.el.removeEventListener('change', this._handleChange);
     this._onChange = null;
   }
 }
