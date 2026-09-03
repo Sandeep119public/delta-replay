@@ -84,6 +84,10 @@ export class DeltaCandleProvider extends CandleProvider {
     }
   }
 
+  async fetchChunk({ symbol, timeframe, from, to, signal } = {}) {
+    return this.client.fetchCandles({ symbol, resolution: timeframe, start: from, end: to, signal });
+  }
+
   // Legacy interface: getCandles
   async getCandles({ symbol, timeframe, from, to, limit, signal } = {}) {
     return this.loadCandles({ symbol, timeframe, from, to, limit, signal });

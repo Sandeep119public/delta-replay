@@ -35,9 +35,9 @@ export class PaperTradingEngine extends EventEmitter {
    * @param {string} [opts.ambiguityPolicy=AMBIGUITY_POLICY.CONSERVATIVE]
    * @param {string} [opts.executionPolicy=EXECUTION_POLICY.SIMPLIFIED]
    * @param {boolean} [opts.realisticExecution=false]
-   * @param {number} [opts.marginRate=0] - initial margin rate (0 = fee-only check, 1 = full cash)
+   * @param {number} [opts.marginRate=1.0] - initial margin rate (1.0 = full cash, 0 = unlimited leverage/fee only)
    */
-  constructor({ startingBalance = 10000, feeRate = TRADING_CONFIG.TAKER_FEE_RATE, replayEngine = null, ambiguityPolicy = AMBIGUITY_POLICY.CONSERVATIVE, executionPolicy = null, realisticExecution = false, marginRate = 0 } = {}) {
+  constructor({ startingBalance = 10000, feeRate = TRADING_CONFIG.TAKER_FEE_RATE, replayEngine = null, ambiguityPolicy = AMBIGUITY_POLICY.CONSERVATIVE, executionPolicy = null, realisticExecution = false, marginRate = 1.0 } = {}) {
     super();
     this.account = new TradingAccount({ startingBalance });
     this.feeRate = feeRate;
@@ -50,6 +50,7 @@ export class PaperTradingEngine extends EventEmitter {
     this._latestCandle = null; // cloned
     this._latestCandleIndex = -1;
     this._latestSymbolContext = null;
+    this._marketBySymbol = new Map(); // symbol -> { candle, index, timestamp }
     this._replayEngine = null;
     this._unsubs = [];
     // limit orders
@@ -72,6 +73,20 @@ export class PaperTradingEngine extends EventEmitter {
       throw new Error(`Invalid execution policy: ${policy}`);
     }
     this.executionPolicy = policy;
+  }
+
+  _getRequiredEntryCash(price, quantity) {
+    const notional = price * quantity;
+    const fee = calcFee(notional, this.feeRate);
+    const marginRatio = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
+    return (notional * marginRatio) + fee;
+  }
+
+  getLatestCandle(symbol = null) {
+    if (symbol && this._marketBySymbol.has(symbol)) {
+      return this._cloneJSON(this._marketBySymbol.get(symbol).candle);
+    }
+    return this._latestCandle ? this._cloneJSON(this._latestCandle) : null;
   }
 
   attachToReplay(replayEngine) {
@@ -178,7 +193,10 @@ export class PaperTradingEngine extends EventEmitter {
     // clone
     this._latestCandle = { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
     this._latestCandleIndex = idx;
-    if (symbol) this._latestSymbolContext = symbol;
+    if (symbol) {
+      this._latestSymbolContext = symbol;
+      this._marketBySymbol.set(symbol, { candle: this._latestCandle, index: idx, timestamp: c.time });
+    }
     // Update matching open positions currentPrice
     let totalUnrealized = 0;
     for (const pos of this._positions.values()) {
@@ -248,13 +266,17 @@ export class PaperTradingEngine extends EventEmitter {
     const qtyRes = TradingValidator.validateQuantity(quantity);
     if (!qtyRes.valid) return this._reject(qtyRes.code, qtyRes.message);
 
-    if (!this._latestCandle) {
-      return this._reject('NO_MARKET_PRICE', 'Cannot place order before the first replay candle.');
+    const market = this._marketBySymbol.get(symbol)
+      || (this._latestCandle && (!this._latestSymbolContext || this._latestSymbolContext === symbol) ? { candle: this._latestCandle, index: this._latestCandleIndex } : null);
+
+    if (!market || !market.candle) {
+      return this._reject('NO_MARKET_PRICE', `Cannot place order: no market price received for ${symbol}.`);
     }
 
     const q = Number(quantity);
-    const execPrice = this._latestCandle.close;
-    const time = this._latestCandle.time;
+    const execPrice = market.candle.close;
+    const time = market.candle.time;
+    const candleIndex = market.index;
 
     const existing = this._positions.get(symbol);
 
@@ -276,7 +298,7 @@ export class PaperTradingEngine extends EventEmitter {
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
     const entryNotional = execPrice * q;
     const entryFee = calcFee(entryNotional, this.feeRate);
-    const requiredCash = (entryNotional * (this.marginRate > 0 ? this.marginRate : 0)) + entryFee;
+    const requiredCash = this._getRequiredEntryCash(execPrice, q);
     if (this.account.cashBalance < requiredCash) {
       return this._reject('INSUFFICIENT_CASH', `Insufficient cash to place ${side} order: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);
     }
@@ -291,7 +313,7 @@ export class PaperTradingEngine extends EventEmitter {
       currentPrice: execPrice,
       openedAt: time,
       entryFee,
-      openedIndex: this._latestCandleIndex,
+      openedIndex: candleIndex,
     });
     this._positions.set(symbol, position);
     // unrealized 0 at open
@@ -386,14 +408,17 @@ export class PaperTradingEngine extends EventEmitter {
     if (!qtyRes.valid) return this._reject(qtyRes.code, qtyRes.message);
     const priceRes = TradingValidator.validateLimitPrice(limitPrice);
     if (!priceRes.valid) return this._reject(priceRes.code, priceRes.message);
-    if (!this._latestCandle) {
-      return this._reject('NO_MARKET_PRICE', 'Cannot place limit order before the first replay candle.');
+    const market = this._marketBySymbol.get(symbol)
+      || (this._latestCandle && (!this._latestSymbolContext || this._latestSymbolContext === symbol) ? { candle: this._latestCandle, index: this._latestCandleIndex } : null);
+
+    if (!market || !market.candle) {
+      return this._reject('NO_MARKET_PRICE', `Cannot place limit order: no market price received for ${symbol}.`);
     }
     const q = Number(quantity);
     const lp = Number(limitPrice);
     const orderId = `order-${this._nextOrderId++}`;
-    const createdTime = this._latestCandle.time;
-    const createdIdx = this._latestCandleIndex;
+    const createdTime = market.candle.time;
+    const createdIdx = market.index;
     const order = new Order({
       id: orderId,
       symbol,
@@ -424,14 +449,17 @@ export class PaperTradingEngine extends EventEmitter {
     if (!qtyRes.valid) return this._reject(qtyRes.code, qtyRes.message);
     const priceRes = TradingValidator.validateStopPrice(stopPrice);
     if (!priceRes.valid) return this._reject(priceRes.code, priceRes.message);
-    if (!this._latestCandle) {
-      return this._reject('NO_MARKET_PRICE', 'Cannot place stop order before the first replay candle.');
+    const market = this._marketBySymbol.get(symbol)
+      || (this._latestCandle && (!this._latestSymbolContext || this._latestSymbolContext === symbol) ? { candle: this._latestCandle, index: this._latestCandleIndex } : null);
+
+    if (!market || !market.candle) {
+      return this._reject('NO_MARKET_PRICE', `Cannot place stop order: no market price received for ${symbol}.`);
     }
     const q = Number(quantity);
     const sp = Number(stopPrice);
     const orderId = `order-${this._nextOrderId++}`;
-    const createdTime = this._latestCandle.time;
-    const createdIdx = this._latestCandleIndex;
+    const createdTime = market.candle.time;
+    const createdIdx = market.index;
     const order = new Order({
       id: orderId,
       symbol,
@@ -610,7 +638,7 @@ export class PaperTradingEngine extends EventEmitter {
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
     const notional = filledPrice * qty;
     const entryFee = calcFee(notional, this.feeRate);
-    const requiredCash = (notional * (this.marginRate > 0 ? this.marginRate : 1)) + entryFee;
+    const requiredCash = this._getRequiredEntryCash(filledPrice, qty);
     if (this.account.cashBalance < requiredCash) {
       order.status = ORDER_STATUSES.REJECTED;
       order.rejectionReason = 'INSUFFICIENT_CASH';
@@ -731,7 +759,7 @@ export class PaperTradingEngine extends EventEmitter {
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
     const notional = filledPrice * qty;
     const entryFee = calcFee(notional, this.feeRate);
-    const requiredCash = (notional * (this.marginRate > 0 ? this.marginRate : 1)) + entryFee;
+    const requiredCash = this._getRequiredEntryCash(filledPrice, qty);
     if (this.account.cashBalance < requiredCash) {
       order.status = ORDER_STATUSES.REJECTED;
       order.rejectionReason = 'INSUFFICIENT_CASH';

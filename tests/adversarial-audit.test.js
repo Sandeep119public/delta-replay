@@ -125,7 +125,7 @@ describe('Adversarial Audit — Provider Decoupling & Market Source Integrity (P
 
 describe('Adversarial Audit — Multi-Symbol Price Isolation (Point 4)', () => {
   it('does NOT re-price BTC position when an ETH candle arrives', () => {
-    const engine = new PaperTradingEngine({ feeRate: 0 });
+    const engine = new PaperTradingEngine({ startingBalance: 100000, feeRate: 0 });
     // Initialize BTC price at 50,000
     engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1000, open: 50000, high: 50100, low: 49900, close: 50000, volume: 1 }, index: 0 });
     engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
@@ -141,7 +141,7 @@ describe('Adversarial Audit — Multi-Symbol Price Isolation (Point 4)', () => {
   });
 
   it('does NOT trigger pending BTC limit order on ETH candle movements', () => {
-    const engine = new PaperTradingEngine({ feeRate: 0 });
+    const engine = new PaperTradingEngine({ startingBalance: 100000, feeRate: 0 });
     engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1000, open: 50000, high: 50100, low: 49900, close: 50000, volume: 1 }, index: 0 });
     // Place BTC BUY limit at 48,000
     const res = engine.placeLimitOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1, limitPrice: 48000 });
@@ -308,5 +308,131 @@ describe('Adversarial Audit — Decoupled Replay Action Guards & Windowed APIs (
 
     // Current candle
     expect(engine.getCurrentCandle().time).toBe(1000 + 15 * 60);
+  });
+});
+
+describe('Adversarial Audit — Residual Correctness Hardening (Points 1-6)', () => {
+  it('Cache strict-mode bypass: cached gapped data is rejected identically in strict mode', async () => {
+    const { CandleCache, CACHE_VERSION } = await import('../src/data/CandleCache.js');
+    const cache = new CandleCache({ enableIDB: false });
+    // Seed cache with gapped candles: 1000 and 1120 (missing 1060)
+    const gappedCandles = [
+      { time: 1000, open: 100, high: 105, low: 95, close: 102, volume: 10 },
+      { time: 1120, open: 106, high: 109, low: 104, close: 107, volume: 12 },
+    ];
+    const key = cache._key('BTCUSD', '1m');
+    cache._memory.set(key, {
+      candles: gappedCandles,
+      intervals: [{ from: 1000, to: 1120 }],
+      ts: Date.now(),
+      version: CACHE_VERSION,
+    });
+
+    const mockProvider = {
+      fetchChunk: vi.fn(),
+      getCandles: vi.fn(),
+    };
+    const store = new CandleStore();
+    const manager = new HistoricalDataManager({ provider: mockProvider, store, cache, strictMode: true });
+
+    // Loading cached range with strict: true must throw integrity error, NOT bypass strict validation!
+    await expect(manager.load({ symbol: 'BTCUSD', timeframe: '1m', from: 1000, to: 1120, strict: true })).rejects.toThrow(/Integrity error.*gap/);
+  });
+
+  it('Boundary coverage: detects missing start prefix (PARTIAL_START)', () => {
+    // Requested [1000, 1200), but first candle starts at 1060
+    const raw = [
+      { time: 1060, open: 102, high: 108, low: 101, close: 106, volume: 15 },
+      { time: 1120, open: 106, high: 109, low: 104, close: 107, volume: 12 },
+    ];
+    const res = CandleIntegrity.process(raw, { from: 1000, to: 1180, timeframeSec: 60, halfOpen: true });
+    expect(res.metadata.hasStartGap).toBe(true);
+    expect(res.metadata.gaps.some(g => g.type === 'PARTIAL_START')).toBe(true);
+    expect(res.metadata.coverageType).toContain('PARTIAL_START');
+
+    // Strict mode must reject it
+    expect(() => {
+      CandleIntegrity.process(raw, { from: 1000, to: 1180, timeframeSec: 60, halfOpen: true, strict: true });
+    }).toThrow(/Integrity error.*gap/);
+  });
+
+  it('Boundary coverage: detects missing end suffix (PARTIAL_END)', () => {
+    // Requested [1000, 1240), but last candle ends at 1120
+    const raw = [
+      { time: 1000, open: 100, high: 105, low: 95, close: 102, volume: 10 },
+      { time: 1060, open: 102, high: 108, low: 101, close: 106, volume: 15 },
+      { time: 1120, open: 106, high: 109, low: 104, close: 107, volume: 12 },
+    ];
+    const res = CandleIntegrity.process(raw, { from: 1000, to: 1240, timeframeSec: 60, halfOpen: true });
+    expect(res.metadata.hasEndGap).toBe(true);
+    expect(res.metadata.gaps.some(g => g.type === 'PARTIAL_END')).toBe(true);
+    expect(res.metadata.coverageType).toContain('PARTIAL_END');
+
+    // Strict mode must reject it
+    expect(() => {
+      CandleIntegrity.process(raw, { from: 1000, to: 1240, timeframeSec: 60, halfOpen: true, strict: true });
+    }).toThrow(/Integrity error.*gap/);
+  });
+
+  it('Unified solvency: identical cash requirement for market, limit, and stop orders under marginRate = 1.0', () => {
+    // Starting cash: 50. Price: 100. Qty: 1. Notional: 100.
+    const engine = new PaperTradingEngine({ startingBalance: 50, feeRate: 0.001, marginRate: 1.0 });
+    engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1000, open: 100, high: 105, low: 95, close: 100, volume: 1 }, index: 0 });
+
+    // Market order requires 100 * 1.0 + fee = 100.10 > 50 -> REJECT
+    const mkt = engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
+    expect(mkt.success).toBe(false);
+    expect(mkt.code).toBe('INSUFFICIENT_CASH');
+
+    // Limit order fill requires 100.10 > 50 -> REJECT fill
+    const lmt = engine.placeLimitOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1, limitPrice: 95 });
+    expect(lmt.success).toBe(true);
+    engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1060, open: 95, high: 96, low: 90, close: 94, volume: 1 }, index: 1 });
+    expect(engine.getOrder(lmt.order.id).status).toBe('REJECTED');
+    expect(engine.getOrder(lmt.order.id).rejectionReason).toBe('INSUFFICIENT_CASH');
+
+    // Stop order fill requires 100.10 > 50 -> REJECT fill
+    const stp = engine.placeStopOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1, stopPrice: 105 });
+    expect(stp.success).toBe(true);
+    engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1120, open: 105, high: 110, low: 104, close: 108, volume: 1 }, index: 2 });
+    expect(engine.getOrder(stp.order.id).status).toBe('REJECTED');
+    expect(engine.getOrder(stp.order.id).rejectionReason).toBe('INSUFFICIENT_CASH');
+  });
+
+  it('Unified solvency: marginRate = 0 (unlimited leverage / fee only) uniformly permits all orders', () => {
+    // Starting cash: 50. Price: 100. Qty: 1. Notional: 100. Fee = 0.10 <= 50.
+    const engine = new PaperTradingEngine({ startingBalance: 50, feeRate: 0.001, marginRate: 0 });
+    engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1000, open: 100, high: 105, low: 95, close: 100, volume: 1 }, index: 0 });
+
+    const mkt = engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
+    expect(mkt.success).toBe(true);
+    expect(engine.getPosition('BTCUSD')).not.toBeNull();
+  });
+
+  it('Per-symbol market state: market order uses the exact target symbol price even if another symbol arrived recently', () => {
+    const engine = new PaperTradingEngine({ startingBalance: 100000, feeRate: 0 });
+    // 1) BTC candle arrives at 50,000
+    engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1000, open: 50000, high: 50100, low: 49900, close: 50000, volume: 1 }, index: 0 });
+
+    // 2) ETH candle arrives at 3,000
+    engine.onMarketCandle({ symbol: 'ETHUSD', candle: { time: 1060, open: 3000, high: 3050, low: 2950, close: 3000, volume: 10 }, index: 1 });
+
+    // 3) BUY BTC must execute at 50,000 (BTC price), NOT 3,000 (ETH price)!
+    const res = engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
+    expect(res.success).toBe(true);
+    expect(engine.getPosition('BTCUSD').entryPrice).toBe(50000);
+    expect(engine.getPosition('BTCUSD').openedAt).toBe(1000); // BTC candle time, not ETH candle time!
+
+    // 4) BUY ETH executes at 3,000
+    const resEth = engine.placeOrder({ symbol: 'ETHUSD', side: 'BUY', quantity: 2 });
+    expect(resEth.success).toBe(true);
+    expect(engine.getPosition('ETHUSD').entryPrice).toBe(3000);
+  });
+
+  it('Provider contract: HistoricalDataManager strictly enforces provider interface', async () => {
+    const { CandleCache } = await import('../src/data/CandleCache.js');
+    const invalidProvider = { client: { fetchCandles: () => [] } }; // does not have fetchChunk or getCandles
+    const manager = new HistoricalDataManager({ provider: invalidProvider, store: new CandleStore(), cache: new CandleCache({ enableIDB: false }) });
+    await expect(manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 1000, to: 1120 })).rejects.toThrow(/Provider must implement fetchChunk or getCandles/);
   });
 });

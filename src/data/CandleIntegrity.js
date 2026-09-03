@@ -67,25 +67,104 @@ export class CandleIntegrity {
     const { validCandles, errors } = CandleValidator.validateBatch(ranged);
     const invalidCount = errors.length;
 
-    // 6. Gap detection
+    // 6. Gap and boundary coverage detection
     const gaps = [];
-    if (timeframeSec) {
+    let hasStartGap = false;
+    let hasEndGap = false;
+    let hasInternalGaps = false;
+
+    if (timeframeSec && Number.isFinite(from) && Number.isFinite(to)) {
+      const alignedStart = Math.ceil(from / timeframeSec) * timeframeSec;
+      const expectedLast = halfOpen
+        ? (to % timeframeSec === 0 ? to - timeframeSec : Math.floor(to / timeframeSec) * timeframeSec)
+        : Math.floor(to / timeframeSec) * timeframeSec;
+
+      if (validCandles.length === 0) {
+        if (alignedStart <= expectedLast) {
+          const missingCount = Math.round((expectedLast - alignedStart) / timeframeSec) + 1;
+          hasStartGap = true;
+          hasEndGap = true;
+          gaps.push({
+            type: 'FULL_GAP',
+            from: alignedStart,
+            to: expectedLast,
+            missingCount,
+          });
+        }
+      } else {
+        // Boundary check: start coverage (PARTIAL_START)
+        if (validCandles[0].time > alignedStart) {
+          const missingCount = Math.round((validCandles[0].time - alignedStart) / timeframeSec);
+          if (missingCount > 0) {
+            hasStartGap = true;
+            gaps.push({
+              type: 'PARTIAL_START',
+              from: alignedStart,
+              to: validCandles[0].time - timeframeSec,
+              missingCount,
+            });
+          }
+        }
+
+        // Internal gaps (INTERNAL_GAP)
+        for (let i = 1; i < validCandles.length; i++) {
+          const expected = validCandles[i - 1].time + timeframeSec;
+          const actual = validCandles[i].time;
+          if (actual !== expected) {
+            const missingCount = Math.round((actual - expected) / timeframeSec);
+            if (missingCount > 0) {
+              hasInternalGaps = true;
+              gaps.push({
+                type: 'INTERNAL_GAP',
+                from: expected,
+                to: actual - timeframeSec,
+                missingCount,
+                afterIndex: i - 1,
+              });
+            } else if (actual > expected) {
+              hasInternalGaps = true;
+              gaps.push({
+                type: 'INTERNAL_GAP',
+                from: expected,
+                to: actual,
+                missingCount: 1,
+                afterIndex: i - 1,
+                irregular: true,
+              });
+            }
+          }
+        }
+
+        // Boundary check: end coverage (PARTIAL_END)
+        const lastCandle = validCandles[validCandles.length - 1];
+        if (lastCandle.time < expectedLast) {
+          const missingCount = Math.round((expectedLast - lastCandle.time) / timeframeSec);
+          if (missingCount > 0) {
+            hasEndGap = true;
+            gaps.push({
+              type: 'PARTIAL_END',
+              from: lastCandle.time + timeframeSec,
+              to: expectedLast,
+              missingCount,
+            });
+          }
+        }
+      }
+    } else if (timeframeSec) {
       for (let i = 1; i < validCandles.length; i++) {
         const expected = validCandles[i - 1].time + timeframeSec;
         const actual = validCandles[i].time;
         if (actual !== expected) {
-          // Report gap: missing intervals between
           const missingCount = Math.round((actual - expected) / timeframeSec);
           if (missingCount > 0) {
+            hasInternalGaps = true;
             gaps.push({
+              type: 'INTERNAL_GAP',
               from: expected,
               to: actual - timeframeSec,
               missingCount,
               afterIndex: i - 1,
             });
-          } else if (actual > expected) {
-            // Irregular gap (not aligned)
-            gaps.push({ from: expected, to: actual, missingCount: 1, afterIndex: i - 1, irregular: true });
           }
         }
       }
@@ -105,23 +184,35 @@ export class CandleIntegrity {
         throw new Error(`Integrity error: dataset contains ${invalidCount} invalid candle(s)`);
       }
       if (!allowGaps && gaps.length > 0) {
-        throw new Error(`Integrity error: dataset contains ${gaps.length} candle gap(s); contiguous market time required`);
+        const gapSummary = gaps.map(g => `${g.type || 'GAP'}: ${g.from}->${g.to}`).join(', ');
+        throw new Error(`Integrity error: dataset contains ${gaps.length} candle gap(s) [${gapSummary}]; contiguous market time required`);
       }
     }
 
-    const metadata = {
-      requestedFrom: from,
-      requestedTo: to,
-      actualFirst: validCandles[0]?.time ?? null,
-      actualLast: validCandles[validCandles.length - 1]?.time ?? null,
-      count: validCandles.length,
-      duplicatesRemoved,
-      invalidCount,
-      gaps,
-      integrityStatus,
-      errors: errors.slice(0, 5),
-    };
+    const coverageType = gaps.length === 0
+      ? 'CONTIGUOUS'
+      : (hasStartGap && hasEndGap ? 'PARTIAL_BOTH' : (hasStartGap ? 'PARTIAL_START' : (hasEndGap ? 'PARTIAL_END' : 'INTERNAL_GAP')));
 
-    return { validCandles, metadata };
+    return {
+      validCandles,
+      metadata: {
+        requestedFrom: from,
+        requestedTo: to,
+        actualFirst: validCandles[0]?.time ?? null,
+        actualLast: validCandles[validCandles.length - 1]?.time ?? null,
+        totalInput: rawCandles.length,
+        duplicatesRemoved,
+        invalidCount,
+        validCount: validCandles.length,
+        count: validCandles.length,
+        gaps,
+        hasStartGap,
+        hasEndGap,
+        hasInternalGaps,
+        coverageType,
+        integrityStatus,
+        errors: errors.slice(0, 5),
+      },
+    };
   }
 }

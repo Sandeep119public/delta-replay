@@ -28,7 +28,7 @@ const binanceProvider = new BinanceCandleProvider();
 const deltaProvider = new DeltaCandleProvider();
 const localProvider = new LocalCandleProvider();
 const candleCache = new CandleCache({ dbName: 'delta-replay-futures-v1' });
-const dataManager = new HistoricalDataManager({ provider: binanceProvider, store: candleStore, cache: candleCache, concurrency: 2, chunkSize: 1000 });
+const dataManager = new HistoricalDataManager({ provider: binanceProvider, store: candleStore, cache: candleCache, concurrency: 2, chunkSize: 1000, strictMode: true });
 
 const tradingEngine = new PaperTradingEngine({ startingBalance: 10000, replayEngine: engine });
 
@@ -817,7 +817,7 @@ async function loadAndPrepareReplay({ targetSec = null, autoStart = false } = {}
   dataManager.on(DataEvents.CHUNK_RECEIVED, onChunk);
 
   try {
-    const { candles, metadata } = await dataManager.load({ symbol, timeframe, from, to, signal });
+    const { candles, metadata } = await dataManager.load({ symbol, timeframe, from, to, signal, strict: true, halfOpen: true });
     dataManager.off(DataEvents.PROGRESS, onProgress);
     dataManager.off(DataEvents.CHUNK_RECEIVED, onChunk);
 

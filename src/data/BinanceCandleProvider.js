@@ -8,6 +8,16 @@ export class BinanceCandleProvider {
     this.chunkSize = chunkSize;
   }
 
+  async fetchChunk({ symbol, timeframe, from, to, signal } = {}) {
+    return this.client.fetchCandles({
+      symbol,
+      resolution: timeframe,
+      start: from,
+      end: to,
+      signal
+    });
+  }
+
   async getCandles({ symbol, timeframe, from, to, signal }) {
     const tfSec = TIMEFRAME_SECONDS[timeframe] || 60;
     const allRaw = [];

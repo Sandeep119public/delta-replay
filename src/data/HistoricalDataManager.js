@@ -69,6 +69,15 @@ export class HistoricalDataManager extends EventEmitter {
       throw err;
     }
 
+    const integrityOptions = {
+      from,
+      to,
+      timeframeSec: tfSec,
+      strict,
+      allowGaps,
+      halfOpen,
+    };
+
     // Try IDB if memory miss
     let cacheRes = this.cache.get(symbol, timeframe, from, to);
     if (!cacheRes.hit && this.cache.enableIDB) {
@@ -77,9 +86,20 @@ export class HistoricalDataManager extends EventEmitter {
     }
     // If cache claims hit, verify via integrity that it actually covers range without gaps/corruption (adversarial audit)
     if (cacheRes.hit) {
-      const { validCandles, metadata } = CandleIntegrity.process(cacheRes.candles, { from, to, timeframeSec: tfSec });
+      let validCandles = [];
+      let metadata = null;
+      try {
+        const integrityCheck = CandleIntegrity.process(cacheRes.candles, integrityOptions);
+        validCandles = integrityCheck.validCandles;
+        metadata = integrityCheck.metadata;
+      } catch (err) {
+        if (strict) {
+          this.emit(DataEvents.ERROR, err);
+          throw err;
+        }
+      }
       if (validCandles.length === 0) {
-        // Cache hit but all candles corrupted -> treat as full miss and discard stale cache
+        // Cache hit but all candles corrupted or gapped in strict -> treat as full miss and discard stale cache
         const key = this.cache._key(symbol, timeframe);
         this.cache._memory.delete(key);
         if (this.cache.enableIDB) this.cache._deleteIDBEntry(key).catch(()=>{});
@@ -199,18 +219,10 @@ export class HistoricalDataManager extends EventEmitter {
         let raw;
         if (typeof this.provider.fetchChunk === 'function') {
           raw = await this.provider.fetchChunk({ symbol: apiSymbol, timeframe, from: chunk.from, to: chunk.to, signal });
-        } else if (this.provider.client && typeof this.provider.client.fetchCandles === 'function') {
-          raw = await this.provider.client.fetchCandles({
-            symbol: apiSymbol,
-            resolution: timeframe,
-            start: chunk.from,
-            end: chunk.to,
-            signal,
-          });
         } else if (typeof this.provider.getCandles === 'function') {
           raw = await this.provider.getCandles({ symbol: apiSymbol, timeframe, from: chunk.from, to: chunk.to, signal });
         } else {
-          throw new Error('Provider does not support fetching candles');
+          throw new Error('Provider must implement fetchChunk or getCandles');
         }
         return raw;
       } catch (err) {
@@ -270,14 +282,7 @@ export class HistoricalDataManager extends EventEmitter {
 
     let validCandles, metadata;
     try {
-      const integrityRes = CandleIntegrity.process(allRaw, {
-        from,
-        to,
-        timeframeSec: tfSec,
-        strict,
-        allowGaps,
-        halfOpen,
-      });
+      const integrityRes = CandleIntegrity.process(allRaw, integrityOptions);
       validCandles = integrityRes.validCandles;
       metadata = integrityRes.metadata;
     } catch (err) {
