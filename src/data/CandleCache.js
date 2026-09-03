@@ -1,201 +1,220 @@
 /**
- * CandleCache — memory LRU + optional IndexedDB persistent.
- * Interval-aware: merges overlapping ranges.
- * Versioned: incompatible old records are discarded safely.
+ * CandleCache - memory LRU + optional IndexedDB persistence.
+ *
+ * Coverage is derived from actual candle continuity whenever the timeframe is
+ * known. Callers cannot accidentally mark a sparse response as fully cached.
  */
-export const CACHE_VERSION = 2;
+export const CACHE_VERSION = 3;
+
+const TIMEFRAME_SECONDS = Object.freeze({
+  '1m': 60,
+  '3m': 180,
+  '5m': 300,
+  '15m': 900,
+  '30m': 1800,
+  '1h': 3600,
+  '2h': 7200,
+  '4h': 14400,
+  '6h': 21600,
+  '1d': 86400,
+  '1w': 604800,
+});
 
 export class CandleCache {
   constructor({ maxMemory = 20, dbName = 'delta-replay-cache', enableIDB = true } = {}) {
+    if (!Number.isInteger(maxMemory) || maxMemory < 1) throw new Error('maxMemory must be a positive integer');
     this.maxMemory = maxMemory;
-    this._memory = new Map(); // key -> { candles: [], intervals: [{from,to}], ts, version }
+    this._memory = new Map();
     this.dbName = dbName;
-    this.enableIDB = enableIDB && typeof indexedDB !== 'undefined';
+    this.enableIDB = Boolean(enableIDB && typeof indexedDB !== 'undefined');
     this._db = null;
     this._version = CACHE_VERSION;
   }
 
   _key(symbol, timeframe) { return `${symbol}|${timeframe}`; }
 
+  _getTimeframeSeconds(timeframe, explicit = null, entry = null) {
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    if (Number.isFinite(entry?.timeframeSec) && entry.timeframeSec > 0) return entry.timeframeSec;
+    return TIMEFRAME_SECONDS[timeframe] ?? null;
+  }
+
   _lruTouch(key, entry) {
-    if (this._memory.has(key)) this._memory.delete(key);
+    this._memory.delete(key);
     this._memory.set(key, entry);
-    if (this._memory.size > this.maxMemory) {
-      const first = this._memory.keys().next().value;
-      this._memory.delete(first);
+    while (this._memory.size > this.maxMemory) {
+      this._memory.delete(this._memory.keys().next().value);
     }
   }
 
-  // Compute missing intervals: requested [from,to] minus cached intervals
-  _computeMissing(requestedFrom, requestedTo, cachedIntervals) {
-    if (!cachedIntervals || cachedIntervals.length === 0) return [{ from: requestedFrom, to: requestedTo }];
-    const sorted = [...cachedIntervals].sort((a, b) => a.from - b.from);
+  _computeMissing(requestedFrom, requestedTo, cachedIntervals = []) {
+    const start = Math.floor(requestedFrom);
+    const end = Math.floor(requestedTo);
+    if (start > end) return [];
+    if (!cachedIntervals.length) return [{ from: start, to: end }];
+
+    const sorted = this._mergeIntervals(cachedIntervals).filter(iv => iv.to >= start && iv.from <= end);
     const missing = [];
-    let cur = requestedFrom;
+    let cursor = start;
     for (const iv of sorted) {
-      if (iv.to < cur || iv.from > requestedTo) continue;
-      if (iv.from > cur) {
-        missing.push({ from: cur, to: Math.min(iv.from - 1, requestedTo) });
-      }
-      cur = Math.max(cur, iv.to + 1);
-      if (cur > requestedTo) break;
+      if (iv.from > cursor) missing.push({ from: cursor, to: Math.min(end, iv.from - 1) });
+      cursor = Math.max(cursor, iv.to + 1);
+      if (cursor > end) break;
     }
-    if (cur <= requestedTo) missing.push({ from: cur, to: requestedTo });
-    // Filter zero-length
-    return missing.filter(m => m.from <= m.to);
+    if (cursor <= end) missing.push({ from: cursor, to: end });
+    return missing.filter(iv => iv.from <= iv.to);
   }
 
-  /**
-   * Try to get cached candles for range. Returns { hit: boolean, candles: [], missing: [] }
-   * hit true if fully covered. Version mismatched entries are discarded.
-   */
-  get(symbol, timeframe, from, to) {
+  get(symbol, timeframe, from, to, { timeframeSec = null } = {}) {
     const key = this._key(symbol, timeframe);
     const entry = this._memory.get(key);
-    if (!entry) return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
-    // Version check: discard stale version
-    if (entry.version != null && entry.version !== CACHE_VERSION) {
-      this._memory.delete(key);
-      this._deleteIDBEntry(key).catch(() => {});
+    if (!entry || entry.version !== CACHE_VERSION) {
+      if (entry) this._memory.delete(key);
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
-    if (entry.version == null) {
-      // Old record without version field -> treat as stale, discard
-      this._memory.delete(key);
-      this._deleteIDBEntry(key).catch(() => {});
+    if (!Array.isArray(entry.candles) || !Array.isArray(entry.intervals)) {
+      this.invalidate(symbol, timeframe);
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
-    // Validate intervals present, else miss
-    if (!Array.isArray(entry.intervals)) {
-      return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
-    }
-    const missing = this._computeMissing(from, to, entry.intervals);
-    if (missing.length === 0) {
-      // fully cached according to intervals: but verify candles actually exist for those intervals (defense against corrupted intervals)
-      // We still return hit; caller (HistoricalDataManager) will revalidate via CandleIntegrity and repair if false.
-      const sliced = entry.candles.filter(c => c.time >= from && c.time <= to);
-      this._lruTouch(key, entry);
-      return { hit: true, candles: sliced.map(c => ({ ...c })), missing: [], intervals: entry.intervals };
-    }
-    // partial: return intersecting cached part
-    const cachedSlice = entry.candles.filter(c => c.time >= from && c.time <= to);
-    return { hit: false, candles: cachedSlice.map(c => ({ ...c })), missing, intervals: entry.intervals };
+
+    const canonical = entry.candles.filter(c => this._isCanonicalCandle(c));
+    if (canonical.length !== entry.candles.length) entry.candles = canonical;
+
+    const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
+    entry.timeframeSec = tf;
+    const derivedIntervals = CandleCache.intervalsFromCandles(entry.candles, tf);
+    const intervals = derivedIntervals.length ? derivedIntervals : entry.intervals;
+    const missing = this._computeMissing(from, to, intervals);
+    const candles = entry.candles.filter(c => c.time >= from && c.time <= to).map(c => ({ ...c }));
+
+    entry.intervals = intervals;
+    entry.ts = Date.now();
+    this._lruTouch(key, entry);
+    return { hit: missing.length === 0, candles, missing, intervals };
   }
 
-  /**
-   * Repair stored intervals to match actual candles (gap-aware). Used when integrity detects stale false interval.
-   */
-  repairIntervals(symbol, timeframe, actualIntervals) {
+  invalidate(symbol, timeframe) {
+    const key = this._key(symbol, timeframe);
+    this._memory.delete(key);
+    if (this.enableIDB) this._deleteIDBEntry(key).catch(() => {});
+  }
+
+  replace(symbol, timeframe, candles = [], { timeframeSec = null } = {}) {
+    const tf = this._getTimeframeSeconds(timeframe, timeframeSec);
+    const canonical = (Array.isArray(candles) ? candles : [])
+      .filter(c => this._isCanonicalCandle(c))
+      .map(c => ({ ...c }))
+      .sort((a, b) => a.time - b.time);
+    const entry = {
+      candles: canonical,
+      intervals: CandleCache.intervalsFromCandles(canonical, tf),
+      timeframeSec: tf,
+      ts: Date.now(),
+      version: CACHE_VERSION,
+    };
+    this._lruTouch(this._key(symbol, timeframe), entry);
+    this._persistIDB(this._key(symbol, timeframe), entry).catch(() => {});
+    return entry;
+  }
+
+  repairIntervals(symbol, timeframe, actualIntervals, { timeframeSec = null } = {}) {
     const key = this._key(symbol, timeframe);
     const entry = this._memory.get(key);
     if (!entry) return;
     entry.intervals = this._mergeIntervals(actualIntervals);
+    entry.timeframeSec = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.ts = Date.now();
     entry.version = CACHE_VERSION;
     this._lruTouch(key, entry);
-    if (this.enableIDB) this._persistIDB(key, entry).catch(() => {});
+    this._persistIDB(key, entry).catch(() => {});
   }
 
-  /**
-   * Merge new candles into cache, merge intervals.
-   * If intervals contains gaps, caller should provide actual covered intervals (not just requested).
-   * For backward compat, if candles has gaps, we derive intervals from candles.
-   */
-  set(symbol, timeframe, from, to, candles, opts = {}) {
+  set(symbol, timeframe, from, to, candles = [], { intervals = null, timeframeSec = null } = {}) {
     const key = this._key(symbol, timeframe);
-    let entry = this._memory.get(key);
-    if (!entry) {
-      entry = { candles: [], intervals: [], ts: Date.now(), version: CACHE_VERSION };
-    }
-    // Merge candles: dedup by time, sort, with basic sanitization (drop NaN/Infinity time etc)
-    const map = new Map();
-    for (const c of entry.candles) {
-      if (c && Number.isFinite(c.time) && Number.isFinite(c.open)) map.set(c.time, { ...c });
-    }
-    for (const c of candles) {
-      if (!c || !Number.isFinite(c.time) || !Number.isFinite(c.open) || !Number.isFinite(c.high) || !Number.isFinite(c.low) || !Number.isFinite(c.close)) continue;
-      // Also reject NaN/Infinity volume? volume can be 0 but must be finite
-      if (!Number.isFinite(c.volume) && c.volume != null) continue;
-      // reject mismatched? caller ensures symbol/timeframe consistent
-      map.set(c.time, { ...c });
-    }
-    const merged = Array.from(map.values()).sort((a, b) => a.time - b.time);
-    // Further dedup: ensure strictly increasing, keep last for duplicates (already deduped)
-    entry.candles = merged;
+    const entry = this._memory.get(key) ?? {
+      candles: [], intervals: [], ts: Date.now(), version: CACHE_VERSION, timeframeSec: null,
+    };
+
+    const byTime = new Map();
+    for (const c of entry.candles) if (this._isCanonicalCandle(c)) byTime.set(c.time, { ...c });
+    for (const c of candles) if (this._isCanonicalCandle(c)) byTime.set(c.time, { ...c });
+
+    entry.candles = [...byTime.values()].sort((a, b) => a.time - b.time);
+    entry.timeframeSec = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
+    const derived = CandleCache.intervalsFromCandles(entry.candles, entry.timeframeSec);
+    entry.intervals = derived.length ? derived : this._mergeIntervals(intervals ?? [{ from, to }]);
     entry.version = CACHE_VERSION;
-    // Determine intervals to add: if opts.intervals provided, use those (gap-aware), else use requested [from,to]
-    const intervalsToAdd = opts.intervals ?? [{ from, to }];
-    // Validate intervals: must be finite numbers, from<=to
-    const cleanIntervals = intervalsToAdd.filter(iv => iv && Number.isFinite(iv.from) && Number.isFinite(iv.to) && iv.from <= iv.to);
-    entry.intervals = this._mergeIntervals([...entry.intervals, ...cleanIntervals]);
     entry.ts = Date.now();
+
     this._lruTouch(key, entry);
-    // Fire-and-forget IDB persist
-    if (this.enableIDB) this._persistIDB(key, entry).catch(() => {});
+    this._persistIDB(key, entry).catch(() => {});
     return entry;
   }
 
-  // Derive continuous intervals from sorted candles given timeframeSec
   static intervalsFromCandles(candles, timeframeSec) {
-    if (!candles.length || !timeframeSec) return [];
-    const sorted = [...candles].sort((a,b)=>a.time-b.time);
+    if (!Array.isArray(candles) || !candles.length || !Number.isFinite(timeframeSec) || timeframeSec <= 0) return [];
+    const sorted = candles.filter(c => c && Number.isFinite(c.time)).slice().sort((a, b) => a.time - b.time);
+    if (!sorted.length) return [];
     const intervals = [];
     let start = sorted[0].time;
-    let prev = sorted[0].time;
-    for (let i=1;i<sorted.length;i++) {
-      const expected = prev + timeframeSec;
-      if (sorted[i].time !== expected) {
-        intervals.push({ from: start, to: prev });
-        start = sorted[i].time;
+    let previous = sorted[0].time;
+    for (let i = 1; i < sorted.length; i++) {
+      const current = sorted[i].time;
+      if (current !== previous + timeframeSec) {
+        intervals.push({ from: start, to: previous });
+        start = current;
       }
-      prev = sorted[i].time;
+      previous = current;
     }
-    intervals.push({ from: start, to: prev });
+    intervals.push({ from: start, to: previous });
     return intervals;
   }
 
   _mergeIntervals(intervals) {
-    if (!intervals.length) return [];
-    const sorted = [...intervals].sort((a, b) => a.from - b.from);
-    const merged = [sorted[0]];
-    for (let i = 1; i < sorted.length; i++) {
+    const clean = intervals
+      .filter(iv => iv && Number.isFinite(iv.from) && Number.isFinite(iv.to) && iv.from <= iv.to)
+      .map(iv => ({ from: Math.floor(iv.from), to: Math.floor(iv.to) }))
+      .sort((a, b) => a.from - b.from);
+    if (!clean.length) return [];
+    const merged = [{ ...clean[0] }];
+    for (let i = 1; i < clean.length; i++) {
+      const current = clean[i];
       const last = merged[merged.length - 1];
-      const cur = sorted[i];
-      if (cur.from <= last.to + 1) {
-        last.to = Math.max(last.to, cur.to);
-      } else {
-        merged.push({ ...cur });
-      }
+      if (current.from <= last.to + 1) last.to = Math.max(last.to, current.to);
+      else merged.push({ ...current });
     }
     return merged;
+  }
+
+  _isCanonicalCandle(c) {
+    return Boolean(c)
+      && Number.isFinite(c.time) && c.time > 0
+      && Number.isFinite(c.open) && Number.isFinite(c.high)
+      && Number.isFinite(c.low) && Number.isFinite(c.close)
+      && Number.isFinite(c.volume) && c.volume >= 0;
   }
 
   clear() {
     this._memory.clear();
     if (this.enableIDB && this._db) {
-      // clear IDB store
-      try {
-        const tx = this._db.transaction('candles', 'readwrite');
-        tx.objectStore('candles').clear();
-      } catch {}
+      try { this._db.transaction('candles', 'readwrite').objectStore('candles').clear(); } catch {}
     }
   }
 
-  // IDB helpers (best-effort)
   async _openIDB() {
     if (!this.enableIDB) return null;
     if (this._db) return this._db;
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open(this.dbName, this._version);
-      req.onupgradeneeded = (event) => {
-        const db = req.result;
+      const request = indexedDB.open(this.dbName, this._version);
+      request.onupgradeneeded = () => {
+        const db = request.result;
         if (!db.objectStoreNames.contains('candles')) db.createObjectStore('candles');
-        else if (event.oldVersion < CACHE_VERSION) {
-          try { const store = event.target.transaction.objectStore('candles'); store.clear(); } catch {}
+        else {
+          try { request.transaction.objectStore('candles').clear(); } catch {}
         }
       };
-      req.onsuccess = () => { this._db = req.result; resolve(this._db); };
-      req.onerror = () => reject(req.error);
+      request.onsuccess = () => { this._db = request.result; resolve(this._db); };
+      request.onerror = () => reject(request.error);
     });
   }
 
@@ -203,8 +222,14 @@ export class CandleCache {
     try {
       const db = await this._openIDB();
       if (!db) return;
-      const tx = db.transaction('candles', 'readwrite');
-      tx.objectStore('candles').put({ key, candles: entry.candles, intervals: entry.intervals, ts: entry.ts, version: CACHE_VERSION }, key);
+      db.transaction('candles', 'readwrite').objectStore('candles').put({
+        key,
+        candles: entry.candles,
+        intervals: entry.intervals,
+        timeframeSec: entry.timeframeSec,
+        ts: entry.ts,
+        version: CACHE_VERSION,
+      }, key);
     } catch {}
   }
 
@@ -212,47 +237,32 @@ export class CandleCache {
     try {
       const db = await this._openIDB();
       if (!db) return;
-      const tx = db.transaction('candles', 'readwrite');
-      tx.objectStore('candles').delete(key);
+      db.transaction('candles', 'readwrite').objectStore('candles').delete(key);
     } catch {}
   }
 
   async loadFromIDB(symbol, timeframe) {
     if (!this.enableIDB) return null;
+    const key = this._key(symbol, timeframe);
     try {
       const db = await this._openIDB();
-      const tx = db.transaction('candles', 'readonly');
-      const req = tx.objectStore('candles').get(this._key(symbol, timeframe));
-      return new Promise((resolve) => {
-        req.onsuccess = () => {
-          const val = req.result;
-          if (val) {
-            // Version check: discard incompatible
-            if (val.version == null || val.version !== CACHE_VERSION) {
-              // remove stale
-              this._deleteIDBEntry(this._key(symbol, timeframe)).catch(()=>{});
-              resolve(null);
-              return;
-            }
-            // Basic corruption check: must be array of candles with finite time
-            if (!Array.isArray(val.candles) || !Array.isArray(val.intervals)) {
-              this._deleteIDBEntry(this._key(symbol, timeframe)).catch(()=>{});
-              resolve(null);
-              return;
-            }
-            // Filter obviously corrupt candles (NaN/Infinity time)
-            const filtered = val.candles.filter(c => c && Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close));
-            if (filtered.length === 0 && val.candles.length > 0) {
-              this._deleteIDBEntry(this._key(symbol, timeframe)).catch(()=>{});
-              resolve(null);
-              return;
-            }
-            const entry = { candles: filtered.map(c=>({ ...c })), intervals: val.intervals.filter(iv=>iv && Number.isFinite(iv.from) && Number.isFinite(iv.to)), ts: val.ts, version: val.version };
-            this._memory.set(this._key(symbol, timeframe), entry);
-            resolve(val);
-          } else resolve(null);
+      const request = db.transaction('candles', 'readonly').objectStore('candles').get(key);
+      return await new Promise(resolve => {
+        request.onsuccess = () => {
+          const value = request.result;
+          if (!value || value.version !== CACHE_VERSION || !Array.isArray(value.candles)) {
+            if (value) this._deleteIDBEntry(key).catch(() => {});
+            resolve(null);
+            return;
+          }
+          const candles = value.candles.filter(c => this._isCanonicalCandle(c)).map(c => ({ ...c }));
+          const tf = this._getTimeframeSeconds(timeframe, value.timeframeSec, value);
+          const intervals = CandleCache.intervalsFromCandles(candles, tf);
+          const entry = { candles, intervals, timeframeSec: tf, ts: value.ts, version: value.version };
+          this._lruTouch(key, entry);
+          resolve(entry);
         };
-        req.onerror = () => resolve(null);
+        request.onerror = () => resolve(null);
       });
     } catch { return null; }
   }
