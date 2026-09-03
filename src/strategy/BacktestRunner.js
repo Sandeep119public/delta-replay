@@ -22,6 +22,13 @@ export class BacktestRunner {
       executionProfile: EXECUTION_PROFILE.RESEARCH_BACKTEST,
     });
 
+    // An injected engine is part of the experiment definition. Do not silently
+    // accept manual-replay semantics here, because IMMEDIATE_CLOSE can turn a
+    // strategy signal into same-bar execution and introduce lookahead bias.
+    if (this.engine.executionProfile !== EXECUTION_PROFILE.RESEARCH_BACKTEST) {
+      throw new Error(`BacktestRunner requires execution profile ${EXECUTION_PROFILE.RESEARCH_BACKTEST}`);
+    }
+
     // Single canonical orchestration path: subscribe strategy strictly to PaperTradingEngine's BAR_CLOSE.
     this._lastIntents = [];
     this._unsubBarClose = this.engine.on(TradingEvents.BAR_CLOSE, (barEvent) => {
@@ -39,6 +46,10 @@ export class BacktestRunner {
    * -> strategy evaluates finalized bar and enqueues intents for T+1 execution.
    */
   processBar(candle, index = null) {
+    if (!candle || typeof candle !== 'object') throw new TypeError('BacktestRunner.processBar expects a candle object');
+    if (candle.symbol != null && candle.symbol !== this.symbol) {
+      throw new Error(`BacktestRunner symbol mismatch: expected ${this.symbol}, got ${candle.symbol}`);
+    }
     const idx = Number.isFinite(index) ? index : (this.engine.getLatestCandleIndex() + 1);
     this.engine.onMarketCandle({ candle, index: idx, symbol: this.symbol });
     return { intents: this._lastIntents };
