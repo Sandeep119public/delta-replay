@@ -276,6 +276,7 @@ describe('PHASE 6.6A — Regression: Illegal invocation & data path', () => {
       ];
       const fetchFn = mockFetchResponse({ jsonData:{ success:true, result: raw }});
       const client = new DeltaClient({ fetchFn, timeoutMs:0 });
+      client.gridOrigin = 1700000000;
       const provider = new DeltaCandleProvider({ client });
       const store = new CandleStore(); const cache = new CandleCache({ enableIDB:false });
       const mgr = new HistoricalDataManager({ provider, store, cache });

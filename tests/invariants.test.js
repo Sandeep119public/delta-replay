@@ -608,7 +608,7 @@ describe('High-Value Invariant Tests (Audit Section 18 & Second-Pass Hardening)'
       expect(cached.candles.length).toBe(0);
     });
 
-    it('isolates cache namespace by venue and gridOrigin', () => {
+    it('isolates cache namespace by venue and gridOrigin without any bypass or fallback', () => {
       const cache = new CandleCache({ enableIDB: false });
       const candles = [makeCandle(1000, 100), makeCandle(1060, 101)];
 
@@ -619,7 +619,7 @@ describe('High-Value Invariant Tests (Audit Section 18 & Second-Pass Hardening)'
         gridOrigin: 1000,
       });
 
-      // Cache lookup for Binance with origin 0 should be a MISS
+      // Cache lookup for Binance with origin 0 should be a strict MISS
       const binanceLookup = cache.get('BTCUSD', '1m', 1000, 1060, {
         timeframeSec: 60,
         venue: VENUES.BINANCE_FUTURES,
@@ -636,6 +636,79 @@ describe('High-Value Invariant Tests (Audit Section 18 & Second-Pass Hardening)'
       });
       expect(deltaLookup.hit).toBe(true);
       expect(deltaLookup.candles.length).toBe(2);
+
+      // Verify no fallback: an entry in DEFAULT never leaks into BINANCE_FUTURES
+      cache.set('ETHUSD', '1m', 1000, 1060, candles, {
+        timeframeSec: 60,
+        venue: 'DEFAULT',
+        gridOrigin: 0,
+      });
+      const binanceEthLookup = cache.get('ETHUSD', '1m', 1000, 1060, {
+        timeframeSec: 60,
+        venue: VENUES.BINANCE_FUTURES,
+        gridOrigin: 0,
+      });
+      expect(binanceEthLookup.hit).toBe(false);
+    });
+
+    it('CandleIntegrity rejects off-grid timestamps on non-zero lattice (origin split-brain prevention)', () => {
+      const origin = 1000;
+      const tfSec = 60;
+      // Valid on origin=0 lattice (1020%60===0, 1080%60===0, 1140%60===0),
+      // but OFF-GRID on origin=1000 lattice ((1020-1000)%60===20 != 0)!
+      const offGridCandles = [
+        makeCandle(1020, 100),
+        makeCandle(1080, 101),
+        makeCandle(1140, 102),
+      ];
+
+      // In strict mode on origin=1000, this MUST be rejected as invalid/off-grid!
+      expect(() => {
+        CandleIntegrity.process(offGridCandles, {
+          from: 1000,
+          to: 1180,
+          timeframeSec: tfSec,
+          origin,
+          strict: true,
+        });
+      }).toThrow(/OFF_GRID|Integrity error.*invalid candle/);
+
+      // In repair/lenient mode on origin=1000, off-grid candles must be excluded from validCandles
+      const res = CandleIntegrity.process(offGridCandles, {
+        from: 1000,
+        to: 1180,
+        timeframeSec: tfSec,
+        origin,
+        policy: 'REPAIR',
+      });
+      expect(res.validCandles.length).toBe(0);
+      expect(res.metadata.invalidCount).toBe(3);
+      expect(res.metadata.errors[0].reason).toContain('OFF_GRID');
+    });
+
+    it('CandleCache enforces discrete grid validity on set() and replace()', () => {
+      const cache = new CandleCache({ enableIDB: false });
+      const origin = 1000;
+      const tfSec = 60;
+      // 1020 is off-grid for origin 1000
+      const mixedCandles = [
+        makeCandle(1000, 100), // on-grid
+        makeCandle(1020, 101), // off-grid
+        makeCandle(1060, 102), // on-grid
+      ];
+
+      cache.set('BTCUSD', '1m', 1000, 1060, mixedCandles, {
+        timeframeSec: tfSec,
+        gridOrigin: origin,
+      });
+
+      const res = cache.get('BTCUSD', '1m', 1000, 1060, {
+        timeframeSec: tfSec,
+        gridOrigin: origin,
+      });
+      // Off-grid candle at 1020 must not enter the cache!
+      expect(res.candles.length).toBe(2);
+      expect(res.candles.map(c => c.time)).toEqual([1000, 1060]);
     });
   });
 });

@@ -522,11 +522,12 @@ describe('Phase 8.6 — Retry After Error', () => {
       return { ok: true, status: 200, json: async () => ({ success: true, result: [genCandle(1000)] }), text: async () => '' };
     };
     const client = new DeltaClient({ fetchFn, timeoutMs: 0 });
+    client.gridOrigin = 1000;
     const provider = new DeltaCandleProvider({ client, maxCandles: 10000, chunkSize: 2000 });
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const manager = new HistoricalDataManager({ provider, store, cache, maxRetries: 3, chunkSize: 2000 });
-    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 900, to: 1100 });
+    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 1000, to: 1120 });
     expect(result.candles.length).toBe(1);
     expect(attempts).toBe(3);
   });
@@ -539,11 +540,12 @@ describe('Phase 8.6 — Retry After Error', () => {
       return { ok: true, status: 200, json: async () => ({ success: true, result: [genCandle(1000)] }), text: async () => '' };
     };
     const client = new DeltaClient({ fetchFn, timeoutMs: 0 });
+    client.gridOrigin = 1000;
     const provider = new DeltaCandleProvider({ client, maxCandles: 10000, chunkSize: 2000 });
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const manager = new HistoricalDataManager({ provider, store, cache, maxRetries: 3, chunkSize: 2000 });
-    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 900, to: 1100 });
+    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 1000, to: 1120 });
     expect(result.candles.length).toBe(1);
     expect(attempts).toBe(2);
   });
@@ -711,13 +713,14 @@ describe('Phase 8.6 — Success State', () => {
     const client = new DeltaClient({
       fetchFn: mockFetchResponse({ jsonData: { success: true, result: [genCandle(1000), genCandle(1060)] } }),
     });
+    client.gridOrigin = 1000;
     const provider = new DeltaCandleProvider({ client, maxCandles: 10000 });
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const manager = new HistoricalDataManager({ provider, store, cache });
     const readyEvents = [];
     manager.on(DataEvents.READY, (e) => readyEvents.push(e));
-    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 900, to: 1200 });
+    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 1000, to: 1120 });
     expect(result.candles.length).toBe(2);
     expect(readyEvents.length).toBe(1);
     expect(readyEvents[0].candles.length).toBe(2);

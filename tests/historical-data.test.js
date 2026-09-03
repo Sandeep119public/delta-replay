@@ -96,7 +96,7 @@ describe('CandleCache', () => {
     const cache = new CandleCache({ enableIDB: false });
     cache.set('BTCUSD', '1m', 1000, 1060, [c(1000, 100), c(1060, 101)]);
     cache.set('BTCUSD', '1m', 1060, 1120, [c(1060, 101), c(1120, 102)]);
-    const entry = cache._memory.get('BTCUSD|1m');
+    const entry = cache._memory.get(cache._key('BTCUSD', '1m'));
     expect(entry.intervals.length).toBe(1);
     expect(entry.intervals[0]).toEqual({ from: 1000, to: 1120 });
     expect(entry.candles.length).toBe(3);

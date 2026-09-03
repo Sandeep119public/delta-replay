@@ -65,9 +65,9 @@ describe('Cache trust boundary', () => {
   it('unsorted cached candles are sorted via integrity', async () => {
     const cache = new CandleCache({ enableIDB:false });
     const unsorted = [c(1060,101), c(1000,100)];
-    // Directly set unsorted via cache (simulates corrupted IndexedDB) — include version
     const { CACHE_VERSION } = await import('../src/data/CandleCache.js');
-    cache._memory.set('BTCUSD|1m', { candles: unsorted, intervals: [{from:1000,to:1060}], ts: Date.now(), version: CACHE_VERSION });
+    const key = cache._key('BTCUSD', '1m');
+    cache._memory.set(key, { candles: unsorted, intervals: [{from:1000,to:1060}], ts: Date.now(), version: CACHE_VERSION });
     const res = cache.get('BTCUSD','1m',1000,1060);
     // Manager would re-process via integrity, so validCandles sorted
     const { validCandles } = CandleIntegrity.process(res.candles, { from:1000,to:1060, timeframeSec:60 });

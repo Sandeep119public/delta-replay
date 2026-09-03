@@ -4,6 +4,7 @@ import { CandleStore } from '../src/data/CandleStore.js';
 import { CandleIntegrity } from '../src/data/CandleIntegrity.js';
 import { HistoricalDataManager } from '../src/data/HistoricalDataManager.js';
 import { DeltaCandleProvider, TIMEFRAME_SECONDS } from '../src/data/DeltaCandleProvider.js';
+import { VENUES } from '../src/data/InstrumentConfig.js';
 import { ReplayEngine } from '../src/replay/ReplayEngine.js';
 import { PaperTradingEngine } from '../src/trading/PaperTradingEngine.js';
 import { Timeline } from '../src/ui/Timeline.js';
@@ -28,22 +29,23 @@ describe('Phase 6.6 Part 1 — Cache Coverage Adversarial', () => {
     // Remove Jan5 (index 4)
     const gapped = all.filter((_, i) => i !== 4);
     // Initially store as if full coverage (simulate stale false interval in cache entry)
-    cache.set('BTCUSD', '1m', base, base + 9 * 60, gapped);
-    cache._memory.get(cache._key('BTCUSD', '1m')).intervals = [{ from: base, to: base + 9 * 60 }];
-    let res = cache.get('BTCUSD', '1m', base, base + 9 * 60);
+    const venue = VENUES.DELTA_EXCHANGE;
+    cache.set('BTCUSD', '1m', base, base + 9 * 60, gapped, { venue, gridOrigin: base });
+    const key = cache._key('BTCUSD', '1m', { venue, gridOrigin: base });
+    cache._memory.get(key).intervals = [{ from: base, to: base + 9 * 60 }];
+    let res = cache.get('BTCUSD', '1m', base, base + 9 * 60, { venue, gridOrigin: base });
     expect(res.hit).toBe(true); // before revalidation, stale claims hit
     // Simulate HistoricalDataManager revalidation step
-    const { validCandles } = CandleIntegrity.process(res.candles, { from: base, to: base + 9 * 60, timeframeSec: tfSec });
+    const { validCandles } = CandleIntegrity.process(res.candles, { from: base, to: base + 9 * 60, timeframeSec: tfSec, origin: base });
     const actualIntervals = CandleCache.intervalsFromCandles(validCandles, tfSec);
     expect(actualIntervals.length).toBe(2); // gap splits
     const missing = cache._computeMissing(base, base + 9 * 60, actualIntervals);
     expect(missing.length).toBeGreaterThan(0);
     // Repair via manager logic: replace stale intervals
-    const key = cache._key('BTCUSD', '1m');
     const entry = cache._memory.get(key);
     entry.intervals = actualIntervals;
     // After repair, request again should be miss for gap
-    const after = cache.get('BTCUSD', '1m', base, base + 9 * 60);
+    const after = cache.get('BTCUSD', '1m', base, base + 9 * 60, { venue, gridOrigin: base });
     expect(after.hit).toBe(false);
     expect(after.missing.length).toBeGreaterThan(0);
     // Also via HistoricalDataManager path
@@ -69,11 +71,12 @@ describe('Phase 6.6 Part 1 — Cache Coverage Adversarial', () => {
   it('IndexedDB cache abstraction version mismatch is discarded', async () => {
     const cache = new CandleCache({ enableIDB: false });
     // Simulate old version record
-    cache._memory.set('BTCUSD|1m', { candles: [c(1000,100)], intervals: [{ from: 1000, to: 1060 }], ts: Date.now(), version: 1 });
+    const key = cache._key('BTCUSD', '1m');
+    cache._memory.set(key, { candles: [c(1000,100)], intervals: [{ from: 1000, to: 1060 }], ts: Date.now(), version: 1 });
     const res = cache.get('BTCUSD', '1m', 1000, 1060);
     expect(res.hit).toBe(false); // discarded as stale version (expected 2)
     // New version passes
-    cache._memory.set('BTCUSD|1m', { candles: [c(1000,100), c(1060,101)], intervals: [{ from: 1000, to: 1060 }], ts: Date.now(), version: CACHE_VERSION });
+    cache._memory.set(key, { candles: [c(1000,100), c(1060,101)], intervals: [{ from: 1000, to: 1060 }], ts: Date.now(), version: CACHE_VERSION });
     const res2 = cache.get('BTCUSD', '1m', 1000, 1060);
     // Actually intervals [{1000,1060}] claims sec coverage but candles are at 1000 and 1060, gap handled by intervalsFromCandles but intervals cover contiguous sec range, so hit true
     expect(res2.hit).toBe(true);
@@ -89,7 +92,8 @@ describe('Phase 6.6 Part 2 — Cache Versioning', () => {
   });
   it('old record without version is discarded', () => {
     const cache = new CandleCache({ enableIDB: false });
-    cache._memory.set('BTCUSD|1m', { candles: [c(1000,100)], intervals: [{ from: 1000, to: 1060 }], ts: Date.now() });
+    const key = cache._key('BTCUSD', '1m');
+    cache._memory.set(key, { candles: [c(1000,100)], intervals: [{ from: 1000, to: 1060 }], ts: Date.now() });
     const res = cache.get('BTCUSD', '1m', 1000, 1060);
     expect(res.hit).toBe(false);
     expect(res.missing[0].from).toBe(1000);
@@ -151,8 +155,8 @@ describe('Phase 6.6 Part 4 — Range Merging', () => {
     const base=1000;
     const tf=60;
     const candles = makeCandles(11, base, tf); // 1000..1600 (11*60=660+1000=1660? actually 1000+10*60=1600)
-    cache.set('BTCUSD','1m',base, base+10*60, candles.slice(0,6), { intervals: CandleCache.intervalsFromCandles(candles.slice(0,6),tf) });
-    const res = cache.get('BTCUSD','1m', base+4*60, base+10*60);
+    cache.set('BTCUSD', '1m', base, base + 10 * 60, candles.slice(0, 6), { venue: VENUES.DELTA_EXCHANGE, gridOrigin: base });
+    const res = cache.get('BTCUSD', '1m', base + 4 * 60, base + 10 * 60, { venue: VENUES.DELTA_EXCHANGE, gridOrigin: base });
     expect(res.hit).toBe(false);
     // missing should start after cached interval end (which is base+5*60)
     expect(res.missing[0].from).toBeGreaterThan(base+5*60);

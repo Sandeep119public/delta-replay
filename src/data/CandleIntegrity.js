@@ -39,9 +39,10 @@ export class CandleIntegrity {
    * @param {boolean} [opts.allowGaps=false] - when strict, allow gaps but reject invalid
    * @param {boolean} [opts.halfOpen=false] - use [from, to) half-open interval
    * @param {string} [opts.policy] - 'STRICT' | 'REPAIR' | 'LENIENT'
+   * @param {number} [opts.origin=0] - grid origin for lattice alignment
    * @returns {{ validCandles: Array, metadata: object }}
    */
-  static process(rawCandles, { from, to, timeframeSec, strict = false, allowGaps = false, halfOpen = false, policy = null, timestampUnit = 'auto' } = {}) {
+  static process(rawCandles, { from, to, timeframeSec, origin = null, strict = false, allowGaps = false, halfOpen = false, policy = null, timestampUnit = 'auto' } = {}) {
     if (!Array.isArray(rawCandles)) throw new Error('rawCandles must be array');
 
     const effectivePolicy = policy ?? (strict ? DATA_POLICY.STRICT : DATA_POLICY.REPAIR);
@@ -72,8 +73,24 @@ export class CandleIntegrity {
     // 4. Range filter (supports standard [from, to) half-open or legacy [from, to] closed)
     const ranged = deduped.filter(c => halfOpen ? (c.time >= from && c.time < to) : (c.time >= from && c.time <= to));
 
-    // 5. Validate
-    const { validCandles, errors } = CandleValidator.validateBatch(ranged);
+    // 5. Validate OHLCV numerical validity & discrete lattice alignment
+    const { validCandles: ohlcValid, errors } = CandleValidator.validateBatch(ranged);
+    const validCandles = [];
+    if (timeframeSec && Number.isFinite(origin)) {
+      for (const c of ohlcValid) {
+        if ((c.time - origin) % timeframeSec !== 0) {
+          errors.push({
+            index: ranged.indexOf(c),
+            candle: c,
+            reason: `OFF_GRID: timestamp ${c.time} is not on origin=${origin} lattice (tf=${timeframeSec}s)`,
+          });
+        } else {
+          validCandles.push(c);
+        }
+      }
+    } else {
+      validCandles.push(...ohlcValid);
+    }
     const invalidCount = errors.length;
 
     // 6. Gap and boundary coverage detection
@@ -83,10 +100,16 @@ export class CandleIntegrity {
     let hasInternalGaps = false;
 
     if (timeframeSec && Number.isFinite(from) && Number.isFinite(to)) {
-      const alignedStart = Math.ceil(from / timeframeSec) * timeframeSec;
+      const alignedStart = Number.isFinite(origin)
+        ? origin + Math.ceil((from - origin) / timeframeSec) * timeframeSec
+        : Math.ceil(from / timeframeSec) * timeframeSec;
       const expectedLast = halfOpen
-        ? (to % timeframeSec === 0 ? to - timeframeSec : Math.floor(to / timeframeSec) * timeframeSec)
-        : Math.floor(to / timeframeSec) * timeframeSec;
+        ? (Number.isFinite(origin)
+            ? ((to - origin) % timeframeSec === 0 ? to - timeframeSec : origin + Math.floor((to - origin) / timeframeSec) * timeframeSec)
+            : (to % timeframeSec === 0 ? to - timeframeSec : Math.floor(to / timeframeSec) * timeframeSec))
+        : (Number.isFinite(origin)
+            ? origin + Math.floor((to - origin) / timeframeSec) * timeframeSec
+            : Math.floor(to / timeframeSec) * timeframeSec);
 
       if (validCandles.length === 0) {
         if (alignedStart <= expectedLast) {

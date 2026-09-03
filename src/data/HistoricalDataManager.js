@@ -102,6 +102,7 @@ export class HistoricalDataManager extends EventEmitter {
       from: effectiveFrom,
       to: effectiveTo,
       timeframeSec: tfSec,
+      origin: gridOrigin,
       strict,
       allowGaps,
       halfOpen,
@@ -130,6 +131,7 @@ export class HistoricalDataManager extends EventEmitter {
         from: effectiveFrom,
         to: effectiveTo,
         timeframeSec: tfSec,
+        origin: gridOrigin,
         halfOpen,
         policy: 'REPAIR',
         timestampUnit: 'seconds',
@@ -200,6 +202,7 @@ export class HistoricalDataManager extends EventEmitter {
           from: effectiveFrom,
           to: effectiveTo,
           timeframeSec: tfSec,
+          origin: gridOrigin,
           policy: 'REPAIR',
           timestampUnit: 'seconds',
         });

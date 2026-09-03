@@ -321,7 +321,7 @@ describe('Adversarial Audit — Residual Correctness Hardening (Points 1-6)', ()
       { time: 1000, open: 100, high: 105, low: 95, close: 102, volume: 10 },
       { time: 1120, open: 106, high: 109, low: 104, close: 107, volume: 12 },
     ];
-    const key = cache._key('BTCUSD', '1m');
+    const key = cache._key('BTCUSD', '1m', { gridOrigin: 1000 });
     cache._memory.set(key, {
       candles: gappedCandles,
       intervals: [{ from: 1000, to: 1120 }],
@@ -350,7 +350,7 @@ describe('Adversarial Audit — Residual Correctness Hardening (Points 1-6)', ()
       { time: 1000, open: 100, high: 105, low: 95, close: 102, volume: 10 },
       { time: 1120, open: 106, high: 109, low: 104, close: 107, volume: 12 },
     ];
-    const key = cache._key('BTCUSD', '1m');
+    const key = cache._key('BTCUSD', '1m', { gridOrigin: 1000 });
     cache._memory.set(key, {
       candles: gappedCandles,
       intervals: [{ from: 1000, to: 1120 }],

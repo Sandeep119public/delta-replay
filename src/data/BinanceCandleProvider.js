@@ -12,6 +12,16 @@ export class BinanceCandleProvider extends CandleProvider {
     this.chunkSize = chunkSize;
   }
 
+  get venue() {
+    return this.client?.venue ?? 'BINANCE';
+  }
+
+  getGridSpec() {
+    return typeof this.client?.getGridSpec === 'function'
+      ? this.client.getGridSpec()
+      : { origin: 0, timeframeUnit: 'seconds', alignment: 'UTC' };
+  }
+
   async fetchChunk({ symbol, timeframe, from, to, signal } = {}) {
     return this.client.fetchCandles({
       symbol,

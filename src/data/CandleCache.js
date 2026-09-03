@@ -25,9 +25,6 @@ export class CandleCache {
   }
 
   _key(symbol, timeframe, { venue = 'DEFAULT', gridOrigin = 0 } = {}) {
-    if ((venue === 'DEFAULT' || !venue) && (gridOrigin === 0 || gridOrigin === null || gridOrigin === undefined)) {
-      return `${symbol}|${timeframe}`;
-    }
     return `${symbol}|${venue ?? 'DEFAULT'}|${timeframe}|${gridOrigin ?? 0}`;
   }
 
@@ -50,22 +47,15 @@ export class CandleCache {
     return computeGridMissing(requestedFrom, requestedTo, cachedIntervals, tf);
   }
 
-  get(symbol, timeframe, from, to, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
-    let key = this._key(symbol, timeframe, { venue, gridOrigin });
-    let entry = this._memory.get(key);
-    if (!entry && key !== `${symbol}|${timeframe}`) {
-      const fallbackKey = `${symbol}|${timeframe}`;
-      if (this._memory.has(fallbackKey)) {
-        key = fallbackKey;
-        entry = this._memory.get(key);
-      }
-    }
+  get(symbol, timeframe, from, to, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
+    const key = this._key(symbol, timeframe, { venue, gridOrigin: gridOrigin ?? 0 });
+    const entry = this._memory.get(key);
     if (!entry || entry.version !== CACHE_VERSION) {
       if (entry) this._memory.delete(key);
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
     if (!Array.isArray(entry.candles) || !Array.isArray(entry.intervals)) {
-      this.invalidate(symbol, timeframe, { venue, gridOrigin });
+      this.invalidate(symbol, timeframe, { venue, gridOrigin: gridOrigin ?? 0 });
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
 
@@ -93,10 +83,11 @@ export class CandleCache {
     if (this.enableIDB) this._deleteIDBEntry(key).catch(() => {});
   }
 
-  replace(symbol, timeframe, candles = [], { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+  replace(symbol, timeframe, candles = [], { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec);
+    const origin = Number.isFinite(gridOrigin) ? gridOrigin : null;
     const canonical = (Array.isArray(candles) ? candles : [])
-      .filter(c => this._isCanonicalCandle(c))
+      .filter(c => this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0))
       .map(c => ({ ...c }))
       .sort((a, b) => a.time - b.time);
 
@@ -109,9 +100,9 @@ export class CandleCache {
       ts: Date.now(),
       version: CACHE_VERSION,
       venue,
-      gridOrigin,
+      gridOrigin: gridOrigin ?? 0,
     };
-    const key = this._key(symbol, timeframe, { venue, gridOrigin });
+    const key = this._key(symbol, timeframe, { venue, gridOrigin: gridOrigin ?? 0 });
     this._lruTouch(key, entry);
     this._persistIDB(key, entry).catch(() => {});
     return entry;
@@ -130,8 +121,9 @@ export class CandleCache {
     this._persistIDB(key, entry).catch(() => {});
   }
 
-  set(symbol, timeframe, from, to, candles = [], { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
-    const key = this._key(symbol, timeframe, { venue, gridOrigin });
+  set(symbol, timeframe, from, to, candles = [], { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
+    const effectiveGridOrigin = gridOrigin ?? 0;
+    const key = this._key(symbol, timeframe, { venue, gridOrigin: effectiveGridOrigin });
     const entry = this._memory.get(key) ?? {
       candles: [],
       intervals: [],
@@ -139,17 +131,26 @@ export class CandleCache {
       version: CACHE_VERSION,
       timeframeSec: null,
       venue,
-      gridOrigin,
+      gridOrigin: effectiveGridOrigin,
     };
 
-    const byTime = new Map();
-    for (const c of entry.candles) if (this._isCanonicalCandle(c)) byTime.set(c.time, { ...c });
-    for (const c of candles) if (this._isCanonicalCandle(c)) byTime.set(c.time, { ...c });
-
-    entry.candles = [...byTime.values()].sort((a, b) => a.time - b.time);
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.timeframeSec = tf;
+    const origin = Number.isFinite(gridOrigin) ? gridOrigin : null;
 
+    const byTime = new Map();
+    for (const c of entry.candles) {
+      if (this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0)) {
+        byTime.set(c.time, { ...c });
+      }
+    }
+    for (const c of candles) {
+      if (this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0)) {
+        byTime.set(c.time, { ...c });
+      }
+    }
+
+    entry.candles = [...byTime.values()].sort((a, b) => a.time - b.time);
     entry.intervals = CandleCache.intervalsFromCandles(entry.candles, tf);
     entry.version = CACHE_VERSION;
     entry.ts = Date.now();
@@ -262,10 +263,12 @@ export class CandleCache {
           const tf = this._getTimeframeSeconds(timeframe, value.timeframeSec, value);
           const entry = {
             candles,
-            intervals: this._mergeIntervals(value.intervals, tf),
+            intervals: CandleCache.intervalsFromCandles(candles, tf),
             timeframeSec: tf,
             ts: value.ts,
             version: value.version,
+            venue,
+            gridOrigin,
           };
           this._lruTouch(key, entry);
           resolve(entry);
