@@ -54,13 +54,13 @@ export class BacktestRunner {
   getResults() {
     const allOrders = this.engine.getOrders();
     const pendingIntents = allOrders.filter(o => o.status === ORDER_STATUSES.PENDING);
+    const terminalIndex = this.engine._latestCandleIndex;
+    const terminalOrders = pendingIntents.filter(o => o.createdIndex === terminalIndex);
     return {
-      summary: {
-        ...this.engine.getBacktestSummary(),
-        unfilledTerminalOrders: pendingIntents.length,
-      },
+      summary: { ...this.engine.getBacktestSummary(), unfilledTerminalOrders: terminalOrders.length },
       trades: this.engine.getTrades(),
       unfilledOrders: pendingIntents,
+      unfilledTerminalOrders: terminalOrders,
       account: this.engine.getAccountSnapshot(),
     };
   }

@@ -118,7 +118,7 @@ export class PaperTradingEngine extends EventEmitter {
     this._fundingSchedule = schedule;
   }
 
-  applyFundingRate({ symbol = null, fundingRate = 0.0001, timestamp = null } = {}) {
+  applyFundingRate({ symbol = null, fundingRate = 0.0001, timestamp = null, markPrice = null } = {}) {
     const ts = timestamp ?? (this._latestCandle ? this._latestCandle.time : Date.now());
     const rate = Number(fundingRate);
     if (!Number.isFinite(rate)) return [];
@@ -126,8 +126,9 @@ export class PaperTradingEngine extends EventEmitter {
     const payments = [];
     for (const [sym, pos] of this._positions.entries()) {
       if (symbol && sym !== symbol) continue;
-      const markPrice = Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice;
-      const notional = markPrice * pos.quantity;
+      const explicitMark = markPrice == null ? NaN : Number(markPrice);
+      const resolvedMarkPrice = Number.isFinite(explicitMark) ? explicitMark : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice);
+      const notional = resolvedMarkPrice * pos.quantity;
       // When fundingRate > 0: Longs pay Shorts (payment negative for Long, positive for Short)
       // When fundingRate < 0: Shorts pay Longs (payment positive for Long, negative for Short)
       const payment = (pos.side === 'LONG' ? -1 : 1) * notional * rate;
@@ -143,7 +144,7 @@ export class PaperTradingEngine extends EventEmitter {
         symbol: sym,
         side: pos.side,
         quantity: pos.quantity,
-        markPrice,
+        markPrice: resolvedMarkPrice,
         fundingRate: rate,
         payment,
       };
@@ -278,48 +279,55 @@ export class PaperTradingEngine extends EventEmitter {
     this._updateLiquidationPrices();
   }
 
+  _portfolioMarginStateAtPrice(symbol, markPrice) {
+    const mmRate = (typeof this.maintMarginRate === 'number' && this.maintMarginRate >= 0) ? this.maintMarginRate : (((typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0) * 0.5);
+    let equity = this.account.walletBalance;
+    let maintenanceMargin = 0;
+    for (const [sym, pos] of this._positions.entries()) {
+      const mark = sym === symbol ? markPrice : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice);
+      equity += pos.side === 'LONG' ? (mark - pos.entryPrice) * pos.quantity : (pos.entryPrice - mark) * pos.quantity;
+      maintenanceMargin += Math.abs(mark * pos.quantity) * mmRate;
+    }
+    return { equity, maintenanceMargin };
+  }
+
+  _isPortfolioLiquidatable(symbol, markPrice) {
+    const state = this._portfolioMarginStateAtPrice(symbol, markPrice);
+    return state.equity <= state.maintenanceMargin + 1e-9;
+  }
+
   _processLiquidations(candle, candleIndex, symbol) {
-    this._updateLiquidationPrices();
     const toLiquidate = [];
     for (const [sym, pos] of this._positions.entries()) {
       if (symbol && sym !== symbol) continue;
-      if (!pos.liquidationPrice || !Number.isFinite(pos.liquidationPrice)) continue;
-
-      let isLiquidated = false;
-      let exitPrice = pos.liquidationPrice;
-
-      if (pos.side === 'LONG') {
-        if (Number.isFinite(candle.low) && candle.low <= pos.liquidationPrice) {
-          isLiquidated = true;
-          if (this.executionPolicy === EXECUTION_POLICY.REALISTIC && Number.isFinite(candle.open) && candle.open < pos.liquidationPrice) {
-            exitPrice = candle.open;
-          }
-        }
-      } else if (pos.side === 'SHORT') {
-        if (Number.isFinite(candle.high) && candle.high >= pos.liquidationPrice) {
-          isLiquidated = true;
-          if (this.executionPolicy === EXECUTION_POLICY.REALISTIC && Number.isFinite(candle.open) && candle.open > pos.liquidationPrice) {
-            exitPrice = candle.open;
-          }
-        }
+      const adversePrice = pos.side === 'LONG' ? candle.low : candle.high;
+      if (!Number.isFinite(adversePrice) || !this._isPortfolioLiquidatable(sym, adversePrice)) continue;
+      const derivedPrice = this.getLiquidationPrice(sym);
+      let exitPrice = Number.isFinite(derivedPrice) && derivedPrice > 0 ? derivedPrice : adversePrice;
+      if (this.executionPolicy === EXECUTION_POLICY.REALISTIC && Number.isFinite(candle.open)) {
+        if (pos.side === 'LONG' && candle.open < exitPrice) exitPrice = candle.open;
+        if (pos.side === 'SHORT' && candle.open > exitPrice) exitPrice = candle.open;
       }
-
-      if (isLiquidated) {
-        toLiquidate.push({ symbol: sym, exitPrice, candleTime: candle.time, pos });
-      }
+      toLiquidate.push({ symbol: sym, exitPrice, candleTime: candle.time, pos });
     }
-
     for (const item of toLiquidate) {
       const { symbol: sym, exitPrice, candleTime, pos } = item;
-      this.emit(TradingEvents.POSITION_LIQUIDATED, {
-        symbol: sym,
-        liquidationPrice: exitPrice,
-        position: this._cloneJSON(pos.toJSON()),
-        candle: this._cloneJSON(candle),
-      });
+      this.emit(TradingEvents.POSITION_LIQUIDATED, { symbol: sym, liquidationPrice: exitPrice, position: this._cloneJSON(pos.toJSON()), candle: this._cloneJSON(candle) });
       this._closePositionInternal(sym, exitPrice, candleTime, 'LIQUIDATION');
       this._cancelIncompatiblePendings(sym);
     }
+  }
+
+  _fundingMarkPriceAt(symbol, timestamp, previousMarket, currentCandle) {
+    const pos = this._positions.get(symbol);
+    if (!pos) return null;
+    const prevClose = previousMarket && Number.isFinite(previousMarket.candle?.close) ? Number(previousMarket.candle.close) : (Number.isFinite(pos.currentPrice) ? Number(pos.currentPrice) : Number(pos.entryPrice));
+    const currClose = Number.isFinite(currentCandle?.close) ? Number(currentCandle.close) : prevClose;
+    const prevTime = Number(previousMarket?.timestamp);
+    const currTime = Number(currentCandle?.time);
+    if (!Number.isFinite(prevTime) || !Number.isFinite(currTime) || currTime <= prevTime || timestamp <= prevTime) return timestamp >= currTime ? currClose : prevClose;
+    const ratio = Math.min(1, Math.max(0, (timestamp - prevTime) / (currTime - prevTime)));
+    return prevClose + (currClose - prevClose) * ratio;
   }
 
   clearMarketContext() {
@@ -440,6 +448,7 @@ export class PaperTradingEngine extends EventEmitter {
     if (!payload || !payload.candle) return;
     const c = payload.candle;
     const symbol = payload.symbol || payload.candle?.symbol || null;
+    const previousMarket = symbol ? this._marketBySymbol.get(symbol) : null;
     const idx = Number.isFinite(payload.index) ? payload.index : this._latestCandleIndex + 1;
     // clone
     this._latestCandle = { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
@@ -479,21 +488,21 @@ export class PaperTradingEngine extends EventEmitter {
     }
     this.account.unrealizedPnL = totalUnrealized;
 
-    // 5. Automatic funding evaluation at scheduled boundaries across the chronological interval
+    // 5. Automatic funding evaluation at every scheduled boundary crossed by this candle.
     if (this._fundingSchedule && Number.isFinite(c.time)) {
       const interval = this._fundingSchedule.intervalSec || (8 * 3600);
       const origin = this._fundingSchedule.origin || 0;
-
-      if (this._lastFundingTimestamp == null) {
-        this._lastFundingTimestamp = c.time;
-      } else if (c.time > this._lastFundingTimestamp) {
+      if (this._lastFundingTimestamp == null) this._lastFundingTimestamp = c.time;
+      else if (c.time > this._lastFundingTimestamp) {
         const prevTime = this._lastFundingTimestamp;
         let nextBoundary = origin + Math.floor((prevTime - origin) / interval + 1) * interval;
         while (nextBoundary <= c.time) {
-          const rate = typeof this._fundingSchedule.rateProvider === 'function'
-            ? this._fundingSchedule.rateProvider(nextBoundary, symbol)
-            : (this._fundingSchedule.defaultRate ?? 0.0001);
-          this.applyFundingRate({ symbol, fundingRate: rate, timestamp: nextBoundary });
+          for (const [sym, pos] of this._positions.entries()) {
+            if (pos.openedAt != null && Number(pos.openedAt) > nextBoundary) continue;
+            const rate = typeof this._fundingSchedule.rateProvider === 'function' ? this._fundingSchedule.rateProvider(nextBoundary, sym) : (this._fundingSchedule.defaultRate ?? 0.0001);
+            const mark = sym === symbol ? this._fundingMarkPriceAt(sym, nextBoundary, previousMarket, c) : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice);
+            this.applyFundingRate({ symbol: sym, fundingRate: rate, timestamp: nextBoundary, markPrice: mark });
+          }
           nextBoundary += interval;
         }
         this._lastFundingTimestamp = c.time;
@@ -560,12 +569,11 @@ export class PaperTradingEngine extends EventEmitter {
 
       const notional = filledPrice * qty;
       const entryFee = calcFee(notional, this.feeRate);
-      const requiredCash = this._getRequiredEntryCash(filledPrice, qty);
-
-      if (this.account.cashBalance < requiredCash) {
+      const marginCheck = this._checkMarginAvailable(filledPrice, qty);
+      if (!marginCheck.valid) {
         order.status = ORDER_STATUSES.REJECTED;
         order.rejectionReason = 'INSUFFICIENT_CASH';
-        this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient cash to fill MARKET: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);
+        this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient available margin to fill MARKET: required ${marginCheck.requiredMargin.toFixed(2)}, available ${marginCheck.availableMargin.toFixed(2)}`);
         continue;
       }
 
@@ -708,9 +716,9 @@ export class PaperTradingEngine extends EventEmitter {
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
     const entryNotional = execPrice * q;
     const entryFee = calcFee(entryNotional, this.feeRate);
-    const requiredCash = this._getRequiredEntryCash(execPrice, q);
-    if (this.account.cashBalance < requiredCash) {
-      return this._reject('INSUFFICIENT_CASH', `Insufficient cash to place ${side} order: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);
+    const marginCheck = this._checkMarginAvailable(execPrice, q);
+    if (!marginCheck.valid) {
+      return this._reject('INSUFFICIENT_CASH', `Insufficient available margin to place ${side} order: required ${marginCheck.requiredMargin.toFixed(2)}, available ${marginCheck.availableMargin.toFixed(2)}`);
     }
     // deduct entry fee immediately
     this.account.cashBalance -= entryFee;
@@ -1085,11 +1093,11 @@ export class PaperTradingEngine extends EventEmitter {
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
     const notional = filledPrice * qty;
     const entryFee = calcFee(notional, this.feeRate);
-    const requiredCash = this._getRequiredEntryCash(filledPrice, qty);
-    if (this.account.cashBalance < requiredCash) {
+    const marginCheck = this._checkMarginAvailable(filledPrice, qty);
+    if (!marginCheck.valid) {
       order.status = ORDER_STATUSES.REJECTED;
       order.rejectionReason = 'INSUFFICIENT_CASH';
-      this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient cash to fill ${side} limit: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);
+      this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient available margin to fill ${side} limit: required ${marginCheck.requiredMargin.toFixed(2)}, available ${marginCheck.availableMargin.toFixed(2)}`);
       return { success: false, code: 'INSUFFICIENT_CASH' };
     }
     this.account.cashBalance -= entryFee;
@@ -1211,11 +1219,11 @@ export class PaperTradingEngine extends EventEmitter {
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT';
     const notional = filledPrice * qty;
     const entryFee = calcFee(notional, this.feeRate);
-    const requiredCash = this._getRequiredEntryCash(filledPrice, qty);
-    if (this.account.cashBalance < requiredCash) {
+    const marginCheck = this._checkMarginAvailable(filledPrice, qty);
+    if (!marginCheck.valid) {
       order.status = ORDER_STATUSES.REJECTED;
       order.rejectionReason = 'INSUFFICIENT_CASH';
-      this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient cash to fill STOP: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);
+      this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient available margin to fill STOP: required ${marginCheck.requiredMargin.toFixed(2)}, available ${marginCheck.availableMargin.toFixed(2)}`);
       return { success: false, code: 'INSUFFICIENT_CASH' };
     }
     this.account.cashBalance -= entryFee;
