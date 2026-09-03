@@ -86,29 +86,32 @@ export class HistoricalDataManager extends EventEmitter {
     }
     // If cache claims hit, verify via integrity that it actually covers range without gaps/corruption (adversarial audit)
     if (cacheRes.hit) {
-      let validCandles = [];
-      let metadata = null;
-      try {
-        const integrityCheck = CandleIntegrity.process(cacheRes.candles, integrityOptions);
-        validCandles = integrityCheck.validCandles;
-        metadata = integrityCheck.metadata;
-      } catch (err) {
-        if (strict) {
-          this.emit(DataEvents.ERROR, err);
-          throw err;
-        }
-      }
+      // Evaluate cached integrity without strict-abort so gaps/corruption can be healed via network fetch
+      const integrityCheck = CandleIntegrity.process(cacheRes.candles, {
+        from,
+        to,
+        timeframeSec: tfSec,
+        halfOpen,
+      });
+      const validCandles = integrityCheck.validCandles;
+      const metadata = integrityCheck.metadata;
+      const isClean = metadata.invalidCount === 0 && (!strict || allowGaps || metadata.gaps.length === 0);
+
       if (validCandles.length === 0) {
-        // Cache hit but all candles corrupted or gapped in strict -> treat as full miss and discard stale cache
+        // Cache hit but all candles corrupted or unusable -> treat as full miss and discard stale cache
         const key = this.cache._key(symbol, timeframe);
         this.cache._memory.delete(key);
         if (this.cache.enableIDB) this.cache._deleteIDBEntry(key).catch(()=>{});
         cacheRes = { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
       } else {
         const actualIntervals = CandleCache.intervalsFromCandles(validCandles, tfSec);
-        const realMissing = this.cache._computeMissing(from, to, actualIntervals);
-        if (realMissing.length === 0) {
-          // True hit: also repair stored intervals if stale (e.g., previously false full interval but now verified gapless)
+        let realMissing = this.cache._computeMissing(from, to, actualIntervals);
+        if (realMissing.length === 0 && !isClean && metadata.gaps.length > 0) {
+          realMissing = metadata.gaps.map(g => ({ from: g.from, to: g.to + (halfOpen ? tfSec : 0) }));
+        }
+
+        if (realMissing.length === 0 && isClean) {
+          // True clean hit: return cached candles
           const key = this.cache._key(symbol, timeframe);
           const entry = this.cache._memory.get(key);
           if (entry && JSON.stringify(entry.intervals) !== JSON.stringify(actualIntervals)) {
@@ -121,7 +124,7 @@ export class HistoricalDataManager extends EventEmitter {
           this.emit(DataEvents.PROGRESS, { loaded: validCandles.length, total: validCandles.length, pct: 100 });
           return { candles: validCandles, metadata: this.store.getMetadata() };
         } else {
-          // False hit: cache claimed full coverage but gaps/corruption detected -> treat as partial and repair truthfully
+          // Cache has gaps or corruption: treat as partial miss, repair stored cache, and fetch missing from network
           const key = this.cache._key(symbol, timeframe);
           const entry = this.cache._memory.get(key);
           if (entry) {
@@ -132,7 +135,12 @@ export class HistoricalDataManager extends EventEmitter {
             entry.version = this.cache._version;
             if (this.cache.enableIDB) this.cache._persistIDB(key, entry).catch(()=>{});
           }
-          cacheRes = { hit: false, candles: validCandles, missing: realMissing, intervals: actualIntervals };
+          cacheRes = {
+            hit: false,
+            candles: validCandles,
+            missing: realMissing.length > 0 ? realMissing : [{ from, to }],
+            intervals: actualIntervals,
+          };
         }
       }
     }
@@ -251,8 +259,12 @@ export class HistoricalDataManager extends EventEmitter {
         const raw = await fetchChunkWithRetry(chunk);
         results[chunkIdx] = raw;
         completed++;
-        rawCollected.push(...raw);
-        this.emit(DataEvents.CHUNK_RECEIVED, { index: chunkIdx, chunk, count: raw.length });
+        if (Array.isArray(raw)) {
+          rawCollected.push(...raw);
+          this.emit(DataEvents.CHUNK_RECEIVED, { index: chunkIdx, chunk, count: raw.length });
+        } else {
+          this.emit(DataEvents.CHUNK_RECEIVED, { index: chunkIdx, chunk, count: 0 });
+        }
         emitProgress();
       }
     });

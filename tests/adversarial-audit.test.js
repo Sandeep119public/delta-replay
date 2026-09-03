@@ -329,14 +329,47 @@ describe('Adversarial Audit — Residual Correctness Hardening (Points 1-6)', ()
     });
 
     const mockProvider = {
-      fetchChunk: vi.fn(),
+      fetchChunk: vi.fn(async () => []),
+      getCandles: vi.fn(async () => []),
+    };
+    const store = new CandleStore();
+    const manager = new HistoricalDataManager({ provider: mockProvider, store, cache, strictMode: true });
+
+    // Loading cached range with strict: true attempts network repair, but when provider has no missing data, it throws integrity error
+    await expect(manager.load({ symbol: 'BTCUSD', timeframe: '1m', from: 1000, to: 1120, strict: true })).rejects.toThrow(/Integrity error.*gap/);
+    expect(mockProvider.fetchChunk).toHaveBeenCalled();
+  });
+
+  it('Cache recovery: gapped cache is healed by network fetch and strictly validated', async () => {
+    const { CandleCache, CACHE_VERSION } = await import('../src/data/CandleCache.js');
+    const cache = new CandleCache({ enableIDB: false });
+    // Seed cache with gapped candles: 1000 and 1120 (missing 1060)
+    const gappedCandles = [
+      { time: 1000, open: 100, high: 105, low: 95, close: 102, volume: 10 },
+      { time: 1120, open: 106, high: 109, low: 104, close: 107, volume: 12 },
+    ];
+    const key = cache._key('BTCUSD', '1m');
+    cache._memory.set(key, {
+      candles: gappedCandles,
+      intervals: [{ from: 1000, to: 1120 }],
+      ts: Date.now(),
+      version: CACHE_VERSION,
+    });
+
+    // Provider returns the missing candle at 1060
+    const mockProvider = {
+      fetchChunk: vi.fn(async () => [
+        { time: 1060, open: 102, high: 108, low: 101, close: 106, volume: 15 },
+      ]),
       getCandles: vi.fn(),
     };
     const store = new CandleStore();
     const manager = new HistoricalDataManager({ provider: mockProvider, store, cache, strictMode: true });
 
-    // Loading cached range with strict: true must throw integrity error, NOT bypass strict validation!
-    await expect(manager.load({ symbol: 'BTCUSD', timeframe: '1m', from: 1000, to: 1120, strict: true })).rejects.toThrow(/Integrity error.*gap/);
+    // Load succeeds because network repaired the gap!
+    const res = await manager.load({ symbol: 'BTCUSD', timeframe: '1m', from: 1000, to: 1180, strict: true, halfOpen: true });
+    expect(res.candles.length).toBe(3);
+    expect(res.candles[1].time).toBe(1060);
   });
 
   it('Boundary coverage: detects missing start prefix (PARTIAL_START)', () => {
@@ -434,5 +467,58 @@ describe('Adversarial Audit — Residual Correctness Hardening (Points 1-6)', ()
     const invalidProvider = { client: { fetchCandles: () => [] } }; // does not have fetchChunk or getCandles
     const manager = new HistoricalDataManager({ provider: invalidProvider, store: new CandleStore(), cache: new CandleCache({ enableIDB: false }) });
     await expect(manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 1000, to: 1120 })).rejects.toThrow(/Provider must implement fetchChunk or getCandles/);
+  });
+
+  it('Multi-symbol closePosition: closing BTC position uses BTC market price, not ETH market price', () => {
+    const engine = new PaperTradingEngine({ startingBalance: 100000, feeRate: 0 });
+    // 1) BTC arrives at 50,000 and BUY order opens position
+    engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1000, open: 50000, high: 50100, low: 49900, close: 50000, volume: 1 }, index: 0 });
+    engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
+
+    // 2) BTC advances to 52,000
+    engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1060, open: 50000, high: 52100, low: 49900, close: 52000, volume: 1 }, index: 1 });
+
+    // 3) ETH candle arrives at 3,000
+    engine.onMarketCandle({ symbol: 'ETHUSD', candle: { time: 1120, open: 3000, high: 3050, low: 2950, close: 3000, volume: 10 }, index: 2 });
+
+    // 4) Close BTC position: must exit at 52,000 (BTC price), NOT 3,000 (ETH price)!
+    const res = engine.closePosition('BTCUSD');
+    expect(res.success).toBe(true);
+    expect(res.exitPrice).toBe(52000);
+    expect(res.realizedPnL).toBe(2000); // 52000 - 50000
+  });
+
+  it('Multi-symbol SL/TP context: sets SL/TP createdIndex matching the target symbol index', () => {
+    const engine = new PaperTradingEngine({ startingBalance: 100000, feeRate: 0 });
+    // 1) BTC candle arrives at index 0
+    engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1000, open: 50000, high: 50100, low: 49900, close: 50000, volume: 1 }, index: 0 });
+    engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
+
+    // 2) ETH candle arrives at index 10
+    engine.onMarketCandle({ symbol: 'ETHUSD', candle: { time: 1060, open: 3000, high: 3050, low: 2950, close: 3000, volume: 10 }, index: 10 });
+
+    // 3) Set SL and TP on BTC position
+    const slRes = engine.setStopLoss('BTCUSD', 48000);
+    expect(slRes.success).toBe(true);
+    expect(engine.getPosition('BTCUSD').stopLossCreatedIndex).toBe(0); // BTC index 0, NOT ETH index 10!
+
+    const tpRes = engine.setTakeProfit('BTCUSD', 55000);
+    expect(tpRes.success).toBe(true);
+    expect(engine.getPosition('BTCUSD').takeProfitCreatedIndex).toBe(0); // BTC index 0, NOT ETH index 10!
+  });
+
+  it('Session lifecycle: market context does not survive account reset or replay reset', () => {
+    const engine = new PaperTradingEngine({ startingBalance: 100000, feeRate: 0 });
+    engine.onMarketCandle({ symbol: 'BTCUSD', candle: { time: 1000, open: 50000, high: 50100, low: 49900, close: 50000, volume: 1 }, index: 0 });
+    expect(engine.getLatestCandle('BTCUSD')).not.toBeNull();
+
+    // Reset account clears market context
+    engine.resetAccount();
+    expect(engine.getLatestCandle('BTCUSD')).toBeNull();
+
+    // Placing order before a new candle arrives is rejected
+    const res = engine.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 1 });
+    expect(res.success).toBe(false);
+    expect(res.code).toBe('NO_MARKET_PRICE');
   });
 });

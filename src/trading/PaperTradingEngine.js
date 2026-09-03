@@ -82,6 +82,13 @@ export class PaperTradingEngine extends EventEmitter {
     return (notional * marginRatio) + fee;
   }
 
+  clearMarketContext() {
+    this._marketBySymbol.clear();
+    this._latestCandle = null;
+    this._latestCandleIndex = -1;
+    this._latestSymbolContext = null;
+  }
+
   getLatestCandle(symbol = null) {
     if (symbol && this._marketBySymbol.has(symbol)) {
       return this._cloneJSON(this._marketBySymbol.get(symbol).candle);
@@ -96,8 +103,11 @@ export class PaperTradingEngine extends EventEmitter {
     // MARKET_CANDLE payload: {candle, index, timestamp, replayState}
     const unsubCandle = replayEngine.on('marketCandle', (payload) => this.onMarketCandle(payload));
     this._unsubs.push(unsubCandle);
-    // Clear pending on replay load/reset (data reload protection) — stored separately to preserve audit _unsubs length=1
-    const clearOnLifecycle = () => this._clearPendingOrders('REPLAY_RESET');
+    // Clear pending and market state on replay load/reset (data reload protection)
+    const clearOnLifecycle = () => {
+      this._clearPendingOrders('REPLAY_RESET');
+      this.clearMarketContext();
+    };
     const unsubLoad = replayEngine.on('loaded', clearOnLifecycle);
     const unsubReset = replayEngine.on('reset', clearOnLifecycle);
     this._lifecycleUnsubs.push(unsubLoad, unsubReset);
@@ -159,6 +169,7 @@ export class PaperTradingEngine extends EventEmitter {
     this._unsubs = [];
     this._lifecycleUnsubs.forEach(fn => fn());
     this._lifecycleUnsubs = [];
+    this.clearMarketContext();
     if (this._replayEngine && this._replayEngine._tradingGuardOwner === this) {
       const e = this._replayEngine;
       if (e._origSeekPaper) e.seek = e._origSeekPaper;
@@ -331,12 +342,18 @@ export class PaperTradingEngine extends EventEmitter {
   closePosition(symbol) {
     const symRes = TradingValidator.validateSymbol(symbol);
     if (!symRes.valid) return this._reject(symRes.code, symRes.message);
-    if (!this._latestCandle) return this._reject('NO_MARKET_PRICE', 'No market price available to close.');
     const existing = this._positions.get(symbol);
     if (!existing) return this._reject('NO_POSITION', `No open position for ${symbol}`);
 
-    const execPrice = this._latestCandle.close;
-    const time = this._latestCandle.time;
+    const market = this._marketBySymbol.get(symbol)
+      || (this._latestCandle && (!this._latestSymbolContext || this._latestSymbolContext === symbol) ? { candle: this._latestCandle, index: this._latestCandleIndex } : null);
+
+    if (!market || !market.candle) {
+      return this._reject('NO_MARKET_PRICE', `No market price available to close position for ${symbol}.`);
+    }
+
+    const execPrice = market.candle.close;
+    const time = market.candle.time;
     const res = this._closePositionInternal(symbol, execPrice, time);
     this._cancelIncompatiblePendings(symbol);
     return res;
@@ -384,7 +401,7 @@ export class PaperTradingEngine extends EventEmitter {
     this.emit(TradingEvents.POSITION_CLOSED, { symbol, realizedPnL: net, grossPnL: gross, entryFee, exitFee, totalFee, exitPrice, exitReason, trade: this._cloneJSON(trade.toJSON()) });
     this.emit(TradingEvents.TRADE_EXECUTED, { trade: this._cloneJSON(trade.toJSON()) });
     this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
-    return { success: true, realizedPnL: net, grossPnL: gross, entryFee, exitFee, totalFee, netPnL: net, exitReason, trade: this._cloneJSON(trade.toJSON()), closedPosition: this._cloneJSON(pos.toJSON()) };
+    return { success: true, exitPrice, realizedPnL: net, grossPnL: gross, entryFee, exitFee, totalFee, netPnL: net, exitReason, trade: this._cloneJSON(trade.toJSON()), closedPosition: this._cloneJSON(pos.toJSON()) };
   }
 
   _closePositionWithReason(symbol, exitPrice, closedAt, exitReason) {
@@ -917,11 +934,13 @@ export class PaperTradingEngine extends EventEmitter {
     if (!symRes.valid) return this._reject(symRes.code, symRes.message);
     const pr = TradingValidator.validateStopPrice(price);
     if (!pr.valid) return this._reject(pr.code, pr.message);
-    if (!this._latestCandle) return this._reject('NO_MARKET_PRICE', 'Cannot set SL before first candle');
+    const market = this._marketBySymbol.get(symbol)
+      || (this._latestCandle && (!this._latestSymbolContext || this._latestSymbolContext === symbol) ? { candle: this._latestCandle, index: this._latestCandleIndex } : null);
+    if (!market || !market.candle) return this._reject('NO_MARKET_PRICE', `Cannot set SL before first candle for ${symbol}`);
     const pos = this._positions.get(symbol);
     if (!pos) return this._reject('NO_POSITION', `No open position for ${symbol}`);
     pos.stopLossPrice = Number(price);
-    pos.stopLossCreatedIndex = this._latestCandleIndex;
+    pos.stopLossCreatedIndex = market.index;
     this.emit(TradingEvents.POSITION_UPDATED, { position: this._cloneJSON(pos.toJSON()) });
     return { success: true, position: this._cloneJSON(pos.toJSON()) };
   }
@@ -947,11 +966,13 @@ export class PaperTradingEngine extends EventEmitter {
       const msg = pr.message ? pr.message.replace(/Stop price/i, 'Take profit price') : 'Invalid take profit price';
       return this._reject(pr.code === 'INVALID_STOP_PRICE' ? 'INVALID_TAKE_PROFIT_PRICE' : pr.code, msg);
     }
-    if (!this._latestCandle) return this._reject('NO_MARKET_PRICE', 'Cannot set TP before first candle');
+    const market = this._marketBySymbol.get(symbol)
+      || (this._latestCandle && (!this._latestSymbolContext || this._latestSymbolContext === symbol) ? { candle: this._latestCandle, index: this._latestCandleIndex } : null);
+    if (!market || !market.candle) return this._reject('NO_MARKET_PRICE', `Cannot set TP before first candle for ${symbol}`);
     const pos = this._positions.get(symbol);
     if (!pos) return this._reject('NO_POSITION', `No open position for ${symbol}`);
     pos.takeProfitPrice = Number(price);
-    pos.takeProfitCreatedIndex = this._latestCandleIndex;
+    pos.takeProfitCreatedIndex = market.index;
     this.emit(TradingEvents.POSITION_UPDATED, { position: this._cloneJSON(pos.toJSON()) });
     return { success: true, position: this._cloneJSON(pos.toJSON()) };
   }
@@ -1072,6 +1093,7 @@ export class PaperTradingEngine extends EventEmitter {
     this._positions.clear();
     this._trades = [];
     this._nextTradeId = 1;
+    this.clearMarketContext();
     // ID determinism note: _nextOrderId is intentionally NOT reset to avoid collision
     // with preserved order history (orders remain in _orders Map as CANCELLED).
     // Fresh engine instance gives deterministic IDs for identical sequences;
@@ -1086,13 +1108,14 @@ export class PaperTradingEngine extends EventEmitter {
 
   // For testing: allow explicit full reset that clears order history and resets IDs
   // This is the deterministic path for repeated simulations via same instance.
-  resetAll() {
+  resetAll({ clearMarket = false } = {}) {
     this._positions.clear();
     this._trades = [];
     this._nextTradeId = 1;
     this._nextOrderId = 1;
     this._orders.clear();
     this._pendingOrderIds = [];
+    if (clearMarket) this.clearMarketContext();
     this.account.reset();
     this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot());
     this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
