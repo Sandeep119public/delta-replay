@@ -240,9 +240,7 @@ export class PaperTradingEngine extends EventEmitter {
     this._replayEngine = replayEngine;
     const unsubCandle = replayEngine.on('marketCandle', payload => this.onMarketCandle(payload));
     this._unsubs.push(unsubCandle);
-    const clearOnLifecycle = () => {
-      this.resetAccount('REPLAY_RESET');
-    };
+    const clearOnLifecycle = () => this.resetAccount('REPLAY_RESET');
     this._lifecycleUnsubs.push(replayEngine.on('loaded', clearOnLifecycle), replayEngine.on('reset', clearOnLifecycle));
     if (typeof replayEngine.registerActionGuard === 'function') {
       const unguard = replayEngine.registerActionGuard(action => {
@@ -268,10 +266,10 @@ export class PaperTradingEngine extends EventEmitter {
   destroy() { return this.detach(); }
 
   _validateCandleSequence(symbol, idx, timestamp) {
-    if (this.executionProfile !== EXECUTION_PROFILE.RESEARCH_BACKTEST) return { duplicate: false };
     const previous = symbol ? this._marketBySymbol.get(symbol) : (this._latestCandle ? { index: this._latestCandleIndex, timestamp: this._latestCandle.time } : null);
     if (!previous) return { duplicate: false };
     if (previous.index === idx && previous.timestamp === timestamp) return { duplicate: true };
+    if (this.executionProfile !== EXECUTION_PROFILE.RESEARCH_BACKTEST) return { duplicate: false };
     if (idx < previous.index) throw new Error(`MARKET_CANDLE_OUT_OF_ORDER: index ${idx} < previous ${previous.index}`);
     if (idx === previous.index) throw new Error(`MARKET_CANDLE_IDENTITY_CONFLICT: index ${idx} already processed at timestamp ${previous.timestamp}`);
     if (timestamp <= previous.timestamp) throw new Error(`MARKET_CANDLE_OUT_OF_ORDER: timestamp ${timestamp} <= previous ${previous.timestamp}`);
@@ -527,7 +525,6 @@ export class PaperTradingEngine extends EventEmitter {
   }
 
   _emitOrderTriggeredIfNeeded(order) { if (order.type === ORDER_TYPES.STOP_MARKET) return; }
-
   _cancelStaleExitPendings(closedMap, candleIndex) {
     for (const [symbol, closedSide] of closedMap.entries()) {
       const staleIds = this._pendingOrderIds.filter(id => {
@@ -538,7 +535,6 @@ export class PaperTradingEngine extends EventEmitter {
       for (const id of staleIds) { const o = this._orders.get(id); o.status = ORDER_STATUSES.CANCELLED; o.cancelReason = 'STALE_EXIT_AFTER_RISK_CLOSE'; this._pendingOrderIds = this._pendingOrderIds.filter(i => i !== id); this._emitOrderCancelled(o); }
     }
   }
-
   _processStopLossTakeProfit(candle, candleIndex, targetSymbol = null) {
     const closed = new Map();
     for (const [symbol, pos] of [...this._positions.entries()]) {
@@ -567,7 +563,6 @@ export class PaperTradingEngine extends EventEmitter {
     }
     return closed;
   }
-
   setStopLoss(symbolOrOpts, priceMaybe) {
     let symbol, price;
     if (typeof symbolOrOpts === 'object' && symbolOrOpts !== null) { symbol = symbolOrOpts.symbol || symbolOrOpts.ticker || this._positions.keys().next().value; price = symbolOrOpts.price ?? symbolOrOpts.stopLoss ?? symbolOrOpts.stopPrice ?? symbolOrOpts.value; }
