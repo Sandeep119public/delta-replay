@@ -1,0 +1,132 @@
+name: Complete Audited Accounting Fix
+
+on:
+  push:
+    branches: [audit-fix-margin-funding]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: "!contains(github.event.head_commit.message, 'audited accounting fix applied')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply complete fix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/trading/PaperTradingEngine.js')
+          s = p.read_text()
+
+          # Entry admission: use availableMargin, not raw wallet cash, in all entry paths.
+          blocks = [
+              ("""      const requiredCash = this._getRequiredEntryCash(filledPrice, qty);\n\n      if (this.account.cashBalance < requiredCash) {\n        order.status = ORDER_STATUSES.REJECTED;\n        order.rejectionReason = 'INSUFFICIENT_CASH';\n        this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient cash to fill MARKET: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);\n        continue;\n      }\n""", """      const marginCheck = this._checkMarginAvailable(filledPrice, qty);\n      if (!marginCheck.valid) {\n        order.status = ORDER_STATUSES.REJECTED;\n        order.rejectionReason = 'INSUFFICIENT_CASH';\n        this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient available margin to fill MARKET: required ${marginCheck.requiredMargin.toFixed(2)}, available ${marginCheck.availableMargin.toFixed(2)}`);\n        continue;\n      }\n"""),
+              ("""    const requiredCash = this._getRequiredEntryCash(filledPrice, qty);\n    if (this.account.cashBalance < requiredCash) {\n      order.status = ORDER_STATUSES.REJECTED;\n      order.rejectionReason = 'INSUFFICIENT_CASH';\n      this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient cash to fill ${side} limit: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);\n      return { success: false, code: 'INSUFFICIENT_CASH' };\n    }\n""", """    const marginCheck = this._checkMarginAvailable(filledPrice, qty);\n    if (!marginCheck.valid) {\n      order.status = ORDER_STATUSES.REJECTED;\n      order.rejectionReason = 'INSUFFICIENT_CASH';\n      this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient available margin to fill ${side} limit: required ${marginCheck.requiredMargin.toFixed(2)}, available ${marginCheck.availableMargin.toFixed(2)}`);\n      return { success: false, code: 'INSUFFICIENT_CASH' };\n    }\n"""),
+              ("""    const requiredCash = this._getRequiredEntryCash(filledPrice, qty);\n    if (this.account.cashBalance < requiredCash) {\n      order.status = ORDER_STATUSES.REJECTED;\n      order.rejectionReason = 'INSUFFICIENT_CASH';\n      this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient cash to fill STOP: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);\n      return { success: false, code: 'INSUFFICIENT_CASH' };\n    }\n""", """    const marginCheck = this._checkMarginAvailable(filledPrice, qty);\n    if (!marginCheck.valid) {\n      order.status = ORDER_STATUSES.REJECTED;\n      order.rejectionReason = 'INSUFFICIENT_CASH';\n      this._emitOrderRejected(order, 'INSUFFICIENT_CASH', `Insufficient available margin to fill STOP: required ${marginCheck.requiredMargin.toFixed(2)}, available ${marginCheck.availableMargin.toFixed(2)}`);\n      return { success: false, code: 'INSUFFICIENT_CASH' };\n    }\n"""),
+              ("""    const requiredCash = this._getRequiredEntryCash(execPrice, q);\n    if (this.account.cashBalance < requiredCash) {\n      return this._reject('INSUFFICIENT_CASH', `Insufficient cash to place ${side} order: required ${requiredCash.toFixed(2)}, available ${this.account.cashBalance.toFixed(2)}`);\n    }\n""", """    const marginCheck = this._checkMarginAvailable(execPrice, q);\n    if (!marginCheck.valid) {\n      return this._reject('INSUFFICIENT_CASH', `Insufficient available margin to place ${side} order: required ${marginCheck.requiredMargin.toFixed(2)}, available ${marginCheck.availableMargin.toFixed(2)}`);\n    }\n"""),
+          ]
+          for old, new in blocks:
+              if old not in s:
+                  raise SystemExit('entry-admission block not found')
+              s = s.replace(old, new, 1)
+
+          # Public funding API: explicit event-time mark when supplied.
+          old_sig = "  applyFundingRate({ symbol = null, fundingRate = 0.0001, timestamp = null } = {}) {"
+          new_sig = "  applyFundingRate({ symbol = null, fundingRate = 0.0001, timestamp = null, markPrice = null } = {}) {"
+          if old_sig not in s: raise SystemExit('funding signature not found')
+          s = s.replace(old_sig, new_sig, 1)
+          old_mark = "      const markPrice = Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice;\n      const notional = markPrice * pos.quantity;"
+          new_mark = "      const explicitMark = markPrice == null ? NaN : Number(markPrice);\n      const resolvedMarkPrice = Number.isFinite(explicitMark) ? explicitMark : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice);\n      const notional = resolvedMarkPrice * pos.quantity;"
+          if old_mark not in s: raise SystemExit('funding mark block not found')
+          s = s.replace(old_mark, new_mark, 1)
+          s = s.replace("        markPrice,\n        fundingRate: rate,", "        markPrice: resolvedMarkPrice,\n        fundingRate: rate,", 1)
+
+          # Capture prior market sample before overwriting current market context.
+          old_capture = "    const c = payload.candle;\n    const symbol = payload.symbol || payload.candle?.symbol || null;\n    const idx = Number.isFinite(payload.index) ? payload.index : this._latestCandleIndex + 1;\n    // clone\n"
+          new_capture = "    const c = payload.candle;\n    const symbol = payload.symbol || payload.candle?.symbol || null;\n    const previousMarket = symbol ? this._marketBySymbol.get(symbol) : null;\n    const idx = Number.isFinite(payload.index) ? payload.index : this._latestCandleIndex + 1;\n    // clone\n"
+          if old_capture not in s: raise SystemExit('capture anchor not found')
+          s = s.replace(old_capture, new_capture, 1)
+
+          # Portfolio-level liquidation trigger.
+          start = s.index("  _processLiquidations(candle, candleIndex, symbol) {")
+          end = s.index("\n  clearMarketContext() {", start)
+          new_liq = """  _portfolioMarginStateAtPrice(symbol, markPrice) {\n    const imRate = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;\n    const mmRate = (typeof this.maintMarginRate === 'number' && this.maintMarginRate >= 0) ? this.maintMarginRate : (imRate * 0.5);\n    let equity = this.account.walletBalance;\n    let maintenanceMargin = 0;\n    for (const [sym, pos] of this._positions.entries()) {\n      const mark = sym === symbol\n        ? markPrice\n        : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice);\n      const unrealized = pos.side === 'LONG'\n        ? (mark - pos.entryPrice) * pos.quantity\n        : (pos.entryPrice - mark) * pos.quantity;\n      equity += unrealized;\n      maintenanceMargin += Math.abs(mark * pos.quantity) * mmRate;\n    }\n    return { equity, maintenanceMargin };\n  }\n\n  _isPortfolioLiquidatable(symbol, markPrice) {\n    const state = this._portfolioMarginStateAtPrice(symbol, markPrice);\n    return state.equity <= state.maintenanceMargin + 1e-9;\n  }\n\n  _processLiquidations(candle, candleIndex, symbol) {\n    const toLiquidate = [];\n    for (const [sym, pos] of this._positions.entries()) {\n      if (symbol && sym !== symbol) continue;\n      const adversePrice = pos.side === 'LONG' ? candle.low : candle.high;\n      if (!Number.isFinite(adversePrice)) continue;\n      if (!this._isPortfolioLiquidatable(sym, adversePrice)) continue;\n\n      const derivedPrice = this.getLiquidationPrice(sym);\n      let exitPrice = Number.isFinite(derivedPrice) && derivedPrice > 0 ? derivedPrice : adversePrice;\n      if (this.executionPolicy === EXECUTION_POLICY.REALISTIC && Number.isFinite(candle.open)) {\n        if (pos.side === 'LONG' && candle.open < exitPrice) exitPrice = candle.open;\n        if (pos.side === 'SHORT' && candle.open > exitPrice) exitPrice = candle.open;\n      }\n      toLiquidate.push({ symbol: sym, exitPrice, candleTime: candle.time, pos });\n    }\n\n    for (const item of toLiquidate) {\n      const { symbol: sym, exitPrice, candleTime, pos } = item;\n      this.emit(TradingEvents.POSITION_LIQUIDATED, {\n        symbol: sym,\n        liquidationPrice: exitPrice,\n        position: this._cloneJSON(pos.toJSON()),\n        candle: this._cloneJSON(candle),\n      });\n      this._closePositionInternal(sym, exitPrice, candleTime, 'LIQUIDATION');\n      this._cancelIncompatiblePendings(sym);\n    }\n  }\n"""
+          s = s[:start] + new_liq + s[end:]
+
+          # Deterministic event-time funding marks for every boundary crossed.
+          old_funding = """    // 5. Automatic funding evaluation at scheduled boundaries across the chronological interval\n    if (this._fundingSchedule && Number.isFinite(c.time)) {\n      const interval = this._fundingSchedule.intervalSec || (8 * 3600);\n      const origin = this._fundingSchedule.origin || 0;\n\n      if (this._lastFundingTimestamp == null) {\n        this._lastFundingTimestamp = c.time;\n      } else if (c.time > this._lastFundingTimestamp) {\n        const prevTime = this._lastFundingTimestamp;\n        let nextBoundary = origin + Math.floor((prevTime - origin) / interval + 1) * interval;\n        while (nextBoundary <= c.time) {\n          const rate = typeof this._fundingSchedule.rateProvider === 'function'\n            ? this._fundingSchedule.rateProvider(nextBoundary, symbol)\n            : (this._fundingSchedule.defaultRate ?? 0.0001);\n          this.applyFundingRate({ symbol, fundingRate: rate, timestamp: nextBoundary });\n          nextBoundary += interval;\n        }\n        this._lastFundingTimestamp = c.time;\n      }\n    }\n"""
+          new_funding = """    // 5. Automatic funding evaluation at scheduled boundaries across the chronological interval.\n    // Each boundary uses a deterministic event-time mark. Positions opened after a boundary do not pay it.\n    if (this._fundingSchedule && Number.isFinite(c.time)) {\n      const interval = this._fundingSchedule.intervalSec || (8 * 3600);\n      const origin = this._fundingSchedule.origin || 0;\n\n      if (this._lastFundingTimestamp == null) {\n        this._lastFundingTimestamp = c.time;\n      } else if (c.time > this._lastFundingTimestamp) {\n        const prevTime = this._lastFundingTimestamp;\n        let nextBoundary = origin + Math.floor((prevTime - origin) / interval + 1) * interval;\n        while (nextBoundary <= c.time) {\n          for (const [sym, pos] of this._positions.entries()) {\n            if (pos.openedAt != null && Number(pos.openedAt) > nextBoundary) continue;\n            const rate = typeof this._fundingSchedule.rateProvider === 'function'\n              ? this._fundingSchedule.rateProvider(nextBoundary, sym)\n              : (this._fundingSchedule.defaultRate ?? 0.0001);\n            const marketForSymbol = sym === symbol\n              ? previousMarket\n              : this._marketBySymbol.get(sym);\n            const mark = sym === symbol\n              ? this._fundingMarkPriceAt(sym, nextBoundary, marketForSymbol, c)\n              : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice);\n            this.applyFundingRate({ symbol: sym, fundingRate: rate, timestamp: nextBoundary, markPrice: mark });\n          }\n          nextBoundary += interval;\n        }\n        this._lastFundingTimestamp = c.time;\n      }\n    }\n"""
+          if old_funding not in s: raise SystemExit('funding block not found')
+          s = s.replace(old_funding, new_funding, 1)
+
+          # Funding mark helper is inserted after the final liquidation method.
+          helper_anchor = "\n  clearMarketContext() {\n"
+          helper = """\n  _fundingMarkPriceAt(symbol, timestamp, previousMarket, currentCandle) {\n    const pos = this._positions.get(symbol);\n    if (!pos) return null;\n    const prevClose = previousMarket && Number.isFinite(previousMarket.candle?.close)\n      ? Number(previousMarket.candle.close)\n      : (Number.isFinite(pos.currentPrice) ? Number(pos.currentPrice) : Number(pos.entryPrice));\n    const currClose = Number.isFinite(currentCandle?.close) ? Number(currentCandle.close) : prevClose;\n    const prevTime = Number(previousMarket?.timestamp);\n    const currTime = Number(currentCandle?.time);\n    if (!Number.isFinite(prevTime) || !Number.isFinite(currTime) || currTime <= prevTime || timestamp <= prevTime) {\n      return timestamp >= currTime ? currClose : prevClose;\n    }\n    const ratio = Math.min(1, Math.max(0, (timestamp - prevTime) / (currTime - prevTime)));\n    return prevClose + (currClose - prevClose) * ratio;\n  }\n"""
+          if "  _fundingMarkPriceAt(symbol, timestamp, previousMarket, currentCandle) {" not in s:
+              if helper_anchor not in s: raise SystemExit('helper anchor not found')
+              s = s.replace(helper_anchor, helper + helper_anchor, 1)
+
+          s = s.replace(" * Deterministic: market execution = close, limit execution = limitPrice with next-candle rule.\n", " * Deterministic research clock: market orders default to next-bar open; explicit IMMEDIATE_CLOSE is supported for manual execution.\n", 1)
+          p.write_text(s)
+
+          # Terminal results must count only pending intents created on the final backtest bar.
+          rp = Path('src/strategy/BacktestRunner.js')
+          r = rp.read_text()
+          old_r = """    const allOrders = this.engine.getOrders();\n    const pendingIntents = allOrders.filter(o => o.status === ORDER_STATUSES.PENDING);\n    return {\n      summary: {\n        ...this.engine.getBacktestSummary(),\n        unfilledTerminalOrders: pendingIntents.length,\n      },\n      trades: this.engine.getTrades(),\n      unfilledOrders: pendingIntents,\n"""
+          new_r = """    const allOrders = this.engine.getOrders();\n    const pendingIntents = allOrders.filter(o => o.status === ORDER_STATUSES.PENDING);\n    const terminalIndex = this.engine._latestCandleIndex;\n    const terminalOrders = pendingIntents.filter(o => o.createdIndex === terminalIndex);\n    return {\n      summary: {\n        ...this.engine.getBacktestSummary(),\n        unfilledTerminalOrders: terminalOrders.length,\n      },\n      trades: this.engine.getTrades(),\n      unfilledOrders: pendingIntents,\n      unfilledTerminalOrders: terminalOrders,\n"""
+          if old_r not in r: raise SystemExit('BacktestRunner block not found')
+          rp.write_text(r.replace(old_r, new_r, 1))
+          PY
+
+          cat > tests/audit-hardening.test.js <<'EOF'
+          import { describe, it, expect } from 'vitest';
+          import { PaperTradingEngine, EXECUTION_TIMING } from '../src/trading/PaperTradingEngine.js';
+
+          const c = (time, open, high, low, close) => ({ time, open, high, low, close, volume: 1 });
+
+          describe('Audited accounting hardening', () => {
+            it('admits entries only against cross-margin availableMargin', () => {
+              const e = new PaperTradingEngine({ startingBalance: 10000, feeRate: 0, marginRate: 0.1, maintMarginRate: 0.05, executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE });
+              e.onMarketCandle({ candle: c(0, 100, 100, 100, 100), index: 0, symbol: 'BTCUSD' });
+              expect(e.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 90 }).success).toBe(true);
+              e.onMarketCandle({ candle: c(1, 50, 50, 50, 50), index: 1, symbol: 'ETHUSD' });
+              const rejected = e.placeOrder({ symbol: 'ETHUSD', side: 'BUY', quantity: 220 });
+              expect(rejected.success).toBe(false);
+              expect(e.getAccountSnapshot().availableMargin).toBe(1000);
+            });
+
+            it('uses event-time interpolated marks for automatic funding boundaries', () => {
+              const e = new PaperTradingEngine({ startingBalance: 10000, feeRate: 0, executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE, fundingSchedule: { intervalSec: 28800, defaultRate: 0.001 } });
+              e.onMarketCandle({ candle: c(60, 100, 100, 100, 100), index: 0, symbol: 'BTCUSD' });
+              e.placeOrder({ symbol: 'BTCUSD', side: 'BUY', quantity: 10 });
+              e.onMarketCandle({ candle: c(86460, 200, 200, 200, 200), index: 1, symbol: 'BTCUSD' });
+              const h = e.getFundingHistory();
+              expect(h).toHaveLength(3);
+              expect(h.map(x => x.timestamp)).toEqual([28800, 57600, 86400]);
+              expect(h[0].markPrice).toBeCloseTo(133.333333, 5);
+              expect(h[1].markPrice).toBeCloseTo(166.666667, 5);
+              expect(h[2].markPrice).toBeCloseTo(200, 5);
+              expect(e.getAccountSnapshot().walletBalance).toBeCloseTo(9995, 8);
+            });
+          });
+          EOF
+
+          npm ci
+          npm test
+          npm run build
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/audit-fix.yml .github/workflows/audit-fix2.yml .github/workflows/audit-fix3.yml
+          git add src tests .github/workflows/audit-fix.yml .github/workflows/audit-fix2.yml .github/workflows/audit-fix3.yml
+          git diff --cached --check
+          git commit -m "fix(accounting): audited accounting fix applied"
+          git push
