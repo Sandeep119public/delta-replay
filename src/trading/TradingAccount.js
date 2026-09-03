@@ -15,6 +15,8 @@ export class TradingAccount {
     this.usedMargin = 0;
     this.maintenanceMargin = 0;
     this.totalFundingPaid = 0;
+    this.totalFundingReceived = 0;
+    this.netFunding = 0;
   }
 
   get cashBalance() {
@@ -50,6 +52,8 @@ export class TradingAccount {
     this.usedMargin = 0;
     this.maintenanceMargin = 0;
     this.totalFundingPaid = 0;
+    this.totalFundingReceived = 0;
+    this.netFunding = 0;
   }
 
   snapshot() {
@@ -61,6 +65,8 @@ export class TradingAccount {
       unrealizedPnL: this.unrealizedPnL,
       totalFees: this.totalFees,
       totalFundingPaid: this.totalFundingPaid,
+      totalFundingReceived: this.totalFundingReceived,
+      netFunding: this.netFunding,
       usedMargin: this.usedMargin,
       initialMargin: this.initialMargin,
       maintenanceMargin: this.maintenanceMargin,
