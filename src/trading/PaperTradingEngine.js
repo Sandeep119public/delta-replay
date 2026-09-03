@@ -33,7 +33,7 @@ export const EXECUTION_PROFILE = Object.freeze({
   RESEARCH_BACKTEST: 'RESEARCH_BACKTEST',
 });
 
-/** PaperTradingEngine — deterministic paper execution over MARKET_CANDLE events. */
+/** PaperTradingEngine - deterministic paper execution over MARKET_CANDLE events. */
 export class PaperTradingEngine extends EventEmitter {
   static defaultExecutionTiming = EXECUTION_TIMING.NEXT_BAR_OPEN;
 
@@ -224,7 +224,7 @@ export class PaperTradingEngine extends EventEmitter {
   }
   _fundingMarkPriceAt(symbol, timestamp, previousMarket, currentCandle) {
     const pos = this._positions.get(symbol); if (!pos) return null;
-    const prevClose = previousMarket && Number.isFinite(previousMarket.candle?.close) ? Number(previousMarket.candle.close) : (Number.isFinite(pos.currentPrice) ? Number(pos.currentPrice) : Number(pos.entryPrice));
+    const prevClose = previousMarket && Number.isFinite(previousMarket.candle?.close) ? Number(previousMarket.candle.close) : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : Number(pos.entryPrice));
     const currClose = Number.isFinite(currentCandle?.close) ? Number(currentCandle.close) : prevClose;
     const prevTime = Number(previousMarket?.timestamp), currTime = Number(currentCandle?.time);
     if (!Number.isFinite(prevTime) || !Number.isFinite(currTime) || currTime <= prevTime || timestamp <= prevTime) return timestamp >= currTime ? currClose : prevClose;
@@ -241,7 +241,7 @@ export class PaperTradingEngine extends EventEmitter {
     const unsubCandle = replayEngine.on('marketCandle', payload => this.onMarketCandle(payload));
     this._unsubs.push(unsubCandle);
     const clearOnLifecycle = () => {
-      this.resetAll({ clearMarket: true });
+      this.resetAccount('REPLAY_RESET');
     };
     this._lifecycleUnsubs.push(replayEngine.on('loaded', clearOnLifecycle), replayEngine.on('reset', clearOnLifecycle));
     if (typeof replayEngine.registerActionGuard === 'function') {
@@ -608,7 +608,7 @@ export class PaperTradingEngine extends EventEmitter {
   getPendingOrders() { return this._pendingOrderIds.map(id => this._orders.get(id)).filter(Boolean).map(o => this._cloneJSON(o.toJSON())); }
   getOrders() { return Array.from(this._orders.values()).map(o => this._cloneJSON(o.toJSON())); }
   getOrder(id) { const o = this._orders.get(id); return o ? this._cloneJSON(o.toJSON()) : null; }
-  resetAccount() { this._positions.clear(); this._trades = []; this._nextTradeId = 1; this._ambiguousBarCount = 0; this._totalBarsEvaluated = 0; this._fundingHistory = []; this._lastFundingTimestamp = null; this.clearMarketContext(); this.account.reset(); this._clearPendingOrders('ACCOUNT_RESET'); this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot()); this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot()); return this.getAccountSnapshot(); }
+  resetAccount(pendingCancelReason = 'ACCOUNT_RESET') { this._positions.clear(); this._trades = []; this._nextTradeId = 1; this._ambiguousBarCount = 0; this._totalBarsEvaluated = 0; this._fundingHistory = []; this._lastFundingTimestamp = null; this.clearMarketContext(); this.account.reset(); this._clearPendingOrders(pendingCancelReason); this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot()); this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot()); return this.getAccountSnapshot(); }
   resetAll({ clearMarket = false } = {}) { this._positions.clear(); this._trades = []; this._nextTradeId = 1; this._nextOrderId = 1; this._orders.clear(); this._pendingOrderIds = []; this._ambiguousBarCount = 0; this._totalBarsEvaluated = 0; this._fundingHistory = []; this._lastFundingTimestamp = null; if (clearMarket) this.clearMarketContext(); this.account.reset(); this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot()); this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot()); return this.getAccountSnapshot(); }
   setStartingBalance(newBalance) { const val = Number(newBalance); if (!Number.isFinite(val) || val <= 0) return { success: false, message: 'Invalid starting balance' }; this.account.startingBalance = val; this.account.cashBalance = val; this.account.realizedPnL = 0; this.account.unrealizedPnL = 0; this.account.totalFees = 0; this.account.totalFundingPaid = 0; this.account.totalFundingReceived = 0; this.account.netFunding = 0; this._positions.clear(); this._trades = []; this._clearPendingOrders('BALANCE_CHANGED'); this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot()); this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot()); return { success: true, balance: val }; }
   setFeeRate(newRate) { const val = Number(newRate); if (!Number.isFinite(val) || val < 0) return { success: false, message: 'Invalid fee rate' }; this.feeRate = val; return { success: true, feeRate: val }; }
@@ -618,7 +618,7 @@ export class PaperTradingEngine extends EventEmitter {
   getState() { return this._cloneJSON({ account: this.account.snapshot(), positions: Array.from(this._positions.values()).map(p => p.toJSON()), orders: Array.from(this._orders.values()).map(o => o.toJSON()), pendingOrderIds: [...this._pendingOrderIds], trades: this._trades.map(t => t.toJSON()), latestCandle: this._latestCandle ? { ...this._latestCandle } : null, latestCandleIndex: this._latestCandleIndex, nextOrderId: this._nextOrderId, nextTradeId: this._nextTradeId, executionProfile: this.executionProfile, executionTiming: this.executionTiming }); }
   getPosition(symbol) { const p = this._positions.get(symbol); return p ? this._cloneJSON(p.toJSON()) : null; }
   getPositions() { return Array.from(this._positions.values()).map(p => this._cloneJSON(p.toJSON())); }
-  getTrades() { return this._trades.map(t => this._cloneJSON(t.toJSON()); }
+  getTrades() { return this._trades.map(t => this._cloneJSON(t.toJSON())); }
   getTradeHistory() { return this.getTrades(); }
   checkInvariants() { const acct = this.account, equity = acct.cashBalance + acct.unrealizedPnL, equityOk = Math.abs(acct.equity - equity) < 1e-9, feesSum = this._trades.reduce((s, t) => s + (t.totalFee || 0), 0) + Array.from(this._positions.values()).reduce((s, p) => s + (p.entryFee || 0), 0), unrealizedOk = this._positions.size === 0 ? Math.abs(acct.unrealizedPnL) < 1e-9 : true, pendingIdsUnique = new Set(this._pendingOrderIds).size === this._pendingOrderIds.length, pendingAllPending = this._pendingOrderIds.every(id => this._orders.get(id)?.status === ORDER_STATUSES.PENDING); return { equityOk, unrealizedOk, pendingIdsUnique, pendingAllPending, equity, unrealizedPnL: acct.unrealizedPnL, cashBalance: acct.cashBalance, totalFees: acct.totalFees, computedFeesSum: feesSum }; }
   hasOpenPosition(symbol = null) { return symbol ? this._positions.has(symbol) : this._positions.size > 0; }
