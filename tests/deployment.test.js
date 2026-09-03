@@ -1,7 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'fs';
+import { execSync } from 'child_process';
 
 describe('Deployment regression', () => {
+  beforeAll(() => {
+    if (!fs.existsSync('dist/index.html')) {
+      execSync('npx vite build', { stdio: 'ignore' });
+    }
+  });
+
   it('dist/index.html exists and references base-prefixed assets', () => {
     const html = fs.readFileSync('dist/index.html', 'utf-8');
     // Must contain /delta-replay/assets/ not bare /assets/
