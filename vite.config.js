@@ -1,9 +1,8 @@
 import { defineConfig } from 'vite';
-import fs from 'node:fs';
-import path from 'node:path';
 
 export default defineConfig({
-  // GitHub Pages hosts under /delta-replay/.
+  // GitHub Pages hosts under /delta-replay/, not / . Base must be set so
+  // dist/index.html asset URLs become /delta-replay/assets/... not /assets/...
   base: '/delta-replay/',
   server: {
     port: 5174,
@@ -11,28 +10,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false,
-    rollupOptions: {
-      input: 'index.html'
-    }
+    sourcemap: false
   },
-  plugins: [
-    {
-      name: 'inject-inline-app-styles',
-      transformIndexHtml(html) {
-        const files = [
-          'src/styles.css',
-          'src/ui-polish.css',
-          'src/viewport-fit.css',
-          'src/paper-theme.css'
-        ];
-        const css = files
-          .map((file) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8'))
-          .join('\n');
-        return html.replace('</head>', `<style data-delta-replay-inline-styles>${css}</style>\n</head>`);
-      }
-    }
-  ],
   test: {
     environment: 'node',
     include: ['tests/**/*.test.js'],
