@@ -11,3 +11,375 @@
 </head>
 <body>
   <div id="app">
+    <!-- HEADER -->
+    <header class="topbar" role="banner">
+      <div class="topbar-left">
+        <div class="logo-wrapper">
+          <h1 class="logo">DELTA REPLAY</h1>
+          <span class="phase-badge" aria-hidden="true">PRO REPLAY</span>
+        </div>
+        <div id="cache-badge" class="cache-badge hidden" title="Data loaded from local IndexedDB cache">💾 CACHED</div>
+      </div>
+
+      <nav class="topbar-center" aria-label="Replay controls">
+        <!-- Symbol -->
+        <div class="selector-group symbol-group">
+          <label for="symbol-select">Symbol</label>
+          <select id="symbol-select" aria-label="Symbol"></select>
+        </div>
+
+        <!-- Timeframe -->
+        <div class="selector-group tf-group">
+          <label for="timeframe-select">Timeframe</label>
+          <select id="timeframe-select" aria-label="Timeframe"></select>
+        </div>
+
+        <!-- Replay Start Date Picker -->
+        <div class="selector-group selector-datetime replay-date-group">
+          <label for="replay-date">Replay From (UTC)</label>
+          <div class="datetime-group">
+            <input type="date" id="replay-date" aria-label="Replay start date" />
+            <input type="time" id="replay-time" step="60" aria-label="Replay start time" />
+          </div>
+        </div>
+
+        <!-- Quick Date Presets -->
+        <div class="preset-group">
+          <label>Quick Presets</label>
+          <div class="preset-chips">
+            <button type="button" class="preset-chip" data-preset="1d" title="Replay from 1 day ago">1D</button>
+            <button type="button" class="preset-chip" data-preset="3d" title="Replay from 3 days ago">3D</button>
+            <button type="button" class="preset-chip" data-preset="7d" title="Replay from 7 days ago">7D</button>
+            <button type="button" class="preset-chip" data-preset="30d" title="Replay from 30 days ago">30D</button>
+            <button type="button" class="preset-chip" data-preset="now" title="Replay from recent 24h">Live</button>
+          </div>
+        </div>
+
+        <!-- Primary Start Button -->
+        <div class="header-action-group">
+          <button id="header-start-replay-btn" class="btn btn-primary btn-replay-accent" aria-label="Start replaying from selected date">
+            <span class="icon">▶</span> START REPLAY
+          </button>
+        </div>
+
+        <!-- Hidden legacy inputs for backwards-compatibility with tests -->
+        <div class="hidden" aria-hidden="true">
+          <input type="date" id="from-date" />
+          <input type="time" id="from-time" step="60" />
+          <input type="date" id="to-date" />
+          <input type="time" id="to-time" step="60" />
+          <button id="load-btn">LOAD DATA</button>
+        </div>
+      </nav>
+
+      <div class="topbar-right">
+        <span id="data-status" class="data-status" role="status" aria-live="polite">Ready to replay</span>
+      </div>
+    </header>
+
+    <!-- STATUS BAR -->
+    <div id="mode-banner" class="mode-banner mode-idle" role="status" aria-live="polite">
+      <span id="mode-indicator" class="mode-indicator">PREVIEW MODE — READY TO REPLAY</span>
+      <span id="progress-panel" class="progress-panel hidden">
+        <span id="progress-text">0 / 0</span>
+        <span id="progress-pct">0%</span>
+        <span id="market-time" class="market-time">—</span>
+      </span>
+      <span id="market-time-full" class="market-time-full">CURRENT MARKET TIME: —</span>
+    </div>
+
+    <!-- ERROR PANEL -->
+    <div id="error-panel" class="error-panel hidden" role="alert" aria-live="assertive">
+      <div class="error-panel-header">
+        <span class="error-panel-icon" aria-hidden="true">!</span>
+        <span id="error-panel-title" class="error-panel-title">Data Error</span>
+        <button id="error-panel-dismiss" class="error-panel-dismiss" aria-label="Dismiss error">&times;</button>
+      </div>
+      <p id="error-panel-message" class="error-panel-message"></p>
+      <div id="error-panel-context" class="error-panel-context hidden"></div>
+      <div class="error-panel-actions">
+        <button id="error-panel-retry" class="btn btn-secondary btn-sm">Retry</button>
+        <button id="error-panel-details" class="btn btn-sm">Details</button>
+      </div>
+    </div>
+
+    <!-- MAIN LAYOUT: CHART + SIDEBAR -->
+    <div class="main-layout">
+      <!-- CHART AREA -->
+      <main class="main" role="main" aria-label="Chart">
+        <div id="chart-container" class="chart-container"></div>
+        
+        <!-- On-Chart Floating Trading Status Bar -->
+        <div id="chart-floating-bar" class="chart-floating-bar hidden">
+          <div class="chart-floating-left">
+            <span id="chart-pos-badge" class="chart-pos-badge">LONG 1.0</span>
+            <span id="chart-pos-entry" class="chart-pos-entry">@ $65,000.00</span>
+            <span id="chart-pos-pnl" class="chart-pos-pnl pnl-pos">+$0.00</span>
+          </div>
+          <div class="chart-floating-right">
+            <span class="chart-click-hint">🎯 Click chart to set SL / TP</span>
+            <button id="btn-chart-close" type="button" class="btn btn-xs btn-chart-close">✕ Close</button>
+          </div>
+        </div>
+
+        <!-- On-Chart Notification Toast -->
+        <div id="chart-toast" class="chart-toast hidden" role="status"></div>
+
+        <div id="chart-overlay" class="chart-overlay hidden">
+          <div class="chart-overlay-content">
+            <p id="overlay-text"></p>
+          </div>
+        </div>
+      </main>
+
+      <!-- TRADING SIDEBAR -->
+      <aside id="trading-panel" class="trading-section" aria-label="Paper trading">
+        <!-- Live Sticky Account Header -->
+        <div class="trading-top-summary">
+          <div class="trading-header">
+            <h2 class="trading-title">⚡ PAPER TRADING</h2>
+            <span id="trading-error" class="trading-error hidden" role="alert"></span>
+          </div>
+          <div class="equity-hero-bar">
+            <div class="equity-main">
+              <span class="equity-caption">EQUITY</span>
+              <span id="acct-equity" class="equity-highlight">$10,000.00</span>
+            </div>
+            <div class="pnl-hero-pill">
+              <span class="pnl-caption">UNREALIZED</span>
+              <span id="acct-unrealized" class="pnl-val">$0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="trading-tab-nav" role="tablist">
+          <button type="button" class="panel-tab-btn active" data-tab="trade" role="tab" aria-selected="true">⚡ TRADE</button>
+          <button type="button" class="panel-tab-btn" data-tab="account" role="tab" aria-selected="false">📊 ACCOUNT</button>
+          <button type="button" class="panel-tab-btn" data-tab="activity" role="tab" aria-selected="false">📋 ACTIVITY <span id="activity-badge" class="tab-badge">0</span></button>
+        </div>
+
+        <div class="trading-tab-contents">
+          <!-- TAB 1: TRADE VIEW -->
+          <div id="tab-view-trade" class="tab-panel active" role="tabpanel">
+            <!-- Active Position Card -->
+            <div class="position-panel compact-card">
+              <div class="card-header-row">
+                <span class="card-title">ACTIVE POSITION</span>
+                <span id="pos-side-badge" class="pos-badge hidden">—</span>
+              </div>
+              <div class="pos-compact-grid">
+                <div class="pos-metric"><span class="lbl">Symbol</span><span id="pos-symbol" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">Side</span><span id="pos-side" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">Size</span><span id="pos-qty" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">Entry</span><span id="pos-entry" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">Mark</span><span id="pos-current" class="val">—</span></div>
+                <div class="pos-metric"><span class="lbl">PnL</span><span id="pos-pnl" class="val">—</span></div>
+              </div>
+              <!-- Hidden for compatibility / updated via JS -->
+              <div class="hidden">
+                <span id="pos-sl">—</span>
+                <span id="pos-tp">—</span>
+              </div>
+              <!-- Inline SL/TP Controls -->
+              <div class="risk-controls-compact">
+                <div class="risk-inputs-row">
+                  <input id="sl-price" type="number" min="0.0001" step="0.01" placeholder="SL Price" aria-label="Stop Loss price" />
+                  <input id="tp-price" type="number" min="0.0001" step="0.01" placeholder="TP Price" aria-label="Take Profit price" />
+                  <button id="btn-set-risk" class="btn btn-sm btn-primary" disabled>SET</button>
+                  <button id="btn-clear-risk" class="btn btn-sm btn-secondary" disabled>✕</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Order Placement Card -->
+            <div class="order-panel compact-card">
+              <div class="order-type-tabs">
+                <button type="button" class="order-tab active" data-type="MARKET">Market</button>
+                <button type="button" class="order-tab" data-type="LIMIT">Limit</button>
+                <button type="button" class="order-tab" data-type="STOP_MARKET">Stop</button>
+              </div>
+              <select id="order-type" class="hidden" aria-label="Order type">
+                <option value="MARKET" selected>Market</option>
+                <option value="LIMIT">Limit</option>
+                <option value="STOP_MARKET">Stop</option>
+              </select>
+
+              <div class="order-form-compact">
+                <div class="order-row-compact">
+                  <div class="qty-field-wrap">
+                    <label for="trade-qty">Qty</label>
+                    <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" aria-label="Trade quantity" />
+                  </div>
+                  <div class="qty-presets-compact">
+                    <button type="button" class="qty-chip" data-qty="0.05">0.05</button>
+                    <button type="button" class="qty-chip" data-qty="0.1">0.1</button>
+                    <button type="button" class="qty-chip" data-qty="0.5">0.5</button>
+                    <button type="button" class="qty-chip" data-qty="1">1.0</button>
+                  </div>
+                </div>
+
+                <div class="order-row hidden" id="limit-price-row">
+                  <label for="limit-price">Limit Price</label>
+                  <input id="limit-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" aria-label="Limit price" />
+                </div>
+                <div class="order-row hidden" id="stop-price-row">
+                  <label for="stop-price">Stop Price</label>
+                  <input id="stop-price" type="number" min="0.0001" step="0.01" placeholder="e.g. 65000" aria-label="Stop price" />
+                </div>
+
+                <div class="order-actions-grid">
+                  <button id="btn-buy" class="btn btn-buy-main" disabled>BUY / LONG</button>
+                  <button id="btn-sell" class="btn btn-sell-main" disabled>SELL / SHORT</button>
+                </div>
+                <div class="order-secondary-grid">
+                  <button id="btn-close" class="btn btn-close-pos" disabled>CLOSE POSITION</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: ACCOUNT & RISK MANAGEMENT -->
+          <div id="tab-view-account" class="tab-panel" role="tabpanel">
+            <div class="account-details-card compact-card">
+              <span class="card-title">ACCOUNT OVERVIEW</span>
+              <div class="kv-grid">
+                <div class="kv"><span>Cash Balance</span><span id="acct-balance">$10,000.00</span></div>
+                <div class="kv"><span>Realized PnL</span><span id="acct-realized">$0.00</span></div>
+                <div class="kv"><span>Total Fees</span><span id="acct-fees">$0.00</span></div>
+              </div>
+            </div>
+
+            <!-- Performance Metrics -->
+            <div class="performance-card compact-card">
+              <span class="card-title">PERFORMANCE METRICS</span>
+              <div class="stats-mini-grid">
+                <div class="stat-tile">
+                  <span class="stat-lbl">Win Rate</span>
+                  <span id="stat-winrate" class="stat-val">0.0%</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-lbl">Profit Factor</span>
+                  <span id="stat-pf" class="stat-val">—</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-lbl">Total Trades</span>
+                  <span id="stat-trades" class="stat-val">0</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-lbl">Net Return</span>
+                  <span id="stat-return" class="stat-val">0.0%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Capital & Fee Settings -->
+            <div class="acct-settings-card compact-card">
+              <span class="card-title">CAPITAL & FEE SETTINGS</span>
+              <div class="setting-item">
+                <label>Starting Capital</label>
+                <div class="capital-presets">
+                  <button type="button" class="capital-chip" data-balance="1000">$1K</button>
+                  <button type="button" class="capital-chip" data-balance="5000">$5K</button>
+                  <button type="button" class="capital-chip active" data-balance="10000">$10K</button>
+                  <button type="button" class="capital-chip" data-balance="25000">$25K</button>
+                  <button type="button" class="capital-chip" data-balance="50000">$50K</button>
+                  <button type="button" class="capital-chip" data-balance="100000">$100K</button>
+                </div>
+                <div class="custom-capital-row">
+                  <input id="custom-capital-input" type="number" min="100" step="100" placeholder="Custom USD" />
+                  <button id="btn-set-capital" type="button" class="btn btn-sm btn-secondary">Set</button>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <label for="fee-tier-select">Fee Tier</label>
+                <select id="fee-tier-select" class="select-sm">
+                  <option value="0.0005" selected>Standard Futures (0.05%)</option>
+                  <option value="0.0003">VIP / Delta (0.03%)</option>
+                  <option value="0.0000">Zero Fee / Backtest (0.00%)</option>
+                </select>
+              </div>
+
+              <div class="reset-action-row">
+                <button id="btn-reset-acct" class="btn btn-secondary btn-full">RESET ACCOUNT (RESTART)</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: ACTIVITY & LOGS -->
+          <div id="tab-view-activity" class="tab-panel" role="tabpanel">
+            <div class="activity-card compact-card">
+              <div class="activity-section">
+                <span class="card-title">PENDING ORDERS</span>
+                <div id="pending-orders-list" class="trades-list"><span class="empty-hint">No pending orders</span></div>
+              </div>
+              <div class="activity-section">
+                <span class="card-title">TRADE LOG</span>
+                <div id="trades-list" class="trades-list"><span class="empty-hint">No trades yet</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- TIMELINE -->
+    <section class="timeline-section" aria-label="Timeline">
+      <div class="timeline-header">
+        <span class="timeline-bound"><span class="bound-label">From:</span> <span id="timeline-start-label">—</span></span>
+        <span id="timeline-current-label" class="timeline-current hidden">—</span>
+        <span class="timeline-bound"><span class="bound-label">To:</span> <span id="timeline-end-label">—</span></span>
+      </div>
+      <div class="timeline-track-wrap">
+        <input type="range" id="timeline-slider" min="0" max="100" value="0" disabled aria-label="Timeline position" />
+        <div class="timeline-meta">
+          <div class="timeline-meta-left">
+            <span id="start-index-label">Ready to replay</span>
+            <span id="start-time-label" class="start-time-label">—</span>
+          </div>
+          <div class="timeline-meta-right">
+            <span id="timeline-index-label">0 / 0</span>
+            <span id="timeline-time-label" class="hidden">—</span>
+          </div>
+        </div>
+      </div>
+      <div class="timeline-start-controls hidden">
+        <!-- Hidden/compact jump & start controls for test compatibility -->
+        <div class="hidden" aria-hidden="true">
+          <input type="date" id="jump-date" />
+          <input type="time" id="jump-time" step="60" />
+          <button id="jump-btn">JUMP</button>
+          <span id="jump-error" class="jump-error hidden"></span>
+          <button id="start-replay-btn">START REPLAY</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- REPLAY CONTROLS -->
+    <section class="controls-section" aria-label="Replay controls">
+      <div class="controls-row">
+        <button id="btn-reset" class="btn" disabled title="R (Reset)" aria-label="Reset replay">RESET</button>
+        <button id="btn-play" class="btn" disabled title="Space (Play/Pause)" aria-label="Play">PLAY</button>
+        <button id="btn-pause" class="btn hidden" disabled aria-label="Pause">PAUSE</button>
+        <button id="btn-step" class="btn" disabled title="Arrow Right (Step)" aria-label="Step forward">STEP</button>
+        <div class="speed-group">
+          <label for="speed-select">Speed</label>
+          <select id="speed-select" disabled aria-label="Playback speed">
+            <option value="0.25">0.25x</option>
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x</option>
+            <option value="2">2x</option>
+            <option value="5">5x</option>
+            <option value="10">10x</option>
+          </select>
+        </div>
+        <span id="replay-status" class="replay-status" aria-live="polite">idle</span>
+        <button id="btn-follow" class="btn btn-secondary hidden" title="Follow current replay candle" aria-label="Follow current candle">&#8599; FOLLOW</button>
+      </div>
+      <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; &rarr; Step &nbsp;|&nbsp; R: Reset &nbsp;|&nbsp; Drag chart to pan history</p>
+    </section>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
