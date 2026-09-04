@@ -20,6 +20,30 @@ describe('BacktestRunner strategy errors', () => {
     runner.destroy();
   });
 
+  it('propagates falsy thrown values', () => {
+    for (const thrown of [null, undefined, false, 0, '']) {
+      const strategy = { onBar: () => { throw thrown; }, reset() {} };
+      const runner = new BacktestRunner({ strategy, symbol: 'BTCUSD', feeRate: 0 });
+
+      let received;
+      try {
+        runner.processBar(candles[0], 0);
+      } catch (err) {
+        received = err;
+      }
+      expect(received).toBe(thrown);
+      runner.destroy();
+    }
+  });
+
+  it('propagates invalid non-iterable strategy results', () => {
+    const strategy = { onBar: () => Promise.resolve([]), reset() {} };
+    const runner = new BacktestRunner({ strategy, symbol: 'BTCUSD', feeRate: 0 });
+
+    expect(() => runner.processBar(candles[0], 0)).toThrow(/must return an iterable of intents/);
+    runner.destroy();
+  });
+
   it('does not leak a prior strategy error into the next bar', () => {
     let calls = 0;
     const strategy = {
