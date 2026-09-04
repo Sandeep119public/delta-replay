@@ -172,7 +172,7 @@ export class CandleCache {
     return (
       Boolean(c) &&
       Number.isFinite(c.time) &&
-      c.time > 0 &&
+      c.time >= 0 &&
       Number.isFinite(c.open) &&
       Number.isFinite(c.high) &&
       Number.isFinite(c.low) &&
