@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { HistoricalDataManager } from '../src/data/HistoricalDataManager.js';
 
 const candles = [
-  { time: 0, open: 100, high: 101, low: 99, close: 100, volume: 1 },
-  { time: 60, open: 100, high: 102, low: 99, close: 101, volume: 1 },
-  { time: 120, open: 101, high: 103, low: 100, close: 102, volume: 1 },
+  { time: 60, open: 100, high: 101, low: 99, close: 100, volume: 1 },
+  { time: 120, open: 100, high: 102, low: 99, close: 101, volume: 1 },
+  { time: 180, open: 101, high: 103, low: 100, close: 102, volume: 1 },
 ];
 
 class PublicOnlyCache {
@@ -17,13 +17,13 @@ class PublicOnlyCache {
   get(symbol, timeframe, from, to) {
     this.operations.push('get');
     return this.hit
-      ? { hit: true, candles: candles.map(c => ({ ...c })), missing: [], intervals: [{ from: 0, to: 120 }] }
+      ? { hit: true, candles: candles.map(c => ({ ...c })), missing: [], intervals: [{ from: 60, to: 180 }] }
       : { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
   }
 
   getCoverage() {
     this.operations.push('getCoverage');
-    return [{ from: 0, to: 120 }];
+    return [{ from: 60, to: 180 }];
   }
 
   repairIntervals() {
@@ -53,7 +53,7 @@ describe('HistoricalDataManager public cache contract', () => {
     };
     const manager = new HistoricalDataManager({ provider, cache, chunkSize: 10 });
 
-    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 0, to: 120 });
+    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 60, to: 180 });
 
     expect(result.quality).toBe('VALID');
     expect(result.candles).toHaveLength(3);
@@ -62,10 +62,14 @@ describe('HistoricalDataManager public cache contract', () => {
 
   it('repairs cache coverage through public methods on a cache hit', async () => {
     const cache = new PublicOnlyCache({ hit: true });
-    const provider = { venue: 'TEST', getGridSpec: () => ({ origin: 0 }) };
+    const provider = {
+      venue: 'TEST',
+      getGridSpec: () => ({ origin: 0 }),
+      fetchChunk: async () => candles,
+    };
     const manager = new HistoricalDataManager({ provider, cache });
 
-    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 0, to: 120 });
+    const result = await manager.load({ symbol: 'BTCUSDT', timeframe: '1m', from: 60, to: 180 });
 
     expect(result.quality).toBe('VALID');
     expect(result.metadata.cached).toBe(true);
