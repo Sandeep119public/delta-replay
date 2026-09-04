@@ -1,18 +1,17 @@
 # Delta Replay
 
-Historical market replay application — **Phase 1** of the Delta Replay roadmap.
-
-> **Paper trading is NOT implemented yet.** This phase focuses exclusively on historical replay.
+Historical market replay application with paper trading and strategy backtesting.
 
 ## What it is
 
 Delta Replay lets you:
 - Select a symbol / timeframe
-- Load historical candles (local sample data, offline)
-- Pick a replay start candle via timeline slider
-- Hide all future candles (they are never passed to the chart)
+- Load historical candles from local sample data or supported providers
+- Pick a replay start candle via the timeline slider
+- Keep future candles hidden during replay
 - Play / Pause / Step / Seek / Reset / Change speed
-- Never see future candles during replay
+- Paper-trade against replayed market candles
+- Run deterministic research backtests with next-bar-open execution
 
 ## Quick start
 
@@ -24,72 +23,69 @@ npm run dev
 
 ## Scripts
 
-- `npm run dev` — Vite dev server
-- `npm run build` — production build
-- `npm test` — run tests (vitest)
-- `npm run preview` — preview build
+- `npm run dev`: Vite dev server
+- `npm run build`: production build
+- `npm test`: run tests with Vitest
+- `npm run preview`: preview the production build
 
 ## Architecture
 
-```
+```text
 Historical Data
-      │
-      ▼
-Replay Engine  ──► ReplayState (single source of truth)
-      │
-      ├──────────► ChartAdapter ──► ChartManager (lightweight-charts)
-      │
-      └──────────► (future) PaperTradingEngine via marketCandle events
+      |
+      v
+Replay Engine  --> ReplayState
+      |
+      +----------> ChartAdapter --> ChartManager
+      |
+      +----------> PaperTradingEngine
+                          |
+                          +----------> Strategy / BacktestRunner
 ```
 
-**Core principle:** `ReplayEngine` has ZERO dependency on DOM / chart / UI. It manages only candles, play state, position, speed, and emits deterministic events.
+**Core principle:** `ReplayEngine` has zero dependency on DOM, chart, or UI code. It owns replay state and emits deterministic market-candle events. `PaperTradingEngine` consumes those events for paper execution, while `BacktestRunner` provides an isolated research execution profile.
 
-Chart subscribes to engine events (`marketCandle` / `candle`) — this is the bridge for future paper trading without rewriting the engine.
+## Candle format
 
-### Project structure
-
-```
-src/
-  core/EventEmitter.js, Logger.js
-  replay/ReplayEngine.js, ReplayState.js, ReplayEvents.js
-  chart/ChartManager.js, ChartAdapter.js
-  data/CandleProvider.js, LocalCandleProvider.js, CandleValidator.js, CandleNormalizer.js
-  ui/ReplayControls.js, Timeline.js, SymbolSelector.js, TimeframeSelector.js
-  state/AppState.js
-  utils/time.js
-  main.js
-public/sample-data/BTCUSD-1m.json (1000 candles, generated, not live Delta Exchange data)
-```
-
-### Candle format (canonical)
+Canonical candle format:
 
 ```js
 { time: 1700000000, open: 35000, high: 35010, low: 34990, close: 35005, volume: 42 }
 ```
-`time` is **Unix seconds**. `CandleNormalizer` converts ms or alias fields; validator rejects invalid OHLC.
 
-### ReplayEngine API
+`time` is Unix seconds. `CandleNormalizer` converts supported timestamp and field aliases, and `CandleValidator` rejects invalid OHLCV data.
 
-`load(candles)`, `start(index)`, `play()`, `pause()`, `toggle()`, `stepForward()`, `seek(index)`, `setSpeed(s)`, `stop()`, `reset()`, `getState()`, `getVisibleCandles()`
+## Trading and backtesting
 
-State: `{ status: 'idle'|'ready'|'playing'|'paused'|'ended', currentIndex, startIndex, speed, totalCandles }`
+`PaperTradingEngine` supports market, limit, and stop-market orders, execution timing policies, OHLC ambiguity handling, futures-style margin accounting, liquidation, and funding accounting.
 
-Speed: `1x = 1 candle/sec`, `2x = 2 candles/sec`, etc. (single controlled `setTimeout` loop — no duplicate timers).
+`BacktestRunner` enforces `RESEARCH_BACKTEST` with `NEXT_BAR_OPEN` execution, validates candle chronology and symbol consistency, supports isolated runs and continuation, and exposes unfilled terminal-bar orders explicitly.
 
-### Key design decisions
+## Data integrity
 
-- Events: `loaded, started, played, paused, stepped, seeked, candle/marketCandle, speedChanged, ended, stopped, stateChanged, reset`
-- Chart performance: `setData()` only on start/seek/reset; `update()` per step.
-- Race protection: `loadToken` in `main.js`; `AbortSignal` supported in `LocalCandleProvider`.
-- Offline-first: `LocalCandleProvider` loads `/sample-data/*.json`, no backend required.
+Historical loading uses discrete candle-grid normalization, cache coverage tracking, chunked fetching, retries, and integrity policies including `STRICT`, `REPAIR`, and `LENIENT`.
 
-## Roadmap
+## Project structure
 
-- **Phase 1 — Historical Replay** (current)
-- **Phase 2 — Cloud Historical Data** (`CloudCandleProvider` via API)
-- **Phase 3 — Paper Trading** (orders, balance, PnL consuming `marketCandle`)
-- **Phase 4 — Advanced Simulation** (indicators, strategy testing)
+```text
+src/
+  core/
+  replay/
+  chart/
+  data/
+  trading/
+  strategy/
+  indicators/
+  ui/
+  state/
+public/sample-data/
+tests/
+```
 
 ## Testing
 
-See `tests/`.
+Run the complete suite with:
+
+```bash
+npm test
+```
