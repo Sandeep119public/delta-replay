@@ -7,7 +7,7 @@
  */
 export class TradingAccount {
   constructor({ startingBalance = 10000 } = {}) {
-    this.startingBalance = startingBalance;
+    this._startingBalance = startingBalance;
     this.walletBalance = startingBalance;
     this.realizedPnL = 0; // net realized
     this.unrealizedPnL = 0; // gross unrealized
@@ -17,6 +17,15 @@ export class TradingAccount {
     this.totalFundingPaid = 0;
     this.totalFundingReceived = 0;
     this.netFunding = 0;
+  }
+
+  get startingBalance() {
+    return this._startingBalance;
+  }
+
+  set startingBalance(val) {
+    this._startingBalance = val;
+    this.reset();
   }
 
   get cashBalance() {
