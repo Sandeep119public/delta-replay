@@ -200,11 +200,18 @@ export class CandleCache {
 
   clear() {
     this._memory.clear();
-    if (this.enableIDB && this._db) {
+    if (!this.enableIDB) return;
+    if (this._db) {
       try {
         this._db.transaction('candles', 'readwrite').objectStore('candles').clear();
       } catch {}
+      return;
     }
+    this._openIDB().then((db) => {
+      try {
+        db.transaction('candles', 'readwrite').objectStore('candles').clear();
+      } catch {}
+    }).catch(() => {});
   }
 
   async _openIDB() {
