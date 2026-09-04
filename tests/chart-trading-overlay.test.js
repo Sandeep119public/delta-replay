@@ -44,7 +44,7 @@ describe('ChartManager Trading Overlays and Price Lines', () => {
     expect(mockSeries.createPriceLine).toHaveBeenCalledTimes(1);
     expect(mockSeries.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({
       price: 65000,
-      color: '#10b981',
+      color: '#2f7d58',
       title: 'LONG 1.5 @ 65000.00',
     }));
   });
@@ -62,9 +62,9 @@ describe('ChartManager Trading Overlays and Price Lines', () => {
     expect(mockSeries.createPriceLine).toHaveBeenCalledTimes(3);
     expect(cm._positionLine.opts.price).toBe(65000);
     expect(cm._stopLossLine.opts.price).toBe(63500);
-    expect(cm._stopLossLine.opts.color).toBe('#ef4444');
+    expect(cm._stopLossLine.opts.color).toBe('#b44842');
     expect(cm._takeProfitLine.opts.price).toBe(68000);
-    expect(cm._takeProfitLine.opts.color).toBe('#10b981');
+    expect(cm._takeProfitLine.opts.color).toBe('#2f7d58');
   });
 
   it('updates existing price lines in-place on position update without re-creating', () => {
