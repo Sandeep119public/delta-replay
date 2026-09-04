@@ -27,16 +27,27 @@ export class BacktestRunner {
     }
 
     this._lastIntents = [];
+    this._strategyError = null;
+    this._strategyErrorCaptured = false;
     this._unsubBarClose = this.engine.on(TradingEvents.BAR_CLOSE, (barEvent) => {
       this._assertResearchExecution();
-      const intents = this.strategy.onBar(barEvent) || [];
-      this._lastIntents = intents;
-      for (const intent of intents) {
-        if (intent?.symbol != null && intent.symbol !== this.symbol) {
-          this.engine._reject?.('SYMBOL_MISMATCH', `BacktestRunner symbol mismatch: expected ${this.symbol}, got ${intent.symbol}`);
-          continue;
+      try {
+        const intents = this.strategy.onBar(barEvent);
+        if (intents != null && typeof intents[Symbol.iterator] !== 'function') {
+          throw new TypeError('BacktestRunner strategy.onBar must return an iterable of intents');
         }
-        this.engine.submitIntent({ ...intent, symbol: this.symbol });
+        const normalizedIntents = intents || [];
+        this._lastIntents = normalizedIntents;
+        for (const intent of normalizedIntents) {
+          if (intent?.symbol != null && intent.symbol !== this.symbol) {
+            this.engine._reject?.('SYMBOL_MISMATCH', `BacktestRunner symbol mismatch: expected ${this.symbol}, got ${intent.symbol}`);
+            continue;
+          }
+          this.engine.submitIntent({ ...intent, symbol: this.symbol });
+        }
+      } catch (err) {
+        this._strategyErrorCaptured = true;
+        this._strategyError = err;
       }
     });
   }
@@ -53,8 +64,17 @@ export class BacktestRunner {
     if (candle.symbol != null && candle.symbol !== this.symbol) {
       throw new Error(`BacktestRunner symbol mismatch: expected ${this.symbol}, got ${candle.symbol}`);
     }
+    this._strategyError = null;
+    this._strategyErrorCaptured = false;
+    this._lastIntents = [];
     const idx = Number.isFinite(index) ? index : (this.engine.getLatestCandleIndex() + 1);
     this.engine.onMarketCandle({ candle, index: idx, symbol: this.symbol });
+    if (this._strategyErrorCaptured) {
+      const err = this._strategyError;
+      this._strategyError = null;
+      this._strategyErrorCaptured = false;
+      throw err;
+    }
     return { intents: this._lastIntents };
   }
 
@@ -92,6 +112,8 @@ export class BacktestRunner {
   reset() {
     if (typeof this.strategy.reset === 'function') this.strategy.reset();
     this.engine.resetAll({ clearMarket: true });
+    this._strategyError = null;
+    this._strategyErrorCaptured = false;
     this._lastIntents = [];
   }
 }
