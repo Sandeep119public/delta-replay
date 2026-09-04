@@ -47,15 +47,25 @@ export class CandleCache {
     return computeGridMissing(requestedFrom, requestedTo, cachedIntervals, tf);
   }
 
+  getCoverage(symbol, timeframe, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    const key = this._key(symbol, timeframe, { venue, gridOrigin });
+    const entry = this._memory.get(key);
+    if (!entry || entry.version !== CACHE_VERSION || !Array.isArray(entry.candles)) return [];
+    const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
+    const canonical = entry.candles.filter(c => this._isCanonicalCandle(c));
+    return CandleCache.intervalsFromCandles(canonical, tf).map(iv => ({ ...iv }));
+  }
+
   get(symbol, timeframe, from, to, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
-    const key = this._key(symbol, timeframe, { venue, gridOrigin: gridOrigin ?? 0 });
+    const effectiveGridOrigin = gridOrigin ?? 0;
+    const key = this._key(symbol, timeframe, { venue, gridOrigin: effectiveGridOrigin });
     const entry = this._memory.get(key);
     if (!entry || entry.version !== CACHE_VERSION) {
       if (entry) this._memory.delete(key);
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
     if (!Array.isArray(entry.candles) || !Array.isArray(entry.intervals)) {
-      this.invalidate(symbol, timeframe, { venue, gridOrigin: gridOrigin ?? 0 });
+      this.invalidate(symbol, timeframe, { venue, gridOrigin: effectiveGridOrigin });
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
 
@@ -64,9 +74,8 @@ export class CandleCache {
 
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.timeframeSec = tf;
-
     const missing = this._computeMissing(from, to, entry.intervals, tf);
-    const candles = entry.candles.filter(c => c.time >= from && c.time <= to).map(c => ({ ...c }));
+    const candles = canonical.filter(c => c.time >= from && c.time <= to).map(c => ({ ...c }));
     this._lruTouch(key, entry);
 
     return {
@@ -172,7 +181,7 @@ export class CandleCache {
     return (
       Boolean(c) &&
       Number.isFinite(c.time) &&
-      c.time > 0 &&
+      c.time >= 0 &&
       Number.isFinite(c.open) &&
       Number.isFinite(c.high) &&
       Number.isFinite(c.low) &&
@@ -184,10 +193,15 @@ export class CandleCache {
 
   clear() {
     this._memory.clear();
-    if (this.enableIDB && this._db) {
-      try {
-        this._db.transaction('candles', 'readwrite').objectStore('candles').clear();
-      } catch {}
+    if (this.enableIDB) {
+      const clearPersisted = async () => {
+        try {
+          const db = await this._openIDB();
+          if (!db) return;
+          db.transaction('candles', 'readwrite').objectStore('candles').clear();
+        } catch {}
+      };
+      clearPersisted();
     }
   }
 

@@ -83,7 +83,11 @@ export class BinanceClient {
           throw err;
         }
         const data = await res.json();
-        if (!Array.isArray(data)) break;
+        if (!Array.isArray(data)) {
+          const err = new Error('Binance API returned a non-array candle payload');
+          err.code = 'INVALID_RESPONSE';
+          throw err;
+        }
 
         page = data.map(item => {
           if (Array.isArray(item)) {
