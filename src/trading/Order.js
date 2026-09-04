@@ -40,7 +40,7 @@ export class Order {
     rejectionReason = null,
     cancelReason = null,
   }) {
-    this.id = id;
+    this.id = String(id);
     this.symbol = symbol;
     this.side = side; // BUY/SELL
     this.type = type; // MARKET/LIMIT/STOP_MARKET
