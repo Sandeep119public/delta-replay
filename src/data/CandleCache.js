@@ -130,6 +130,45 @@ export class CandleCache {
     this._persistIDB(key, entry).catch(() => {});
   }
 
+  set(symbol, timeframe, from, to, candles = [], { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
+    const effectiveGridOrigin = gridOrigin ?? 0;
+    const key = this._key(symbol, timeframe, { venue, gridOrigin: effectiveGridOrigin });
+    const entry = this._memory.get(key) ?? {
+      candles: [],
+      intervals: [],
+      ts: Date.now(),
+      version: CACHE_VERSION,
+      timeframeSec: null,
+      venue,
+      gridOrigin: effectiveGridOrigin,
+    };
+
+    const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
+    entry.timeframeSec = tf;
+    const origin = Number.isFinite(gridOrigin) ? gridOrigin : null;
+
+    const byTime = new Map();
+    for (const c of entry.candles) {
+      if (this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0)) {
+        byTime.set(c.time, { ...c });
+      }
+    }
+    for (const c of candles) {
+      if (this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0)) {
+        byTime.set(c.time, { ...c });
+      }
+    }
+
+    entry.candles = [...byTime.values()].sort((a, b) => a.time - b.time);
+    entry.intervals = CandleCache.intervalsFromCandles(entry.candles, tf);
+    entry.version = CACHE_VERSION;
+    entry.ts = Date.now();
+
+    this._lruTouch(key, entry);
+    this._persistIDB(key, entry).catch(() => {});
+    return entry;
+  }
+
   reconcile(symbol, timeframe, { from, to, candles = [], timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0, halfOpen = false } = {}) {
     if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) {
       throw new Error('reconcile requires a valid from/to range');
