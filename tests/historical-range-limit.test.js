@@ -6,7 +6,11 @@ const candle = (time) => ({ time, open: 1, high: 1, low: 1, close: 1, volume: 1 
 const provider = {
   venue: 'TEST',
   getGridSpec: () => ({ origin: 0 }),
-  fetchChunk: async ({ from, to }) => [candle(from), ...(to === from ? [] : [candle(to)])],
+  fetchChunk: async ({ from, to }) => {
+    const candles = [];
+    for (let time = from; time <= to; time += 60) candles.push(candle(time));
+    return candles;
+  },
 };
 
 describe('HistoricalDataManager range limit', () => {
