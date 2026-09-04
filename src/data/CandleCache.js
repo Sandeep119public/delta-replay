@@ -74,14 +74,7 @@ export class CandleCache {
 
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.timeframeSec = tf;
-    const truthfulIntervals = CandleCache.intervalsFromCandles(canonical, tf);
-    const intervalsChanged = JSON.stringify(entry.intervals) !== JSON.stringify(truthfulIntervals);
-    if (intervalsChanged) {
-      entry.intervals = truthfulIntervals;
-      entry.ts = Date.now();
-    }
-
-    const missing = this._computeMissing(from, to, truthfulIntervals, tf);
+    const missing = this._computeMissing(from, to, entry.intervals, tf);
     const candles = canonical.filter(c => c.time >= from && c.time <= to).map(c => ({ ...c }));
     this._lruTouch(key, entry);
 
@@ -89,7 +82,7 @@ export class CandleCache {
       hit: missing.length === 0,
       candles,
       missing,
-      intervals: truthfulIntervals.map(iv => ({ ...iv })),
+      intervals: entry.intervals.map(iv => ({ ...iv })),
     };
   }
 
@@ -200,18 +193,16 @@ export class CandleCache {
 
   clear() {
     this._memory.clear();
-    if (!this.enableIDB) return;
-    if (this._db) {
-      try {
-        this._db.transaction('candles', 'readwrite').objectStore('candles').clear();
-      } catch {}
-      return;
+    if (this.enableIDB) {
+      const clearPersisted = async () => {
+        try {
+          const db = await this._openIDB();
+          if (!db) return;
+          db.transaction('candles', 'readwrite').objectStore('candles').clear();
+        } catch {}
+      };
+      clearPersisted();
     }
-    this._openIDB().then((db) => {
-      try {
-        db.transaction('candles', 'readwrite').objectStore('candles').clear();
-      } catch {}
-    }).catch(() => {});
   }
 
   async _openIDB() {
