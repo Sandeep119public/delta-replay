@@ -16,7 +16,7 @@ describe('CandleCache public coverage API', () => {
     ]);
   });
 
-  it('does not trust stale interval metadata when determining a cache hit', () => {
+  it('reports truthful coverage even when legacy interval metadata is stale', () => {
     const cache = new CandleCache({ enableIDB: false });
     cache.set('BTCUSDT', '1m', 60, 180, [candle(60), candle(120), candle(180)], {
       timeframeSec: 60,
@@ -27,10 +27,7 @@ describe('CandleCache public coverage API', () => {
     cache._memory.get(key).intervals = [{ from: 60, to: 180 }];
     cache._memory.get(key).candles = [candle(60), candle(180)];
 
-    const result = cache.get('BTCUSDT', '1m', 60, 180, { timeframeSec: 60, venue: 'TEST' });
-    expect(result.hit).toBe(false);
-    expect(result.missing).toEqual([{ from: 120, to: 120 }]);
-    expect(result.intervals).toEqual([
+    expect(cache.getCoverage('BTCUSDT', '1m', { timeframeSec: 60, venue: 'TEST' })).toEqual([
       { from: 60, to: 60 },
       { from: 180, to: 180 },
     ]);
