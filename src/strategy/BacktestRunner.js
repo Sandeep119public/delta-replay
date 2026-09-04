@@ -30,8 +30,8 @@ export class BacktestRunner {
     this._strategyError = null;
     this._strategyErrorCaptured = false;
     this._unsubBarClose = this.engine.on(TradingEvents.BAR_CLOSE, (barEvent) => {
-      this._assertResearchExecution();
       try {
+        this._assertResearchExecution();
         const intents = this.strategy.onBar(barEvent);
         if (intents != null && typeof intents[Symbol.iterator] !== 'function') {
           throw new TypeError('BacktestRunner strategy.onBar must return an iterable of intents');
