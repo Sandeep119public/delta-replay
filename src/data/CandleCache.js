@@ -169,6 +169,43 @@ export class CandleCache {
     return entry;
   }
 
+  reconcile(symbol, timeframe, { from, to, candles = [], timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0, halfOpen = false } = {}) {
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) {
+      throw new Error('reconcile requires a valid from/to range');
+    }
+    const key = this._key(symbol, timeframe, { venue, gridOrigin });
+    const existing = this._memory.get(key);
+    const tf = this._getTimeframeSeconds(timeframe, timeframeSec, existing);
+    if (!Number.isFinite(tf) || tf <= 0) throw new Error(`Invalid timeframe seconds for ${timeframe}`);
+    const origin = Number.isFinite(gridOrigin) ? gridOrigin : 0;
+    const inRange = (time) => halfOpen ? (time >= from && time < to) : (time >= from && time <= to);
+
+    const byTime = new Map();
+    for (const c of existing?.candles ?? []) {
+      if (!this._isCanonicalCandle(c)) continue;
+      if (!inRange(c.time)) byTime.set(c.time, { ...c });
+    }
+    for (const c of Array.isArray(candles) ? candles : []) {
+      if (!this._isCanonicalCandle(c)) continue;
+      if ((c.time - origin) % tf !== 0 || !inRange(c.time)) continue;
+      byTime.set(c.time, { ...c });
+    }
+
+    const mergedCandles = [...byTime.values()].sort((a, b) => a.time - b.time);
+    const entry = {
+      candles: mergedCandles,
+      intervals: CandleCache.intervalsFromCandles(mergedCandles, tf),
+      timeframeSec: tf,
+      ts: Date.now(),
+      version: CACHE_VERSION,
+      venue,
+      gridOrigin: origin,
+    };
+    this._lruTouch(key, entry);
+    this._persistIDB(key, entry).catch(() => {});
+    return entry;
+  }
+
   static intervalsFromCandles(candles, timeframeSec) {
     return intervalsFromCandles(candles, timeframeSec);
   }

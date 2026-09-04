@@ -4,7 +4,7 @@ import { CandleCache } from './CandleCache.js';
 import { CandleIntegrity, INTEGRITY_STATUS } from './CandleIntegrity.js';
 import { CandleNormalizer } from './CandleNormalizer.js';
 import { CandleValidator } from './CandleValidator.js';
-import { TIMEFRAME_SECONDS, normalizeRange } from './CandleGrid.js';
+import { TIMEFRAME_SECONDS, normalizeRange, computeGridMissing } from './CandleGrid.js';
 
 export const DataEvents = {
   LOADING_STARTED: 'dataLoadingStarted',
@@ -39,7 +39,7 @@ export class HistoricalDataManager extends EventEmitter {
   }
 
   /**
-   * Load historical data for range, with cache, chunking, retry, abort, progress, and active repair.
+   * Load historical data for range, with cache, chunking, retry, progress, and active repair.
    * Enforces discrete candle lattice boundaries via normalizeRange.
    * @param {object} params
    * @param {string} params.symbol
@@ -141,24 +141,27 @@ export class HistoricalDataManager extends EventEmitter {
       const isClean = metadata.invalidCount === 0 && (!strict || allowGaps || metadata.gaps.length === 0);
 
       if (validCandles.length === 0) {
-        const key = this.cache._key(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
-        this.cache._memory.delete(key);
-        if (this.cache.enableIDB) this.cache._deleteIDBEntry(key).catch(() => {});
+        this.cache.invalidate(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
         cacheRes = { hit: false, candles: [], missing: [{ from: effectiveFrom, to: effectiveTo }], intervals: [] };
       } else {
         const actualIntervals = CandleCache.intervalsFromCandles(validCandles, tfSec);
-        let realMissing = this.cache._computeMissing(effectiveFrom, effectiveTo, actualIntervals, tfSec);
+        const authoritativeCoverage = this.cache.getCoverage(symbol, timeframe, {
+          timeframeSec: tfSec,
+          venue: resolvedVenue,
+          gridOrigin,
+        });
+        let realMissing = computeGridMissing(effectiveFrom, effectiveTo, authoritativeCoverage, tfSec);
         if (realMissing.length === 0 && !isClean && metadata.gaps.length > 0) {
           realMissing = metadata.gaps.map(g => ({ from: g.from, to: g.to + (halfOpen ? tfSec : 0) }));
         }
 
         if (realMissing.length === 0 && isClean) {
-          const key = this.cache._key(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
-          const entry = this.cache._memory.get(key);
-          if (entry && JSON.stringify(entry.intervals) !== JSON.stringify(actualIntervals)) {
-            entry.intervals = actualIntervals;
-            entry.version = this.cache._version;
-            if (this.cache.enableIDB) this.cache._persistIDB(key, entry).catch(() => {});
+          if (JSON.stringify(authoritativeCoverage) !== JSON.stringify(actualIntervals)) {
+            this.cache.repairIntervals(symbol, timeframe, {
+              timeframeSec: tfSec,
+              venue: resolvedVenue,
+              gridOrigin,
+            });
           }
           this.store.load(validCandles, {
             symbol,
@@ -177,14 +180,15 @@ export class HistoricalDataManager extends EventEmitter {
           this.emit(DataEvents.PROGRESS, { loaded: validCandles.length, total: validCandles.length, pct: 100 });
           return { candles: validCandles, metadata: this.store.getMetadata(), quality: 'VALID' };
         } else {
-          const key = this.cache._key(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
-          const entry = this.cache._memory.get(key);
-          if (entry) {
-            entry.intervals = actualIntervals;
-            entry.candles = validCandles.slice().sort((a, b) => a.time - b.time);
-            entry.version = this.cache._version;
-            if (this.cache.enableIDB) this.cache._persistIDB(key, entry).catch(() => {});
-          }
+          this.cache.reconcile(symbol, timeframe, {
+            from: effectiveFrom,
+            to: effectiveTo,
+            candles: validCandles,
+            timeframeSec: tfSec,
+            venue: resolvedVenue,
+            gridOrigin,
+            halfOpen,
+          });
           cacheRes = {
             hit: false,
             candles: validCandles,
@@ -208,20 +212,19 @@ export class HistoricalDataManager extends EventEmitter {
         });
         if (cachedValid.length !== cacheRes.candles.length) {
           const actualCachedIntervals = CandleCache.intervalsFromCandles(cachedValid, tfSec);
-          const realMissing = this.cache._computeMissing(effectiveFrom, effectiveTo, actualCachedIntervals, tfSec);
+          const realMissing = computeGridMissing(effectiveFrom, effectiveTo, actualCachedIntervals, tfSec);
           cacheRes.candles = cachedValid;
           cacheRes.missing = realMissing;
           cacheRes.intervals = actualCachedIntervals;
-
-          const key = this.cache._key(symbol, timeframe, { venue: resolvedVenue, gridOrigin });
-          const entry = this.cache._memory.get(key);
-          if (entry) {
-            const truthful = CandleCache.intervalsFromCandles(entry.candles.filter(c => Number.isFinite(c.time)), tfSec);
-            if (truthful.length && JSON.stringify(truthful) !== JSON.stringify(entry.intervals)) {
-              entry.intervals = truthful;
-              entry.version = this.cache._version;
-            }
-          }
+          this.cache.reconcile(symbol, timeframe, {
+            from: effectiveFrom,
+            to: effectiveTo,
+            candles: cachedValid,
+            timeframeSec: tfSec,
+            venue: resolvedVenue,
+            gridOrigin,
+            halfOpen,
+          });
         }
       } catch {}
     }
