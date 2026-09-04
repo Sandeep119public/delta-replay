@@ -88,8 +88,8 @@ export class HistoricalDataManager extends EventEmitter {
       gridOrigin,
     });
 
-    // Estimated size check before network (protect browser)
-    const estimated = Math.ceil((effectiveTo - effectiveFrom) / tfSec);
+    // Estimated size check before network. Both endpoints are inclusive candle timestamps.
+    const estimated = Math.floor((effectiveTo - effectiveFrom) / tfSec) + 1;
     const MAX_ALLOWED = 100000;
     if (estimated > MAX_ALLOWED) {
       const err = new Error(`Requested range would require ~${estimated} candles (max ${MAX_ALLOWED} for ${timeframe}). Use a larger timeframe or smaller date range.`);
