@@ -392,3 +392,78 @@ input,select{
     .timeline-section{max-height:58px!important}
   }
 }
+
+
+/* PAPER SURFACE FIX — remove the leftover dashboard-black slabs. */
+:root{
+  --paper-panel:rgba(255,252,244,.88);
+  --paper-field:rgba(246,240,228,.92);
+  --paper-field-deep:rgba(235,226,208,.96);
+}
+.equity-hero-bar,
+.order-type-tabs,
+#trade-qty,
+input[type="number"],
+.order-form-compact input,
+.pos-compact-grid,
+.pos-metric,
+.risk-inputs-row input{
+  background:var(--paper-field)!important;
+  color:var(--ink-soft)!important;
+  border-color:rgba(69,60,48,.48)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7),1px 2px 0 rgba(69,60,48,.08)!important;
+}
+.equity-hero-bar{
+  background:
+    linear-gradient(100deg,rgba(255,255,255,.58),rgba(232,222,202,.28)),
+    var(--paper-field)!important;
+}
+.equity-caption,.pnl-caption,
+.equity-highlight,.pnl-hero-value,
+#trade-qty,
+.order-form-compact input{
+  color:var(--ink-soft)!important;
+  text-shadow:none!important;
+}
+.pnl-hero-pill{
+  background:rgba(234,244,232,.72)!important;
+  border-color:rgba(62,121,83,.3)!important;
+}
+.order-type-tabs{
+  overflow:hidden!important;
+  padding:3px!important;
+  border-radius:17px 15px 18px 14px!important;
+}
+.order-tab{
+  color:#5a5146!important;
+  background:transparent!important;
+  border-radius:13px 11px 14px 10px!important;
+}
+.order-tab.active{
+  color:#294a66!important;
+  background:rgba(83,130,173,.17)!important;
+  box-shadow:inset 0 -2px 0 rgba(49,95,140,.45)!important;
+}
+.qty-field-wrap label{color:var(--ink-soft)!important}
+.pos-metric{
+  background:rgba(245,239,227,.8)!important;
+}
+.pos-metric .value,.pos-metric .lbl{color:var(--ink-soft)!important}
+
+@media (max-width:700px){
+  .trading-section{
+    background:
+      radial-gradient(circle at 10% 10%,rgba(255,255,255,.65),transparent 35%),
+      rgba(244,237,222,.94)!important;
+  }
+  .equity-hero-bar{min-height:54px!important}
+  #trade-qty{
+    background:
+      linear-gradient(100deg,rgba(255,255,255,.52),rgba(236,226,207,.3)),
+      var(--paper-field-deep)!important;
+    font-weight:600!important;
+  }
+  .order-panel{
+    background:rgba(255,252,244,.72)!important;
+  }
+}
