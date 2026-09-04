@@ -34,7 +34,7 @@ Success:
 {
   "success": true,
   "result": [
-    {"time": 1704070800, "open": 42485.5, "high": 42485.5, "low": 42485.5, "open": 42485.5, "volume": 99},
+    {"time": 1704070800, "open": 42485.5, "high": 42490.0, "low": 42480.0, "close": 42485.5, "volume": 99},
     ...
   ]
 }
