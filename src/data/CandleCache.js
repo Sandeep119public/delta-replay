@@ -57,14 +57,15 @@ export class CandleCache {
   }
 
   get(symbol, timeframe, from, to, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
-    const key = this._key(symbol, timeframe, { venue, gridOrigin: gridOrigin ?? 0 });
+    const effectiveGridOrigin = gridOrigin ?? 0;
+    const key = this._key(symbol, timeframe, { venue, gridOrigin: effectiveGridOrigin });
     const entry = this._memory.get(key);
     if (!entry || entry.version !== CACHE_VERSION) {
       if (entry) this._memory.delete(key);
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
     if (!Array.isArray(entry.candles) || !Array.isArray(entry.intervals)) {
-      this.invalidate(symbol, timeframe, { venue, gridOrigin: gridOrigin ?? 0 });
+      this.invalidate(symbol, timeframe, { venue, gridOrigin: effectiveGridOrigin });
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
 
@@ -73,16 +74,22 @@ export class CandleCache {
 
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.timeframeSec = tf;
+    const truthfulIntervals = CandleCache.intervalsFromCandles(canonical, tf);
+    const intervalsChanged = JSON.stringify(entry.intervals) !== JSON.stringify(truthfulIntervals);
+    if (intervalsChanged) {
+      entry.intervals = truthfulIntervals;
+      entry.ts = Date.now();
+    }
 
-    const missing = this._computeMissing(from, to, entry.intervals, tf);
-    const candles = entry.candles.filter(c => c.time >= from && c.time <= to).map(c => ({ ...c }));
+    const missing = this._computeMissing(from, to, truthfulIntervals, tf);
+    const candles = canonical.filter(c => c.time >= from && c.time <= to).map(c => ({ ...c }));
     this._lruTouch(key, entry);
 
     return {
       hit: missing.length === 0,
       candles,
       missing,
-      intervals: entry.intervals.map(iv => ({ ...iv })),
+      intervals: truthfulIntervals.map(iv => ({ ...iv })),
     };
   }
 
