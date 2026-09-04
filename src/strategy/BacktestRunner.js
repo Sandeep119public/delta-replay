@@ -27,9 +27,16 @@ export class BacktestRunner {
     }
 
     this._lastIntents = [];
+    this._strategyError = null;
     this._unsubBarClose = this.engine.on(TradingEvents.BAR_CLOSE, (barEvent) => {
       this._assertResearchExecution();
-      const intents = this.strategy.onBar(barEvent) || [];
+      let intents;
+      try {
+        intents = this.strategy.onBar(barEvent) || [];
+      } catch (err) {
+        this._strategyError = err;
+        return;
+      }
       this._lastIntents = intents;
       for (const intent of intents) {
         if (intent?.symbol != null && intent.symbol !== this.symbol) {
@@ -53,8 +60,14 @@ export class BacktestRunner {
     if (candle.symbol != null && candle.symbol !== this.symbol) {
       throw new Error(`BacktestRunner symbol mismatch: expected ${this.symbol}, got ${candle.symbol}`);
     }
+    this._strategyError = null;
     const idx = Number.isFinite(index) ? index : (this.engine.getLatestCandleIndex() + 1);
     this.engine.onMarketCandle({ candle, index: idx, symbol: this.symbol });
+    if (this._strategyError) {
+      const err = this._strategyError;
+      this._strategyError = null;
+      throw err;
+    }
     return { intents: this._lastIntents };
   }
 
@@ -92,6 +105,7 @@ export class BacktestRunner {
   reset() {
     if (typeof this.strategy.reset === 'function') this.strategy.reset();
     this.engine.resetAll({ clearMarket: true });
+    this._strategyError = null;
     this._lastIntents = [];
   }
 }
