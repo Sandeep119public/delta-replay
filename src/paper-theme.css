@@ -1,0 +1,30 @@
+:root{--paper:#f5f0e7;--paper-card:#fbf8f1;--paper-inset:#eee8dd;--ink:#26221d;--muted:#756d62;--rule:#d7cebf;--rule-strong:#bfb3a2;--blue:#315f8c;--blue-hover:#264d73;--green:#2f7d58;--red:#b44842;--amber:#a86e24;--shadow:0 8px 24px rgba(71,58,41,.08)}
+html,body{background:var(--paper)!important;color:var(--ink)!important}
+body{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif!important;background:radial-gradient(circle at 15% 0%,rgba(255,255,255,.75),transparent 32%),linear-gradient(180deg,#f8f4ec 0%,var(--paper) 100%)!important}
+.topbar{background:rgba(251,248,241,.97)!important;border-bottom:1px solid var(--rule)!important;box-shadow:0 1px 0 rgba(255,255,255,.8)!important}
+.logo,.trading-title,.equity-highlight{font-family:Georgia,"Times New Roman",serif!important;color:#1f1c18!important}
+.phase-badge{color:var(--blue)!important;background:#eef3f7!important;border-color:#b8c6d4!important;border-radius:999px!important}
+.cache-badge{color:var(--green)!important;background:#eef5ee!important;border-color:#c9dbca!important;border-radius:999px!important}
+.selector-group select,#speed-select,.selector-group input[type=date],.selector-group input[type=time],input,select{background:var(--paper-card)!important;color:var(--ink)!important;border-color:var(--rule)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.8)!important}
+.selector-group label,.preset-group label,.card-title,.equity-caption,.pnl-caption,.pos-metric .lbl,.stat-lbl,.qty-field-wrap label,.order-row label,.setting-item label{color:var(--muted)!important}
+.preset-chip,.qty-chip,.capital-chip,.order-tab,.btn{background:transparent!important;color:var(--muted)!important;border-color:var(--rule)!important;border-radius:999px!important}
+.preset-chip:hover,.qty-chip:hover,.capital-chip:hover,.order-tab:hover,.btn:hover:not(:disabled){background:var(--paper-inset)!important;color:var(--ink)!important;border-color:var(--rule-strong)!important}
+.preset-chip.active,.capital-chip.active,.order-tab.active{background:#edf2f6!important;color:var(--blue)!important;border-color:#b8c6d4!important}
+.btn-primary,.btn-replay-accent{background:var(--blue)!important;color:#fff!important;border-color:var(--blue)!important;box-shadow:0 5px 12px rgba(49,95,140,.17)!important;border-radius:6px!important}
+.btn-primary:hover:not(:disabled),.btn-replay-accent:hover:not(:disabled){background:var(--blue-hover)!important}
+.btn-buy-main{background:#e8f2ea!important;color:#2f704f!important;border-color:#bdd5c3!important;border-radius:6px!important}
+.btn-sell-main{background:#f8eae8!important;color:#9d433d!important;border-color:#e1c1bc!important;border-radius:6px!important}
+.mode-banner,.timeline-section{background:#eee8dd!important;border-color:var(--rule)!important}
+.controls-section{background:#e6ded0!important;border-color:var(--rule)!important}
+.mode-idle .mode-indicator{background:#f7f3eb!important;color:var(--muted)!important;border-color:var(--rule)!important}
+.mode-ready .mode-indicator,.mode-playing .mode-indicator{background:#edf4ed!important;color:var(--green)!important;border-color:#c5d8c6!important}
+.mode-paused .mode-indicator{background:#fbf1e4!important;color:var(--amber)!important;border-color:#e4cfad!important}
+.main,.main-layout,.chart-container{background:var(--paper-card)!important}
+.trading-section{background:#eee8dd!important;border-color:var(--rule)!important}
+.trading-top-summary,.compact-card,.account-panel,.position-panel,.order-panel,.trades-list{background:var(--paper-card)!important;border-color:var(--rule)!important;box-shadow:var(--shadow)!important}
+.pnl-hero-pill,.pos-metric,.stat-tile{background:#f1ece2!important;border-color:var(--rule)!important}
+.chart-floating-bar{background:rgba(251,248,241,.94)!important;border-color:var(--rule)!important;box-shadow:var(--shadow)!important}
+.chart-floating-right{border-color:var(--rule)!important}.chart-click-hint,.data-status,.chart-pos-entry{color:var(--muted)!important}
+.error-panel{background:#fbefed!important;border-color:#e4bcb7!important;box-shadow:var(--shadow)!important}.error-panel-title{color:#933c38!important}.error-panel-message{color:#8f4944!important}
+.chart-overlay{background:rgba(245,240,231,.8)!important}.chart-overlay-content{background:rgba(251,248,241,.96)!important;border-color:var(--rule)!important;box-shadow:var(--shadow)!important}
+@media (max-width:560px){.pos-compact-grid{grid-template-columns:1fr 1fr!important}.risk-inputs-row{grid-template-columns:1fr 1fr!important}}
