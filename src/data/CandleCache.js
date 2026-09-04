@@ -47,6 +47,15 @@ export class CandleCache {
     return computeGridMissing(requestedFrom, requestedTo, cachedIntervals, tf);
   }
 
+  getCoverage(symbol, timeframe, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    const key = this._key(symbol, timeframe, { venue, gridOrigin });
+    const entry = this._memory.get(key);
+    if (!entry || entry.version !== CACHE_VERSION || !Array.isArray(entry.candles)) return [];
+    const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
+    const canonical = entry.candles.filter(c => this._isCanonicalCandle(c));
+    return CandleCache.intervalsFromCandles(canonical, tf).map(iv => ({ ...iv }));
+  }
+
   get(symbol, timeframe, from, to, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
     const key = this._key(symbol, timeframe, { venue, gridOrigin: gridOrigin ?? 0 });
     const entry = this._memory.get(key);
