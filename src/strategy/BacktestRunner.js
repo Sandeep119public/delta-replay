@@ -28,22 +28,26 @@ export class BacktestRunner {
 
     this._lastIntents = [];
     this._strategyError = null;
+    this._strategyErrorCaptured = false;
     this._unsubBarClose = this.engine.on(TradingEvents.BAR_CLOSE, (barEvent) => {
       this._assertResearchExecution();
-      let intents;
       try {
-        intents = this.strategy.onBar(barEvent) || [];
-      } catch (err) {
-        this._strategyError = err;
-        return;
-      }
-      this._lastIntents = intents;
-      for (const intent of intents) {
-        if (intent?.symbol != null && intent.symbol !== this.symbol) {
-          this.engine._reject?.('SYMBOL_MISMATCH', `BacktestRunner symbol mismatch: expected ${this.symbol}, got ${intent.symbol}`);
-          continue;
+        const intents = this.strategy.onBar(barEvent);
+        if (intents != null && typeof intents[Symbol.iterator] !== 'function') {
+          throw new TypeError('BacktestRunner strategy.onBar must return an iterable of intents');
         }
-        this.engine.submitIntent({ ...intent, symbol: this.symbol });
+        const normalizedIntents = intents || [];
+        this._lastIntents = normalizedIntents;
+        for (const intent of normalizedIntents) {
+          if (intent?.symbol != null && intent.symbol !== this.symbol) {
+            this.engine._reject?.('SYMBOL_MISMATCH', `BacktestRunner symbol mismatch: expected ${this.symbol}, got ${intent.symbol}`);
+            continue;
+          }
+          this.engine.submitIntent({ ...intent, symbol: this.symbol });
+        }
+      } catch (err) {
+        this._strategyErrorCaptured = true;
+        this._strategyError = err;
       }
     });
   }
@@ -61,11 +65,14 @@ export class BacktestRunner {
       throw new Error(`BacktestRunner symbol mismatch: expected ${this.symbol}, got ${candle.symbol}`);
     }
     this._strategyError = null;
+    this._strategyErrorCaptured = false;
+    this._lastIntents = [];
     const idx = Number.isFinite(index) ? index : (this.engine.getLatestCandleIndex() + 1);
     this.engine.onMarketCandle({ candle, index: idx, symbol: this.symbol });
-    if (this._strategyError) {
+    if (this._strategyErrorCaptured) {
       const err = this._strategyError;
       this._strategyError = null;
+      this._strategyErrorCaptured = false;
       throw err;
     }
     return { intents: this._lastIntents };
@@ -106,6 +113,7 @@ export class BacktestRunner {
     if (typeof this.strategy.reset === 'function') this.strategy.reset();
     this.engine.resetAll({ clearMarket: true });
     this._strategyError = null;
+    this._strategyErrorCaptured = false;
     this._lastIntents = [];
   }
 }
