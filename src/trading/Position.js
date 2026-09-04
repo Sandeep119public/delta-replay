@@ -1,5 +1,5 @@
 /**
- * Position model — one per symbol.
+ * Position model - one per symbol.
  */
 export class Position {
   /**
@@ -12,7 +12,7 @@ export class Position {
    * @param {number} p.openedAt - unix seconds
    * @param {number} [p.entryFee] - fee at entry (notional * rate)
    */
-  constructor({ symbol, side, quantity, entryPrice, currentPrice, openedAt, entryFee = 0, openedIndex = -1, stopLossPrice = null, takeProfitPrice = null, stopLossCreatedIndex = -1, takeProfitCreatedIndex = -1, initialMargin = 0, maintenanceMargin = 0, liquidationPrice = null }) {
+  constructor({ symbol, side, quantity, entryPrice, currentPrice, openedAt, entryFee = 0, openedIndex = -1, stopLossPrice = null, takeProfitPrice = null, stopLossCreatedIndex = -1, takeProfitCreatedIndex = -1, initialMargin = 0, maintenanceMargin = 0, maintenanceMarginRate = null, liquidationPrice = null }) {
     this.symbol = symbol;
     this.side = side;
     this.quantity = quantity;
@@ -26,8 +26,19 @@ export class Position {
     this.stopLossCreatedIndex = stopLossCreatedIndex;
     this.takeProfitCreatedIndex = takeProfitCreatedIndex;
     this.initialMargin = initialMargin;
-    this.maintenanceMargin = maintenanceMargin;
+    const entryNotional = Math.abs(Number(entryPrice) * Number(quantity));
+    const derivedRate = entryNotional > 0 && Number.isFinite(Number(maintenanceMargin))
+      ? Number(maintenanceMargin) / entryNotional
+      : 0;
+    this._maintenanceMarginRate = Number.isFinite(Number(maintenanceMarginRate)) && Number(maintenanceMarginRate) >= 0
+      ? Number(maintenanceMarginRate)
+      : Math.max(0, derivedRate);
     this.liquidationPrice = liquidationPrice;
+  }
+
+  get maintenanceMargin() {
+    const mark = Number.isFinite(Number(this.currentPrice)) ? Number(this.currentPrice) : Number(this.entryPrice);
+    return Math.abs(mark * this.quantity) * this._maintenanceMarginRate;
   }
 
   get unrealizedPnL() {
@@ -50,7 +61,7 @@ export class Position {
       stopLossCreatedIndex: this.stopLossCreatedIndex,
       takeProfitCreatedIndex: this.takeProfitCreatedIndex,
       initialMargin: this.initialMargin,
-      maintenanceMargin: this.maintenanceMargin,
+      maintenanceMarginRate: this._maintenanceMarginRate,
       liquidationPrice: this.liquidationPrice,
     });
   }
