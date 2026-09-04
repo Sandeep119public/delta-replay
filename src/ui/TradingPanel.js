@@ -391,7 +391,9 @@ export class TradingPanel {
     this.realizedEl.className = acct.realizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
 
     const posSideBadge = document.getElementById('pos-side-badge');
+    const positionPanel = document.querySelector('.position-panel');
     const positions = this.engine.getPositions();
+    if (positionPanel) positionPanel.classList.toggle('is-empty', positions.length === 0);
     if (positions.length === 0) {
       this.posSymbolEl.textContent = '—';
       this.posSideEl.textContent = '—';

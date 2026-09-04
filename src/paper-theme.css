@@ -217,3 +217,178 @@ input,select{
   .trading-section{padding:12px!important}
   .order-actions-grid .btn{font-size:17px!important}
 }
+
+
+/* MOBILE FIT PASS — trading should be usable, not an endless receipt. */
+@media (max-width:700px){
+  html,body{width:100%;height:100%;height:100dvh;overflow:hidden!important}
+  body{position:fixed;inset:0}
+  #app{
+    height:100dvh!important;
+    min-height:100dvh!important;
+    max-height:100dvh!important;
+    overflow:hidden!important;
+    display:grid!important;
+    grid-template-rows:auto minmax(0,1fr) auto!important;
+  }
+  .topbar{
+    max-height:112px!important;
+    overflow:hidden!important;
+    padding:10px 14px!important;
+  }
+  .topbar-left{margin-bottom:6px!important}
+  .topbar-center{
+    display:flex!important;
+    gap:7px!important;
+    align-items:end!important;
+    overflow-x:auto!important;
+    scrollbar-width:none!important;
+  }
+  .topbar-center::-webkit-scrollbar{display:none}
+  .topbar-center .selector-group{flex:0 0 108px!important}
+  .topbar-center .replay-date-group,
+  .topbar-center .preset-group{display:none!important}
+  .header-action-group{display:block!important;flex:1 0 136px!important}
+  #header-start-replay-btn{min-height:42px!important;height:42px!important;padding:0 10px!important;font-size:11px!important}
+  .topbar-right{display:none!important}
+  .mode-banner{display:none!important}
+  .main-layout{
+    min-height:0!important;
+    height:100%!important;
+    overflow:hidden!important;
+    display:grid!important;
+    grid-template-rows:minmax(180px,38vh) minmax(0,1fr)!important;
+  }
+  .main{
+    min-height:0!important;
+    height:auto!important;
+    order:initial!important;
+    border-bottom:2px solid rgba(69,60,48,.35)!important;
+  }
+  .trading-section{
+    min-height:0!important;
+    height:auto!important;
+    order:initial!important;
+    padding:8px 10px 10px!important;
+    overflow:hidden!important;
+    display:flex!important;
+    flex-direction:column!important;
+    gap:7px!important;
+  }
+  .trading-top-summary{
+    flex:0 0 auto!important;
+    display:flex!important;
+    align-items:center!important;
+    gap:8px!important;
+    padding:0!important;
+    background:transparent!important;
+    border:0!important;
+    box-shadow:none!important;
+  }
+  .trading-header{display:none!important}
+  .equity-hero-bar{
+    width:100%!important;
+    min-height:48px!important;
+    padding:7px 10px!important;
+    display:grid!important;
+    grid-template-columns:1fr 1fr!important;
+    gap:8px!important;
+  }
+  .equity-highlight{font-size:19px!important}
+  .pnl-hero-pill{padding:5px 8px!important}
+  .trading-tab-nav{
+    flex:0 0 48px!important;
+    min-height:48px!important;
+  }
+  .panel-tab-btn{min-height:46px!important;font-size:12px!important}
+  .trading-tab-contents{
+    min-height:0!important;
+    flex:1 1 auto!important;
+    padding:0!important;
+    overflow:hidden!important;
+  }
+  .tab-panel.active{
+    height:100%!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  #tab-view-trade{
+    display:flex!important;
+    flex-direction:column!important;
+    gap:7px!important;
+  }
+
+  /* Empty position is information-free. Collapse it until there is a real trade. */
+  .position-panel.is-empty{
+    display:none!important;
+  }
+  .position-panel:not(.is-empty){
+    flex:0 0 auto!important;
+    margin:0!important;
+    padding:8px!important;
+  }
+  .position-panel:not(.is-empty) .card-header-row{margin-bottom:5px!important}
+  .position-panel:not(.is-empty) .pos-compact-grid{gap:3px!important}
+  .position-panel:not(.is-empty) .pos-metric{min-height:43px!important;padding:5px 7px!important}
+  .position-panel:not(.is-empty) .risk-inputs-row{gap:5px!important}
+  .position-panel:not(.is-empty) .risk-inputs-row input,
+  .position-panel:not(.is-empty) .risk-inputs-row button{min-height:38px!important}
+
+  .order-panel{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:8px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    justify-content:space-between!important;
+  }
+  .order-type-tabs{flex:0 0 44px!important}
+  .order-tab{min-height:42px!important;font-size:15px!important}
+  .order-form-compact{display:flex!important;flex-direction:column!important;gap:7px!important}
+  .order-row-compact{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:6px!important;
+  }
+  .qty-field-wrap{
+    display:grid!important;
+    grid-template-columns:38px 1fr!important;
+    gap:7px!important;
+    align-items:center!important;
+  }
+  #trade-qty{min-height:45px!important;height:45px!important;font-size:18px!important}
+  .qty-presets-compact{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:6px!important}
+  .qty-chip{min-height:38px!important;height:38px!important;font-size:12px!important}
+  .order-actions-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:7px!important}
+  .order-actions-grid .btn{min-height:56px!important;height:56px!important;font-size:19px!important}
+  .order-secondary-grid{display:none!important}
+  .timeline-section{
+    display:block!important;
+    grid-row:3!important;
+    flex:none!important;
+    padding:7px 12px calc(8px + env(safe-area-inset-bottom))!important;
+    max-height:76px!important;
+    overflow:hidden!important;
+  }
+  .timeline-header{font-size:10px!important;margin-bottom:4px!important}
+  #timeline-current-label{font-size:11px!important;margin-top:3px!important}
+  .controls-section{display:none!important}
+
+  /* If the browser gets very short, prioritize the chart and order buttons. */
+  @media (max-height:760px){
+    .topbar{max-height:72px!important;padding:7px 12px!important}
+    .logo{font-size:19px!important}
+    .topbar-center{display:none!important}
+    .main-layout{grid-template-rows:minmax(155px,34vh) minmax(0,1fr)!important}
+    .trading-section{padding:6px 8px!important}
+    .equity-hero-bar{min-height:42px!important;padding:5px 8px!important}
+    .trading-tab-nav{flex-basis:42px!important;min-height:42px!important}
+    .panel-tab-btn{min-height:40px!important}
+    .order-panel{padding:6px!important}
+    .order-actions-grid .btn{min-height:48px!important;height:48px!important}
+    .qty-chip{min-height:34px!important;height:34px!important}
+    .order-tab{min-height:38px!important}
+    .timeline-section{max-height:58px!important}
+  }
+}
