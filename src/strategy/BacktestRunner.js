@@ -28,6 +28,7 @@ export class BacktestRunner {
 
     this._lastIntents = [];
     this._unsubBarClose = this.engine.on(TradingEvents.BAR_CLOSE, (barEvent) => {
+      this._assertResearchExecution();
       const intents = this.strategy.onBar(barEvent) || [];
       this._lastIntents = intents;
       for (const intent of intents) {
@@ -40,8 +41,15 @@ export class BacktestRunner {
     });
   }
 
+  _assertResearchExecution() {
+    if (this.engine.executionProfile !== EXECUTION_PROFILE.RESEARCH_BACKTEST || this.engine.executionTiming !== EXECUTION_TIMING.NEXT_BAR_OPEN) {
+      throw new Error(`BacktestRunner requires ${EXECUTION_PROFILE.RESEARCH_BACKTEST} with ${EXECUTION_TIMING.NEXT_BAR_OPEN} timing`);
+    }
+  }
+
   processBar(candle, index = null) {
     if (!candle || typeof candle !== 'object') throw new TypeError('BacktestRunner.processBar expects a candle object');
+    this._assertResearchExecution();
     if (candle.symbol != null && candle.symbol !== this.symbol) {
       throw new Error(`BacktestRunner symbol mismatch: expected ${this.symbol}, got ${candle.symbol}`);
     }
@@ -50,7 +58,6 @@ export class BacktestRunner {
     return { intents: this._lastIntents };
   }
 
-  /** Each run is an independent research experiment by default. Pass reset:false to continue an existing session. */
   run(candles, { reset = true } = {}) {
     if (!Array.isArray(candles)) throw new TypeError('BacktestRunner.run expects an array of candles');
     if (reset) this.reset();
