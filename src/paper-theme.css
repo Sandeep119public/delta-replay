@@ -46,6 +46,19 @@
   --sumi-border: rgba(85, 72, 57, 0.44);
   --shadow-wash: 0 4px 18px rgba(65, 50, 32, 0.07);
   --shadow-seal: 1px 2px 0 rgba(70, 20, 15, 0.28);
+
+  /* Base Variable Overrides to Harmonize Legacy & Utility Selectors */
+  --bg: var(--paper);
+  --bg-card: var(--paper-card);
+  --bg-input: #fffefb;
+  --border: var(--rule-strong);
+  --text: var(--ink-sumi);
+  --text-muted: var(--ink-muted);
+  --accent: #305478;
+  --accent-hover: #1f3d59;
+  --green: var(--jade);
+  --red: var(--cinnabar);
+  --yellow: var(--bamboo-gold);
 }
 
 /* Base Document & Xuan Paper Grain Texture */

@@ -43,6 +43,15 @@ export class TradingPanel {
     this.setRiskBtn = setRiskBtn || document.getElementById('btn-set-risk');
     this.clearRiskBtn = clearRiskBtn || document.getElementById('btn-clear-risk');
 
+    // Cached elements for high-frequency render
+    this.posSideBadge = document.getElementById('pos-side-badge');
+    this.positionPanel = typeof document?.querySelector === 'function' ? document.querySelector('.position-panel') : null;
+    this.statWinEl = document.getElementById('stat-winrate');
+    this.statPfEl = document.getElementById('stat-pf');
+    this.statTrEl = document.getElementById('stat-trades');
+    this.statRetEl = document.getElementById('stat-return');
+    this.activityBadge = document.getElementById('activity-badge');
+
     this._bindEvents();
     this._bindTabs();
     this._bindSidebarTabs();
@@ -352,7 +361,8 @@ export class TradingPanel {
         const statusCls = o.status === 'PENDING' ? 'pnl-pos' : o.status === 'FILLED' ? 'pnl-pos' : 'pnl-neg';
         const price = o.type === 'STOP_MARKET' ? o.stopPrice : o.limitPrice;
         const typeLabel = o.type === 'STOP_MARKET' ? 'STOP' : (o.type || 'LIMIT');
-        return `<div class="trade-row" style="border-left:3px solid ${o.side==='BUY' ? '#22c55e' : '#ef4444'}; padding-left:6px;">
+        const borderColor = o.side === 'BUY' ? 'var(--jade, #266b47)' : 'var(--cinnabar, #a83324)';
+        return `<div class="trade-row" style="border-left:3px solid ${borderColor}; padding-left:6px;">
           <span><b>${o.id}</b> ${typeLabel} ${o.side} ${o.quantity} @ ${price != null ? Number(price).toFixed(2) : '—'} <span class="${statusCls}">[${o.status}]</span><br/><small>${this._fmtTime(o.createdReplayTime)}</small></span>
           <span><button class="btn btn-secondary" data-cancel-id="${o.id}" style="padding:2px 6px; min-height:24px; font-size:10px;">Cancel</button></span>
         </div>`;
@@ -361,10 +371,10 @@ export class TradingPanel {
     if (nonPending.length > 0) {
       html += '<div style="margin-top:6px; font-size:10px; color:var(--text-muted); border-top:1px solid var(--border); padding-top:4px;">Recent</div>';
       html += nonPending.map(o => {
-        let color = '#8a93a6';
-        if (o.status === 'FILLED') color = '#22c55e';
-        else if (o.status === 'CANCELLED') color = '#eab308';
-        else if (o.status === 'REJECTED') color = '#ef4444';
+        let color = 'var(--ink-muted, #726453)';
+        if (o.status === 'FILLED') color = 'var(--jade, #266b47)';
+        else if (o.status === 'CANCELLED') color = 'var(--bamboo-gold, #b38232)';
+        else if (o.status === 'REJECTED') color = 'var(--cinnabar, #a83324)';
         const price = o.stopPrice ?? o.limitPrice;
         const typeLabel = o.type === 'STOP_MARKET' ? 'STOP ' : (o.type === 'LIMIT' ? 'LIMIT ' : '');
         return `<div class="trade-row" style="opacity:0.85;">
@@ -390,8 +400,8 @@ export class TradingPanel {
     this.unrealizedEl.className = acct.unrealizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
     this.realizedEl.className = acct.realizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
 
-    const posSideBadge = document.getElementById('pos-side-badge');
-    const positionPanel = typeof document?.querySelector === 'function' ? document.querySelector('.position-panel') : null;
+    const posSideBadge = this.posSideBadge || document.getElementById('pos-side-badge');
+    const positionPanel = this.positionPanel || (typeof document?.querySelector === 'function' ? document.querySelector('.position-panel') : null);
     const positions = this.engine.getPositions();
     if (positionPanel) positionPanel.classList.toggle('is-empty', positions.length === 0);
     if (positions.length === 0) {
@@ -449,10 +459,10 @@ export class TradingPanel {
       const stats = typeof this.engine.getPerformanceStats === 'function'
         ? this.engine.getPerformanceStats()
         : { totalTrades: trades.length, winRate: 0, profitFactor: 1, netReturn: 0 };
-      const winEl = document.getElementById('stat-winrate');
-      const pfEl = document.getElementById('stat-pf');
-      const trEl = document.getElementById('stat-trades');
-      const retEl = document.getElementById('stat-return');
+      const winEl = this.statWinEl || document.getElementById('stat-winrate');
+      const pfEl = this.statPfEl || document.getElementById('stat-pf');
+      const trEl = this.statTrEl || document.getElementById('stat-trades');
+      const retEl = this.statRetEl || document.getElementById('stat-return');
       if (winEl) winEl.textContent = `${stats.winRate.toFixed(1)}%`;
       if (pfEl) pfEl.textContent = Number.isFinite(stats.profitFactor) ? `${stats.profitFactor.toFixed(2)}x` : '—';
       if (trEl) trEl.textContent = String(stats.totalTrades);
@@ -463,7 +473,7 @@ export class TradingPanel {
 
       // Update Activity Badge
       const pendingCount = (this.engine.getPendingOrders ? this.engine.getPendingOrders().length : 0);
-      const activityBadge = document.getElementById('activity-badge');
+      const activityBadge = this.activityBadge || document.getElementById('activity-badge');
       if (activityBadge) {
         const totalActivity = pendingCount + trades.length;
         activityBadge.textContent = String(totalActivity);

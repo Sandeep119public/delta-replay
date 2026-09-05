@@ -103,7 +103,7 @@
   .controls-section {
     min-height: 0;
     padding: 6px 16px 8px;
-    background: #0e121a;
+    background: var(--paper-deep, #eee5d4);
   }
 
   .controls-row {

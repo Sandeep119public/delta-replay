@@ -32,7 +32,8 @@ const dataManager = new HistoricalDataManager({ provider: binanceProvider, store
 
 const tradingEngine = new PaperTradingEngine({ startingBalance: 10000, replayEngine: engine, executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE });
 
-// ===== LOADING STATE MACHINE =====
+// ===== CORE REPLAY & LOADING STATE =====
+let pendingStartIndex = 0;
 let loadingState = LoadingState.IDLE;
 let currentDataError = null;
 let loadToken = 0;
@@ -438,7 +439,7 @@ function showTradingError(msg) {
 }
 
 // ===== TIMELINE =====
-let pendingStartIndex = 0;
+pendingStartIndex = 0;
 const timeline = new Timeline({ sliderEl, startLabelEl, currentLabelEl, endLabelEl, indexLabelEl, timeLabelEl, startIndexLabelEl, appState, engine, startTimeLabelEl });
 const controls = new ReplayControls({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, engine });
 
