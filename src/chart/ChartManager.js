@@ -1,4 +1,5 @@
 import { createChart, ColorType } from 'lightweight-charts';
+import { ChartTradingOverlay } from './ChartTradingOverlay.js';
 
 /**
  * ChartManager owns lightweight-charts instance. No replay logic inside.
@@ -149,30 +150,47 @@ export class ChartManager {
   coordinateToPrice(y) { if (!this.series || !Number.isFinite(y)) return null; try { return this.series.coordinateToPrice(y); } catch { return null; } }
   onChartClick(cb) { if (typeof cb === 'function') this._onChartClickCallbacks.push(cb); }
 
-  updatePositionLines(position) {
-    if (!this.series) return;
-    if (!position || !Number.isFinite(Number(position.entryPrice))) { this.clearPositionLines(); return; }
-    const isLong = position.side === 'LONG', entryPrice = Number(position.entryPrice), posColor = isLong ? '#2f7d58' : '#b44842';
-    const title = `${position.side} ${position.quantity} @ ${entryPrice.toFixed(2)}`;
-    if (!this._positionLine) { try { this._positionLine = this.series.createPriceLine({ price:entryPrice,color:posColor,lineWidth:2,lineStyle:0,axisLabelVisible:true,title }); } catch {} }
-    else { try { this._positionLine.applyOptions({ price:entryPrice,color:posColor,title }); } catch {} }
-    const sl = position.stopLossPrice != null ? Number(position.stopLossPrice) : null;
-    if (sl != null && Number.isFinite(sl) && sl > 0) {
-      const slTitle = `SL: ${sl.toFixed(2)}`;
-      if (!this._stopLossLine) { try { this._stopLossLine = this.series.createPriceLine({ price:sl,color:'#b44842',lineWidth:2,lineStyle:2,axisLabelVisible:true,title:slTitle }); } catch {} }
-      else { try { this._stopLossLine.applyOptions({ price:sl,color:'#b44842',title:slTitle }); } catch {} }
-    } else if (this._stopLossLine) { try { this.series.removePriceLine(this._stopLossLine); } catch {} this._stopLossLine = null; }
-    const tp = position.takeProfitPrice != null ? Number(position.takeProfitPrice) : null;
-    if (tp != null && Number.isFinite(tp) && tp > 0) {
-      const tpTitle = `TP: ${tp.toFixed(2)}`;
-      if (!this._takeProfitLine) { try { this._takeProfitLine = this.series.createPriceLine({ price:tp,color:'#2f7d58',lineWidth:2,lineStyle:2,axisLabelVisible:true,title:tpTitle }); } catch {} }
-      else { try { this._takeProfitLine.applyOptions({ price:tp,color:'#2f7d58',title:tpTitle }); } catch {} }
-    } else if (this._takeProfitLine) { try { this.series.removePriceLine(this._takeProfitLine); } catch {} this._takeProfitLine = null; }
+  get tradingOverlay() {
+    if (!this._tradingOverlay) {
+      this._tradingOverlay = new ChartTradingOverlay(this);
+    }
+    return this._tradingOverlay;
   }
 
-  clearPositionLines() { if (this._positionLine) { try { this.series?.removePriceLine(this._positionLine); } catch {} this._positionLine=null; } if (this._stopLossLine) { try { this.series?.removePriceLine(this._stopLossLine); } catch {} this._stopLossLine=null; } if (this._takeProfitLine) { try { this.series?.removePriceLine(this._takeProfitLine); } catch {} this._takeProfitLine=null; } }
-  updateOrderLines(orders) { if (!this.series) return; const pending=Array.isArray(orders)?orders.filter(o=>o&&o.status==='PENDING'):[]; const activeIds=new Set(pending.map(o=>o.id)); for(const [id,line] of this._orderLines.entries()){if(!activeIds.has(id)){try{this.series.removePriceLine(line)}catch{} this._orderLines.delete(id)}} for(const o of pending){const price=Number(o.stopPrice??o.limitPrice); if(!Number.isFinite(price)||price<=0)continue; const isBuy=o.side==='BUY', color=o.type==='STOP_MARKET'?'#a86e24':(isBuy?'#315f8c':'#9d5a36'), typeLabel=o.type==='STOP_MARKET'?'STOP':'LIMIT', title=`${typeLabel} ${o.side} ${o.quantity} @ ${price.toFixed(2)}`; const existing=this._orderLines.get(o.id); if(existing){try{existing.applyOptions({price,color,title})}catch{}}else{try{const line=this.series.createPriceLine({price,color,lineWidth:1,lineStyle:1,axisLabelVisible:true,title});if(line)this._orderLines.set(o.id,line)}catch{}}} }
-  clearTradingLines(){this.clearPositionLines();for(const line of this._orderLines.values()){try{this.series?.removePriceLine(line)}catch{}}this._orderLines.clear()}
-  clear(){this.clearTradingLines();if(this.series)this.series.setData([])}
-  destroy(){this.clearTradingLines();window.removeEventListener('resize',this._onWindowResize);if(this._resizeObserver){this._resizeObserver.disconnect();this._resizeObserver=null}this._onChartClickCallbacks=[];this._onAutoFollowChange=null;if(this.chart){try{this.chart.remove()}catch{}this.chart=null;this.series=null}}
+  updatePositionLines(position) {
+    this.tradingOverlay.updatePositionLines(position);
+  }
+
+  clearPositionLines() {
+    this.tradingOverlay.clearPositionLines();
+  }
+
+  updateOrderLines(orders) {
+    this.tradingOverlay.updateOrderLines(orders);
+  }
+
+  clearTradingLines() {
+    this.tradingOverlay.clearTradingLines();
+  }
+
+  clear() {
+    this.clearTradingLines();
+    if (this.series) this.series.setData([]);
+  }
+
+  destroy() {
+    this.clearTradingLines();
+    window.removeEventListener('resize', this._onWindowResize);
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    this._onChartClickCallbacks = [];
+    this._onAutoFollowChange = null;
+    if (this.chart) {
+      try { this.chart.remove(); } catch {}
+      this.chart = null;
+      this.series = null;
+    }
+  }
 }

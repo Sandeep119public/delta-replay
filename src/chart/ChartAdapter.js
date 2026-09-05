@@ -62,19 +62,34 @@ export class ChartAdapter {
     this._lastRenderedIndex = -1;
   }
 
-  showPreview(candles) {
-    const WINDOW = 1000;
-    const win = candles.length > WINDOW ? candles.slice(-WINDOW) : candles;
-    this.chart.setRevealedMax?.(win[win.length - 1]?.time ?? null);
+  showPreview(candlesOrStore, targetIndex = null, windowSize = 1000) {
+    if (!candlesOrStore) return;
+    let win;
+    let revealedTime = null;
+
+    if (typeof candlesOrStore.sliceWindow === 'function' && typeof candlesOrStore.getCount === 'function') {
+      const count = candlesOrStore.getCount();
+      if (!count) return;
+      const idx = Number.isInteger(targetIndex) && targetIndex >= 0 ? targetIndex : count - 1;
+      const start = Math.max(0, idx - windowSize + 1);
+      win = candlesOrStore.sliceWindow(start, idx);
+      revealedTime = candlesOrStore.get(idx)?.time ?? null;
+    } else {
+      const arr = Array.isArray(candlesOrStore) ? candlesOrStore : (candlesOrStore?.getAll?.() || []);
+      if (!arr.length) return;
+      const idx = Number.isInteger(targetIndex) && targetIndex >= 0 ? targetIndex : arr.length - 1;
+      const start = Math.max(0, idx - windowSize + 1);
+      win = arr.slice(start, idx + 1);
+      revealedTime = win[win.length - 1]?.time ?? null;
+    }
+
+    this.chart.setRevealedMax?.(revealedTime);
     this.chart.setData(win, { fit: true });
     this._lastRenderedIndex = -1;
   }
 
   showPreviewWindow(candles, centerIdx, windowSize = 1000) {
-    const start = Math.max(0, centerIdx - windowSize + 1);
-    const win = candles.slice(start, centerIdx + 1);
-    this.chart.setRevealedMax?.(win[win.length - 1]?.time ?? null);
-    this.chart.setData(win, { fit: true });
-    this._lastRenderedIndex = centerIdx;
+    return this.showPreview(candles, centerIdx, windowSize);
   }
 }
+

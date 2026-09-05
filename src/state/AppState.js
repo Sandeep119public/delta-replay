@@ -1,4 +1,5 @@
 import { EventEmitter } from '../core/EventEmitter.js';
+import { LoadingState } from '../data/DataError.js';
 
 export class AppState extends EventEmitter {
   constructor() {
@@ -8,7 +9,11 @@ export class AppState extends EventEmitter {
     this._candles = []; // legacy direct storage (used when no store)
     this._store = null; // CandleStore reference if available
     this.loading = false;
+    this.loadingState = LoadingState.IDLE;
     this.error = null;
+    this.dataError = null;
+    this.pendingStartIndex = 0;
+    this.retryCount = 0;
     this.replayState = null;
   }
 
@@ -27,7 +32,32 @@ export class AppState extends EventEmitter {
 
   setLoading(v) {
     this.loading = v;
+    if (v) {
+      this.loadingState = LoadingState.LOADING;
+    } else if (this.loadingState === LoadingState.LOADING) {
+      this.loadingState = LoadingState.SUCCESS;
+    }
     this.emit('change', this.snapshot());
+  }
+
+  transitionLoading(state, dataError = null) {
+    this.loadingState = state;
+    this.dataError = dataError;
+    this.loading = state === LoadingState.LOADING;
+    this.error = dataError ? (dataError.userMessage || dataError.message || String(dataError)) : null;
+    this.emit('loadingStateChanged', { loadingState: state, dataError });
+    this.emit('change', this.snapshot());
+  }
+
+  setPendingStartIndex(idx) {
+    this.pendingStartIndex = Number(idx) || 0;
+    this.emit('pendingStartIndexChanged', this.pendingStartIndex);
+    this.emit('change', this.snapshot());
+  }
+
+  setRetryCount(count) {
+    this.retryCount = Number(count) || 0;
+    this.emit('retryCountChanged', this.retryCount);
   }
 
   setError(msg) {
@@ -38,6 +68,7 @@ export class AppState extends EventEmitter {
 
   clearError() {
     this.error = null;
+    this.dataError = null;
     this.emit('change', this.snapshot());
   }
 
@@ -65,8 +96,13 @@ export class AppState extends EventEmitter {
       timeframe: this.timeframe,
       total: this.candles.length,
       loading: this.loading,
+      loadingState: this.loadingState,
       error: this.error,
+      dataError: this.dataError,
+      pendingStartIndex: this.pendingStartIndex,
+      retryCount: this.retryCount,
       replayState: this.replayState
     };
   }
 }
+

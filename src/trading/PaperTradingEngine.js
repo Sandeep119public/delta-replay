@@ -6,27 +6,11 @@ import { TradingEvents } from './TradingEvents.js';
 import { TradingValidator } from './TradingValidator.js';
 import { TRADING_CONFIG, calcFee } from './TradingConfig.js';
 import { Order, ORDER_TYPES, ORDER_STATUSES, EXECUTION_TIMING } from './Order.js';
+import { FundingManager } from './FundingManager.js';
+import { MarginEngine } from './MarginEngine.js';
+import { AmbiguityResolver, AMBIGUITY_RESOLUTION, AMBIGUITY_POLICY, EXECUTION_POLICY } from './AmbiguityResolver.js';
 
-export { EXECUTION_TIMING };
-
-export const AMBIGUITY_RESOLUTION = Object.freeze({
-  NONE: 'NONE',
-  SL_FIRST: 'SL_FIRST',
-  TP_FIRST: 'TP_FIRST',
-  HEURISTIC_PROXIMITY: 'HEURISTIC_PROXIMITY',
-});
-
-export const AMBIGUITY_POLICY = Object.freeze({
-  CONSERVATIVE: 'CONSERVATIVE',
-  SL_FIRST: 'SL_FIRST',
-  TP_FIRST: 'TP_FIRST',
-  OPEN_PROXIMITY: 'OPEN_PROXIMITY',
-});
-
-export const EXECUTION_POLICY = Object.freeze({
-  SIMPLIFIED: 'SIMPLIFIED',
-  REALISTIC: 'REALISTIC',
-});
+export { EXECUTION_TIMING, AMBIGUITY_RESOLUTION, AMBIGUITY_POLICY, EXECUTION_POLICY };
 
 export const EXECUTION_PROFILE = Object.freeze({
   MANUAL_REPLAY: 'MANUAL_REPLAY',
@@ -48,8 +32,11 @@ export class PaperTradingEngine extends EventEmitter {
     this.executionProfile = executionProfile;
     this.executionTiming = executionTiming ?? (executionProfile === EXECUTION_PROFILE.RESEARCH_BACKTEST ? EXECUTION_TIMING.NEXT_BAR_OPEN : EXECUTION_TIMING.IMMEDIATE_CLOSE);
     if (!Object.values(EXECUTION_PROFILE).includes(this.executionProfile)) throw new Error(`Invalid execution profile: ${this.executionProfile}`);
+    this._marginEngine = new MarginEngine({ marginRate: this.marginRate, maintMarginRate: this.maintMarginRate });
+    this._ambiguityResolver = new AmbiguityResolver({ policy: this.ambiguityPolicy, executionPolicy: this.executionPolicy });
+    this._fundingManager = new FundingManager({ schedule: fundingSchedule });
     this._fundingSchedule = fundingSchedule;
-    this._fundingHistory = [];
+    this._fundingHistory = this._fundingManager._history;
     this._lastFundingTimestamp = null;
     this._ambiguousBarCount = 0;
     this._totalBarsEvaluated = 0;
@@ -74,10 +61,12 @@ export class PaperTradingEngine extends EventEmitter {
   setAmbiguityPolicy(policy) {
     if (!Object.values(AMBIGUITY_POLICY).includes(policy)) throw new Error(`Invalid ambiguity policy: ${policy}`);
     this.ambiguityPolicy = policy;
+    this._ambiguityResolver.setPolicy(policy);
   }
   setExecutionPolicy(policy) {
     if (!Object.values(EXECUTION_POLICY).includes(policy)) throw new Error(`Invalid execution policy: ${policy}`);
     this.executionPolicy = policy;
+    this._ambiguityResolver.setExecutionPolicy(policy);
   }
   setExecutionProfile(profile) {
     if (!Object.values(EXECUTION_PROFILE).includes(profile)) throw new Error(`Invalid execution profile: ${profile}`);
@@ -97,32 +86,28 @@ export class PaperTradingEngine extends EventEmitter {
     return this._reject('INVALID_ORDER_TYPE', `Unknown order type: ${type}`);
   }
 
-  setFundingSchedule(schedule) { this._fundingSchedule = schedule; }
+  setFundingSchedule(schedule) {
+    this._fundingSchedule = schedule;
+    this._fundingManager.setSchedule(schedule);
+  }
 
   applyFundingRate({ symbol = null, fundingRate = 0.0001, timestamp = null, markPrice = null } = {}) {
     const ts = timestamp ?? (this._latestCandle ? this._latestCandle.time : Date.now());
-    const rate = Number(fundingRate);
-    if (!Number.isFinite(rate)) return [];
-    const payments = [];
-    for (const [sym, pos] of this._positions.entries()) {
-      if (symbol && sym !== symbol) continue;
-      const explicitMark = markPrice == null ? NaN : Number(markPrice);
-      const resolvedMarkPrice = Number.isFinite(explicitMark) ? explicitMark : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice);
-      const notional = resolvedMarkPrice * pos.quantity;
-      const payment = (pos.side === 'LONG' ? -1 : 1) * notional * rate;
-      this.account.walletBalance += payment;
-      if (payment < 0) this.account.totalFundingPaid += -payment;
-      else if (payment > 0) this.account.totalFundingReceived += payment;
-      this.account.netFunding = this.account.totalFundingReceived - this.account.totalFundingPaid;
-      const record = { id: this._fundingHistory.length + 1, timestamp: ts, symbol: sym, side: pos.side, quantity: pos.quantity, markPrice: resolvedMarkPrice, fundingRate: rate, payment };
-      this._fundingHistory.push(record);
-      payments.push(record);
+    const payments = this._fundingManager.applyFundingRate({
+      positions: this._positions,
+      account: this.account,
+      symbol,
+      fundingRate,
+      timestamp: ts,
+      markPrice,
+    });
+    for (const record of payments) {
       this.emit(TradingEvents.FUNDING_PAYMENT, this._cloneJSON(record));
     }
     if (payments.length > 0) this._emitAccountUpdated();
     return payments;
   }
-  getFundingHistory() { return this._fundingHistory.map(f => this._cloneJSON(f)); }
+  getFundingHistory() { return this._fundingManager.getHistory().map(f => this._cloneJSON(f)); }
 
   _emitAccountUpdated() {
     if (this._isProcessingCandle) { this._accountNeedsUpdate = true; return; }
@@ -131,56 +116,34 @@ export class PaperTradingEngine extends EventEmitter {
   _getRequiredEntryCash(price, quantity) {
     const notional = price * quantity;
     const fee = calcFee(notional, this.feeRate);
-    const marginRatio = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
-    return notional * marginRatio + fee;
+    return this._marginEngine.calcRequiredEntryCash(price, quantity, fee);
   }
   _checkMarginAvailable(price, quantity) {
     const notional = price * quantity;
     const fee = calcFee(notional, this.feeRate);
-    const imRate = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
-    const requiredInitialMargin = notional * imRate;
-    const requiredMargin = requiredInitialMargin + fee;
-    const hasMargin = this.account.availableMargin >= requiredMargin && this.account.walletBalance >= fee;
-    return { valid: hasMargin, requiredMargin, availableMargin: this.account.availableMargin, fee, initialMargin: requiredInitialMargin };
+    return this._marginEngine.checkMarginAvailable({
+      price,
+      quantity,
+      fee,
+      availableMargin: this.account.availableMargin,
+      walletBalance: this.account.walletBalance,
+    });
   }
 
   getLiquidationPrice(symbol) {
     const pos = this._positions.get(symbol);
-    if (!pos) return null;
-    const imRate = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
-    const mmRate = (typeof this.maintMarginRate === 'number' && this.maintMarginRate >= 0) ? this.maintMarginRate : imRate * 0.5;
-    let otherUnrealized = 0, otherMM = 0;
-    for (const [sym, other] of this._positions.entries()) {
-      if (sym === symbol) continue;
-      otherUnrealized += other.unrealizedPnL;
-      otherMM += other.quantity * (Number.isFinite(other.currentPrice) ? other.currentPrice : other.entryPrice) * mmRate;
-    }
-    const W = this.account.walletBalance + otherUnrealized;
-    const Q = pos.quantity, P_entry = pos.entryPrice;
-    if (pos.side === 'LONG') {
-      const denom = Q * (1 - mmRate); if (denom <= 0) return null;
-      const liqPrice = (P_entry * Q + otherMM - W) / denom;
-      return liqPrice > 0 ? liqPrice : null;
-    }
-    const denom = Q * (1 + mmRate); if (denom <= 0) return null;
-    const liqPrice = (W + P_entry * Q - otherMM) / denom;
-    return liqPrice > 0 ? liqPrice : null;
+    return this._marginEngine.calcLiquidationPrice(pos, this._positions, this.account.walletBalance);
   }
 
   _calcPositionMargins(price, quantity, side, symbol = null) {
-    const notional = price * quantity;
-    const imRate = (typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0;
-    const mmRate = (typeof this.maintMarginRate === 'number' && this.maintMarginRate >= 0) ? this.maintMarginRate : imRate * 0.5;
-    const initialMargin = notional * imRate;
-    const maintenanceMargin = notional * mmRate;
     let liquidationPrice = null;
-    if (symbol && this._positions.has(symbol)) liquidationPrice = this.getLiquidationPrice(symbol);
-    else {
-      const W = this.account.walletBalance, Q = quantity, P_entry = price;
-      if (side === 'LONG') { const denom = Q * (1 - mmRate); if (denom > 0) { const liq = (P_entry * Q - W) / denom; liquidationPrice = liq > 0 ? liq : null; } }
-      else { const denom = Q * (1 + mmRate); if (denom > 0) { const liq = (W + P_entry * Q) / denom; liquidationPrice = liq > 0 ? liq : null; } }
+    if (symbol && this._positions.has(symbol)) {
+      liquidationPrice = this.getLiquidationPrice(symbol);
+    } else {
+      const posMock = { symbol: symbol || 'MOCK', side, quantity, entryPrice: price };
+      liquidationPrice = this._marginEngine.calcLiquidationPrice(posMock, new Map(), this.account.walletBalance);
     }
-    return { initialMargin, maintenanceMargin, liquidationPrice };
+    return this._marginEngine.calcPositionMargins(price, quantity, side, liquidationPrice);
   }
   _updateLiquidationPrices() { for (const [sym, pos] of this._positions.entries()) pos.liquidationPrice = this.getLiquidationPrice(sym); }
   _recalcMargins() {
@@ -191,16 +154,11 @@ export class PaperTradingEngine extends EventEmitter {
     this._updateLiquidationPrices();
   }
   _portfolioMarginStateAtPrice(symbol, markPrice) {
-    const mmRate = (typeof this.maintMarginRate === 'number' && this.maintMarginRate >= 0) ? this.maintMarginRate : (((typeof this.marginRate === 'number' && this.marginRate >= 0) ? this.marginRate : 1.0) * 0.5);
-    let equity = this.account.walletBalance, maintenanceMargin = 0;
-    for (const [sym, pos] of this._positions.entries()) {
-      const mark = sym === symbol ? markPrice : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : pos.entryPrice);
-      equity += pos.side === 'LONG' ? (mark - pos.entryPrice) * pos.quantity : (pos.entryPrice - mark) * pos.quantity;
-      maintenanceMargin += Math.abs(mark * pos.quantity) * mmRate;
-    }
-    return { equity, maintenanceMargin };
+    return this._marginEngine.calcPortfolioMarginState(symbol, markPrice, this._positions, this.account.walletBalance);
   }
-  _isPortfolioLiquidatable(symbol, markPrice) { const state = this._portfolioMarginStateAtPrice(symbol, markPrice); return state.equity <= state.maintenanceMargin + 1e-9; }
+  _isPortfolioLiquidatable(symbol, markPrice) {
+    return this._marginEngine.isPortfolioLiquidatable(symbol, markPrice, this._positions, this.account.walletBalance);
+  }
   _processLiquidations(candle, candleIndex, symbol) {
     const toLiquidate = [];
     for (const [sym, pos] of this._positions.entries()) {
@@ -540,25 +498,19 @@ export class PaperTradingEngine extends EventEmitter {
     for (const [symbol, pos] of [...this._positions.entries()]) {
       if (targetSymbol && symbol !== targetSymbol) continue;
       if (pos.openedIndex >= candleIndex) continue;
-      const sl = pos.stopLossPrice, tp = pos.takeProfitPrice, slIdx = pos.stopLossCreatedIndex, tpIdx = pos.takeProfitCreatedIndex;
-      let triggerSL = false, triggerTP = false;
-      if (sl != null && Number.isFinite(sl) && slIdx < candleIndex) { if (pos.side === 'LONG' && candle.low <= sl) triggerSL = true; if (pos.side === 'SHORT' && candle.high >= sl) triggerSL = true; }
-      if (tp != null && Number.isFinite(tp) && tpIdx < candleIndex) { if (pos.side === 'LONG' && candle.high >= tp) triggerTP = true; if (pos.side === 'SHORT' && candle.low <= tp) triggerTP = true; }
-      let ambiguityResolution = AMBIGUITY_RESOLUTION.NONE;
-      if (triggerSL && triggerTP) {
+      const evalRes = this._ambiguityResolver.evaluate({ position: pos, candle, candleIndex });
+      if (evalRes.isAmbiguous) {
         this._ambiguousBarCount++;
-        if (this.ambiguityPolicy === AMBIGUITY_POLICY.TP_FIRST) { ambiguityResolution = AMBIGUITY_RESOLUTION.TP_FIRST; triggerSL = false; }
-        else if (this.ambiguityPolicy === AMBIGUITY_POLICY.OPEN_PROXIMITY && Number.isFinite(candle.open)) { ambiguityResolution = AMBIGUITY_RESOLUTION.HEURISTIC_PROXIMITY; const slDist = Math.abs(candle.open - sl), tpDist = Math.abs(candle.open - tp); if (tpDist < slDist) triggerSL = false; else triggerTP = false; }
-        else { ambiguityResolution = AMBIGUITY_RESOLUTION.SL_FIRST; triggerTP = false; }
       }
-      if (triggerSL) {
-        let price = sl;
-        if (this.executionPolicy === EXECUTION_POLICY.REALISTIC) { if (pos.side === 'LONG' && Number.isFinite(candle.open) && candle.open < sl) price = candle.open; else if (pos.side === 'SHORT' && Number.isFinite(candle.open) && candle.open > sl) price = candle.open; }
-        const sideBefore = pos.side; this.emit(TradingEvents.STOP_LOSS_TRIGGERED, { symbol, price, position: this._cloneJSON(pos.toJSON()), candle: this._cloneJSON(candle) }); this._closePositionWithReason(symbol, price, candle.time, 'STOP_LOSS', ambiguityResolution); closed.set(symbol, sideBefore);
-      } else if (triggerTP) {
-        let price = tp;
-        if (this.executionPolicy === EXECUTION_POLICY.REALISTIC) { if (pos.side === 'LONG' && Number.isFinite(candle.open) && candle.open > tp) price = candle.open; else if (pos.side === 'SHORT' && Number.isFinite(candle.open) && candle.open < tp) price = candle.open; }
-        const sideBefore = pos.side; this.emit(TradingEvents.TAKE_PROFIT_TRIGGERED, { symbol, price, position: this._cloneJSON(pos.toJSON()), candle: this._cloneJSON(candle) }); this._closePositionWithReason(symbol, price, candle.time, 'TAKE_PROFIT', ambiguityResolution); closed.set(symbol, sideBefore);
+      if (evalRes.triggered) {
+        const sideBefore = pos.side;
+        if (evalRes.exitReason === 'STOP_LOSS') {
+          this.emit(TradingEvents.STOP_LOSS_TRIGGERED, { symbol, price: evalRes.exitPrice, position: this._cloneJSON(pos.toJSON()), candle: this._cloneJSON(candle) });
+        } else {
+          this.emit(TradingEvents.TAKE_PROFIT_TRIGGERED, { symbol, price: evalRes.exitPrice, position: this._cloneJSON(pos.toJSON()), candle: this._cloneJSON(candle) });
+        }
+        this._closePositionWithReason(symbol, evalRes.exitPrice, candle.time, evalRes.exitReason, evalRes.ambiguityResolution);
+        closed.set(symbol, sideBefore);
       }
     }
     return closed;

@@ -1,9 +1,15 @@
+import { INSTRUMENTS } from '../data/InstrumentConfig.js';
+
+export const DEFAULT_SYMBOLS = Object.freeze([
+  'BTCUSDT', 'BTCUSD', 'ETHUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT'
+]);
+
 export class SymbolSelector {
   constructor(selectEl, appState, symbols = null) {
     if (!selectEl) throw new Error('SymbolSelector requires select element');
     this.el = selectEl;
     this.appState = appState;
-    this.symbols = symbols ?? ['BTCUSDT', 'BTCUSD', 'ETHUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT'];
+    this.symbols = symbols ?? [...DEFAULT_SYMBOLS];
     this._onChange = null;
     this._handleChange = () => this._onChange?.(this.el.value);
     this._render();
