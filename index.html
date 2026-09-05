@@ -67,10 +67,10 @@
 
         <!-- Hidden legacy inputs for backwards-compatibility with tests -->
         <div class="hidden" aria-hidden="true">
-          <input type="date" id="from-date" />
-          <input type="time" id="from-time" step="60" />
-          <input type="date" id="to-date" />
-          <input type="time" id="to-time" step="60" />
+          <input type="date" id="from-date" aria-label="From date" />
+          <input type="time" id="from-time" step="60" aria-label="From time" />
+          <input type="date" id="to-date" aria-label="To date" />
+          <input type="time" id="to-time" step="60" aria-label="To time" />
           <button id="load-btn">LOAD DATA</button>
         </div>
       </nav>
@@ -290,7 +290,7 @@
                   <button type="button" class="capital-chip" data-balance="100000">$100K</button>
                 </div>
                 <div class="custom-capital-row">
-                  <input id="custom-capital-input" type="number" min="100" step="100" placeholder="Custom USD" />
+                  <input id="custom-capital-input" type="number" min="100" step="100" placeholder="Custom USD" aria-label="Custom starting capital in USD" />
                   <button id="btn-set-capital" type="button" class="btn btn-sm btn-secondary">Set</button>
                 </div>
               </div>
@@ -350,8 +350,8 @@
       <div class="timeline-start-controls hidden">
         <!-- Hidden/compact jump & start controls for test compatibility -->
         <div class="hidden" aria-hidden="true">
-          <input type="date" id="jump-date" />
-          <input type="time" id="jump-time" step="60" />
+          <input type="date" id="jump-date" aria-label="Jump to date" />
+          <input type="time" id="jump-time" step="60" aria-label="Jump to time" />
           <button id="jump-btn">JUMP</button>
           <span id="jump-error" class="jump-error hidden"></span>
           <button id="start-replay-btn">START REPLAY</button>

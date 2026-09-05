@@ -410,6 +410,7 @@ if (errorPanelDetails) {
 }
 if (errorPanelRetry) {
   errorPanelRetry.addEventListener('click', () => {
+    retryCount = 0;
     hideErrorPanel();
     loadData();
   });
@@ -692,10 +693,31 @@ tradingEngine.on('accountReset', () => {
 });
 tradingEngine.on('orderPlaced', syncChartTradingLines);
 tradingEngine.on('orderTriggered', syncChartTradingLines);
-tradingEngine.on('orderFilled', syncChartTradingLines);
+tradingEngine.on('orderFilled', (payload) => {
+  syncChartTradingLines();
+  const o = payload?.order ?? payload;
+  if (o && o.type && o.type !== 'MARKET') {
+    const typeLabel = o.type === 'STOP_MARKET' ? 'Stop' : 'Limit';
+    const priceStr = o.filledPrice != null ? ` @ $${Number(o.filledPrice).toFixed(2)}` : '';
+    showTradingToast(`✓ ${typeLabel} ${o.side} Filled${priceStr}`);
+  }
+});
 tradingEngine.on('orderCancelled', syncChartTradingLines);
-tradingEngine.on('stopLossTriggered', syncChartTradingLines);
-tradingEngine.on('takeProfitTriggered', syncChartTradingLines);
+tradingEngine.on('stopLossTriggered', (payload) => {
+  syncChartTradingLines();
+  const price = payload?.price != null ? ` @ $${Number(payload.price).toFixed(2)}` : '';
+  showTradingToast(`🛑 Stop Loss Triggered${price}`);
+});
+tradingEngine.on('takeProfitTriggered', (payload) => {
+  syncChartTradingLines();
+  const price = payload?.price != null ? ` @ $${Number(payload.price).toFixed(2)}` : '';
+  showTradingToast(`🎯 Take Profit Triggered${price}`);
+});
+tradingEngine.on('positionLiquidated', (payload) => {
+  syncChartTradingLines();
+  const price = payload?.liquidationPrice != null ? ` @ $${Number(payload.liquidationPrice).toFixed(2)}` : '';
+  showTradingToast(`⚠️ Position Liquidated${price}`);
+});
 
 // Interactive Chart Click Handler for SL / TP / Orders
 chartManager.onChartClick(({ price }) => {
