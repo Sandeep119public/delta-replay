@@ -63,7 +63,7 @@
   .timeline-section {
     min-height: 0;
     padding: 6px 16px 8px;
-    background: #141923;
+    background: var(--paper-deep, #eee5d4);
   }
 
   .timeline-track-wrap {
