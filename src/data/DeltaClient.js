@@ -27,6 +27,7 @@ export class DeltaClient {
       const global = globalThis;
       this.fetchFn = (url, init) => nativeFetch.call(global, url, init);
     }
+    this._fetchIsBound = true;
   }
 
   static isIllegalInvocation(err) {
@@ -63,7 +64,12 @@ export class DeltaClient {
         res = await this.fetchFn(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
       } catch (err) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-        if (timedOut) throw new DeltaError('TIMEOUT', `Request timed out after ${this.timeoutMs}ms`, { url, symbol, resolution, start, end });
+        if (timedOut || err?.name === 'TimeoutError' || controller.signal.reason === 'timeout') {
+          throw new DeltaError('TIMEOUT', `Request timed out after ${this.timeoutMs}ms`, { url, symbol, resolution, start, end });
+        }
+        if (err?.name === 'AbortError' || controller.signal.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
         if (DeltaClient.isIllegalInvocation(err)) {
           throw new DeltaError('INVALID_REQUEST', `Fetch Illegal invocation: ${err.message}`, { url, symbol, resolution, start, end, cause: err });
         }
