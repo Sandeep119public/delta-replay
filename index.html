@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Delta Replay - Historical Crypto Market Replay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Ma+Shan+Zheng&family=Shippori+Mincho:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/src/styles.css" />
   <link rel="stylesheet" href="/src/ui-polish.css" />
   <link rel="stylesheet" href="/src/viewport-fit.css" />
@@ -137,7 +140,7 @@
         <!-- Live Sticky Account Header -->
         <div class="trading-top-summary">
           <div class="trading-header">
-            <h2 class="trading-title">⚡ PAPER TRADING</h2>
+            <h2 class="trading-title"><span class="seal-mark" aria-hidden="true">紙</span> PAPER TRADING</h2>
             <span id="trading-error" class="trading-error hidden" role="alert"></span>
           </div>
           <div class="equity-hero-bar">
@@ -154,9 +157,9 @@
 
         <!-- Navigation Tabs -->
         <div class="trading-tab-nav" role="tablist">
-          <button type="button" class="panel-tab-btn active" data-tab="trade" role="tab" aria-selected="true">⚡ TRADE</button>
-          <button type="button" class="panel-tab-btn" data-tab="account" role="tab" aria-selected="false">📊 ACCOUNT</button>
-          <button type="button" class="panel-tab-btn" data-tab="activity" role="tab" aria-selected="false">📋 ACTIVITY <span id="activity-badge" class="tab-badge">0</span></button>
+          <button type="button" class="panel-tab-btn active" data-tab="trade" role="tab" aria-selected="true"><span class="tab-glyph" aria-hidden="true">易</span> TRADE</button>
+          <button type="button" class="panel-tab-btn" data-tab="account" role="tab" aria-selected="false"><span class="tab-glyph" aria-hidden="true">帳</span> ACCOUNT</button>
+          <button type="button" class="panel-tab-btn" data-tab="activity" role="tab" aria-selected="false"><span class="tab-glyph" aria-hidden="true">錄</span> ACTIVITY <span id="activity-badge" class="tab-badge">0</span></button>
         </div>
 
         <div class="trading-tab-contents">
