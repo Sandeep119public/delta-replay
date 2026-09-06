@@ -36,6 +36,7 @@ export class OrderFormView {
     this.onSuccess = onSuccess;
     this.onRender = onRender;
 
+    this._listeners = [];
     this._bindEvents();
     this._bindTabs();
     this._bindPresets();
@@ -204,6 +205,8 @@ export class OrderFormView {
       this.orderTypeSelect.addEventListener('change', () => this.updateOrderTypeUI());
     }
   }
+
+  destroy() { this._listeners.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler)); this._listeners = []; }
 
   getOrderType() {
     if (this.orderTypeSelect) return this.orderTypeSelect.value;
