@@ -104,6 +104,7 @@ export class ChartManager {
     this._takeProfitLine = null;
     this._orderLines = new Map();
     this._onChartClickCallbacks = [];
+    this._panResetTimer = null;
 
     this._resizeObserver = new ResizeObserver(() => this.resize());
     this._resizeObserver.observe(this.container);
@@ -175,7 +176,7 @@ export class ChartManager {
       try { this.chart.priceScale('right').applyOptions({ autoScale: true }); } catch {}
       if (fit && prepared.length) this.chart.timeScale().fitContent();
       else if (this._autoFollow) this.chart.timeScale().scrollToPosition(3, false);
-    } finally { setTimeout(() => { this._isUserPanning = false; }, 50); }
+    } finally { this._schedulePanReset(); }
   }
 
   renderReplayWindow(candles, { fit = false } = {}) {
@@ -191,7 +192,7 @@ export class ChartManager {
       this.series.setData(prepared);
       try { this.chart.priceScale('right').applyOptions({ autoScale: true }); } catch {}
       if (fit) this.chart.timeScale().fitContent(); else if (this._autoFollow) this.chart.timeScale().scrollToPosition(3, false);
-    } finally { setTimeout(() => { this._isUserPanning = false; }, 50); }
+    } finally { this._schedulePanReset(); }
   }
 
   updateRevealedCandle(candle) {
@@ -213,8 +214,20 @@ export class ChartManager {
   _emitAutoFollowChanged() { try { if (this._onAutoFollowChange) this._onAutoFollowChange(this._autoFollow); } catch {} }
   onAutoFollowChange(cb) { this._onAutoFollowChange = cb; }
   scrollToTime(unixSec) { if (!this.chart || !Number.isFinite(unixSec)) return; try { const timeScale = this.chart.timeScale(); const coord = timeScale.timeToCoordinate(unixSec); if (coord !== null && Number.isFinite(coord)) { const logical = timeScale.coordinateToLogical(coord); if (logical !== null && Number.isFinite(logical)) { timeScale.scrollToPosition(logical, false); return; } } timeScale.scrollToPosition(3, false); } catch { try { this.chart.timeScale().scrollToPosition(3, false); } catch {} } }
+  _schedulePanReset() {
+    if (this._panResetTimer) clearTimeout(this._panResetTimer);
+    this._panResetTimer = setTimeout(() => { this._panResetTimer = null; this._isUserPanning = false; }, 50);
+  }
+
   coordinateToPrice(y) { if (!this.series || !Number.isFinite(y)) return null; try { return this.series.coordinateToPrice(y); } catch { return null; } }
-  onChartClick(cb) { if (typeof cb === 'function') this._onChartClickCallbacks.push(cb); }
+  onChartClick(cb) {
+    if (typeof cb !== 'function') return () => {};
+    this._onChartClickCallbacks.push(cb);
+    return () => {
+      const index = this._onChartClickCallbacks.indexOf(cb);
+      if (index >= 0) this._onChartClickCallbacks.splice(index, 1);
+    };
+  }
 
   get tradingOverlay() {
     if (!this._tradingOverlay) {
@@ -271,6 +284,7 @@ export class ChartManager {
 
   destroy() {
     this.clearTradingLines();
+    if (this._panResetTimer) { clearTimeout(this._panResetTimer); this._panResetTimer = null; }
     window.removeEventListener('resize', this._onWindowResize);
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
