@@ -38,6 +38,7 @@ export class ReplayDateSelector {
     this.onJump = onJump;
 
     this._debounceTimer = null;
+    this._handlers = [];
 
     this.initDefaultRange();
     this._bindEvents();
@@ -87,9 +88,7 @@ export class ReplayDateSelector {
   }
 
   _bindEvents() {
-    this.presetChips.forEach(chip => {
-      chip.addEventListener('click', () => this.selectPreset(chip.dataset.preset));
-    });
+    this.presetChips.forEach(chip => { const handler = () => this.selectPreset(chip.dataset.preset); chip.addEventListener('click', handler); this._handlers.push([chip, 'click', handler]); });
     const defaultChip = typeof document !== 'undefined' ? document.querySelector('.preset-chip[data-preset="1d"]') : null;
     if (defaultChip) defaultChip.classList.add('active');
 
@@ -102,12 +101,15 @@ export class ReplayDateSelector {
       }, 400);
     };
 
-    if (this.replayDateEl) this.replayDateEl.addEventListener('change', handleInputChange);
-    if (this.replayTimeEl) this.replayTimeEl.addEventListener('change', handleInputChange);
+    if (this.replayDateEl) { this.replayDateEl.addEventListener('change', handleInputChange); this._handlers.push([this.replayDateEl, 'change', handleInputChange]); }
+    if (this.replayTimeEl) { this.replayTimeEl.addEventListener('change', handleInputChange); this._handlers.push([this.replayTimeEl, 'change', handleInputChange]); }
+    if (this.jumpBtn) { const handler = () => this.handleJump(); this.jumpBtn.addEventListener('click', handler); this._handlers.push([this.jumpBtn, 'click', handler]); }
+  }
 
-    if (this.jumpBtn) {
-      this.jumpBtn.addEventListener('click', () => this.handleJump());
-    }
+  destroy() {
+    clearTimeout(this._debounceTimer);
+    this._handlers.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler));
+    this._handlers = [];
   }
 
   handleJump() {
