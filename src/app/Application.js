@@ -10,17 +10,6 @@ import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { bindMobileDrawer } from './bindMobileDrawer.js';
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
 
-function registerActionGuard(engine, tradingEngine, coordinator) {
-  engine.registerActionGuard((action) => {
-    if (!tradingEngine.hasOpenPosition()) return { allowed: true };
-    const msg = action === 'load'
-      ? 'Cannot load new data while a position is open — close position or reset account first.'
-      : `Cannot ${action} while a position is open — close position first.`;
-    coordinator.showTradingError(msg);
-    return { allowed: false, reason: msg };
-  });
-}
-
 function bindDatasetSelectors(ui, coordinator) {
   ui.symbolSelector.onChange((symbol) =>
     coordinator.handleSymbolTimeframeChange('symbol', symbol, ui.el('symbol-select')));
