@@ -218,7 +218,10 @@ export class PaperTradingEngine extends EventEmitter {
   }
   attachReplayEngine(replayEngine) { return this.attachToReplay(replayEngine); }
   detachReplayEngine() { return this.detach(); }
-  destroy() { return this.detach(); }
+  destroy() {
+    this.detach();
+    this.removeAllListeners?.();
+  }
 
   _validateCandleSequence(symbol, idx, timestamp) {
     const previous = symbol ? this._marketBySymbol.get(symbol) : (this._latestCandle ? { index: this._latestCandleIndex, timestamp: this._latestCandle.time } : null);
