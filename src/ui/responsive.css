@@ -74,3 +74,13 @@
     bottom: 0;
   }
 }
+
+
+@media (max-width: 640px) {
+  .main-layout > .trading-section {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .replay-controls-section {
+    padding-bottom: max(var(--page-padding), env(safe-area-inset-bottom));
+  }
+}
