@@ -160,10 +160,18 @@ export class TradingPanel {
     if (!this.errorEl) return;
     this.errorEl.textContent = msg;
     this.errorEl.classList.remove('hidden');
-    setTimeout(() => this.clearError(), 3500);
+    clearTimeout(this.errorTimeout);
+    this.errorTimeout = setTimeout(() => {
+      this.errorTimeout = null;
+      this.clearError();
+    }, 3500);
   }
 
   clearError() {
+    if (this.errorTimeout) {
+      clearTimeout(this.errorTimeout);
+      this.errorTimeout = null;
+    }
     if (!this.errorEl) return;
     this.errorEl.textContent = '';
     this.errorEl.classList.add('hidden');
