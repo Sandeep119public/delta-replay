@@ -396,7 +396,7 @@ export class PaperTradingEngine extends EventEmitter {
     if (!market || !market.candle) return this._reject('NO_MARKET_PRICE', `Cannot place limit order: no market price received for ${symbol}.`);
     const q = Number(quantity), lp = Number(limitPrice), orderId = `order-${this._nextOrderId++}`, createdTime = market.candle.time, createdIdx = market.index;
     const order = new Order({ id: orderId, symbol, side, type: ORDER_TYPES.LIMIT, quantity: q, limitPrice: lp, status: ORDER_STATUSES.PENDING, createdAt: createdTime, createdReplayTime: createdTime, createdIndex: createdIdx });
-    this._orders.set(orderId, order); this._pendingOrderIds.push(orderId); this._emitOrderPlaced(order); return { success: true, order: this._cloneJSON(order.toJSON()) };
+    this._orders.set(String(orderId), order); this._pendingOrderIds.push(String(orderId)); this._emitOrderPlaced(order); return { success: true, order: this._cloneJSON(order.toJSON()) };
   }
   placeStopOrder({ symbol, side, quantity, stopPrice }) {
     const sideRes = TradingValidator.validateSide(side); if (!sideRes.valid) return this._reject(sideRes.code, sideRes.message);
@@ -490,7 +490,7 @@ export class PaperTradingEngine extends EventEmitter {
         const orderIsLong = o.side === 'BUY', closedIsLong = closedSide === 'LONG';
         return (closedIsLong && !orderIsLong) || (!closedIsLong && orderIsLong);
       });
-      for (const id of staleIds) { const o = this._orders.get(String(id)); o.status = ORDER_STATUSES.CANCELLED; o.cancelReason = 'STALE_EXIT_AFTER_RISK_CLOSE'; this._pendingOrderIds = this._pendingOrderIds.filter(i => i !== id); this._emitOrderCancelled(o); }
+      for (const id of staleIds) { const o = this._orders.get(String(id)); o.status = ORDER_STATUSES.CANCELLED; o.cancelReason = 'STALE_EXIT_AFTER_RISK_CLOSE'; this._pendingOrderIds = this._pendingOrderIds.filter(i => String(i) !== String(id)); this._emitOrderCancelled(o); }
     }
   }
   _processStopLossTakeProfit(candle, candleIndex, targetSymbol = null) {
