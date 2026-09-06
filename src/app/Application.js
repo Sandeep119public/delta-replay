@@ -46,7 +46,14 @@ export function createApplication() {
   });
   coordinatorRef.current = coordinator;
 
-  registerActionGuard(engine, tradingEngine, coordinator);
+  const unregisterActionGuard = engine.registerActionGuard((action) => {
+    if (!tradingEngine.hasOpenPosition()) return { allowed: true };
+    const msg = action === 'load'
+      ? 'Cannot load new data while a position is open — close position or reset account first.'
+      : `Cannot ${action} while a position is open — close position first.`;
+    coordinator.showTradingError(msg);
+    return { allowed: false, reason: msg };
+  });
 
   const commandController = new ReplayCommandController({
     engine, appState, candleStore, tradingEngine, coordinator,
@@ -83,7 +90,7 @@ export function createApplication() {
 
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts, coordinator, engine, candleCache,
-    resources: [unbindTradingEvents, unbindReplayLifecycle, unbindAutoFollow, timelineBindings, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
+    resources: [unregisterActionGuard, unbindTradingEvents, unbindReplayLifecycle, unbindAutoFollow, timelineBindings, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
   });
 
   return {
