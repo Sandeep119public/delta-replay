@@ -182,18 +182,6 @@ const commandController = new ReplayCommandController({
 const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
 // ===== 4. UI BOOTSTRAP: trading terminal, timeline, chart overlays =====
-// Guard: prohibit loading or destructive changes during active position.
-engine.registerActionGuard((action) => {
-  if (tradingEngine.hasOpenPosition()) {
-    const msg = action === 'load'
-      ? 'Cannot load new data while a position is open — close position or reset account first.'
-      : `Cannot ${action} while a position is open — close position first.`;
-    coordinator.showTradingError(msg);
-    return { allowed: false, reason: msg };
-  }
-  return { allowed: true };
-});
-
 // Contextual sparkline scrubber: click a pip/setup to jump there.
 const sparklineEl = document.getElementById('timeline-sparkline');
 const sparkline = new TimelineSparkline({
@@ -360,7 +348,7 @@ tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (payload) => {
   try { commandController.pause(); } catch (error) { console.warn('[Replay] pause failed', error); }
   errorPanel.show(
     { category: 'LIQUIDATION', userMessage: `Position liquidated: ${payload?.symbol || ''} @ ${payload?.liquidationPrice ?? '—'}`, message: 'Position liquidated', code: 'LIQUIDATION', context: {} },
-    { severity: 'critical', onPause: () => { try { commandController.pause(); } catch {} } },
+    { severity: 'critical', onPause: () => { try { commandController.pause(); } catch (error) { console.warn('[Replay] liquidation pause failed', error); } } },
   );
 });
 tradingEngine.on(TradingEvents.ORDER_REJECTED, (err) => {
