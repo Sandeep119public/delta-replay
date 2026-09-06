@@ -287,6 +287,12 @@
 /* --------------------------------------------------------------------------
    RESPONSIVE BREAKPOINTS
    -------------------------------------------------------------------------- */
+@media (min-width: 1025px) {
+  :root {
+    --sidebar-w-desktop: clamp(360px, 29vw, 460px);
+  }
+}
+
 @media (min-width: 1500px) {
   :root { --sidebar-w-desktop: 430px; }
   .topbar { padding-inline: 20px; }
