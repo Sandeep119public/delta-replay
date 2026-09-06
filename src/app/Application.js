@@ -69,7 +69,7 @@ export function createApplication() {
   bindDatasetSelectors(ui, coordinator);
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, controls: ui.controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner: ui.modeBanner });
   const unbindTradingEvents = bindTradingEvents({ tradingEngine, commandController, errorPanel: ui.errorPanel });
-  ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
+  const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
   const chartTradingController = new ChartTradingController({
     chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel,
@@ -83,7 +83,7 @@ export function createApplication() {
 
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts, coordinator, engine, candleCache,
-    resources: [unbindTradingEvents, unbindReplayLifecycle, timelineBindings, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
+    resources: [unbindTradingEvents, unbindReplayLifecycle, unbindAutoFollow, timelineBindings, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
   });
 
   return {
