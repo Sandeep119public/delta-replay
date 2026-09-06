@@ -30,6 +30,10 @@ export class FloatingPositionView {
     this.badgeEl = badgeEl;
 
     this._lastPnl = 0;
+    this._boundClose = () => {
+      const positions = this.tradingEngine?.getPositions?.() || [];
+      if (positions.length > 0) this.tradingEngine.closePosition(positions[0].symbol);
+    };
     this._bindCloseBtn();
   }
 
@@ -37,13 +41,15 @@ export class FloatingPositionView {
     if (!this.closeBtn) return;
     // Guard against double-binding when view is re-instantiated on the same DOM node.
     if (this.closeBtn.__floatingPosBound) return;
-    this.closeBtn.addEventListener('click', () => {
-      const positions = this.tradingEngine?.getPositions?.() || [];
-      if (positions.length > 0) {
-        this.tradingEngine.closePosition(positions[0].symbol);
-      }
-    });
+    this.closeBtn.addEventListener('click', this._boundClose);
     this.closeBtn.__floatingPosBound = true;
+  }
+
+  destroy() {
+    if (this.closeBtn?.__floatingPosBound) {
+      this.closeBtn.removeEventListener?.('click', this._boundClose);
+      delete this.closeBtn.__floatingPosBound;
+    }
   }
 
   _renderIcon(side) {
