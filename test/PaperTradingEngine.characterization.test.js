@@ -71,11 +71,11 @@ describe('PaperTradingEngine characterization', () => {
     expect(close.realizedPnL).toBeCloseTo(9.79, 10);
   });
 
-  it('rejects malformed market candles before mutating the latest market state', () => {
+  it('rejects an invalid market timestamp before mutating the latest market state', () => {
     const engine = new PaperTradingEngine({ startingBalance: 10000 });
     engine.onMarketCandle(market(1000, 100, 105, 95, 101, 0));
     const previous = engine.getLatestCandle();
-    expect(() => engine.onMarketCandle(market(2000, 100, 0, 95, Number.NaN, 1))).toThrow();
+    expect(() => engine.onMarketCandle(market(Number.NaN, 100, 105, 95, 101, 1))).toThrow('MARKET_CANDLE_INVALID_TIMESTAMP');
     expect(engine.getLatestCandle()).toEqual(previous);
     expect(engine.getLatestCandleIndex()).toBe(0);
   });
