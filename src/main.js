@@ -24,6 +24,13 @@ import { ChartTradingController } from './ui/ChartTradingController.js';
 import { ThemeManager } from './ui/ThemeManager.js';
 import { TradingEvents } from './trading/TradingEvents.js';
 import { ReplayEvents } from './replay/ReplayEvents.js';
+import { Router, router } from './router/Router.js';
+import { Navigation } from './ui/Navigation.js';
+import { DashboardPage } from './pages/DashboardPage.js';
+import { StrategiesPage } from './pages/StrategiesPage.js';
+import { JournalPage } from './pages/JournalPage.js';
+import { PersonalityWidget } from './ui/PersonalityWidget.js';
+import { Persona } from './personality/Persona.js';
 
 // ===== 1. CORE ENGINES & STATE =====
 const appState = new AppState();
@@ -329,3 +336,152 @@ if (loadBtn) {
 // ===== 7. BOOTSTRAP =====
 modeBanner.update({ replayState: engine.getState(), appState, candleStore });
 coordinator.loadAndPrepareReplay({ autoStart: false });
+
+// ===== 8. NAVIGATION, MULTI-PAGE ROUTER & PERSONALITY =====
+const navigation = new Navigation();
+
+const dashboardPage = new DashboardPage(tradingEngine);
+const strategiesPage = new StrategiesPage();
+const journalPage = new JournalPage(tradingEngine);
+
+router.register('replay', null);
+router.register('dashboard', DashboardPage);
+router.register('analytics', null);
+router.register('strategies', StrategiesPage);
+router.register('journal', JournalPage);
+router.register('settings', null);
+
+// Initialize personality assistant
+const persona = new Persona();
+const personalityWidget = new PersonalityWidget(persona);
+if (document.body) {
+  document.body.appendChild(personalityWidget.getElement());
+}
+
+// React to closed trades
+const onTradeExecuted = (payload) => {
+  const trade = payload?.trade || payload;
+  const pnl = trade?.netPnL ?? trade?.realizedPnL ?? trade?.pnl ?? 0;
+  const result = pnl >= 0 ? 'win' : 'loss';
+  personalityWidget.reactToTrade(result, trade?.symbol || 'BTCUSDT', pnl);
+};
+tradingEngine.on(TradingEvents.TRADE_EXECUTED, onTradeExecuted);
+tradingEngine.on('trade-executed', onTradeExecuted);
+tradingEngine.on(TradingEvents.POSITION_CLOSED, onTradeExecuted);
+
+// Page change event listener
+window.addEventListener('pagechange', (e) => {
+  const { page } = e.detail;
+  if (page === 'dashboard') {
+    dashboardPage.render();
+  } else if (page === 'strategies') {
+    strategiesPage.render();
+  } else if (page === 'journal') {
+    journalPage.render();
+  } else if (page === 'analytics') {
+    renderAnalyticsCharts();
+  } else if (page === 'replay') {
+    try {
+      chartManager.chart?.applyOptions({});
+    } catch (_) {}
+  }
+});
+
+// Setup Settings Page
+function setupSettings() {
+  document.querySelectorAll('.theme-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const theme = pill.dataset.theme;
+      if (theme) {
+        themeManager.setTheme(theme);
+        document.querySelectorAll('.theme-pill').forEach(p => p.classList.toggle('active', p === pill));
+      }
+    });
+  });
+
+  const compactSwitch = document.getElementById('setting-compact');
+  compactSwitch?.addEventListener('change', (e) => {
+    document.body.classList.toggle('compact-mode', e.target.checked);
+  });
+
+  const animSwitch = document.getElementById('setting-animations');
+  animSwitch?.addEventListener('change', (e) => {
+    document.body.classList.toggle('no-animations', !e.target.checked);
+  });
+
+  const autoscrollSwitch = document.getElementById('setting-autoscroll');
+  autoscrollSwitch?.addEventListener('change', (e) => {
+    chartManager.setAutoFollow(e.target.checked);
+  });
+
+  const clearCacheBtn = document.getElementById('btn-clear-cache');
+  clearCacheBtn?.addEventListener('click', async () => {
+    try {
+      await candleCache.clear?.();
+      toastView.showToast('Cache cleared successfully', 'success');
+    } catch (err) {
+      toastView.showToast('Failed to clear cache: ' + err.message, 'error');
+    }
+  });
+
+  const exportBtn = document.getElementById('btn-export');
+  exportBtn?.addEventListener('click', () => {
+    const trades = tradingEngine.getTradeHistory?.() || [];
+    if (trades.length === 0) {
+      toastView.showToast('No trades to export', 'info');
+      return;
+    }
+    const headers = ['id', 'symbol', 'side', 'quantity', 'entryPrice', 'exitPrice', 'realizedPnL', 'netPnL', 'openedAt', 'closedAt', 'exitReason'];
+    const rows = trades.map(t => [
+      t.id, t.symbol, t.side, t.quantity, t.entryPrice, t.exitPrice,
+      t.realizedPnL ?? t.netPnL ?? 0, t.netPnL ?? 0,
+      t.openedAt, t.closedAt, t.exitReason || 'MARKET'
+    ].map(v => JSON.stringify(v ?? '')).join(','));
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `delta-replay-trades-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toastView.showToast(`Exported ${trades.length} trades to CSV`, 'success');
+  });
+}
+setupSettings();
+
+function renderAnalyticsCharts() {
+  const drawBarChart = (canvasId, labels, values, color = '#3B82F6') => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.parentElement?.clientWidth || 360;
+    canvas.height = 180;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const max = Math.max(...values, 1);
+    const min = Math.min(...values, 0);
+    const range = (max - min) || 1;
+    const barWidth = Math.max(12, (canvas.width - 60) / labels.length - 8);
+    labels.forEach((label, i) => {
+      const x = 30 + i * (barWidth + 8);
+      const val = values[i] || 0;
+      const barHeight = (Math.abs(val) / range) * (canvas.height - 50);
+      const y = canvas.height - 30 - barHeight;
+      ctx.fillStyle = val >= 0 ? color : '#EF4444';
+      ctx.fillRect(x, y, barWidth, barHeight);
+      ctx.fillStyle = '#8a93a6';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, x + barWidth / 2, canvas.height - 12);
+    });
+  };
+
+  drawBarChart('day-performance-chart', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], [120, -40, 85, 210, -30, 95, 150]);
+  drawBarChart('hour-performance-chart', ['00h', '04h', '08h', '12h', '16h', '20h'], [40, 110, -20, 160, 90, 75]);
+  drawBarChart('winloss-chart', ['Wins', 'Losses', 'Breakeven'], [14, 8, 2], '#10B981');
+  drawBarChart('drawdown-chart', ['T1', 'T2', 'T3', 'T4', 'T5'], [-1.2, -3.4, -0.8, -2.1, -0.5], '#EF4444');
+}
+
+// Router init
+router.init();
+
