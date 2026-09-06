@@ -1,6 +1,6 @@
 /* Final viewport-fit layer. Keeps the desktop app inside the browser viewport without overlapping panels. */
 
-@media (min-width: 1121px) {
+@media (min-width: 1025px) {
   html,
   body {
     height: 100dvh;
@@ -122,7 +122,7 @@
 }
 
 /* Error row must not push the rest of the desktop UI below the fold. */
-@media (min-width: 1121px) {
+@media (min-width: 1025px) {
   .error-panel {
     max-height: 96px;
     overflow: hidden;

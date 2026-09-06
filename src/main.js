@@ -20,6 +20,7 @@ import { TradingPanel } from './ui/TradingPanel.js';
 import { ToastNotificationView } from './ui/ToastNotificationView.js';
 import { FloatingPositionView } from './ui/FloatingPositionView.js';
 import { ReplayDateSelector } from './ui/ReplayDateSelector.js';
+import { ChartTradingController } from './ui/ChartTradingController.js';
 import { TradingEvents } from './trading/TradingEvents.js';
 import { ReplayEvents } from './replay/ReplayEvents.js';
 
@@ -115,6 +116,17 @@ const controls = new ReplayControls({
   speedSelect,
   statusEl,
   engine,
+  followBtn,
+  onFollowClick: () => {
+    chartManager.setAutoFollow(true);
+    const idx = engine.getState().currentIndex;
+    if (idx >= 0) {
+      const c = candleStore.get(idx);
+      if (c) chartManager.setRevealedMax(c.time);
+      coordinator.applyWindowedChart(idx);
+      chartManager.followCurrent();
+    }
+  },
 });
 
 const errorPanel = new ErrorPanel({
@@ -215,16 +227,6 @@ const tradingPanel = new TradingPanel({
 symbolSelector.onChange((symbol) => coordinator.handleSymbolTimeframeChange('symbol', symbol, symbolSelect));
 timeframeSelector.onChange((timeframe) => coordinator.handleSymbolTimeframeChange('timeframe', timeframe, timeframeSelect));
 
-document.querySelectorAll('.qty-chip').forEach(chip => {
-  chip.addEventListener('click', () => {
-    const qtyInput = document.getElementById('trade-qty');
-    if (qtyInput && chip.dataset.qty) {
-      qtyInput.value = chip.dataset.qty;
-      qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-  });
-});
-
 timeline.onChange((idx) => {
   appState.setPendingStartIndex(idx);
   controls.setStartIndex(idx);
@@ -235,8 +237,7 @@ timeline.onChange((idx) => {
   }
 });
 
-sliderEl.addEventListener('change', () => {
-  const idx = Number(sliderEl.value);
+timeline.onCommit((idx) => {
   const st = engine.getState();
   if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
     if (st.status === 'playing') commandController.pause();
@@ -254,22 +255,8 @@ sliderEl.addEventListener('change', () => {
 });
 
 chartManager.onAutoFollowChange((isFollow) => {
-  if (followBtn) followBtn.classList.toggle('hidden', isFollow);
+  controls.setAutoFollow(isFollow);
 });
-
-if (followBtn) {
-  followBtn.addEventListener('click', () => {
-    chartManager.setAutoFollow(true);
-    const idx = engine.getState().currentIndex;
-    if (idx >= 0) {
-      const c = candleStore.get(idx);
-      if (c) chartManager.setRevealedMax(c.time);
-      coordinator.applyWindowedChart(idx);
-      chartManager.followCurrent();
-    }
-    followBtn.classList.add('hidden');
-  });
-}
 
 function updateRevealedMax(idx) {
   const c = candleStore.get(idx);
@@ -277,86 +264,19 @@ function updateRevealedMax(idx) {
 }
 
 // ===== 5. TRADING OVERLAY & EVENT SYNCHRONIZATION =====
-function syncChartTradingLines() {
-  const positions = tradingEngine.getPositions();
-  const activePos = positions.length > 0 ? positions[0] : null;
-  chartManager.updatePositionLines(activePos);
-  const pendingOrders = tradingEngine.getPendingOrders ? tradingEngine.getPendingOrders() : [];
-  chartManager.updateOrderLines(pendingOrders);
-  floatingPosView.render(activePos);
-}
-
-chartManager.onChartClick(({ price }) => {
-  if (!Number.isFinite(price) || price <= 0) return;
-  const positions = tradingEngine.getPositions();
-  const activePos = positions.length > 0 ? positions[0] : null;
-  const intent = TradingIntentResolver.resolveClickIntent(price, activePos);
-  if (!intent) return;
-
-  if (intent.action === 'SET_TP') {
-    const res = tradingEngine.setTakeProfit(intent.symbol, intent.price);
-    if (res.success) {
-      if (tpInput) tpInput.value = intent.price.toFixed(2);
-      toastView.show(`Take Profit set to $${intent.price.toFixed(2)}`);
-    } else {
-      coordinator.showTradingError(res.message);
-    }
-  } else if (intent.action === 'SET_SL') {
-    const res = tradingEngine.setStopLoss(intent.symbol, intent.price);
-    if (res.success) {
-      if (slInput) slInput.value = intent.price.toFixed(2);
-      toastView.show(`Stop Loss set to $${intent.price.toFixed(2)}`);
-    } else {
-      coordinator.showTradingError(res.message);
-    }
-  } else {
-    const type = orderTypeSelect ? orderTypeSelect.value : 'MARKET';
-    if (type === 'LIMIT' && limitPriceInput) {
-      limitPriceInput.value = intent.price.toFixed(2);
-      toastView.show(`Limit Price set to $${intent.price.toFixed(2)}`);
-    } else if (type === 'STOP_MARKET' && stopPriceInput) {
-      stopPriceInput.value = intent.price.toFixed(2);
-      toastView.show(`Stop Price set to $${intent.price.toFixed(2)}`);
-    }
-  }
-  syncChartTradingLines();
-  tradingPanel.render();
-});
-
-tradingEngine.on(TradingEvents.POSITION_OPENED, syncChartTradingLines);
-tradingEngine.on(TradingEvents.POSITION_UPDATED, syncChartTradingLines);
-tradingEngine.on(TradingEvents.POSITION_CLOSED, () => {
-  chartManager.updatePositionLines(null);
-  floatingPosView.render(null);
-  syncChartTradingLines();
-});
-tradingEngine.on(TradingEvents.ACCOUNT_RESET, () => {
-  chartManager.clearTradingLines();
-  floatingPosView.render(null);
-});
-tradingEngine.on(TradingEvents.ORDER_PLACED, syncChartTradingLines);
-tradingEngine.on(TradingEvents.ORDER_TRIGGERED, syncChartTradingLines);
-tradingEngine.on(TradingEvents.ORDER_FILLED, (payload) => {
-  syncChartTradingLines();
-  const o = payload?.order ?? payload;
-  if (o?.type && o.type !== 'MARKET') {
-    const typeLabel = o.type === 'STOP_MARKET' ? 'Stop' : 'Limit';
-    const priceStr = o.filledPrice != null ? ` @ $${Number(o.filledPrice).toFixed(2)}` : '';
-    toastView.show(`✓ ${typeLabel} ${o.side} Filled${priceStr}`);
-  }
-});
-tradingEngine.on(TradingEvents.ORDER_CANCELLED, syncChartTradingLines);
-tradingEngine.on(TradingEvents.STOP_LOSS_TRIGGERED, (p) => {
-  syncChartTradingLines();
-  toastView.show(`🛑 Stop Loss Triggered${p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : ''}`);
-});
-tradingEngine.on(TradingEvents.TAKE_PROFIT_TRIGGERED, (p) => {
-  syncChartTradingLines();
-  toastView.show(`🎯 Take Profit Triggered${p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : ''}`);
-});
-tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (p) => {
-  syncChartTradingLines();
-  toastView.show(`⚠️ Position Liquidated${p?.liquidationPrice != null ? ` @ $${Number(p.liquidationPrice).toFixed(2)}` : ''}`);
+const chartTradingController = new ChartTradingController({
+  chartManager,
+  tradingEngine,
+  tradingPanel,
+  floatingPosView,
+  toastView,
+  orderFormView: tradingPanel.orderFormView,
+  coordinator,
+  slInput,
+  tpInput,
+  limitPriceInput,
+  stopPriceInput,
+  orderTypeSelect,
 });
 
 // ===== 6. ENGINE LIFECYCLE EVENTS =====

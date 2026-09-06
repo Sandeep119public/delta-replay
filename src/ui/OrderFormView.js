@@ -34,11 +34,65 @@ export class OrderFormView {
 
     this._bindEvents();
     this._bindTabs();
+    this._bindPresets();
     this.updateOrderTypeUI();
   }
 
   _updateOrderTypeUI() {
     this.updateOrderTypeUI();
+  }
+
+  _bindPresets() {
+    try {
+      const chips = document.querySelectorAll('.qty-chip');
+      chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          if (chip.dataset?.qty) {
+            this.setQuantity(chip.dataset.qty);
+          }
+        });
+      });
+    } catch {}
+  }
+
+  setQuantity(qty) {
+    if (this.qtyInput) {
+      this.qtyInput.value = String(qty);
+      try {
+        this.qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+      } catch {}
+    }
+  }
+
+  setLimitPrice(price) {
+    if (this.limitPriceInput) {
+      const num = Number(price);
+      this.limitPriceInput.value = Number.isFinite(num) ? num.toFixed(2) : String(price);
+      try {
+        this.limitPriceInput.dispatchEvent(new Event('input', { bubbles: true }));
+      } catch {}
+    }
+  }
+
+  setStopPrice(price) {
+    if (this.stopPriceInput) {
+      const num = Number(price);
+      this.stopPriceInput.value = Number.isFinite(num) ? num.toFixed(2) : String(price);
+      try {
+        this.stopPriceInput.dispatchEvent(new Event('input', { bubbles: true }));
+      } catch {}
+    }
+  }
+
+  setOrderType(type) {
+    if (this.orderTypeSelect) {
+      this.orderTypeSelect.value = type;
+      try {
+        this.orderTypeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      } catch {}
+    } else {
+      this.updateOrderTypeUI();
+    }
   }
 
   _bindTabs() {

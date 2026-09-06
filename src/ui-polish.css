@@ -417,7 +417,7 @@ input:disabled {
 }
 
 /* Collapse data controls before they become cramped. */
-@media (max-width: 1120px) {
+@media (max-width: 1024px) {
   #app {
     grid-template-columns: 1fr;
     grid-template-areas:
@@ -560,7 +560,7 @@ input:disabled {
 }
 
 /* FINAL DESKTOP VIEWPORT FIT */
-@media (min-width: 1121px) {
+@media (min-width: 1025px) {
   html,
   body {
     width: 100%;

@@ -1,5 +1,5 @@
 export class ReplayControls {
-  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, engine }) {
+  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, engine, followBtn = null, onFollowClick = null }) {
     this.playBtn = playBtn;
     this.pauseBtn = pauseBtn;
     this.stepBtn = stepBtn;
@@ -8,6 +8,8 @@ export class ReplayControls {
     this.speedSelect = speedSelect;
     this.statusEl = statusEl;
     this.engine = engine;
+    this.followBtn = followBtn;
+    this.onFollowClick = onFollowClick;
 
     this.playBtn.addEventListener('click', () => this._safeAction(() => this.engine.play()));
     this.pauseBtn.addEventListener('click', () => this._safeAction(() => this.engine.pause()));
@@ -22,6 +24,13 @@ export class ReplayControls {
         this.speedSelect.value = String(this.engine.getState().speed);
       });
     });
+
+    if (this.followBtn) {
+      this.followBtn.addEventListener('click', () => {
+        if (this.onFollowClick) this.onFollowClick();
+        this.followBtn.classList.add('hidden');
+      });
+    }
 
     this.engine.on('stateChanged', (state) => this.render(state));
     this.engine.on('speedChanged', ({ speed }) => { this.speedSelect.value = String(speed); });
@@ -102,5 +111,11 @@ export class ReplayControls {
 
   setEnabledForPreview() {
     // State-driven rendering handles preview/replay controls.
+  }
+
+  setAutoFollow(isFollowing) {
+    if (this.followBtn) {
+      this.followBtn.classList.toggle('hidden', isFollowing);
+    }
   }
 }

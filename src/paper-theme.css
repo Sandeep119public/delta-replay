@@ -872,6 +872,78 @@ button, input, select {
    Maintains seamless mobile viewport fit while preserving the paper theme.
    ========================================================================== */
 
+/* ==========================================================================
+   TABLET RESPONSIVE (701px - 1024px)
+   Fluid stacked layout where chart and trading panel share the viewport.
+   ========================================================================== */
+
+@media (min-width: 701px) and (max-width: 1024px) {
+  html, body {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #app {
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto !important;
+    grid-template-areas:
+      "header"
+      "mode"
+      "error"
+      "main"
+      "timeline"
+      "controls" !important;
+  }
+
+  .main-layout {
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .main {
+    flex: 1 1 48% !important;
+    min-height: clamp(240px, 42vh, 460px) !important;
+    border-right: none !important;
+    border-bottom: 2px solid var(--rule-strong) !important;
+  }
+
+  .trading-section {
+    flex: 1 1 52% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    border-left: none !important;
+    border-top: none !important;
+    overflow-y: auto !important;
+    padding: 10px 16px !important;
+  }
+
+  .pos-compact-grid {
+    grid-template-columns: repeat(6, 1fr) !important;
+  }
+
+  .pos-metric {
+    min-height: 46px !important;
+  }
+
+  .timeline-section,
+  .controls-section {
+    padding: 6px 16px !important;
+  }
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVE (<= 700px)
+   Maintains seamless mobile viewport fit with active playback controls.
+   ========================================================================== */
+
 @media (max-width: 700px) {
   html, body {
     width: 100%;
@@ -889,30 +961,56 @@ button, input, select {
     max-height: 100dvh !important;
     overflow: hidden !important;
     display: grid !important;
-    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto minmax(0, 1fr) auto auto !important;
   }
   .topbar {
-    max-height: 112px !important;
+    max-height: 96px !important;
     overflow: hidden !important;
-    padding: 10px 14px !important;
+    padding: 8px 10px !important;
   }
-  .topbar-left { margin-bottom: 6px !important; }
+  .topbar-left {
+    margin-bottom: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+  .logo {
+    font-size: 16px !important;
+    letter-spacing: 0.12em !important;
+  }
+  .phase-badge {
+    font-size: 9px !important;
+    padding: 1px 5px !important;
+  }
   .topbar-center {
     display: flex !important;
-    gap: 7px !important;
-    align-items: end !important;
+    gap: 6px !important;
+    align-items: center !important;
     overflow-x: auto !important;
     scrollbar-width: none !important;
   }
   .topbar-center::-webkit-scrollbar { display: none; }
-  .topbar-center .selector-group { flex: 0 0 108px !important; }
+  .topbar-center .selector-group {
+    flex: 0 0 auto !important;
+    min-width: 70px !important;
+  }
+  .topbar-center .selector-group label {
+    font-size: 9px !important;
+  }
+  .topbar-center select {
+    min-height: 34px !important;
+    height: 34px !important;
+    font-size: 11px !important;
+    padding: 2px 6px !important;
+  }
   .topbar-center .replay-date-group,
   .topbar-center .preset-group { display: none !important; }
-  .header-action-group { display: block !important; flex: 1 0 136px !important; }
+  .header-action-group { display: block !important; flex: 1 0 110px !important; }
   #header-start-replay-btn {
-    min-height: 42px !important;
-    height: 42px !important;
-    padding: 0 10px !important;
+    min-height: 34px !important;
+    height: 34px !important;
+    padding: 0 8px !important;
     font-size: 11px !important;
   }
   .topbar-right { display: none !important; }
@@ -923,7 +1021,7 @@ button, input, select {
     height: 100% !important;
     overflow: hidden !important;
     display: grid !important;
-    grid-template-rows: minmax(180px, 38vh) minmax(0, 1fr) !important;
+    grid-template-rows: minmax(160px, 36vh) minmax(0, 1fr) !important;
   }
   .main {
     min-height: 0 !important;
@@ -935,11 +1033,11 @@ button, input, select {
     min-height: 0 !important;
     height: auto !important;
     order: initial !important;
-    padding: 8px 10px 10px !important;
+    padding: 6px 8px 8px !important;
     overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 7px !important;
+    gap: 6px !important;
     border-left: 0 !important;
     border-top: 2px solid var(--rule-strong) !important;
   }
@@ -947,29 +1045,30 @@ button, input, select {
     flex: 0 0 auto !important;
     display: flex !important;
     align-items: center !important;
-    gap: 8px !important;
+    gap: 6px !important;
     padding: 0 !important;
     background: transparent !important;
     border: 0 !important;
     box-shadow: none !important;
+    margin-bottom: 0 !important;
   }
   .trading-header { display: none !important; }
   .equity-hero-bar {
     width: 100% !important;
-    min-height: 48px !important;
-    padding: 7px 10px !important;
+    min-height: 44px !important;
+    padding: 5px 8px !important;
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 8px !important;
+    gap: 6px !important;
   }
-  .equity-highlight { font-size: 19px !important; }
-  .pnl-hero-pill { padding: 5px 8px !important; }
+  .equity-highlight { font-size: 17px !important; }
+  .pnl-hero-pill { padding: 4px 6px !important; }
   .trading-tab-nav {
-    flex: 0 0 44px !important;
-    min-height: 44px !important;
+    flex: 0 0 38px !important;
+    min-height: 38px !important;
     margin-bottom: 0 !important;
   }
-  .panel-tab-btn { min-height: 40px !important; font-size: 12px !important; }
+  .panel-tab-btn { min-height: 36px !important; font-size: 11px !important; }
   .trading-tab-contents {
     min-height: 0 !important;
     flex: 1 1 auto !important;
@@ -984,77 +1083,155 @@ button, input, select {
   #tab-view-trade {
     display: flex !important;
     flex-direction: column !important;
-    gap: 7px !important;
+    gap: 6px !important;
   }
 
   .position-panel.is-empty { display: none !important; }
   .position-panel:not(.is-empty) {
     flex: 0 0 auto !important;
     margin: 0 !important;
-    padding: 8px !important;
+    padding: 6px 8px !important;
   }
-  .position-panel:not(.is-empty) .card-header-row { margin-bottom: 5px !important; }
+  .position-panel:not(.is-empty) .card-header-row { margin-bottom: 4px !important; }
   .position-panel:not(.is-empty) .pos-compact-grid { gap: 3px !important; }
-  .position-panel:not(.is-empty) .pos-metric { min-height: 43px !important; padding: 5px 7px !important; }
-  .position-panel:not(.is-empty) .risk-inputs-row { gap: 5px !important; }
+  .position-panel:not(.is-empty) .pos-metric { min-height: 38px !important; padding: 4px 6px !important; }
+  .position-panel:not(.is-empty) .risk-inputs-row { gap: 4px !important; }
   .position-panel:not(.is-empty) .risk-inputs-row input,
-  .position-panel:not(.is-empty) .risk-inputs-row button { min-height: 38px !important; }
+  .position-panel:not(.is-empty) .risk-inputs-row button { min-height: 34px !important; }
 
   .order-panel {
     flex: 1 1 auto !important;
     min-height: 0 !important;
     margin: 0 !important;
-    padding: 8px !important;
+    padding: 6px 8px !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
   }
-  .order-type-tabs { flex: 0 0 40px !important; margin-bottom: 4px !important; }
-  .order-tab { min-height: 36px !important; font-size: 13px !important; }
-  .order-form-compact { display: flex !important; flex-direction: column !important; gap: 7px !important; }
+  .order-type-tabs { flex: 0 0 34px !important; margin-bottom: 4px !important; }
+  .order-tab { min-height: 32px !important; font-size: 12px !important; }
+  .order-form-compact { display: flex !important; flex-direction: column !important; gap: 5px !important; }
   .order-row-compact {
     display: grid !important;
     grid-template-columns: 1fr !important;
-    gap: 6px !important;
+    gap: 4px !important;
   }
   .qty-field-wrap {
     display: grid !important;
-    grid-template-columns: 38px 1fr !important;
-    gap: 7px !important;
+    grid-template-columns: 36px 1fr !important;
+    gap: 6px !important;
     align-items: center !important;
   }
-  #trade-qty { min-height: 42px !important; height: 42px !important; font-size: 16px !important; }
-  .qty-presets-compact { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important; }
-  .qty-chip { min-height: 36px !important; height: 36px !important; font-size: 12px !important; }
-  .order-actions-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 7px !important; margin-top: 6px !important; }
-  .order-actions-grid .btn { min-height: 52px !important; height: 52px !important; font-size: 17px !important; }
-  .order-secondary-grid { display: none !important; }
+  #trade-qty { min-height: 36px !important; height: 36px !important; font-size: 15px !important; }
+  .qty-presets-compact { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 4px !important; }
+  .qty-chip { min-height: 32px !important; height: 32px !important; font-size: 11px !important; }
+  .order-actions-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 6px !important; margin-top: 4px !important; }
+  .order-actions-grid .btn { min-height: 46px !important; height: 46px !important; font-size: 15px !important; }
 
+  /* Mobile Close Position Button */
+  .order-secondary-grid {
+    display: block !important;
+    margin-top: 4px !important;
+  }
+  .order-secondary-grid .btn-close-pos {
+    min-height: 36px !important;
+    height: 36px !important;
+    font-size: 12px !important;
+    width: 100% !important;
+  }
+
+  /* Compact Timeline Dock */
   .timeline-section {
     display: block !important;
     grid-row: 3 !important;
     flex: none !important;
-    padding: 7px 12px calc(8px + env(safe-area-inset-bottom)) !important;
-    max-height: 76px !important;
+    padding: 4px 10px !important;
+    max-height: 52px !important;
     overflow: hidden !important;
+    background: var(--paper-deep) !important;
+    border-top: 1px solid var(--rule-strong) !important;
   }
-  .timeline-header { font-size: 10px !important; margin-bottom: 4px !important; }
-  #timeline-current-label { font-size: 11px !important; margin-top: 3px !important; }
-  .controls-section { display: none !important; }
+  .timeline-header { font-size: 9px !important; margin-bottom: 2px !important; }
+  #timeline-slider { height: 18px !important; }
+  .timeline-meta { display: none !important; }
+  #timeline-current-label { font-size: 10px !important; margin-top: 1px !important; }
+
+  /* Compact Mobile Replay Control Bar */
+  .controls-section {
+    display: flex !important;
+    grid-row: 4 !important;
+    flex: none !important;
+    padding: 4px 8px calc(4px + env(safe-area-inset-bottom, 0px)) !important;
+    min-height: 40px !important;
+    max-height: 44px !important;
+    overflow: hidden !important;
+    background: var(--paper-warm) !important;
+    border-top: 1px solid var(--rule) !important;
+    align-items: center !important;
+  }
+  .controls-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 4px !important;
+    width: 100% !important;
+    min-height: 32px !important;
+  }
+  .controls-row .btn {
+    flex: 1 1 0 !important;
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 0 4px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    border-radius: 4px !important;
+  }
+  .speed-group {
+    flex: 0 0 auto !important;
+    gap: 2px !important;
+  }
+  .speed-group label {
+    display: none !important;
+  }
+  #speed-select {
+    min-height: 32px !important;
+    height: 32px !important;
+    font-size: 10px !important;
+    padding: 0 2px !important;
+    border-radius: 4px !important;
+  }
+  .replay-status {
+    display: none !important;
+  }
+  .shortcuts-hint {
+    display: none !important;
+  }
 
   @media (max-height: 760px) {
-    .topbar { max-height: 72px !important; padding: 7px 12px !important; }
-    .logo { font-size: 19px !important; }
-    .topbar-center { display: none !important; }
-    .main-layout { grid-template-rows: minmax(155px, 34vh) minmax(0, 1fr) !important; }
-    .trading-section { padding: 6px 8px !important; }
-    .equity-hero-bar { min-height: 42px !important; padding: 5px 8px !important; }
-    .trading-tab-nav { flex-basis: 40px !important; min-height: 40px !important; }
-    .panel-tab-btn { min-height: 36px !important; }
-    .order-panel { padding: 6px !important; }
-    .order-actions-grid .btn { min-height: 46px !important; height: 46px !important; }
-    .qty-chip { min-height: 32px !important; height: 32px !important; }
-    .order-tab { min-height: 34px !important; }
-    .timeline-section { max-height: 58px !important; }
+    .topbar { max-height: 68px !important; padding: 5px 8px !important; }
+    .logo { font-size: 15px !important; }
+    .main-layout { grid-template-rows: minmax(140px, 32vh) minmax(0, 1fr) !important; }
+    .trading-section { padding: 4px 6px !important; }
+    .equity-hero-bar { min-height: 38px !important; padding: 4px 6px !important; }
+    .trading-tab-nav { flex-basis: 34px !important; min-height: 34px !important; }
+    .panel-tab-btn { min-height: 32px !important; }
+    .order-panel { padding: 4px !important; }
+    .order-actions-grid .btn { min-height: 40px !important; height: 40px !important; }
+    .qty-chip { min-height: 28px !important; height: 28px !important; }
+    .order-tab { min-height: 28px !important; }
+    .timeline-section { max-height: 44px !important; }
+    .controls-section { min-height: 36px !important; max-height: 38px !important; }
+    .controls-row .btn { min-height: 28px !important; height: 28px !important; }
+    #speed-select { min-height: 28px !important; height: 28px !important; }
+  }
+
+  @media (max-width: 360px) {
+    .topbar { padding: 4px 6px !important; }
+    .logo { font-size: 13px !important; }
+    .equity-highlight { font-size: 15px !important; }
+    .pnl-val { font-size: 12px !important; }
+    .panel-tab-btn { font-size: 10px !important; padding: 0 2px !important; }
+    .order-actions-grid .btn { font-size: 13px !important; min-height: 42px !important; height: 42px !important; }
+    .controls-row .btn { font-size: 9px !important; padding: 0 2px !important; }
   }
 }

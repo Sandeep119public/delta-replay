@@ -15,15 +15,23 @@ export class Timeline {
 
     this._total = 0;
     this._onChange = null;
+    this._onCommit = null;
 
     this.slider.addEventListener('input', () => {
       const idx = Number(this.slider.value);
       this._updateLabels(idx);
       if (this._onChange) this._onChange(idx);
     });
+
+    this.slider.addEventListener('change', () => {
+      const idx = Number(this.slider.value);
+      this._updateLabels(idx);
+      if (this._onCommit) this._onCommit(idx);
+    });
   }
 
   onChange(fn) { this._onChange = fn; }
+  onCommit(fn) { this._onCommit = fn; }
 
   setTotal(total, candles) {
     this._total = total;
