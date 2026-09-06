@@ -16,6 +16,8 @@ export class ChartManager {
     this.chart = null;
     this.series = null;
     this._panResetTimer = null;
+    this._onVisibleRangeChange = null;
+    this._onChartLibraryClick = null;
   }
 
   init(initialTheme = null) {
@@ -32,16 +34,18 @@ export class ChartManager {
     this._positionLine = null; this._stopLossLine = null; this._takeProfitLine = null; this._orderLines = new Map(); this._onChartClickCallbacks = [];
     this._resizeObserver = new ResizeObserver(() => this.resize()); this._resizeObserver.observe(this.container); window.addEventListener('resize', this._onWindowResize);
     try {
-      this.chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
+      this._onVisibleRangeChange = (range) => {
         if (!range || this._revealedMaxTime == null || this._isUserPanning) return;
         if (range.to < this._revealedMaxTime) { if (this._autoFollow) { this._autoFollow = false; this._emitAutoFollowChanged(); } }
         else if (range.to >= this._revealedMaxTime) { if (!this._autoFollow) { this._autoFollow = true; this._emitAutoFollowChanged(); } }
-      });
-      this.chart.subscribeClick((param) => {
+      };
+      this.chart.timeScale().subscribeVisibleTimeRangeChange(this._onVisibleRangeChange);
+      this._onChartLibraryClick = (param) => {
         if (!param || !param.point || !this.series) return;
         const price = this.coordinateToPrice(param.point.y);
         if (price != null && Number.isFinite(price)) this._onChartClickCallbacks.forEach(cb => { try { cb({ price, point: param.point, time: param.time }); } catch (error) { console.warn('[ChartManager] click callback failed', error); } });
-      });
+      };
+      this.chart.subscribeClick(this._onChartLibraryClick);
     } catch (error) { console.warn('[ChartManager] chart subscription setup failed', error); }
   }
 
@@ -78,5 +82,25 @@ export class ChartManager {
   clearTradingLines() { this.tradingOverlay.clearTradingLines(); }
   clear() { this.clearTradingLines(); if (this.series) this.series.setData([]); }
   applyTheme(themeName) { const config = CHART_THEMES[themeName] || CHART_THEMES.dark; if (this.chart) { try { this.chart.applyOptions({ layout: config.layout, grid: config.grid, crosshair: { mode: 1, ...config.crosshair }, timeScale: { borderColor: config.timeScale.borderColor }, rightPriceScale: { borderColor: config.rightPriceScale.borderColor } }); } catch (err) { console.warn('[ChartManager] applyTheme chart options error:', err); } } if (this.series) { try { this.series.applyOptions(config.series); } catch (err) { console.warn('[ChartManager] applyTheme series options error:', err); } } return config; }
-  destroy() { clearTimeout(this._panResetTimer); this._panResetTimer = null; this.clearTradingLines(); window.removeEventListener('resize', this._onWindowResize); this._resizeObserver?.disconnect(); this._resizeObserver = null; this._onChartClickCallbacks = []; this._onAutoFollowChange = null; if (this.chart) { try { this.chart.remove(); } catch (error) { console.warn('[ChartManager] chart destroy failed', error); } } this.chart = null; this.series = null; }
+  destroy() {
+    clearTimeout(this._panResetTimer);
+    this._panResetTimer = null;
+    this.clearTradingLines();
+    window.removeEventListener('resize', this._onWindowResize);
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = null;
+    if (this.chart) {
+      try {
+        if (this._onVisibleRangeChange) this.chart.timeScale().unsubscribeVisibleTimeRangeChange(this._onVisibleRangeChange);
+        if (this._onChartLibraryClick) this.chart.unsubscribeClick(this._onChartLibraryClick);
+      } catch (error) { console.warn('[ChartManager] chart unsubscribe failed', error); }
+      try { this.chart.remove(); } catch (error) { console.warn('[ChartManager] chart destroy failed', error); }
+    }
+    this._onVisibleRangeChange = null;
+    this._onChartLibraryClick = null;
+    this._onChartClickCallbacks = [];
+    this._onAutoFollowChange = null;
+    this.chart = null;
+    this.series = null;
+  }
 }
