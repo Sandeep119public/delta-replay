@@ -8,9 +8,9 @@ export const THEMES = {
 
 export const THEME_NAMES = {
   [THEMES.DARK]: 'Dark Pro',
-  [THEMES.PAPER]: 'Paper Manuscript',
+  [THEMES.PAPER]: 'Paper',
   [THEMES.LIGHT]: 'Clean Light',
-  [THEMES.MIDNIGHT]: 'Midnight OLED',
+  [THEMES.MIDNIGHT]: 'Midnight',
   [THEMES.COLORBLIND]: 'Colorblind Safe',
 };
 

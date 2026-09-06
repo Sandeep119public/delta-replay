@@ -198,8 +198,8 @@ describe('ThemeManager & UI Simplification', () => {
         }),
       }));
       expect(mockSeries.applyOptions).toHaveBeenCalledWith(expect.objectContaining({
-        upColor: '#00ff88',
-        downColor: '#ff3b69',
+        upColor: '#10b981',
+        downColor: '#ef4444',
       }));
 
       manager.applyTheme('light');

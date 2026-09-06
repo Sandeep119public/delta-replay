@@ -41,13 +41,13 @@ export const CHART_THEMES = {
   midnight: {
     layout: { background: { type: ColorType.Solid, color: '#030712' }, textColor: '#64748b' },
     grid: { vertLines: { color: 'rgba(31, 41, 55, 0.4)' }, horzLines: { color: 'rgba(31, 41, 55, 0.4)' } },
-    crosshair: { vertLine: { color: '#374151', labelBackgroundColor: '#00f2fe' }, horzLine: { color: '#374151', labelBackgroundColor: '#00f2fe' } },
+    crosshair: { vertLine: { color: '#374151', labelBackgroundColor: '#0ea5e9' }, horzLine: { color: '#374151', labelBackgroundColor: '#0ea5e9' } },
     timeScale: { borderColor: '#1f2937' },
     rightPriceScale: { borderColor: '#1f2937' },
     series: {
-      upColor: '#00ff88', downColor: '#ff3b69',
-      borderUpColor: '#00ff88', borderDownColor: '#ff3b69',
-      wickUpColor: '#00ff88', wickDownColor: '#ff3b69',
+      upColor: '#10b981', downColor: '#ef4444',
+      borderUpColor: '#10b981', borderDownColor: '#ef4444',
+      wickUpColor: '#10b981', wickDownColor: '#ef4444',
     },
   },
   colorblind: {

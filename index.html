@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/src/viewport-fit.css" />
   <link rel="stylesheet" href="/src/paper-theme.css" />
   <link rel="stylesheet" href="/src/themes.css" />
+  <link rel="stylesheet" href="/src/terminal.css" />
   <link rel="stylesheet" href="/src/animations.css" />
   <link rel="stylesheet" href="/src/pages.css" />
 </head>
@@ -30,7 +31,7 @@
         </div>
       </div>
 
-      <nav class="topbar-center" aria-label="Replay controls">
+      <nav class="topbar-center" aria-label="Dataset setup">
         <!-- Symbol -->
         <div class="selector-group symbol-group">
           <label for="symbol-select">Symbol</label>
@@ -43,27 +44,27 @@
           <select id="timeframe-select" aria-label="Timeframe"></select>
         </div>
 
-        <!-- Replay Start Date Picker -->
+        <!-- Replay Start Date Picker (dataset setup; precise start is picked on the timeline) -->
         <div class="selector-group selector-datetime replay-date-group">
-          <label for="replay-date">Replay From (UTC)</label>
+          <label for="replay-date">Dataset Date (UTC)</label>
           <div class="datetime-group">
-            <input type="date" id="replay-date" aria-label="Replay start date" />
+            <input type="date" id="replay-date" aria-label="Dataset date" />
           </div>
         </div>
 
         <!-- Quick Date Presets -->
         <div class="preset-group">
-          <label>Quick Presets</label>
+          <label>Range</label>
           <div class="preset-chips">
-            <button type="button" class="preset-chip" data-preset="1d" title="Replay from 1 day ago">1D</button>
-            <button type="button" class="preset-chip" data-preset="7d" title="Replay from 7 days ago">7D</button>
-            <button type="button" class="preset-chip" data-preset="now" title="Replay from recent 24h">Live</button>
+            <button type="button" class="preset-chip" data-preset="1d" title="Load ~1 day ago">1D</button>
+            <button type="button" class="preset-chip" data-preset="7d" title="Load ~7 days ago">7D</button>
+            <button type="button" class="preset-chip" data-preset="now" title="Load recent 24h">Live</button>
           </div>
         </div>
 
-        <!-- Primary Start Button -->
+        <!-- Primary Start Button (kept for compat; timeline Start-here is the chart-first entry point) -->
         <div class="header-action-group">
-          <button id="header-start-replay-btn" class="btn btn-primary btn-replay-accent" aria-label="Start replaying from selected date">
+          <button id="header-start-replay-btn" class="btn btn-primary btn-replay-accent" aria-label="Start or resume replay">
             <span class="icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></span> START REPLAY
           </button>
         </div>
@@ -84,13 +85,13 @@
             <button type="button" class="theme-pill active" data-theme="dark" role="radio" aria-checked="true" tabindex="0" title="Dark Pro" aria-label="Dark Pro">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
             </button>
-            <button type="button" class="theme-pill" data-theme="paper" role="radio" aria-checked="false" tabindex="-1" title="Paper Manuscript" aria-label="Paper Manuscript">
+            <button type="button" class="theme-pill" data-theme="paper" role="radio" aria-checked="false" tabindex="-1" title="Paper" aria-label="Paper">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
             </button>
             <button type="button" class="theme-pill" data-theme="light" role="radio" aria-checked="false" tabindex="-1" title="Clean Light" aria-label="Clean Light">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>
             </button>
-            <button type="button" class="theme-pill" data-theme="midnight" role="radio" aria-checked="false" tabindex="-1" title="Midnight OLED" aria-label="Midnight OLED">
+            <button type="button" class="theme-pill" data-theme="midnight" role="radio" aria-checked="false" tabindex="-1" title="Midnight" aria-label="Midnight">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"></path></svg>
             </button>
             <button type="button" class="theme-pill" data-theme="colorblind" role="radio" aria-checked="false" tabindex="-1" title="Colorblind Safe" aria-label="Colorblind Safe">
@@ -99,9 +100,9 @@
           </div>
           <select id="theme-select" class="theme-select-legacy" aria-label="Visual Theme">
             <option value="dark" selected>Dark Pro</option>
-            <option value="paper">Paper Manuscript</option>
+            <option value="paper">Paper</option>
             <option value="light">Clean Light</option>
-            <option value="midnight">Midnight OLED</option>
+            <option value="midnight">Midnight</option>
             <option value="colorblind">Colorblind Safe</option>
           </select>
         </div>
@@ -187,7 +188,8 @@
         <!-- Live Sticky Account Header -->
         <div class="trading-top-summary">
           <div class="trading-header">
-            <h2 class="trading-title"><span class="seal-mark" aria-hidden="true">紙</span> PAPER TRADING</h2>
+            <h2 class="trading-title">SIMULATOR</h2>
+            <span id="pos-state-pill" class="pos-state-pill is-flat">FLAT</span>
             <span id="trading-error" class="trading-error hidden" role="alert"></span>
           </div>
           <div class="equity-hero-bar">
@@ -242,8 +244,12 @@
               </div>
             </div>
 
-            <!-- Order Placement Card -->
-            <div class="order-panel compact-card">
+            <!-- Order Placement Card (state-aware ticket: flat -> entry, in-position -> flatten) -->
+            <div class="order-panel compact-card" id="order-ticket">
+              <div class="ticket-state-row">
+                <span class="card-title">ORDER TICKET</span>
+                <span id="ticket-state-hint" class="ticket-hint">FLAT — pick a size</span>
+              </div>
               <div class="order-type-tabs">
                 <button type="button" class="order-tab active" data-type="MARKET">Market</button>
                 <button type="button" class="order-tab" data-type="LIMIT">Limit</button>
@@ -261,11 +267,13 @@
                   <div class="qty-field-wrap">
                     <label for="trade-qty">Qty</label>
                     <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" aria-label="Trade quantity" />
+                    <span id="qty-notional" class="qty-notional" aria-live="polite"></span>
                   </div>
-                  <div class="qty-presets-compact">
-                    <button type="button" class="qty-chip" data-qty="0.1">0.1</button>
-                    <button type="button" class="qty-chip" data-qty="0.5">0.5</button>
-                    <button type="button" class="qty-chip" data-qty="1">1.0</button>
+                  <div class="qty-presets-compact" role="group" aria-label="Position size as percent of equity">
+                    <button type="button" class="qty-chip" data-size-pct="10" title="10% of equity">10%</button>
+                    <button type="button" class="qty-chip" data-size-pct="25" title="25% of equity">25%</button>
+                    <button type="button" class="qty-chip" data-size-pct="50" title="50% of equity">50%</button>
+                    <button type="button" class="qty-chip" data-size-pct="100" title="Max affordable">MAX</button>
                   </div>
                 </div>
 
@@ -283,7 +291,16 @@
                   <button id="btn-sell" class="btn btn-sell-main" disabled>SELL / SHORT</button>
                 </div>
                 <div class="order-secondary-grid">
-                  <button id="btn-close" class="btn btn-close-pos" disabled>CLOSE POSITION</button>
+                  <button id="btn-close" class="btn btn-close-pos btn-flatten" disabled>CLOSE POSITION</button>
+                </div>
+                <div class="ticket-flatten-summary hidden" id="ticket-flatten-summary">
+                  <div class="flatten-row"><span>Entry</span><span id="flatten-entry" class="num">—</span></div>
+                  <div class="flatten-row"><span>Mark</span><span id="flatten-mark" class="num">—</span></div>
+                  <div class="flatten-row"><span>uPnL</span><span id="flatten-pnl" class="num">—</span></div>
+                </div>
+                <div class="ticket-fills">
+                  <span class="card-title">RECENT FILLS</span>
+                  <div id="ticket-fills-list" class="trades-list trades-mini"><span class="empty-hint">No fills yet</span></div>
                 </div>
               </div>
             </div>
@@ -380,7 +397,9 @@
       </div>
       <div class="timeline-track-wrap">
         <canvas id="timeline-sparkline" class="timeline-sparkline" aria-hidden="true"></canvas>
-        <input type="range" id="timeline-slider" min="0" max="100" value="0" disabled aria-label="Timeline position" />
+        <div id="timeline-markers" class="timeline-markers" aria-hidden="true"></div>
+        <input type="range" id="timeline-slider" min="0" max="100" value="0" disabled aria-label="Timeline position. Scrub to a setup, then Start replay here." />
+        <button id="timeline-start-btn" type="button" class="btn btn-primary btn-timeline-start" disabled title="Start replay from the scrubbed candle">▶ START HERE</button>
         <div class="timeline-meta">
           <div class="timeline-meta-left">
             <span id="start-index-label">Ready to replay</span>
@@ -404,8 +423,8 @@
       </div>
     </section>
 
-    <!-- REPLAY CONTROLS -->
-    <section class="controls-section" aria-label="Replay controls">
+    <!-- REPLAY CONTROLS (slim playback toolbar docked under the timeline) -->
+    <section class="controls-section replay-toolbar" aria-label="Replay playback">
       <div class="controls-row">
         <button id="btn-reset" class="btn" disabled title="R (Reset)" aria-label="Reset replay">RESET</button>
         <button id="btn-play" class="btn" disabled title="Space (Play/Pause)" aria-label="Play">PLAY</button>

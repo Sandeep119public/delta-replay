@@ -1,0 +1,267 @@
+/* ==========================================================================
+   DELTA REPLAY — TERMINAL LAYER
+   Professional trader terminal: variable-driven skeleton, no !important.
+   Loaded LAST so it wins by cascade order + specificity, not overrides.
+   Legacy test-locked rules in themes.css are left untouched.
+   ========================================================================== */
+
+/* ---- 1. Variable skeleton: swap palettes by changing vars only ---- */
+:root {
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Roboto Mono', ui-monospace, monospace;
+  --bg-card: var(--bg-surface, #111114);
+  --text-primary: var(--text, #fafafa);
+  --accent-long: #10b981;
+  --accent-short: #ef4444;
+  --pnl-pos-bg: rgba(16, 185, 129, 0.12);
+  --pnl-neg-bg: rgba(239, 68, 68, 0.12);
+  --warn-bg: rgba(245, 158, 11, 0.12);
+  --terminal-gutter: 12px;
+}
+
+/* Terminal (default dark) palette anchor */
+[data-theme="terminal"],
+[data-theme="dark"] {
+  --bg-card: #13161c;
+  --bg-surface: #13161c;
+  --bg-elevated: #1a1e26;
+  --accent-long: #10b981;
+  --accent-short: #ef4444;
+}
+
+/* ---- 2. Terminal typography: tabular numerics, alignment ---- */
+.num,
+.equity-highlight,
+.pnl-val,
+.stat-val,
+.pos-metric .val,
+.kv span:last-child,
+#timeline-index-label,
+#market-time,
+#market-time-full,
+.progress-panel,
+.capsule-val,
+.capsule-pnl,
+.trade-row span:last-child,
+.qty-notional,
+#ticket-fills-list .trade-row span {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Labels left, numbers right */
+.pos-metric .val,
+.kv span:last-child,
+.stat-val,
+.trade-row span:last-child,
+.flatten-row .num,
+.ticket-fills .num {
+  text-align: right;
+}
+.pos-metric .lbl,
+.kv span:first-child,
+.card-title,
+.equity-caption,
+.pnl-caption {
+  text-align: left;
+}
+
+/* ---- 3. Borderless density: background shifts instead of 1px cards ---- */
+.trading-section .compact-card,
+.trading-section .position-panel,
+.trading-section .order-panel,
+.trading-section .account-details-card,
+.trading-section .performance-card,
+.trading-section .acct-settings-card,
+.trading-section .activity-card {
+  border: none;
+  border-radius: 4px;
+  background: var(--bg-elevated, #1a1e26);
+  box-shadow: none;
+}
+#order-ticket {
+  background: var(--bg-elevated, #1a1e26);
+  padding: var(--terminal-gutter);
+}
+.ticket-state-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.ticket-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.pos-state-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: #27272a;
+  color: var(--text-muted);
+}
+.pos-state-pill.is-long { background: var(--pnl-pos-bg); color: var(--accent-long); }
+.pos-state-pill.is-short { background: var(--pnl-neg-bg); color: var(--accent-short); }
+.trading-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.trading-title {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin: 0;
+}
+
+/* ---- 4. State-aware ticket: FLATTEN hero when in position ---- */
+#order-ticket.is-in-position .order-actions-grid {
+  display: none;
+}
+#order-ticket.is-in-position .order-type-tabs,
+#order-ticket.is-in-position .qty-field-wrap,
+#order-ticket.is-in-position .qty-presets-compact {
+  opacity: 0.45;
+  pointer-events: none;
+}
+#order-ticket .btn-flatten {
+  width: 100%;
+  min-height: 52px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+#order-ticket.is-in-position .btn-flatten:not(:disabled) {
+  background: var(--accent-short);
+  border-color: var(--accent-short);
+  color: #fff;
+}
+#order-ticket.is-flat .ticket-flatten-summary {
+  display: none;
+}
+.ticket-flatten-summary {
+  margin-top: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 8px 10px;
+  display: grid;
+  gap: 2px;
+}
+.flatten-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.ticket-fills {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 8px;
+}
+.trades-mini .trade-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.qty-notional {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  min-height: 14px;
+}
+
+/* ---- 5. PnL peripheral tint (not just text color) ---- */
+.pnl-hero-pill:has(.pnl-pos),
+.pnl-hero-pill.pnl-pos {
+  background: var(--pnl-pos-bg);
+}
+.pnl-hero-pill:has(.pnl-neg),
+.pnl-hero-pill.pnl-neg {
+  background: var(--pnl-neg-bg);
+}
+.pnl-pos { color: var(--accent-long); }
+.pnl-neg { color: var(--accent-short); }
+#chart-pos-pnl.pos { background: var(--pnl-pos-bg); }
+#chart-pos-pnl.neg { background: var(--pnl-neg-bg); }
+
+/* ---- 6. Timeline: 32px hit area, markers, start-here ---- */
+.timeline-track-wrap {
+  position: relative;
+  padding: 6px 12px 4px;
+}
+#timeline-slider {
+  min-height: 32px;
+  height: 32px;
+  width: 100%;
+  cursor: crosshair;
+}
+.timeline-markers {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 2px;
+  height: 8px;
+  pointer-events: none;
+}
+.tl-marker {
+  position: absolute;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+.tl-marker.is-long { background: var(--accent-long); }
+.tl-marker.is-short { background: var(--accent-short); }
+.btn-timeline-start {
+  margin-top: 6px;
+  min-height: 34px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+/* ---- 7. Slim replay toolbar docked under the chart ---- */
+.replay-toolbar .controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  min-height: 44px;
+  background: var(--bg-elevated, #1a1e26);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ---- 9. Paper theme: keep texture, drop calligraphy for market data ---- */
+[data-theme="paper"] .num,
+[data-theme="paper"] .equity-highlight,
+[data-theme="paper"] .pnl-val,
+[data-theme="paper"] .stat-val,
+[data-theme="paper"] .pos-metric .val,
+[data-theme="paper"] .kv span:last-child,
+[data-theme="paper"] .trade-row,
+[data-theme="paper"] #timeline-index-label,
+[data-theme="paper"] .progress-panel {
+  font-family: var(--font-mono);
+}
+/* ---- 8. Financial error severity ---- */
+.error-panel.severity-warn {
+  border-left: 4px solid #f59e0b;
+  background: var(--warn-bg);
+}
+.error-panel.severity-critical {
+  border-left: 4px solid var(--accent-short);
+  background: var(--pnl-neg-bg);
+  box-shadow: 0 0 0 1px var(--accent-short);
+}
+.error-panel.severity-critical .error-panel-title {
+  color: var(--accent-short);
+  font-weight: 800;
+}

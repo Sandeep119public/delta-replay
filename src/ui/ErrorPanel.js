@@ -62,7 +62,7 @@ export class ErrorPanel {
     return category === ErrorCategory.NETWORK || category === ErrorCategory.TIMEOUT || category === ErrorCategory.CORS;
   }
 
-  show(dataError) {
+  show(dataError, { severity = null, pauseReplay = false, onPause = null } = {}) {
     if (!this.container) return;
     if (!dataError) {
       this.hide();
@@ -70,6 +70,12 @@ export class ErrorPanel {
     }
 
     this.currentDataError = dataError;
+    // Severity: warn (data gap) vs critical (liquidation / invalid order / margin).
+    const inferred = ErrorPanel.inferSeverity(dataError);
+    const level = severity || inferred || 'error';
+    this.container.dataset.severity = level;
+    this.container.classList.toggle('severity-warn', level === 'warn');
+    this.container.classList.toggle('severity-critical', level === 'critical');
     if (this.titleEl) this.titleEl.textContent = 'Data Error';
     if (this.contextEl) {
       this.contextEl.classList.add('hidden');
@@ -101,6 +107,20 @@ export class ErrorPanel {
 
     if (this.messageEl) this.messageEl.textContent = msg;
     this.container.classList.remove('hidden');
+
+    if ((level === 'critical' && pauseReplay !== false) || pauseReplay === true) {
+      try { if (typeof onPause === 'function') onPause(); } catch {}
+    }
+  }
+
+  /** Map error content to a financial severity level. */
+  static inferSeverity(dataError) {
+    try {
+      const hay = `${dataError?.title || ''} ${dataError?.userMessage || ''} ${dataError?.message || ''} ${dataError?.code || ''} ${dataError?.category || ''}`.toLowerCase();
+      if (/liquidat|margin|invalid order|insufficient|reject/.test(hay)) return 'critical';
+      if (/gap|missing|hole|stale|partial|no_?data|empty/.test(hay)) return 'warn';
+    } catch {}
+    return 'error';
   }
 
   showGeneric(msg) {
@@ -113,7 +133,11 @@ export class ErrorPanel {
   }
 
   hide() {
-    if (this.container) this.container.classList.add('hidden');
+    if (this.container) {
+      this.container.classList.add('hidden');
+      this.container.classList.remove('severity-warn', 'severity-critical');
+      try { delete this.container.dataset.severity; } catch {}
+    }
     this.currentDataError = null;
   }
 }

@@ -16,6 +16,11 @@ export class Timeline {
     this._total = 0;
     this._onChange = null;
     this._onCommit = null;
+    this._markers = [];
+    try {
+      this.markersEl = typeof document !== 'undefined' ? document.getElementById('timeline-markers') : null;
+      this.startHereBtn = typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null;
+    } catch { this.markersEl = null; this.startHereBtn = null; }
 
     this.slider.addEventListener('input', () => {
       const idx = Number(this.slider.value);
@@ -32,6 +37,35 @@ export class Timeline {
 
   onChange(fn) { this._onChange = fn; }
   onCommit(fn) { this._onCommit = fn; }
+  onStartHere(fn) {
+    this._onStartHere = fn;
+    try {
+      const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
+      if (btn && !btn.dataset.wired) {
+        btn.dataset.wired = '1';
+        btn.addEventListener('click', () => this._onStartHere?.(Number(this.slider.value)));
+      }
+    } catch {}
+  }
+
+  /** Trade markers: green dots for LONG entries, red for SHORT. Index-based. */
+  setMarkers(markers = []) {
+    this._markers = Array.isArray(markers) ? markers : [];
+    this._renderMarkers();
+  }
+
+  _renderMarkers() {
+    try {
+      const el = this.markersEl || (typeof document !== 'undefined' ? document.getElementById('timeline-markers') : null);
+      if (!el) return;
+      if (!this._total || !this._markers.length) { el.innerHTML = ''; return; }
+      el.innerHTML = this._markers.map(m => {
+        const pct = this._total > 1 ? (Math.min(Math.max(0, m.index), this._total - 1) / (this._total - 1)) * 100 : 0;
+        const cls = String(m.side).toUpperCase() === 'SELL' || String(m.side).toUpperCase() === 'SHORT' ? 'is-short' : 'is-long';
+        return `<span class="tl-marker ${cls}" style="left:${pct}%" title="${m.side} @ #${m.index}"></span>`;
+      }).join('');
+    } catch {}
+  }
 
   setTotal(total, candles) {
     this._total = total;
@@ -53,6 +87,11 @@ export class Timeline {
     this.slider.min = 0;
     this.slider.max = total - 1;
     this.slider.value = Math.floor(total * 0.5);
+    try {
+      const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
+      if (btn) btn.disabled = false;
+    } catch {}
+    this._renderMarkers();
     this._updateLabels(Number(this.slider.value));
     // labels for start/end use timestamps only
     if (this._times && this._times.length) {
@@ -84,6 +123,7 @@ export class Timeline {
   _updateLabels(idx) {
     this.indexLabel.textContent = `${idx + 1} / ${this._total > 0 ? this._total : 0}`;
     this._updateProgress(idx);
+    this._renderMarkers();
     const t = this._times?.[idx] ?? this._candles?.[idx]?.time;
     const timeStr = Number.isFinite(t) ? formatTime(t) : '—';
     this.timeLabel.textContent = timeStr;

@@ -71,14 +71,66 @@ export class OrderFormView {
 
   _bindPresets() {
     try {
+      // Legacy fixed-qty chips (kept for compat) + % of equity chips.
       const chips = document.querySelectorAll('.qty-chip');
       chips.forEach(chip => {
         chip.addEventListener('click', () => {
-          if (chip.dataset?.qty) {
+          if (chip.dataset?.sizePct) {
+            this.applyEquityPct(Number(chip.dataset.sizePct));
+          } else if (chip.dataset?.qty) {
             this.setQuantity(chip.dataset.qty);
           }
         });
       });
+      this.qtyInput?.addEventListener('input', () => this.updateNotional());
+    } catch {}
+  }
+
+  /** Current mark price for sizing math (latest candle close). */
+  _markPrice() {
+    try {
+      const c = this.engine?.getLatestCandle?.();
+      const p = Number(c?.close ?? c?.price);
+      return Number.isFinite(p) && p > 0 ? p : null;
+    } catch { return null; }
+  }
+
+  _equity() {
+    try {
+      const snap = this.engine?.getAccountSnapshot?.();
+      const eq = Number(snap?.equity);
+      return Number.isFinite(eq) && eq > 0 ? eq : null;
+    } catch { return null; }
+  }
+
+  /** Size an order as % of equity at the current mark price. */
+  applyEquityPct(pct) {
+    const equity = this._equity();
+    const mark = this._markPrice();
+    if (!Number.isFinite(pct) || pct <= 0) return;
+    if (equity == null || mark == null) {
+      this.onError?.('Load data first — no mark price for sizing');
+      return;
+    }
+    const notional = equity * (pct / 100);
+    const qty = notional / mark;
+    // Round down to 4dp so MAX never exceeds equity on quantized venues.
+    const rounded = Math.max(0.0001, Math.floor(qty * 10000) / 10000);
+    this.setQuantity(String(rounded));
+    this.updateNotional();
+  }
+
+  updateNotional() {
+    try {
+      const el = typeof document !== 'undefined' ? document.getElementById('qty-notional') : null;
+      if (!el) return;
+      const qty = Number(this.qtyInput?.value);
+      const mark = this._markPrice();
+      if (!Number.isFinite(qty) || qty <= 0 || mark == null) { el.textContent = ''; return; }
+      const notional = qty * mark;
+      const equity = this._equity();
+      const pct = equity ? ` · ${((notional / equity) * 100).toFixed(1)}% eq` : '';
+      el.textContent = `≈ $${notional.toLocaleString(undefined, { maximumFractionDigits: 0 })}${pct}`;
     } catch {}
   }
 
@@ -219,5 +271,6 @@ export class OrderFormView {
     const hasMarket = !!this.engine.getLatestCandle?.();
     if (this.buyBtn) this.buyBtn.disabled = !hasMarket;
     if (this.sellBtn) this.sellBtn.disabled = !hasMarket;
+    this.updateNotional();
   }
 }

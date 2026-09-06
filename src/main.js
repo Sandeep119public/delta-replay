@@ -330,6 +330,45 @@ timeline.onCommit((idx) => {
   }
 });
 
+// Chart-first entry point: scrub the timeline, then "Start here".
+timeline.onStartHere((idx) => {
+  const n = Number(idx);
+  if (!Number.isFinite(n) || n < 0) return;
+  appState.setPendingStartIndex(n);
+  controls.setStartIndex(n);
+  try {
+    engine.start(n);
+  } catch (e) {
+    coordinator.showTradingError(e?.message || 'Cannot start replay here');
+  }
+});
+
+// Timeline trade markers: map each closed trade to its entry candle index.
+function refreshTimelineMarkers() {
+  try {
+    const trades = tradingEngine.getTrades?.() || [];
+    if (!trades.length || !candleStore.getCount()) { timeline.setMarkers([]); return; }
+    const markers = [];
+    for (const t of trades) {
+      const ts = t.openedAt ?? t.entryTime ?? t.time;
+      let index = -1;
+      if (Number.isInteger(t.entryIndex)) index = t.entryIndex;
+      else if (Number.isFinite(ts)) {
+        // Nearest candle at/before entry time.
+        const all = candleStore.getAll?.() || [];
+        for (let i = all.length - 1; i >= 0; i--) {
+          if (all[i].time <= ts) { index = i; break; }
+        }
+        if (index < 0) index = 0;
+      }
+      if (index >= 0) markers.push({ index, side: t.side });
+    }
+    timeline.setMarkers(markers);
+  } catch {}
+}
+tradingEngine.on(TradingEvents.TRADE_EXECUTED, refreshTimelineMarkers);
+tradingEngine.on(TradingEvents.POSITION_CLOSED, refreshTimelineMarkers);
+
 chartManager.onAutoFollowChange((isFollow) => {
   controls.setAutoFollow(isFollow);
 });
@@ -419,6 +458,20 @@ if (document.body) {
   document.body.appendChild(personalityWidget.getElement());
 }
 
+// Critical financial errors pause the replay so the trader sees them.
+tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (payload) => {
+  try { commandController.pause(); } catch {}
+  errorPanel.show(
+    { category: 'LIQUIDATION', userMessage: `Position liquidated: ${payload?.symbol || ''} @ ${payload?.liquidationPrice ?? '—'}`, message: 'Position liquidated', code: 'LIQUIDATION', context: {} },
+    { severity: 'critical', onPause: () => { try { commandController.pause(); } catch {} } },
+  );
+});
+tradingEngine.on(TradingEvents.ORDER_REJECTED, (err) => {
+  errorPanel.show(
+    { category: 'ORDER', userMessage: err?.message || 'Order rejected', message: err?.message || 'Order rejected', code: err?.code || 'ORDER_REJECTED', context: {} },
+    { severity: 'critical', pauseReplay: false },
+  );
+});
 // React to closed trades
 const onTradeExecuted = (payload) => {
   const trade = payload?.trade || payload;

@@ -207,5 +207,72 @@ export class TradingPanel {
     this.orderFormView.render();
     this.positionView.render(positions);
     this.tradeLogView.render(trades);
+    this._renderTicketState(positions, trades);
+  }
+
+  /** State-aware order ticket: FLAT shows entry buttons, LONG/SHORT shows FLATTEN hero. */
+  _renderTicketState(positions = [], trades = []) {
+    try {
+      const inPos = positions.length > 0;
+      const p = positions[0];
+      const ticket = document.getElementById('order-ticket');
+      const hint = document.getElementById('ticket-state-hint');
+      const pill = document.getElementById('pos-state-pill');
+      const flatSummary = document.getElementById('ticket-flatten-summary');
+      const fEntry = document.getElementById('flatten-entry');
+      const fMark = document.getElementById('flatten-mark');
+      const fPnl = document.getElementById('flatten-pnl');
+      const actionsGrid = ticket?.querySelector('.order-actions-grid');
+
+      if (ticket) {
+        ticket.classList.toggle('is-flat', !inPos);
+        ticket.classList.toggle('is-in-position', inPos);
+        ticket.classList.toggle(`is-${String(p?.side || 'flat').toLowerCase()}`, true);
+      }
+      if (document.body) {
+        document.body.classList.toggle('has-position', inPos);
+        document.body.classList.toggle('is-flat', !inPos);
+      }
+      if (pill) {
+        pill.textContent = inPos ? p.side : 'FLAT';
+        pill.className = `pos-state-pill ${inPos ? (p.side === 'LONG' ? 'is-long' : 'is-short') : 'is-flat'}`;
+      }
+      if (hint) {
+        hint.textContent = inPos
+          ? `${p.side} ${p.quantity} · uPnL ${Number(p.unrealizedPnL) >= 0 ? '+' : ''}$${Number(p.unrealizedPnL).toFixed(2)}`
+          : 'FLAT — pick a size';
+      }
+      const fmt = (v) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return '—';
+        return `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}`;
+      };
+      if (flatSummary) flatSummary.classList.toggle('hidden', !inPos);
+      if (inPos) {
+        if (fEntry) fEntry.textContent = fmt(p.entryPrice);
+        if (fMark) fMark.textContent = fmt(p.currentPrice);
+        if (fPnl) {
+          fPnl.textContent = `${Number(p.unrealizedPnL) >= 0 ? '+' : ''}${fmt(p.unrealizedPnL).replace('$', '$')}`;
+          fPnl.className = `num ${Number(p.unrealizedPnL) >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
+        }
+      }
+      if (this.closeBtn) {
+        this.closeBtn.textContent = inPos ? `FLATTEN ${p.side} ${p.quantity}` : 'CLOSE POSITION';
+      }
+
+      // Recent fills strip inside the trade tab so position + ticket + fills are visible together.
+      const fillsEl = document.getElementById('ticket-fills-list');
+      if (fillsEl) {
+        if (!trades.length) {
+          fillsEl.innerHTML = '<span class="empty-hint">No fills yet</span>';
+        } else {
+          fillsEl.innerHTML = trades.slice(-3).reverse().map(t => {
+            const net = t.netPnL ?? t.realizedPnL ?? 0;
+            const cls = net >= 0 ? 'pnl-pos' : 'pnl-neg';
+            return `<div class="trade-row"><span class="num">${t.symbol} ${t.side} ${t.quantity}</span><span class="num ${cls}">${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}</span></div>`;
+          }).join('');
+        }
+      }
+    } catch {}
   }
 }
