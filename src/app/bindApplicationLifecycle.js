@@ -1,4 +1,4 @@
-export function bindApplicationLifecycle({ unbindKeyboardShortcuts, coordinator, engine, candleCache, resources = [] }) {
+export function bindApplicationLifecycle({ unbindKeyboardShortcuts, coordinator, engine, candleCache, resources = [], extraCleanup = [] }) {
   let destroyed = false;
   const destroy = () => {
     if (destroyed) return;
@@ -7,6 +7,7 @@ export function bindApplicationLifecycle({ unbindKeyboardShortcuts, coordinator,
       ['keyboard cleanup', () => unbindKeyboardShortcuts?.()],
       ['coordinator cleanup', () => coordinator.destroy?.()],
       ['resource cleanup', () => resources.forEach((resource) => resource?.destroy?.())],
+      ['extra cleanup', () => extraCleanup.forEach((cleanupFn) => cleanupFn?.())],
       ['engine cleanup', () => engine.destroy?.()],
       ['cache cleanup', () => candleCache.close?.()],
     ];
