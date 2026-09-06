@@ -38,7 +38,16 @@ export class Timeline {
     this._onStartHereClick = null;
   }
 
-  destroy() { this.slider?.removeEventListener?.('input', this._onInput); this.slider?.removeEventListener?.('change', this._onCommitEvent); if (this.startHereBtn && this._onStartHereClick) this.startHereBtn.removeEventListener?.('click', this._onStartHereClick); this._onChange = this._onCommit = this._onStartHere = null; }
+  destroy() {
+    this.slider?.removeEventListener?.('input', this._onInput);
+    this.slider?.removeEventListener?.('change', this._onCommitEvent);
+    if (this.startHereBtn && this._onStartHereClick) {
+      this.startHereBtn.removeEventListener?.('click', this._onStartHereClick);
+      delete this.startHereBtn.dataset.wired;
+    }
+    this._onChange = this._onCommit = this._onStartHere = null;
+    this._onStartHereClick = null;
+  }
 
   onChange(fn) { this._onChange = fn; }
   onCommit(fn) { this._onCommit = fn; }
