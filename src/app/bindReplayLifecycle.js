@@ -6,7 +6,7 @@ export function bindReplayLifecycle({ engine, appState, candleStore, timeline, m
     if (candle) chartManager.setRevealedMax(candle.time);
   };
   const subscriptions = [];
-  const on = (event, handler) => { const unsubscribe = on(event, handler); if (typeof unsubscribe === 'function') subscriptions.push(unsubscribe); };
+  const on = (event, handler) => { const unsubscribe = engine.on(event, handler); if (typeof unsubscribe === 'function') subscriptions.push(unsubscribe); };
   on(ReplayEvents.STATE_CHANGED, (state) => {
     appState.setReplayState(state);
     if (state.currentIndex >= 0) timeline.setPosition(state.currentIndex);
