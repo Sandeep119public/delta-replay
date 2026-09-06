@@ -6,7 +6,7 @@ export function bindApplicationLifecycle({ unbindKeyboardShortcuts, coordinator,
     const cleanup = [
       ['keyboard cleanup', () => unbindKeyboardShortcuts?.()],
       ['coordinator cleanup', () => coordinator.destroy?.()],
-      ['resource cleanup', () => resources.forEach((resource) => resource?.destroy?.())],
+      ['resource cleanup', () => resources.forEach((resource) => { if (typeof resource === 'function') resource(); else resource?.destroy?.(); })],
       ['engine cleanup', () => engine.destroy?.()],
       ['cache cleanup', () => candleCache.close?.()],
     ];
