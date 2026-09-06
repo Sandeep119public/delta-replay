@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'fs';
 import { ThemeManager, THEMES, THEME_NAMES } from '../src/ui/ThemeManager.js';
 import { ChartManager, CHART_THEMES } from '../src/chart/ChartManager.js';
+import { Timeline } from '../src/ui/Timeline.js';
 
 function createMockElement(initial = {}) {
   const listeners = {};
@@ -144,12 +145,26 @@ describe('ThemeManager & UI Simplification', () => {
     const themesCss = fs.readFileSync('src/themes.css', 'utf-8');
     const html = fs.readFileSync('index.html', 'utf-8');
 
-    it('hides phase-badge, shortcuts-hint, and mode-banner to declutter interface', () => {
+    it('hides phase-badge, shortcuts-hint, and replay-status to declutter interface', () => {
       expect(themesCss).toMatch(/\.phase-badge\s*\{[\s\S]*?display:\s*none\s*!important/);
       expect(themesCss).toMatch(/\.shortcuts-hint[\s\S]*?display:\s*none\s*!important/);
-      expect(themesCss).toMatch(/#mode-banner\s*\{[\s\S]*?display:\s*none\s*!important/);
-      expect(themesCss).toMatch(/\.position-panel\.is-empty\s*\{[\s\S]*?display:\s*none\s*!important/);
       expect(themesCss).toMatch(/\.replay-status[\s\S]*?display:\s*none\s*!important/);
+    });
+
+    it('keeps a slim mode-banner status bar instead of hiding progress', () => {
+      // Banner stays visible as a slim bar; only the bulky indicator text is hidden
+      expect(themesCss).toMatch(/#mode-banner\s*\{[\s\S]*?display:\s*flex\s*!important/);
+      expect(themesCss).toMatch(/#mode-banner\s+#mode-indicator\s*\{[\s\S]*?display:\s*none\s*!important/);
+      // Progress panel is styled as a mini status bar
+      expect(themesCss).toMatch(/\.progress-panel:not\(\.hidden\)\s*\{[\s\S]*?display:\s*flex\s*!important/);
+    });
+
+    it('shows a graceful empty position state instead of hiding the card', () => {
+      // Card stays mounted; only the metrics grid is hidden and inputs dimmed
+      expect(themesCss).toMatch(/\.position-panel\.is-empty\s+\.pos-compact-grid\s*\{[\s\S]*?display:\s*none\s*!important/);
+      expect(themesCss).toMatch(/\.position-panel\.is-empty\s+\.risk-inputs-row input\s*\{[\s\S]*?opacity:\s*0\.5/);
+      // The old aggressive whole-card hide must be gone
+      expect(themesCss).not.toMatch(/\.position-panel\.is-empty\s*\{[\s\S]*?display:\s*none\s*!important/);
     });
 
     it('streamlines redundant UI options across presets, capital, and quantity', () => {
@@ -183,6 +198,43 @@ describe('ThemeManager & UI Simplification', () => {
       expect(html).toMatch(/value="paper"/);
       expect(html).toMatch(/value="light"/);
       expect(html).toMatch(/value="midnight"/);
+    });
+
+    it('index.html exposes a segmented theme pill switcher', () => {
+      expect(html).toMatch(/class="theme-pills"/);
+      expect(html).toMatch(/class="theme-pill/);
+      expect(html).toMatch(/data-theme="dark"/);
+      expect(html).toMatch(/data-theme="paper"/);
+      expect(html).toMatch(/data-theme="light"/);
+      expect(html).toMatch(/data-theme="midnight"/);
+    });
+
+    it('timeline slider has a visual progress fill driven by --timeline-progress', () => {
+      const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
+      expect(baseCss).toMatch(/--timeline-progress/);
+      expect(baseCss).toMatch(/::-webkit-slider-runnable-track/);
+      expect(baseCss).toMatch(/::-moz-range-track/);
+    });
+
+    it('Timeline publishes replay progress to --timeline-progress', () => {
+      const sliderEl = createMockElement({ value: '0' });
+      sliderEl.min = '0';
+      sliderEl.style = { setProperty: vi.fn() };
+      const mk = (t) => createMockElement({ textContent: t ?? '' });
+      const timeline = new Timeline({
+        sliderEl,
+        startLabelEl: mk(),
+        currentLabelEl: mk(),
+        endLabelEl: mk(),
+        indexLabelEl: mk(),
+        timeLabelEl: mk(),
+        startIndexLabelEl: mk(),
+      });
+      timeline.setTotal(100, Array.from({ length: 100 }, (_, i) => ({ time: i })));
+      timeline.setPosition(49);
+      const calls = sliderEl.style.setProperty.mock.calls.filter(([k]) => k === '--timeline-progress');
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls[calls.length - 1][1]).toMatch(/%/);
     });
   });
 });

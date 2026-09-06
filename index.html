@@ -80,8 +80,13 @@
 
       <div class="topbar-right">
         <div class="theme-selector-group">
-          <label for="theme-select" class="theme-label" title="Switch Theme"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h2.36c2.583 0 4.65-2.066 4.65-4.65C21.95 6.167 17.5 2 12 2z"/></svg></label>
-          <select id="theme-select" aria-label="Visual Theme">
+          <div class="theme-pills" role="radiogroup" aria-label="Visual Theme">
+            <button type="button" class="theme-pill active" data-theme="dark" role="radio" aria-checked="true" title="Dark Pro">🌙</button>
+            <button type="button" class="theme-pill" data-theme="paper" role="radio" aria-checked="false" title="Paper Manuscript">📜</button>
+            <button type="button" class="theme-pill" data-theme="light" role="radio" aria-checked="false" title="Clean Light">☀️</button>
+            <button type="button" class="theme-pill" data-theme="midnight" role="radio" aria-checked="false" title="Midnight OLED">🌌</button>
+          </div>
+          <select id="theme-select" class="theme-select-legacy" aria-label="Visual Theme">
             <option value="dark" selected>Dark Pro</option>
             <option value="paper">Paper Manuscript</option>
             <option value="light">Clean Light</option>

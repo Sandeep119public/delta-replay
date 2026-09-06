@@ -31,6 +31,7 @@ export class ThemeManager {
     this.currentTheme = this._loadSavedTheme() || this.defaultTheme;
 
     this._bindSelect();
+    this._bindPills();
     this.applyTheme(this.currentTheme, false);
   }
 
@@ -63,6 +64,39 @@ export class ThemeManager {
     });
   }
 
+  _bindPills() {
+    try {
+      if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+      const pills = document.querySelectorAll('.theme-pill');
+      if (!pills || !pills.length) return;
+      pills.forEach((pill) => {
+        if (typeof pill.addEventListener !== 'function') return;
+        pill.addEventListener('click', () => {
+          const theme = pill.getAttribute ? pill.getAttribute('data-theme') : pill.dataset?.theme;
+          if (theme) this.applyTheme(theme, true);
+        });
+      });
+    } catch {}
+  }
+
+  _syncPills(theme) {
+    try {
+      if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+      const pills = document.querySelectorAll('.theme-pill');
+      if (!pills || !pills.length) return;
+      pills.forEach((pill) => {
+        const name = pill.getAttribute ? pill.getAttribute('data-theme') : pill.dataset?.theme;
+        const isActive = name === theme;
+        if (pill.classList && typeof pill.classList.toggle === 'function') {
+          pill.classList.toggle('active', isActive);
+        }
+        if (typeof pill.setAttribute === 'function') {
+          pill.setAttribute('aria-checked', isActive ? 'true' : 'false');
+        }
+      });
+    } catch {}
+  }
+
   getTheme() {
     return this.currentTheme;
   }
@@ -83,6 +117,8 @@ export class ThemeManager {
     if (this.selectEl && this.selectEl.value !== theme) {
       this.selectEl.value = theme;
     }
+
+    this._syncPills(theme);
 
     if (save) {
       this._saveTheme(theme);

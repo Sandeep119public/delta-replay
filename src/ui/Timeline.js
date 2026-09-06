@@ -67,6 +67,12 @@ export class Timeline {
     this._updateLabels(index);
   }
 
+  _updateProgress(idx) {
+    if (!this.slider || !this.slider.style || typeof this.slider.style.setProperty !== 'function') return;
+    const pct = this._total > 1 ? (idx / (this._total - 1)) * 100 : 0;
+    this.slider.style.setProperty('--timeline-progress', `${pct}%`);
+  }
+
   getSelectedIndex() {
     return Number(this.slider.value);
   }
@@ -77,6 +83,7 @@ export class Timeline {
 
   _updateLabels(idx) {
     this.indexLabel.textContent = `${idx + 1} / ${this._total > 0 ? this._total : 0}`;
+    this._updateProgress(idx);
     const t = this._times?.[idx] ?? this._candles?.[idx]?.time;
     const timeStr = Number.isFinite(t) ? formatTime(t) : '—';
     this.timeLabel.textContent = timeStr;

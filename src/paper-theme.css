@@ -1021,7 +1021,7 @@ button, input, select {
     font-size: 11px !important;
   }
   .topbar-right { display: none !important; }
-  .mode-banner { display: none !important; }
+  /* Slim status bar inherited from themes.css — keep progress visible on mobile */
 
   .main-layout {
     min-height: 0 !important;
@@ -1093,7 +1093,8 @@ button, input, select {
     gap: 6px !important;
   }
 
-  .position-panel.is-empty { display: none !important; }
+  /* Graceful empty state inherited from themes.css — keep card visible */
+  .position-panel.is-empty .pos-compact-grid { display: none !important; }
   .position-panel:not(.is-empty) {
     flex: 0 0 auto !important;
     margin: 0 !important;

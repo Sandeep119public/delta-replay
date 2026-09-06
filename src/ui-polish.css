@@ -735,8 +735,8 @@ input:disabled {
 .risk-inputs-row input { flex: 1; }
 .risk-inputs-row button { flex-shrink: 0; }
 
-/* Order Panel Polish */
-.order-type-tabs { display: flex; gap: var(--sp-2, 8px); margin-bottom: var(--sp-3, 12px); }
+/* Order Panel Polish — segmented control: tabs touch inside a recessed container */
+.order-type-tabs { display: flex; gap: 0; padding: 3px; margin-bottom: var(--sp-3, 12px); }
 .order-type-tabs button { flex: 1; }
 .order-form-compact { display: flex; flex-direction: column; gap: var(--sp-3, 12px); }
 .order-row-compact { display: flex; flex-direction: column; gap: var(--sp-2, 8px); }

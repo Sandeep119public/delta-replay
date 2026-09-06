@@ -47,9 +47,40 @@
   display: none !important;
 }
 
-/* Hide redundant banner to maximize chart height */
+/* Slim replay status bar: keeps progress + market time visible without bulk */
 #mode-banner {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 2px 16px !important;
+  min-height: 0 !important;
+  background: var(--bg-elevated) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  margin: 0 !important;
+}
+#mode-banner #mode-indicator {
   display: none !important;
+}
+#mode-banner .progress-panel:not(.hidden) {
+  display: flex !important;
+  gap: 12px;
+  align-items: center;
+  padding: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+}
+#mode-banner .market-time-full {
+  margin-left: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 /* Hide secondary time picker by default, focusing on date selection */
@@ -81,9 +112,20 @@
   display: none !important;
 }
 
-/* Hide active position card completely when empty */
-.position-panel.is-empty {
+/* Graceful empty position state: keep card + risk controls visible, dim inputs */
+.position-panel.is-empty .pos-compact-grid {
   display: none !important;
+}
+.position-panel.is-empty .card-header-row .card-title::after {
+  content: " (None)";
+  font-weight: 400;
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.position-panel.is-empty .risk-inputs-row input {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Clean up header quick presets */
@@ -310,9 +352,10 @@ body[data-theme="dark"] .order-tab,
 html[data-theme="dark"] .order-tab.active,
 body[data-theme="dark"] .order-tab.active,
 [data-theme="dark"] .order-tab.active {
-  background: rgba(59, 130, 246, 0.15) !important;
-  color: #3b82f6 !important;
+  background: #3b82f6 !important;
+  color: #ffffff !important;
   border-color: #3b82f6 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
 }
 
 html[data-theme="dark"] .btn-buy-main,
@@ -703,8 +746,9 @@ body[data-theme="light"] .order-tab,
 html[data-theme="light"] .order-tab.active,
 body[data-theme="light"] .order-tab.active,
 [data-theme="light"] .order-tab.active {
-  background: #ffffff !important;
-  color: #0f172a !important;
+  background: #0f172a !important;
+  color: #ffffff !important;
+  border-color: #0f172a !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
 }
 
@@ -987,8 +1031,9 @@ body[data-theme="midnight"] .order-tab,
 html[data-theme="midnight"] .order-tab.active,
 body[data-theme="midnight"] .order-tab.active,
 [data-theme="midnight"] .order-tab.active {
-  background: #0a0a0a !important;
-  color: #06b6d4 !important;
+  background: #06b6d4 !important;
+  color: #000000 !important;
+  border-color: #06b6d4 !important;
 }
 
 /* Neon glow effects exclusive to Midnight theme */
