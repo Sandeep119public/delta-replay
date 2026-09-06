@@ -2,7 +2,7 @@ import { TradingEvents } from '../trading/TradingEvents.js';
 
 export function bindTradingEvents({ tradingEngine, commandController, errorPanel }) {
   const subscriptions = [];
-  const on = (event, handler) => { const unsubscribe = on(event, handler); if (typeof unsubscribe === 'function') subscriptions.push(unsubscribe); };
+  const on = (event, handler) => { const unsubscribe = tradingEngine.on(event, handler); if (typeof unsubscribe === 'function') subscriptions.push(unsubscribe); };
   on(TradingEvents.POSITION_LIQUIDATED, (payload) => {
     try { commandController.pause(); } catch (error) { console.warn('[Replay] liquidation pause failed', error); }
     errorPanel.show(
