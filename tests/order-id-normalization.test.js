@@ -16,4 +16,13 @@ describe('Order id normalization', () => {
     expect(engine.getOrder(id)?.id).toBe(String(id));
     expect(engine.getOrder(String(id))?.id).toBe(String(id));
   });
+
+  it('removes a pending order when cancelled using a numeric id', () => {
+    const engine = new PaperTradingEngine();
+    const order = new Order({ id: 7, symbol: 'BTCUSD', side: 'LONG', type: 'LIMIT', quantity: 1, price: 100, status: 'PENDING' });
+    engine._orders.set(order.id, order);
+    engine._pendingOrderIds.push(order.id);
+    engine.cancelOrder(7);
+    expect(engine._pendingOrderIds).not.toContain(order.id);
+  });
 });
