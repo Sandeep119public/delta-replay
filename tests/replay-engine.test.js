@@ -144,6 +144,17 @@ describe('ReplayEngine', () => {
     expect(e.getState().status).toBe(ReplayStatus.ENDED);
   });
 
+  it('seek is navigation-only and does not emit a market candle', () => {
+    const e = new ReplayEngine();
+    e.load(makeCandles(10));
+    e.start(2);
+    let marketCandles = 0;
+    e.on('marketCandle', () => marketCandles++);
+    e.seek(6);
+    expect(e.getState().currentIndex).toBe(6);
+    expect(marketCandles).toBe(0);
+  });
+
   it('reset restores to startIndex', () => {
     const e = new ReplayEngine();
     e.load(makeCandles(10));
