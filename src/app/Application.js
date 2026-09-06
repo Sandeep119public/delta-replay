@@ -83,7 +83,7 @@ export function createApplication() {
 
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts, coordinator, engine, candleCache,
-    resources: [timelineBindings, commandController, mobileDrawer, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
+    resources: [timelineBindings, commandController, mobileDrawer, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
   });
 
   return {
