@@ -209,7 +209,10 @@ export class ChartManager {
   setAutoFollow(v) { this._autoFollow = !!v; this._emitAutoFollowChanged(); if (this._autoFollow) this.followCurrent(); }
   isAutoFollow() { return this._autoFollow; }
   _emitAutoFollowChanged() { try { if (this._onAutoFollowChange) this._onAutoFollowChange(this._autoFollow); } catch {} }
-  onAutoFollowChange(cb) { this._onAutoFollowChange = cb; }
+  onAutoFollowChange(cb) {
+    this._onAutoFollowChange = typeof cb === 'function' ? cb : null;
+    return () => { if (this._onAutoFollowChange === cb) this._onAutoFollowChange = null; };
+  }
   scrollToTime(unixSec) { if (!this.chart || !Number.isFinite(unixSec)) return; try { const timeScale = this.chart.timeScale(); const coord = timeScale.timeToCoordinate(unixSec); if (coord !== null && Number.isFinite(coord)) { const logical = timeScale.coordinateToLogical(coord); if (logical !== null && Number.isFinite(logical)) { timeScale.scrollToPosition(logical, false); return; } } timeScale.scrollToPosition(3, false); } catch { try { this.chart.timeScale().scrollToPosition(3, false); } catch {} } }
   _schedulePanReset() {
     if (this._panResetTimer) clearTimeout(this._panResetTimer);
