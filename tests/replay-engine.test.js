@@ -144,6 +144,15 @@ describe('ReplayEngine', () => {
     expect(e.getState().status).toBe(ReplayStatus.ENDED);
   });
 
+  it('seeking before start does not redefine the replay start index', () => {
+    const e = new ReplayEngine();
+    e.load(makeCandles(10));
+    e.seek(4);
+    expect(e.getState().startIndex).toBe(-1);
+    e.start(2);
+    expect(e.getState().startIndex).toBe(2);
+  });
+
   it('seek is navigation-only and does not emit a market candle', () => {
     const e = new ReplayEngine();
     e.load(makeCandles(10));
