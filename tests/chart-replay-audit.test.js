@@ -45,6 +45,20 @@ describe('Chart and Replay Deep Audit Fixes', () => {
     });
   });
 
+  describe('ChartManager click subscription lifecycle', () => {
+    it('removes a callback when its disposer is called', () => {
+      const cm = Object.create(ChartManager.prototype);
+      cm._onChartClickCallbacks = [];
+      const callback = vi.fn();
+      const dispose = cm.onChartClick(callback);
+      expect(cm._onChartClickCallbacks).toContain(callback);
+      dispose();
+      expect(cm._onChartClickCallbacks).not.toContain(callback);
+      dispose();
+      expect(cm._onChartClickCallbacks).toHaveLength(0);
+    });
+  });
+
   describe('ReplayControls speed selection in READY state', () => {
     it('enables speed selection when data is loaded in READY state', () => {
       const dom = makeMockDOM();
