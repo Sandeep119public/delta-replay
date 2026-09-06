@@ -22,6 +22,12 @@ export class CandleCache {
     this.enableIDB = Boolean(enableIDB && typeof indexedDB !== 'undefined');
     this._db = null;
     this._version = CACHE_VERSION;
+    this._persistChain = Promise.resolve();
+    this._destroyed = false;
+  }
+
+  _assertAlive() {
+    if (this._destroyed) throw new Error('CandleCache has been closed');
   }
 
   _key(symbol, timeframe, { venue = 'DEFAULT', gridOrigin = 0 } = {}) {
@@ -37,9 +43,7 @@ export class CandleCache {
   _lruTouch(key, entry) {
     this._memory.delete(key);
     this._memory.set(key, entry);
-    while (this._memory.size > this.maxMemory) {
-      this._memory.delete(this._memory.keys().next().value);
-    }
+    while (this._memory.size > this.maxMemory) this._memory.delete(this._memory.keys().next().value);
   }
 
   _computeMissing(requestedFrom, requestedTo, cachedIntervals = [], timeframeSec = null) {
@@ -57,6 +61,7 @@ export class CandleCache {
   }
 
   get(symbol, timeframe, from, to, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
+    this._assertAlive();
     const effectiveGridOrigin = gridOrigin ?? 0;
     const key = this._key(symbol, timeframe, { venue, gridOrigin: effectiveGridOrigin });
     const entry = this._memory.get(key);
@@ -68,40 +73,32 @@ export class CandleCache {
       this.invalidate(symbol, timeframe, { venue, gridOrigin: effectiveGridOrigin });
       return { hit: false, candles: [], missing: [{ from, to }], intervals: [] };
     }
-
     const canonical = entry.candles.filter(c => this._isCanonicalCandle(c));
     if (canonical.length !== entry.candles.length) entry.candles = canonical;
-
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.timeframeSec = tf;
     const missing = this._computeMissing(from, to, entry.intervals, tf);
     const candles = canonical.filter(c => c.time >= from && c.time <= to).map(c => ({ ...c }));
     this._lruTouch(key, entry);
-
-    return {
-      hit: missing.length === 0,
-      candles,
-      missing,
-      intervals: entry.intervals.map(iv => ({ ...iv })),
-    };
+    return { hit: missing.length === 0, candles, missing, intervals: entry.intervals.map(iv => ({ ...iv })) };
   }
 
   invalidate(symbol, timeframe, { venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    this._assertAlive();
     const key = this._key(symbol, timeframe, { venue, gridOrigin });
     this._memory.delete(key);
-    if (this.enableIDB) this._deleteIDBEntry(key).catch(() => {});
+    if (this.enableIDB) this._enqueuePersist(() => this._deleteIDBEntry(key));
   }
 
   replace(symbol, timeframe, candles = [], { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
+    this._assertAlive();
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec);
     const origin = Number.isFinite(gridOrigin) ? gridOrigin : null;
     const canonical = (Array.isArray(candles) ? candles : [])
       .filter(c => this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0))
       .map(c => ({ ...c }))
       .sort((a, b) => a.time - b.time);
-
     const truthfulIntervals = CandleCache.intervalsFromCandles(canonical, tf);
-
     const entry = {
       candles: canonical,
       intervals: truthfulIntervals,
@@ -113,11 +110,12 @@ export class CandleCache {
     };
     const key = this._key(symbol, timeframe, { venue, gridOrigin: gridOrigin ?? 0 });
     this._lruTouch(key, entry);
-    this._persistIDB(key, entry).catch(() => {});
+    this._enqueuePersist(() => this._persistIDB(key, entry));
     return entry;
   }
 
   repairIntervals(symbol, timeframe, { timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    this._assertAlive();
     const key = this._key(symbol, timeframe, { venue, gridOrigin });
     const entry = this._memory.get(key);
     if (!entry) return;
@@ -127,59 +125,44 @@ export class CandleCache {
     entry.ts = Date.now();
     entry.version = CACHE_VERSION;
     this._lruTouch(key, entry);
-    this._persistIDB(key, entry).catch(() => {});
+    this._enqueuePersist(() => this._persistIDB(key, entry));
   }
 
   set(symbol, timeframe, from, to, candles = [], { timeframeSec = null, venue = 'DEFAULT', gridOrigin = null } = {}) {
+    this._assertAlive();
     const effectiveGridOrigin = gridOrigin ?? 0;
     const key = this._key(symbol, timeframe, { venue, gridOrigin: effectiveGridOrigin });
     const entry = this._memory.get(key) ?? {
-      candles: [],
-      intervals: [],
-      ts: Date.now(),
-      version: CACHE_VERSION,
-      timeframeSec: null,
-      venue,
-      gridOrigin: effectiveGridOrigin,
+      candles: [], intervals: [], ts: Date.now(), version: CACHE_VERSION, timeframeSec: null, venue, gridOrigin: effectiveGridOrigin,
     };
-
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, entry);
     entry.timeframeSec = tf;
     const origin = Number.isFinite(gridOrigin) ? gridOrigin : null;
-
     const byTime = new Map();
     for (const c of entry.candles) {
-      if (this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0)) {
-        byTime.set(c.time, { ...c });
-      }
+      if (this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0)) byTime.set(c.time, { ...c });
     }
     for (const c of candles) {
-      if (this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0)) {
-        byTime.set(c.time, { ...c });
-      }
+      if (this._isCanonicalCandle(c) && (origin === null || !tf || (c.time - origin) % tf === 0)) byTime.set(c.time, { ...c });
     }
-
     entry.candles = [...byTime.values()].sort((a, b) => a.time - b.time);
     entry.intervals = CandleCache.intervalsFromCandles(entry.candles, tf);
     entry.version = CACHE_VERSION;
     entry.ts = Date.now();
-
     this._lruTouch(key, entry);
-    this._persistIDB(key, entry).catch(() => {});
+    this._enqueuePersist(() => this._persistIDB(key, entry));
     return entry;
   }
 
   reconcile(symbol, timeframe, { from, to, candles = [], timeframeSec = null, venue = 'DEFAULT', gridOrigin = 0, halfOpen = false } = {}) {
-    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) {
-      throw new Error('reconcile requires a valid from/to range');
-    }
+    this._assertAlive();
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) throw new Error('reconcile requires a valid from/to range');
     const key = this._key(symbol, timeframe, { venue, gridOrigin });
     const existing = this._memory.get(key);
     const tf = this._getTimeframeSeconds(timeframe, timeframeSec, existing);
     if (!Number.isFinite(tf) || tf <= 0) throw new Error(`Invalid timeframe seconds for ${timeframe}`);
     const origin = Number.isFinite(gridOrigin) ? gridOrigin : 0;
     const inRange = (time) => halfOpen ? (time >= from && time < to) : (time >= from && time <= to);
-
     const byTime = new Map();
     for (const c of existing?.candles ?? []) {
       if (!this._isCanonicalCandle(c)) continue;
@@ -190,74 +173,72 @@ export class CandleCache {
       if ((c.time - origin) % tf !== 0 || !inRange(c.time)) continue;
       byTime.set(c.time, { ...c });
     }
-
     const mergedCandles = [...byTime.values()].sort((a, b) => a.time - b.time);
     const entry = {
       candles: mergedCandles,
       intervals: CandleCache.intervalsFromCandles(mergedCandles, tf),
-      timeframeSec: tf,
-      ts: Date.now(),
-      version: CACHE_VERSION,
-      venue,
-      gridOrigin: origin,
+      timeframeSec: tf, ts: Date.now(), version: CACHE_VERSION, venue, gridOrigin: origin,
     };
     this._lruTouch(key, entry);
-    this._persistIDB(key, entry).catch(() => {});
+    this._enqueuePersist(() => this._persistIDB(key, entry));
     return entry;
   }
 
-  static intervalsFromCandles(candles, timeframeSec) {
-    return intervalsFromCandles(candles, timeframeSec);
-  }
-
-  _mergeIntervals(intervals, timeframeSec = 1) {
-    return mergeGridIntervals(intervals, timeframeSec);
-  }
+  static intervalsFromCandles(candles, timeframeSec) { return intervalsFromCandles(candles, timeframeSec); }
+  _mergeIntervals(intervals, timeframeSec = 1) { return mergeGridIntervals(intervals, timeframeSec); }
 
   _isCanonicalCandle(c) {
-    return (
-      Boolean(c) &&
-      Number.isFinite(c.time) &&
-      c.time >= 0 &&
-      Number.isFinite(c.open) &&
-      Number.isFinite(c.high) &&
-      Number.isFinite(c.low) &&
-      Number.isFinite(c.close) &&
-      Number.isFinite(c.volume) &&
-      c.volume >= 0
-    );
+    return Boolean(c) && Number.isFinite(c.time) && c.time >= 0 && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close) && Number.isFinite(c.volume) && c.volume >= 0;
   }
 
-  clear() {
+  async clear() {
+    this._assertAlive();
     this._memory.clear();
-    if (this.enableIDB) {
-      const clearPersisted = async () => {
-        try {
-          const db = await this._openIDB();
-          if (!db) return;
-          db.transaction('candles', 'readwrite').objectStore('candles').clear();
-        } catch {}
-      };
-      clearPersisted();
+    if (this.enableIDB) await this._enqueuePersist(async () => {
+      const db = await this._openIDB();
+      if (!db) return;
+      await this._request(db.transaction('candles', 'readwrite').objectStore('candles').clear());
+    });
+  }
+
+  async persist() {
+    this._assertAlive();
+    await this._persistChain;
+  }
+
+  sync() { return this.persist(); }
+
+  close() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    this._memory.clear();
+    this._persistChain = Promise.resolve();
+    if (this._db) {
+      try { this._db.close(); } catch {}
+      this._db = null;
     }
   }
 
+  destroy() { this.close(); }
+
   async _openIDB() {
-    if (!this.enableIDB) return null;
+    if (!this.enableIDB || this._destroyed) return null;
     if (this._db) return this._db;
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this._version);
       request.onupgradeneeded = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains('candles')) {
-          db.createObjectStore('candles');
-        } else {
-          try {
-            request.transaction.objectStore('candles').clear();
-          } catch {}
+        if (!db.objectStoreNames.contains('candles')) db.createObjectStore('candles');
+        else {
+          try { request.transaction.objectStore('candles').clear(); } catch {}
         }
       };
       request.onsuccess = () => {
+        if (this._destroyed) {
+          try { request.result.close(); } catch {}
+          resolve(null);
+          return;
+        }
         this._db = request.result;
         resolve(this._db);
       };
@@ -265,73 +246,60 @@ export class CandleCache {
     });
   }
 
+  _request(request) {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error('IndexedDB request blocked'));
+    });
+  }
+
+  _enqueuePersist(operation) {
+    const run = this._persistChain.then(() => operation());
+    this._persistChain = run.catch(() => {});
+    return run;
+  }
+
   async _persistIDB(key, entry) {
-    try {
-      const db = await this._openIDB();
-      if (!db) return;
-      db.transaction('candles', 'readwrite').objectStore('candles').put(
-        {
-          key,
-          candles: entry.candles,
-          intervals: entry.intervals,
-          timeframeSec: entry.timeframeSec,
-          ts: entry.ts,
-          version: CACHE_VERSION,
-        },
-        key
-      );
-    } catch {}
+    const db = await this._openIDB();
+    if (!db) return;
+    await this._request(db.transaction('candles', 'readwrite').objectStore('candles').put({
+      key,
+      candles: entry.candles,
+      intervals: entry.intervals,
+      timeframeSec: entry.timeframeSec,
+      ts: entry.ts,
+      version: CACHE_VERSION,
+    }, key));
   }
 
   async _deleteIDBEntry(key) {
-    try {
-      const db = await this._openIDB();
-      if (!db) return;
-      db.transaction('candles', 'readwrite').objectStore('candles').delete(key);
-    } catch {}
+    const db = await this._openIDB();
+    if (!db) return;
+    await this._request(db.transaction('candles', 'readwrite').objectStore('candles').delete(key));
   }
 
   async loadFromIDB(symbol, timeframe, { venue = 'DEFAULT', gridOrigin = 0 } = {}) {
+    this._assertAlive();
     if (!this.enableIDB) return null;
     const key = this._key(symbol, timeframe, { venue, gridOrigin });
     try {
       const db = await this._openIDB();
-      const request = db.transaction('candles', 'readonly').objectStore('candles').get(key);
-      return await new Promise((resolve) => {
-        request.onsuccess = () => {
-          const value = request.result;
-          if (
-            !value ||
-            value.version !== CACHE_VERSION ||
-            !Array.isArray(value.candles) ||
-            !Array.isArray(value.intervals)
-          ) {
-            if (value) this._deleteIDBEntry(key).catch(() => {});
-            resolve(null);
-            return;
-          }
-          const candles = value.candles.filter(c => this._isCanonicalCandle(c)).map(c => ({ ...c }));
-          const tf = this._getTimeframeSeconds(timeframe, value.timeframeSec, value);
-          const entry = {
-            candles,
-            intervals: CandleCache.intervalsFromCandles(candles, tf),
-            timeframeSec: tf,
-            ts: value.ts,
-            version: value.version,
-            venue,
-            gridOrigin,
-          };
-          this._lruTouch(key, entry);
-          resolve(entry);
-        };
-        request.onerror = () => resolve(null);
-      });
+      if (!db) return null;
+      const value = await this._request(db.transaction('candles', 'readonly').objectStore('candles').get(key));
+      if (!value || value.version !== CACHE_VERSION || !Array.isArray(value.candles) || !Array.isArray(value.intervals)) {
+        if (value) this._enqueuePersist(() => this._deleteIDBEntry(key));
+        return null;
+      }
+      const candles = value.candles.filter(c => this._isCanonicalCandle(c)).map(c => ({ ...c }));
+      const tf = this._getTimeframeSeconds(timeframe, value.timeframeSec, value);
+      const entry = { candles, intervals: CandleCache.intervalsFromCandles(candles, tf), timeframeSec: tf, ts: value.ts, version: value.version, venue, gridOrigin };
+      this._lruTouch(key, entry);
+      return entry;
     } catch {
       return null;
     }
   }
 
-  size() {
-    return this._memory.size;
-  }
+  size() { return this._memory.size; }
 }
