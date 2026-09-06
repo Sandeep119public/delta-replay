@@ -67,6 +67,23 @@ export class ReplayCommandController {
     }
   }
 
+  startAt(idx) {
+    if (!this.hasData()) return false;
+    const n = Number(idx);
+    if (!Number.isFinite(n) || n < 0) return false;
+    if (this.tradingEngine?.hasOpenPosition?.()) {
+      this._notifyError('Cannot start replay while a position is open — close position first.');
+      return false;
+    }
+    try {
+      this.engine.start(n);
+      return true;
+    } catch (e) {
+      this._notifyError(e?.message || 'Cannot start replay here');
+      return false;
+    }
+  }
+
   stepForward() {
     if (!this.hasData()) return false;
     try {
@@ -122,7 +139,9 @@ export class ReplayCommandController {
       try {
         this.engine.pause();
         return true;
-      } catch {}
+      } catch (e) {
+        this._notifyError(e?.message || 'Unable to pause replay');
+      }
     }
     return false;
   }
