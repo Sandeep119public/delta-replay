@@ -16,7 +16,6 @@ import { ModeBanner } from './ui/ModeBanner.js';
 import { ReplayCoordinator } from './app/ReplayCoordinator.js';
 import { ReplayCommandController } from './app/ReplayCommandController.js';
 import { PaperTradingEngine, EXECUTION_TIMING } from './trading/PaperTradingEngine.js';
-import { TradingIntentResolver } from './trading/TradingIntentResolver.js';
 import { TradingPanel } from './ui/TradingPanel.js';
 import { ToastNotificationView } from './ui/ToastNotificationView.js';
 import { FloatingPositionView } from './ui/FloatingPositionView.js';
@@ -25,13 +24,6 @@ import { ChartTradingController } from './ui/ChartTradingController.js';
 import { ThemeManager } from './ui/ThemeManager.js';
 import { TradingEvents } from './trading/TradingEvents.js';
 import { ReplayEvents } from './replay/ReplayEvents.js';
-import { Router, router } from './router/Router.js';
-import { Navigation } from './ui/Navigation.js';
-import { DashboardPage } from './pages/DashboardPage.js';
-import { StrategiesPage } from './pages/StrategiesPage.js';
-import { JournalPage } from './pages/JournalPage.js';
-import { PersonalityWidget } from './ui/PersonalityWidget.js';
-import { Persona } from './personality/Persona.js';
 import { TradingErrorView } from './ui/TradingErrorView.js';
 
 // ===== 1. CORE ENGINES & STATE =====
@@ -245,7 +237,7 @@ const dateSelector = new ReplayDateSelector({
       coordinator.updatePreviewWindow(idx);
     } else if (st.status === 'playing') {
       if (!tradingEngine.canSeek()) {
-        dateSelector._showJumpError('Cannot jump while position open');
+        coordinator.showTradingError('Cannot jump while position open');
         return;
       }
       commandController.pause();
@@ -327,7 +319,7 @@ timeline.onStartHere((idx) => {
   appState.setPendingStartIndex(n);
   controls.setStartIndex(n);
   try {
-    engine.start(n);
+    commandController.startAt?.(n) ?? engine.start(n);
   } catch (e) {
     coordinator.showTradingError(e?.message || 'Cannot start replay here');
   }
@@ -339,12 +331,12 @@ function refreshTimelineMarkers() {
     const trades = tradingEngine.getTrades?.() || [];
     if (!trades.length || !candleStore.getCount()) { timeline.setMarkers([]); return; }
     const markers = [];
+    const all = candleStore.getAll?.() || [];
     for (const t of trades) {
       const ts = t.openedAt ?? t.entryTime ?? t.time;
       let index = -1;
       if (Number.isInteger(t.entryIndex)) index = t.entryIndex;
       else if (Number.isFinite(ts)) {
-        const all = candleStore.getAll?.() || [];
         let lo = 0, hi = all.length - 1;
         while (lo <= hi) {
           const mid = lo + Math.floor((hi - lo) / 2);
@@ -356,14 +348,16 @@ function refreshTimelineMarkers() {
       if (index >= 0) markers.push({ index, side: t.side });
     }
     timeline.setMarkers(markers);
-  } catch {}
+  } catch (error) {
+    console.warn('[Timeline] marker refresh failed', error);
+  }
 }
 tradingEngine.on(TradingEvents.TRADE_EXECUTED, refreshTimelineMarkers);
 tradingEngine.on(TradingEvents.POSITION_CLOSED, refreshTimelineMarkers);
 
 // Critical financial errors pause the replay so the trader sees them.
 tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (payload) => {
-  try { commandController.pause(); } catch {}
+  try { commandController.pause(); } catch (error) { console.warn('[Replay] pause failed', error); }
   errorPanel.show(
     { category: 'LIQUIDATION', userMessage: `Position liquidated: ${payload?.symbol || ''} @ ${payload?.liquidationPrice ?? '—'}`, message: 'Position liquidated', code: 'LIQUIDATION', context: {} },
     { severity: 'critical', onPause: () => { try { commandController.pause(); } catch {} } },
@@ -471,14 +465,18 @@ try {
       if (endY - startY > 80 && document.body.classList.contains('drawer-open')) setDrawer(false);
     }, { passive: true });
   }
-} catch {}
+} catch (error) {
+  console.warn('[Mobile drawer] setup failed', error);
+}
 
 // Clean up long-lived browser resources when the application is unloaded.
+let destroyed = false;
 const destroyApplication = () => {
-  try { unbindKeyboardShortcuts?.(); } catch {}
-  try { coordinator.destroy(); } catch {}
-  try { engine.destroy(); } catch {}
-  try { candleCache.close(); } catch {}
+  if (destroyed) return;
+  destroyed = true;
+  try { unbindKeyboardShortcuts?.(); } catch (error) { console.warn('[App] keyboard cleanup failed', error); }
+  try { coordinator.destroy(); } catch (error) { console.warn('[App] coordinator cleanup failed', error); }
+  try { engine.destroy(); } catch (error) { console.warn('[App] engine cleanup failed', error); }
+  try { candleCache.close(); } catch (error) { console.warn('[App] cache cleanup failed', error); }
 };
 window.addEventListener('pagehide', destroyApplication, { once: true });
-window.addEventListener('beforeunload', destroyApplication, { once: true });
