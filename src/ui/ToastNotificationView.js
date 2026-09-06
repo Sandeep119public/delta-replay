@@ -26,4 +26,9 @@ export class ToastNotificationView {
       this._timeout = null;
     }
   }
+
+  destroy() {
+    this.hide();
+    this.toastEl = null;
+  }
 }
