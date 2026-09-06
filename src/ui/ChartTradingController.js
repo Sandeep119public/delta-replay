@@ -34,11 +34,13 @@ export class ChartTradingController {
     this.orderTypeSelect = orderTypeSelect;
     this._boundOnChartClick = (event) => this.handleChartClick(event);
     this._subscriptions = [];
+    this._unsubscribeChartClick = null;
+    this._destroyed = false;
     this._init();
   }
 
   _init() {
-    if (this.chartManager?.onChartClick) this.chartManager.onChartClick(this._boundOnChartClick);
+    if (this.chartManager?.onChartClick) this._unsubscribeChartClick = this.chartManager.onChartClick(this._boundOnChartClick);
     this._bindTradingEvents();
     this.syncChartTradingLines();
   }
@@ -93,13 +95,14 @@ export class ChartTradingController {
   }
 
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
     this._subscriptions.forEach((unsubscribe) => {
       try { unsubscribe?.(); } catch (error) { console.warn('[ChartTrading] unsubscribe failed', error); }
     });
     this._subscriptions = [];
-    if (Array.isArray(this.chartManager?._onChartClickCallbacks)) {
-      this.chartManager._onChartClickCallbacks = this.chartManager._onChartClickCallbacks.filter((cb) => cb !== this._boundOnChartClick);
-    }
+    try { this._unsubscribeChartClick?.(); } catch (error) { console.warn('[ChartTrading] chart unsubscribe failed', error); }
+    this._unsubscribeChartClick = null;
   }
 
   syncChartTradingLines() {
