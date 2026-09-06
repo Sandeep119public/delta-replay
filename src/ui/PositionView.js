@@ -45,20 +45,17 @@ export class PositionView {
     this.onSuccess = onSuccess;
     this.onRender = onRender;
 
+    this._listeners = [];
     this._bindEvents();
   }
 
   _bindEvents() {
-    if (this.closeBtn) {
-      this.closeBtn.addEventListener('click', () => this.closePosition());
-    }
-    if (this.setRiskBtn) {
-      this.setRiskBtn.addEventListener('click', () => this.setRisk());
-    }
-    if (this.clearRiskBtn) {
-      this.clearRiskBtn.addEventListener('click', () => this.clearRisk());
-    }
+    if (this.closeBtn) { const h = () => this.closePosition(); this.closeBtn.addEventListener('click', h); this._listeners.push([this.closeBtn, 'click', h]); }
+    if (this.setRiskBtn) { const h = () => this.setRisk(); this.setRiskBtn.addEventListener('click', h); this._listeners.push([this.setRiskBtn, 'click', h]); }
+    if (this.clearRiskBtn) { const h = () => this.clearRisk(); this.clearRiskBtn.addEventListener('click', h); this._listeners.push([this.clearRiskBtn, 'click', h]); }
   }
+
+  destroy() { this._listeners.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler)); this._listeners = []; }
 
   _fmtMoney(v) {
     const n = Number(v);
