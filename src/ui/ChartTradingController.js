@@ -43,7 +43,8 @@ export class ChartTradingController {
 
   _init() {
     if (this.chartManager?.onChartClick) {
-      this.chartManager.onChartClick(this._boundOnChartClick);
+      const unsubscribe = this.chartManager.onChartClick(this._boundOnChartClick);
+      if (typeof unsubscribe === 'function') this._subscriptions.push(unsubscribe);
     }
     this._bindTradingEvents();
     this.syncChartTradingLines();
@@ -112,6 +113,12 @@ export class ChartTradingController {
     this.chartManager?.updateOrderLines?.(pendingOrders);
 
     this.floatingPosView?.render?.(activePos);
+  }
+
+  destroy() {
+    for (const unsubscribe of this._subscriptions.splice(0)) {
+      try { unsubscribe?.(); } catch (error) { console.warn('[ChartTradingController] unsubscribe failed', error); }
+    }
   }
 
   handleChartClick({ price }) {
