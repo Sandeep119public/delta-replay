@@ -4,8 +4,11 @@
  */
 export class MarginEngine {
   constructor({ marginRate = 1.0, maintMarginRate = null } = {}) {
+    if (!Number.isFinite(marginRate) || marginRate <= 0) throw new RangeError('marginRate must be a finite number greater than 0');
+    const resolvedMMRate = maintMarginRate ?? (marginRate * 0.5);
+    if (!Number.isFinite(resolvedMMRate) || resolvedMMRate < 0 || resolvedMMRate >= marginRate) throw new RangeError('maintMarginRate must be finite, >= 0, and less than marginRate');
     this.marginRate = marginRate;
-    this.maintMarginRate = maintMarginRate ?? (marginRate * 0.5);
+    this.maintMarginRate = resolvedMMRate;
   }
 
   getEffectiveIMRate() {
