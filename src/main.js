@@ -32,6 +32,7 @@ import { bindMobileDrawer } from './app/bindMobileDrawer.js';
 import { bindTimelineInteractions } from './app/bindTimelineInteractions.js';
 import { bindTradingEvents } from './app/bindTradingEvents.js';
 import { bindReplayLifecycle } from './app/bindReplayLifecycle.js';
+import { createTerminalViews } from './app/createTerminalViews.js';
 
 const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = createCoreServices();
 
@@ -167,92 +168,8 @@ const commandController = new ReplayCommandController({
 });
 const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
-// ===== 4. UI BOOTSTRAP: trading terminal, timeline, chart overlays =====
-// Contextual sparkline scrubber: click a pip/setup to jump there.
-const sparklineEl = document.getElementById('timeline-sparkline');
-const sparkline = new TimelineSparkline({
-  canvasEl: sparklineEl,
-  candleStore,
-  engine,
-  tradingEngine,
-  onSeek: (idx) => {
-    const st = engine.getState();
-    if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
-      if (st.status === 'playing') commandController.pause();
-      const ok = commandController.trySeek(idx);
-      if (!ok) timeline.setPosition(st.currentIndex);
-    } else {
-      appState.setPendingStartIndex(idx);
-      controls.setStartIndex(idx);
-      modeBanner.update({ replayState: st, appState, candleStore });
-      coordinator.updatePreviewWindow(idx);
-      timeline.setPosition(idx);
-    }
-  },
-});
-
-const toastView = new ToastNotificationView();
-const floatingPosView = new FloatingPositionView({ tradingEngine });
-
-const dateSelector = new ReplayDateSelector({
-  appState,
-  coordinator,
-  candleStore,
-  engine,
-  commandController,
-  timeframeSelect,
-  onJump: (idx) => {
-    const st = engine.getState();
-    if (st.status === 'idle' || st.status === 'ready') {
-      appState.setPendingStartIndex(idx);
-      controls.setStartIndex(idx);
-      timeline.setPosition(idx);
-      modeBanner.update({ replayState: st, appState, candleStore });
-      coordinator.updatePreviewWindow(idx);
-    } else if (st.status === 'playing') {
-      if (!tradingEngine.canSeek()) {
-        coordinator.showTradingError('Cannot jump while position open');
-        return;
-      }
-      commandController.pause();
-      commandController.trySeek(idx);
-    } else if (st.status === 'paused' || st.status === 'ended') {
-      commandController.trySeek(idx);
-    }
-  },
-});
-
-const tradingPanel = new TradingPanel({
-  tradingEngine,
-  balanceEl: document.getElementById('acct-balance'),
-  equityEl: document.getElementById('acct-equity'),
-  realizedEl: document.getElementById('acct-realized'),
-  unrealizedEl: document.getElementById('acct-unrealized'),
-  feesEl: document.getElementById('acct-fees'),
-  posSymbolEl: document.getElementById('pos-symbol'),
-  posSideEl: document.getElementById('pos-side'),
-  posQtyEl: document.getElementById('pos-qty'),
-  posEntryEl: document.getElementById('pos-entry'),
-  posCurrentEl: document.getElementById('pos-current'),
-  posPnlEl: document.getElementById('pos-pnl'),
-  qtyInput: document.getElementById('trade-qty'),
-  buyBtn: document.getElementById('btn-buy'),
-  sellBtn: document.getElementById('btn-sell'),
-  closeBtn: document.getElementById('btn-close'),
-  resetBtn: document.getElementById('btn-reset-acct'),
-  tradesListEl: document.getElementById('trades-list'),
-  errorEl: document.getElementById('trading-error'),
-  orderTypeSelect,
-  limitPriceInput,
-  stopPriceInput,
-  pendingListEl: document.getElementById('pending-orders-list'),
-  posSlEl: document.getElementById('pos-sl'),
-  posTpEl: document.getElementById('pos-tp'),
-  slInput,
-  tpInput,
-  setRiskBtn: document.getElementById('btn-set-risk'),
-  clearRiskBtn: document.getElementById('btn-clear-risk'),
-});
+// ===== 4. UI BOOTSTRAP =====
+const { sparkline, toastView, floatingPosView, dateSelector, tradingPanel } = createTerminalViews({ appState, candleStore, engine, tradingEngine, commandController, coordinator, timeline, controls, modeBanner, timeframeSelect, orderTypeSelect, limitPriceInput, stopPriceInput, slInput, tpInput });
 
 // Dataset selectors drive reloads through the coordinator.
 symbolSelector.onChange((symbol) => coordinator.handleSymbolTimeframeChange('symbol', symbol, symbolSelect));
