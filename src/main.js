@@ -31,6 +31,7 @@ import { bindApplicationLifecycle } from './app/bindApplicationLifecycle.js';
 import { bindMobileDrawer } from './app/bindMobileDrawer.js';
 import { bindTimelineInteractions } from './app/bindTimelineInteractions.js';
 import { bindTradingEvents } from './app/bindTradingEvents.js';
+import { bindReplayLifecycle } from './app/bindReplayLifecycle.js';
 
 const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = createCoreServices();
 
@@ -261,14 +262,7 @@ timeframeSelector.onChange((timeframe) => coordinator.handleSymbolTimeframeChang
 bindTimelineInteractions({ timeline, controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner });
 bindTradingEvents({ tradingEngine, commandController, errorPanel });
 
-chartManager.onAutoFollowChange((isFollow) => {
-  controls.setAutoFollow(isFollow);
-});
-
-function updateRevealedMax(idx) {
-  const c = candleStore.get(idx);
-  if (c) chartManager.setRevealedMax(c.time);
-}
+chartManager.onAutoFollowChange((isFollow) => controls.setAutoFollow(isFollow));
 
 // ===== 5. TRADING OVERLAY & ENGINE LIFECYCLE =====
 const chartTradingController = new ChartTradingController({
@@ -286,39 +280,7 @@ const chartTradingController = new ChartTradingController({
   orderTypeSelect,
 });
 
-engine.on(ReplayEvents.STATE_CHANGED, (s) => {
-  appState.setReplayState(s);
-  if (s.currentIndex >= 0) timeline.setPosition(s.currentIndex);
-  modeBanner.update({ replayState: s, appState, candleStore });
-});
-
-engine.on(ReplayEvents.STARTED, (payload) => {
-  const idx = payload?.index ?? appState.pendingStartIndex;
-  timeline.setPosition(idx);
-  updateRevealedMax(idx);
-  modeBanner.update({ replayState: engine.getState(), appState, candleStore });
-});
-
-engine.on(ReplayEvents.STEPPED, (p) => {
-  modeBanner.update({ replayState: engine.getState(), appState, candleStore });
-  if (p?.index !== undefined) updateRevealedMax(p.index);
-});
-
-engine.on(ReplayEvents.SEEKED, (p) => {
-  modeBanner.update({ replayState: engine.getState(), appState, candleStore });
-  if (p?.index !== undefined) updateRevealedMax(p.index);
-});
-
-engine.on(ReplayEvents.RESET, (s) => {
-  if (s.status === 'ready') {
-    coordinator.updatePreviewWindow(appState.pendingStartIndex);
-    updateRevealedMax(appState.pendingStartIndex);
-    timeline.setTotal(candleStore.getCount(), candleStore.getAll());
-  } else if (s.index !== undefined) {
-    updateRevealedMax(s.index);
-  }
-  modeBanner.update({ replayState: s, appState, candleStore });
-});
+bindReplayLifecycle({ engine, appState, candleStore, timeline, modeBanner, coordinator, chartManager });
 
 if (loadBtn) {
   loadBtn.addEventListener('click', () => coordinator.loadAndPrepareReplay({ autoStart: false }));
