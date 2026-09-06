@@ -1,0 +1,30 @@
+/* ==========================================================================
+   MOTION (canonical): motion only for state changes — replay state, P&L
+   flips, position transitions, timeline movement. Tactile pressed states
+   on buttons. Full opt-out via prefers-reduced-motion.
+   ========================================================================== */
+.btn {
+  transition: background-color 150ms ease-out, transform 60ms ease-out;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.mode-banner::before {
+  transition: background-color 200ms ease-out, box-shadow 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+}

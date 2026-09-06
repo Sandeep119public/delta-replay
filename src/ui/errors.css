@@ -1,0 +1,45 @@
+/* ==========================================================================
+   ERROR SYSTEM (canonical): INFO → WARNING → ERROR → CRITICAL.
+   Full panel for blocking failures; compact inline strip for recoverable
+   data problems so a giant box never covers the chart.
+   ========================================================================== */
+.error-panel {
+  border-left: 4px solid var(--negative);
+  background: var(--surface-raised);
+}
+
+.error-panel.severity-info {
+  border-left-color: var(--info);
+  background: var(--info-bg);
+}
+
+.error-panel.severity-warn {
+  border-left-color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.error-panel.severity-critical {
+  border-left-color: var(--negative);
+  background: var(--negative-bg);
+  box-shadow: 0 0 0 1px var(--negative);
+}
+
+.error-panel.severity-critical .error-panel-title {
+  color: var(--negative);
+  font-weight: 800;
+}
+
+/* Compact inline mode for recoverable data problems. */
+.error-panel.is-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px var(--page-padding);
+  font-size: var(--text-sm);
+  box-shadow: none;
+}
+
+.error-panel.is-inline .error-panel-actions,
+.error-panel.is-inline .error-panel-context {
+  display: none;
+}

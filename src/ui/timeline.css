@@ -1,0 +1,85 @@
+/* ==========================================================================
+   TIMELINE (canonical): major navigation element, not a plain slider.
+   32px interaction area, event markers above the track, explicit
+   playhead readout. Marker categories: LONG ● / SHORT ● / ENTRY ◆ /
+   EXIT ◇ / DATA GAP ⚠.
+   ========================================================================== */
+.timeline-section {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 4px 0 2px;
+}
+
+.timeline-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 0 var(--page-padding);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.timeline-track-wrap {
+  position: relative;
+  padding: 10px var(--page-padding) 2px;
+}
+
+#timeline-slider {
+  width: 100%;
+  min-height: 32px;
+  height: 32px;
+  cursor: crosshair;
+}
+
+.timeline-markers {
+  position: absolute;
+  left: var(--page-padding);
+  right: var(--page-padding);
+  top: 2px;
+  height: 10px;
+  pointer-events: none;
+}
+
+.tl-marker {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.tl-marker.is-long { background: var(--positive); }
+.tl-marker.is-short { background: var(--negative); }
+.tl-marker.is-entry { border-radius: 0; transform: translateX(-50%) rotate(45deg); }
+.tl-marker.is-exit {
+  background: transparent;
+  border: 2px solid var(--text-muted);
+  width: 6px;
+  height: 6px;
+}
+.tl-marker.is-gap {
+  background: var(--warning);
+  border-radius: 0;
+  width: 8px;
+  height: 8px;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.timeline-meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* Chart-first entry point: scrub, then start here. */
+.btn-timeline-start {
+  margin: 2px var(--page-padding) 4px;
+  min-height: 34px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}

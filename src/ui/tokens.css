@@ -1,0 +1,118 @@
+/* ==========================================================================
+   DELTA REPLAY — DESIGN TOKENS (canonical)
+   Single source of truth for dimensions, typography, and semantic color.
+   Themes remap these variables; components must never hardcode palette
+   values outside this file. No !important in this layer by policy.
+   ========================================================================== */
+
+:root {
+  /* ---- Core dimensions ---- */
+  --header-height: 60px;
+  --status-height: 30px;
+  --sidebar-width: clamp(360px, 28vw, 440px);
+  --timeline-height: 76px;
+  --toolbar-height: 48px;
+  --page-padding: 16px;
+  --panel-padding: 12px;
+  --control-height: 36px;
+  --touch-target: 44px;
+
+  /* ---- Typography ---- */
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Shippori Mincho', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Roboto Mono', ui-monospace, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-display: 22px;
+
+  /* ---- Semantic color (default: dark terminal) ---- */
+  --surface: #13161c;
+  --surface-raised: #1a1e26;
+  --surface-inset: #0d1015;
+
+  --text-primary: #f4f6f8;
+  --text-secondary: #a7b0bd;
+  --text-muted: #6b7482;
+
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+
+  --positive: #10b981;
+  --positive-bg: rgba(16, 185, 129, 0.12);
+  --negative: #ef4444;
+  --negative-bg: rgba(239, 68, 68, 0.12);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --info: #38bdf8;
+  --info-bg: rgba(56, 189, 248, 0.12);
+
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  /* ---- Back-compat bridges: legacy files read these names ---- */
+  --trading-w: var(--sidebar-width);
+  --header-h: var(--header-height);
+  --bg-card: var(--surface);
+  --bg-elevated: var(--surface-raised);
+  --accent-long: var(--positive);
+  --accent-short: var(--negative);
+  --pnl-pos-bg: var(--positive-bg);
+  --pnl-neg-bg: var(--negative-bg);
+}
+
+/* ---- Theme remaps: meaning stays, palette changes ---- */
+[data-theme="light"] {
+  --surface: #f4f5f7;
+  --surface-raised: #ffffff;
+  --surface-inset: #e9ebef;
+  --text-primary: #16202e;
+  --text-secondary: #4b586a;
+  --text-muted: #7b8798;
+  --positive: #15803d;
+  --positive-bg: rgba(21, 128, 61, 0.1);
+  --negative: #dc2626;
+  --negative-bg: rgba(220, 38, 38, 0.1);
+  --border: rgba(15, 30, 50, 0.1);
+  --border-strong: rgba(15, 30, 50, 0.2);
+}
+
+[data-theme="paper"] {
+  --surface: #f7f2e7;
+  --surface-raised: #fbf8f0;
+  --surface-inset: #ece4d2;
+  --text-primary: #2b2620;
+  --text-secondary: #5c554a;
+  --text-muted: #8a8172;
+  --accent: #315f8c;
+  --accent-hover: #274d72;
+  --positive: #2f7d58;
+  --positive-bg: rgba(47, 125, 88, 0.12);
+  --negative: #b44842;
+  --negative-bg: rgba(180, 72, 66, 0.12);
+  --warning: #b38232;
+  --warning-bg: rgba(179, 130, 50, 0.14);
+  --border: rgba(70, 58, 42, 0.16);
+  --border-strong: rgba(70, 58, 42, 0.3);
+}
+
+[data-theme="midnight"] {
+  --surface: #060a13;
+  --surface-raised: #0b1120;
+  --surface-inset: #03060c;
+  --text-primary: #e6ebf2;
+  --text-secondary: #8b96a8;
+  --text-muted: #5b6678;
+  --positive: #10b981;
+  --negative: #ef4444;
+}
+
+[data-theme="colorblind"] {
+  --positive: #60a5fa;
+  --positive-bg: rgba(96, 165, 250, 0.14);
+  --negative: #fb923c;
+  --negative-bg: rgba(251, 146, 60, 0.14);
+}

@@ -47,6 +47,8 @@ export class ModeBanner {
     // the banner now acts purely as a slim progress ticker.
     if (this.modeBanner) {
       this.modeBanner.className = 'mode-banner';
+      // Machine-readable state for the ticker skin (dot + label).
+      try { this.modeBanner.setAttribute('data-state', st); } catch {}
       let label = '';
       let showProgress = false;
 
@@ -81,28 +83,29 @@ export class ModeBanner {
       }
     }
 
-    // 2. Update Progress Numbers
+    // 2. Update Progress Numbers (ticker format: BAR 1,482 / 8,640 · 17.2%)
+    const fmtCount = (n) => Number(n).toLocaleString('en-US');
     if (this.progressText && this.progressPct && this.marketTimeEl && this.marketTimeFull) {
       if (total === 0) {
-        this.progressText.textContent = '0 / 0';
+        this.progressText.textContent = 'BAR 0 / 0';
         this.progressPct.textContent = '0%';
         this.marketTimeEl.textContent = '—';
-        this.marketTimeFull.textContent = 'CURRENT MARKET TIME: —';
+        this.marketTimeFull.textContent = '—';
       } else if (st === 'ready' || st === 'idle') {
-        this.progressText.textContent = `${pendingStartIndex + 1} / ${total}`;
-        this.progressPct.textContent = ((pendingStartIndex + 1) / total * 100).toFixed(2) + '%';
+        this.progressText.textContent = `BAR ${fmtCount(pendingStartIndex + 1)} / ${fmtCount(total)}`;
+        this.progressPct.textContent = ((pendingStartIndex + 1) / total * 100).toFixed(1) + '%';
         const c = candleStore?.get?.(pendingStartIndex) || appState?.candles?.[pendingStartIndex];
         const t = c ? formatTime(c.time) : '—';
         this.marketTimeEl.textContent = t;
-        this.marketTimeFull.textContent = `CURRENT MARKET TIME: ${t}`;
+        this.marketTimeFull.textContent = t;
       } else {
-        const pctVal = total > 0 && currentIndex >= 0 ? ((currentIndex + 1) / total * 100).toFixed(2) : '0.00';
-        this.progressText.textContent = `${currentIndex >= 0 ? currentIndex + 1 : 0} / ${total}`;
+        const pctVal = total > 0 && currentIndex >= 0 ? ((currentIndex + 1) / total * 100).toFixed(1) : '0.0';
+        this.progressText.textContent = `BAR ${currentIndex >= 0 ? fmtCount(currentIndex + 1) : 0} / ${fmtCount(total)}`;
         this.progressPct.textContent = pctVal + '%';
         const c = currentIndex >= 0 ? (candleStore?.get?.(currentIndex) || appState?.candles?.[currentIndex]) : null;
         const t = c ? formatTime(c.time) : '—';
         this.marketTimeEl.textContent = t;
-        this.marketTimeFull.textContent = `CURRENT MARKET TIME: ${t}`;
+        this.marketTimeFull.textContent = t;
       }
     }
 

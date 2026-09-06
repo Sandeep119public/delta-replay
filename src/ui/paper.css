@@ -1,0 +1,53 @@
+/* ==========================================================================
+   PAPER SKIN (canonical for [data-theme="paper"]): restraint.
+   Keeps: paper texture, ink text, cinnabar accents, jade positive state,
+   manuscript separators, subtle paper shadows.
+   Drops: decorative typography on inputs, gradients on data, ornate
+   buttons. DISPLAY → serif, UI → Inter, NUMBERS → JetBrains Mono.
+   (Legacy paper-theme.css !important rules are stripped separately so
+   this skin wins by order + specificity, never by force.)
+   ========================================================================== */
+[data-theme="paper"] body,
+body[data-theme="paper"] {
+  font-family: var(--font-ui);
+}
+
+[data-theme="paper"] .num,
+[data-theme="paper"] .equity-highlight,
+[data-theme="paper"] .pnl-val,
+[data-theme="paper"] .stat-val,
+[data-theme="paper"] .pos-metric .val,
+[data-theme="paper"] .kv span:last-child,
+[data-theme="paper"] .trade-row,
+[data-theme="paper"] #timeline-index-label,
+[data-theme="paper"] .progress-panel,
+[data-theme="paper"] .capsule-val,
+[data-theme="paper"] .capsule-pnl {
+  font-family: var(--font-mono);
+}
+
+/* Manuscript separators only around section headers. */
+[data-theme="paper"] .card-title {
+  font-family: var(--font-display);
+  border-bottom: 1px solid var(--border-strong);
+  padding-bottom: 4px;
+}
+
+[data-theme="paper"] .trading-title {
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+}
+
+/* Calm inputs: flat paper, single ink border. */
+[data-theme="paper"] input,
+[data-theme="paper"] select {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+}
+
+/* Buttons stay quiet; only the primary action carries ink. */
+[data-theme="paper"] .btn {
+  box-shadow: none;
+  text-shadow: none;
+}

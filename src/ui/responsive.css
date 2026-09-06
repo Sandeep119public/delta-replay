@@ -1,0 +1,76 @@
+/* ==========================================================================
+   RESPONSIVE (canonical): mobile is a separate UX mode, not a narrower
+   desktop. Priority: chart → transport → position/P&L → buy/sell → rest.
+   Desktop keeps the two-column workstation; very wide viewports feed the
+   chart (sidebar clamp is fixed in tokens.css).
+   ========================================================================== */
+
+/* Very wide monitors: cap content, center, feed the chart. */
+@media (min-width: 1920px) {
+  #app {
+    max-width: 2400px;
+    margin-inline: auto;
+  }
+}
+
+/* Tablet / small desktop: stack workspace, keep ticker readable. */
+@media (max-width: 1024px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "mode"
+      "main"
+      "timeline"
+      "controls";
+  }
+
+  .main-layout {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .main-layout > .main {
+    min-height: 42vh;
+  }
+
+  .main-layout > .trading-section {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    overflow: visible;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+  }
+
+  .data-status {
+    display: none;
+  }
+}
+
+/* Phone: trading app mode — chart, transport, P&L, buy/sell first. */
+@media (max-width: 640px) {
+  .topbar-center .replay-date-group,
+  .topbar-center .preset-group label {
+    display: none;
+  }
+
+  #header-start-replay-btn {
+    min-height: var(--touch-target);
+  }
+
+  .btn-buy-main,
+  .btn-sell-main,
+  #order-ticket .btn-flatten {
+    min-height: 52px;
+  }
+
+  .timeline-section {
+    position: sticky;
+    bottom: 0;
+  }
+}

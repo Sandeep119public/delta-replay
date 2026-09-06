@@ -189,6 +189,257 @@ const commandController = new ReplayCommandController({
 });
 const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
+// ===== 4. UI BOOTSTRAP: trading terminal, timeline, chart overlays =====
+// Guard: prohibit loading or destructive changes during active position.
+engine.registerActionGuard((action) => {
+  if (tradingEngine.hasOpenPosition()) {
+    const msg = action === 'load'
+      ? 'Cannot load new data while a position is open — close position or reset account first.'
+      : `Cannot ${action} while a position is open — close position first.`;
+    coordinator.showTradingError(msg);
+    return { allowed: false, reason: msg };
+  }
+  return { allowed: true };
+});
+
+// Contextual sparkline scrubber: click a pip/setup to jump there.
+const sparklineEl = document.getElementById('timeline-sparkline');
+const sparkline = new TimelineSparkline({
+  canvasEl: sparklineEl,
+  candleStore,
+  engine,
+  tradingEngine,
+  onSeek: (idx) => {
+    const st = engine.getState();
+    if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
+      if (st.status === 'playing') commandController.pause();
+      const ok = commandController.trySeek(idx);
+      if (!ok) timeline.setPosition(st.currentIndex);
+    } else {
+      appState.setPendingStartIndex(idx);
+      controls.setStartIndex(idx);
+      modeBanner.update({ replayState: st, appState, candleStore });
+      coordinator.updatePreviewWindow(idx);
+      timeline.setPosition(idx);
+    }
+  },
+});
+
+const toastView = new ToastNotificationView();
+const floatingPosView = new FloatingPositionView({ tradingEngine });
+
+const dateSelector = new ReplayDateSelector({
+  appState,
+  coordinator,
+  candleStore,
+  engine,
+  commandController,
+  timeframeSelect,
+  onJump: (idx) => {
+    const st = engine.getState();
+    if (st.status === 'idle' || st.status === 'ready') {
+      appState.setPendingStartIndex(idx);
+      controls.setStartIndex(idx);
+      timeline.setPosition(idx);
+      modeBanner.update({ replayState: st, appState, candleStore });
+      coordinator.updatePreviewWindow(idx);
+    } else if (st.status === 'playing') {
+      if (!tradingEngine.canSeek()) {
+        dateSelector._showJumpError('Cannot jump while position open');
+        return;
+      }
+      commandController.pause();
+      commandController.trySeek(idx);
+    } else if (st.status === 'paused' || st.status === 'ended') {
+      commandController.trySeek(idx);
+    }
+  },
+});
+
+const tradingPanel = new TradingPanel({
+  tradingEngine,
+  balanceEl: document.getElementById('acct-balance'),
+  equityEl: document.getElementById('acct-equity'),
+  realizedEl: document.getElementById('acct-realized'),
+  unrealizedEl: document.getElementById('acct-unrealized'),
+  feesEl: document.getElementById('acct-fees'),
+  posSymbolEl: document.getElementById('pos-symbol'),
+  posSideEl: document.getElementById('pos-side'),
+  posQtyEl: document.getElementById('pos-qty'),
+  posEntryEl: document.getElementById('pos-entry'),
+  posCurrentEl: document.getElementById('pos-current'),
+  posPnlEl: document.getElementById('pos-pnl'),
+  qtyInput: document.getElementById('trade-qty'),
+  buyBtn: document.getElementById('btn-buy'),
+  sellBtn: document.getElementById('btn-sell'),
+  closeBtn: document.getElementById('btn-close'),
+  resetBtn: document.getElementById('btn-reset-acct'),
+  tradesListEl: document.getElementById('trades-list'),
+  errorEl: document.getElementById('trading-error'),
+  orderTypeSelect,
+  limitPriceInput,
+  stopPriceInput,
+  pendingListEl: document.getElementById('pending-orders-list'),
+  posSlEl: document.getElementById('pos-sl'),
+  posTpEl: document.getElementById('pos-tp'),
+  slInput,
+  tpInput,
+  setRiskBtn: document.getElementById('btn-set-risk'),
+  clearRiskBtn: document.getElementById('btn-clear-risk'),
+});
+
+// Dataset selectors drive reloads through the coordinator.
+symbolSelector.onChange((symbol) => coordinator.handleSymbolTimeframeChange('symbol', symbol, symbolSelect));
+timeframeSelector.onChange((timeframe) => coordinator.handleSymbolTimeframeChange('timeframe', timeframe, timeframeSelect));
+
+// Timeline scrub: preview before start, seek during replay.
+timeline.onChange((idx) => {
+  appState.setPendingStartIndex(idx);
+  controls.setStartIndex(idx);
+  modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+  const st = engine.getState();
+  if (st.status === 'ready' || st.status === 'idle') {
+    coordinator.updatePreviewWindow(idx);
+  }
+});
+
+timeline.onCommit((idx) => {
+  const st = engine.getState();
+  if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
+    if (st.status === 'playing') commandController.pause();
+    const ok = commandController.trySeek(idx);
+    if (!ok) {
+      sliderEl.value = String(st.currentIndex);
+      timeline.setPosition(st.currentIndex);
+    }
+  } else {
+    appState.setPendingStartIndex(idx);
+    controls.setStartIndex(idx);
+    modeBanner.update({ replayState: st, appState, candleStore });
+    coordinator.updatePreviewWindow(idx);
+  }
+});
+
+// Chart-first entry point: scrub the timeline, then "Start here".
+timeline.onStartHere((idx) => {
+  const n = Number(idx);
+  if (!Number.isFinite(n) || n < 0) return;
+  appState.setPendingStartIndex(n);
+  controls.setStartIndex(n);
+  try {
+    engine.start(n);
+  } catch (e) {
+    coordinator.showTradingError(e?.message || 'Cannot start replay here');
+  }
+});
+
+// Timeline trade markers: map each closed trade to its entry candle index.
+function refreshTimelineMarkers() {
+  try {
+    const trades = tradingEngine.getTrades?.() || [];
+    if (!trades.length || !candleStore.getCount()) { timeline.setMarkers([]); return; }
+    const markers = [];
+    for (const t of trades) {
+      const ts = t.openedAt ?? t.entryTime ?? t.time;
+      let index = -1;
+      if (Number.isInteger(t.entryIndex)) index = t.entryIndex;
+      else if (Number.isFinite(ts)) {
+        const all = candleStore.getAll?.() || [];
+        for (let i = all.length - 1; i >= 0; i--) {
+          if (all[i].time <= ts) { index = i; break; }
+        }
+        if (index < 0) index = 0;
+      }
+      if (index >= 0) markers.push({ index, side: t.side });
+    }
+    timeline.setMarkers(markers);
+  } catch {}
+}
+tradingEngine.on(TradingEvents.TRADE_EXECUTED, refreshTimelineMarkers);
+tradingEngine.on(TradingEvents.POSITION_CLOSED, refreshTimelineMarkers);
+
+// Critical financial errors pause the replay so the trader sees them.
+tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (payload) => {
+  try { commandController.pause(); } catch {}
+  errorPanel.show(
+    { category: 'LIQUIDATION', userMessage: `Position liquidated: ${payload?.symbol || ''} @ ${payload?.liquidationPrice ?? '—'}`, message: 'Position liquidated', code: 'LIQUIDATION', context: {} },
+    { severity: 'critical', onPause: () => { try { commandController.pause(); } catch {} } },
+  );
+});
+tradingEngine.on(TradingEvents.ORDER_REJECTED, (err) => {
+  errorPanel.show(
+    { category: 'ORDER', userMessage: err?.message || 'Order rejected', message: err?.message || 'Order rejected', code: err?.code || 'ORDER_REJECTED', context: {} },
+    { severity: 'critical', pauseReplay: false },
+  );
+});
+
+chartManager.onAutoFollowChange((isFollow) => {
+  controls.setAutoFollow(isFollow);
+});
+
+function updateRevealedMax(idx) {
+  const c = candleStore.get(idx);
+  if (c) chartManager.setRevealedMax(c.time);
+}
+
+// ===== 5. TRADING OVERLAY & ENGINE LIFECYCLE =====
+const chartTradingController = new ChartTradingController({
+  chartManager,
+  tradingEngine,
+  tradingPanel,
+  floatingPosView,
+  toastView,
+  orderFormView: tradingPanel.orderFormView,
+  coordinator,
+  slInput,
+  tpInput,
+  limitPriceInput,
+  stopPriceInput,
+  orderTypeSelect,
+});
+
+engine.on(ReplayEvents.STATE_CHANGED, (s) => {
+  appState.setReplayState(s);
+  if (s.currentIndex >= 0) timeline.setPosition(s.currentIndex);
+  modeBanner.update({ replayState: s, appState, candleStore });
+});
+
+engine.on(ReplayEvents.STARTED, (payload) => {
+  const idx = payload?.index ?? appState.pendingStartIndex;
+  timeline.setPosition(idx);
+  updateRevealedMax(idx);
+  modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+});
+
+engine.on(ReplayEvents.STEPPED, (p) => {
+  modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+  if (p?.index !== undefined) updateRevealedMax(p.index);
+});
+
+engine.on(ReplayEvents.SEEKED, (p) => {
+  modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+  if (p?.index !== undefined) updateRevealedMax(p.index);
+});
+
+engine.on(ReplayEvents.RESET, (s) => {
+  if (s.status === 'ready') {
+    coordinator.updatePreviewWindow(appState.pendingStartIndex);
+    updateRevealedMax(appState.pendingStartIndex);
+    timeline.setTotal(candleStore.getCount(), candleStore.getAll());
+  } else if (s.index !== undefined) {
+    updateRevealedMax(s.index);
+  }
+  modeBanner.update({ replayState: s, appState, candleStore });
+});
+
+if (loadBtn) {
+  loadBtn.addEventListener('click', () => coordinator.loadAndPrepareReplay({ autoStart: false }));
+}
+
+// ===== 6. BOOTSTRAP =====
+modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+coordinator.loadAndPrepareReplay({ autoStart: false });
+
 // Mobile trading drawer (bottom sheet on <=768px): FAB toggle, scrim dismiss,
 // and swipe-down-to-dismiss with native-app feel.
 try {

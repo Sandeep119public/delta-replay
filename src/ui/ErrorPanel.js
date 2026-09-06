@@ -62,7 +62,7 @@ export class ErrorPanel {
     return category === ErrorCategory.NETWORK || category === ErrorCategory.TIMEOUT || category === ErrorCategory.CORS;
   }
 
-  show(dataError, { severity = null, pauseReplay = false, onPause = null } = {}) {
+  show(dataError, { severity = null, inline = false, pauseReplay = false, onPause = null } = {}) {
     if (!this.container) return;
     if (!dataError) {
       this.hide();
@@ -70,12 +70,15 @@ export class ErrorPanel {
     }
 
     this.currentDataError = dataError;
-    // Severity: warn (data gap) vs critical (liquidation / invalid order / margin).
+    // Severity scale: info → warn → error → critical.
     const inferred = ErrorPanel.inferSeverity(dataError);
     const level = severity || inferred || 'error';
     this.container.dataset.severity = level;
+    this.container.classList.toggle('severity-info', level === 'info');
     this.container.classList.toggle('severity-warn', level === 'warn');
     this.container.classList.toggle('severity-critical', level === 'critical');
+    // Compact inline strip for recoverable data problems (never covers chart).
+    this.container.classList.toggle('is-inline', inline === true || (inline !== false && level === 'info'));
     if (this.titleEl) this.titleEl.textContent = 'Data Error';
     if (this.contextEl) {
       this.contextEl.classList.add('hidden');
@@ -132,10 +135,20 @@ export class ErrorPanel {
     this.show(dataErr);
   }
 
+  /** Transient non-blocking notice (e.g. "Cache hit", "Retrying…"). */
+  showInfo(msg) {
+    const dataErr = new DataError({
+      category: ErrorCategory.UNKNOWN,
+      technicalMessage: msg,
+      userMessage: msg,
+    });
+    this.show(dataErr, { severity: 'info', inline: true });
+  }
+
   hide() {
     if (this.container) {
       this.container.classList.add('hidden');
-      this.container.classList.remove('severity-warn', 'severity-critical');
+      this.container.classList.remove('severity-info', 'severity-warn', 'severity-critical', 'is-inline');
       try { delete this.container.dataset.severity; } catch {}
     }
     this.currentDataError = null;
