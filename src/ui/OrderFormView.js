@@ -37,6 +37,7 @@ export class OrderFormView {
     this.onRender = onRender;
 
     this._listeners = [];
+    this._listen = (el, type, handler) => { el?.addEventListener?.(type, handler); if (el?.removeEventListener) this._listeners.push([el, type, handler]); };
     this._bindEvents();
     this._bindTabs();
     this._bindPresets();
@@ -47,7 +48,7 @@ export class OrderFormView {
 
   _bindAdvanced() {
     if (this.advancedToggle && typeof this.advancedToggle.addEventListener === 'function') {
-      this.advancedToggle.addEventListener('click', () => this.setAdvanced(!this.advanced));
+      this._listen(this.advancedToggle, 'click', () => this.setAdvanced(!this.advanced));
     }
   }
 
@@ -75,7 +76,7 @@ export class OrderFormView {
       // Legacy fixed-qty chips (kept for compat) + % of equity chips.
       const chips = document.querySelectorAll('.qty-chip');
       chips.forEach(chip => {
-        chip.addEventListener('click', () => {
+        this._listen(chip, 'click', () => {
           if (chip.dataset?.sizePct) {
             this.applyEquityPct(Number(chip.dataset.sizePct));
           } else if (chip.dataset?.qty) {
@@ -83,7 +84,7 @@ export class OrderFormView {
           }
         });
       });
-      this.qtyInput?.addEventListener('input', () => this.updateNotional());
+      this._listen(this.qtyInput, 'input', () => this.updateNotional());
     } catch {}
   }
 
@@ -179,7 +180,7 @@ export class OrderFormView {
     try {
       const tabs = document.querySelectorAll('.order-tab');
       tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
+        this._listen(tab, 'click', () => {
           tabs.forEach(t => t.classList.remove('active'));
           tab.classList.add('active');
           const type = tab.getAttribute('data-type');
@@ -196,17 +197,21 @@ export class OrderFormView {
 
   _bindEvents() {
     if (this.buyBtn) {
-      this.buyBtn.addEventListener('click', () => this.placeOrder('BUY'));
+      this._listen(this.buyBtn, 'click', () => this.placeOrder('BUY'));
     }
     if (this.sellBtn) {
-      this.sellBtn.addEventListener('click', () => this.placeOrder('SELL'));
+      this._listen(this.sellBtn, 'click', () => this.placeOrder('SELL'));
     }
     if (this.orderTypeSelect) {
-      this.orderTypeSelect.addEventListener('change', () => this.updateOrderTypeUI());
+      this._listen(this.orderTypeSelect, 'change', () => this.updateOrderTypeUI());
     }
   }
 
-  destroy() { this._listeners.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler)); this._listeners = []; }
+  destroy() {
+    this._listeners.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler));
+    this._listeners = [];
+    this._listen = null;
+  }
 
   getOrderType() {
     if (this.orderTypeSelect) return this.orderTypeSelect.value;
