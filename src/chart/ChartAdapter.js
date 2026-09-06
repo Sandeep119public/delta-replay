@@ -62,6 +62,12 @@ export class ChartAdapter {
     this._lastRenderedIndex = -1;
   }
 
+  destroy() {
+    this.detach();
+    this.engine = null;
+    this.chart = null;
+  }
+
   showPreview(candlesOrStore, targetIndex = null, windowSize = 1000) {
     if (!candlesOrStore) return;
     let win;
