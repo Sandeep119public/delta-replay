@@ -345,8 +345,11 @@ function refreshTimelineMarkers() {
       if (Number.isInteger(t.entryIndex)) index = t.entryIndex;
       else if (Number.isFinite(ts)) {
         const all = candleStore.getAll?.() || [];
-        for (let i = all.length - 1; i >= 0; i--) {
-          if (all[i].time <= ts) { index = i; break; }
+        let lo = 0, hi = all.length - 1;
+        while (lo <= hi) {
+          const mid = lo + Math.floor((hi - lo) / 2);
+          if (all[mid].time <= ts) { index = mid; lo = mid + 1; }
+          else hi = mid - 1;
         }
         if (index < 0) index = 0;
       }
@@ -369,7 +372,7 @@ tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (payload) => {
 tradingEngine.on(TradingEvents.ORDER_REJECTED, (err) => {
   errorPanel.show(
     { category: 'ORDER', userMessage: err?.message || 'Order rejected', message: err?.message || 'Order rejected', code: err?.code || 'ORDER_REJECTED', context: {} },
-    { severity: 'critical', pauseReplay: false },
+    { severity: 'error', pauseReplay: false },
   );
 });
 
