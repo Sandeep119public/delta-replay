@@ -43,7 +43,6 @@ export function createApplication() {
     toDateEl: ui.el('to-date'), toTimeEl: ui.el('to-time'),
   });
   coordinatorRef.current = coordinator;
-
   registerActionGuard(engine, tradingEngine, coordinator);
 
   const commandController = new ReplayCommandController({
@@ -58,37 +57,26 @@ export function createApplication() {
     limitPriceInput: ui.el('limit-price'), stopPriceInput: ui.el('stop-price'),
     slInput: ui.el('sl-price'), tpInput: ui.el('tp-price'),
   };
-
-  const views = createTerminalViews({
-    appState, candleStore, engine, tradingEngine, commandController, coordinator,
-    timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, ...form,
-  });
+  const views = createTerminalViews({ appState, candleStore, engine, tradingEngine, commandController, coordinator, timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, ...form });
 
   bindDatasetSelectors(ui, coordinator);
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, controls: ui.controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner: ui.modeBanner });
   bindTradingEvents({ tradingEngine, commandController, errorPanel: ui.errorPanel });
   ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
-  const chartTradingController = new ChartTradingController({
-    chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel,
-    floatingPosView: views.floatingPosView, toastView: views.toastView,
-    orderFormView: views.tradingPanel.orderFormView, coordinator, ...form,
-  });
-
+  const chartTradingController = new ChartTradingController({ chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, coordinator, ...form });
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
-  ui.el('load-btn')?.addEventListener('click', () => coordinator.loadAndPrepareReplay({ autoStart: false }));
+
+  const loadBtn = ui.el('load-btn');
+  const onLoadClick = () => coordinator.loadAndPrepareReplay({ autoStart: false });
+  if (loadBtn) loadBtn.addEventListener('click', onLoadClick);
+  const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
   const mobileDrawer = bindMobileDrawer();
 
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts, coordinator, engine, candleCache,
-    resources: [timelineBindings, replayLifecycle, commandController, mobileDrawer, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
+    resources: [timelineBindings, replayLifecycle, commandController, mobileDrawer, loadBinding, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView, views.toastView],
   });
 
-  return {
-    start() {
-      ui.modeBanner.update({ replayState: engine.getState(), appState, candleStore });
-      coordinator.loadAndPrepareReplay({ autoStart: false });
-    },
-    destroy, services, ui, coordinator,
-  };
+  return { start() { ui.modeBanner.update({ replayState: engine.getState(), appState, candleStore }); coordinator.loadAndPrepareReplay({ autoStart: false }); }, destroy, services, ui, coordinator };
 }
