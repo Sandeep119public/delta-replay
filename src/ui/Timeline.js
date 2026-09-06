@@ -22,18 +22,23 @@ export class Timeline {
       this.startHereBtn = typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null;
     } catch { this.markersEl = null; this.startHereBtn = null; }
 
-    this.slider.addEventListener('input', () => {
+    this._onInput = () => {
       const idx = Number(this.slider.value);
       this._updateLabels(idx);
       if (this._onChange) this._onChange(idx);
-    });
+    };
+    this.slider.addEventListener('input', this._onInput);
 
-    this.slider.addEventListener('change', () => {
+    this._onCommitEvent = () => {
       const idx = Number(this.slider.value);
       this._updateLabels(idx);
       if (this._onCommit) this._onCommit(idx);
-    });
+    };
+    this.slider.addEventListener('change', this._onCommitEvent);
+    this._onStartHereClick = null;
   }
+
+  destroy() { this.slider?.removeEventListener?.('input', this._onInput); this.slider?.removeEventListener?.('change', this._onCommitEvent); if (this.startHereBtn && this._onStartHereClick) this.startHereBtn.removeEventListener?.('click', this._onStartHereClick); this._onChange = this._onCommit = this._onStartHere = null; }
 
   onChange(fn) { this._onChange = fn; }
   onCommit(fn) { this._onCommit = fn; }
@@ -43,7 +48,8 @@ export class Timeline {
       const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
       if (btn && !btn.dataset.wired) {
         btn.dataset.wired = '1';
-        btn.addEventListener('click', () => this._onStartHere?.(Number(this.slider.value)));
+        this._onStartHereClick = () => this._onStartHere?.(Number(this.slider.value));
+        btn.addEventListener('click', this._onStartHereClick);
       }
     } catch {}
   }
