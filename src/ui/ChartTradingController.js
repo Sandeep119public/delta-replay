@@ -4,8 +4,6 @@ import { TradingEvents } from '../trading/TradingEvents.js';
 /**
  * ChartTradingController coordinates chart-click trading interactions,
  * visual order/position price overlays, and trading toast notifications.
- *
- * Decouples chart trading interaction logic from the main application bootstrap.
  */
 export class ChartTradingController {
   constructor({
@@ -29,94 +27,92 @@ export class ChartTradingController {
     this.toastView = toastView;
     this.orderFormView = orderFormView;
     this.coordinator = coordinator;
-
     this.slInput = slInput;
     this.tpInput = tpInput;
     this.limitPriceInput = limitPriceInput;
     this.stopPriceInput = stopPriceInput;
     this.orderTypeSelect = orderTypeSelect;
-
-    this._boundOnChartClick = (e) => this.handleChartClick(e);
+    this._boundOnChartClick = (event) => this.handleChartClick(event);
     this._subscriptions = [];
     this._init();
   }
 
   _init() {
-    if (this.chartManager?.onChartClick) {
-      this.chartManager.onChartClick(this._boundOnChartClick);
-    }
+    if (this.chartManager?.onChartClick) this.chartManager.onChartClick(this._boundOnChartClick);
     this._bindTradingEvents();
     this.syncChartTradingLines();
   }
 
   _bindTradingEvents() {
     if (!this.tradingEngine?.on) return;
-
     const sync = () => this.syncChartTradingLines();
 
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.POSITION_OPENED, sync));
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.POSITION_UPDATED, sync));
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.POSITION_CLOSED, () => {
+    const subscribe = (event, handler) => {
+      const unsubscribe = this.tradingEngine.on(event, handler);
+      if (typeof unsubscribe === 'function') this._subscriptions.push(unsubscribe);
+    };
+
+    subscribe(TradingEvents.POSITION_OPENED, sync);
+    subscribe(TradingEvents.POSITION_UPDATED, sync);
+    subscribe(TradingEvents.POSITION_CLOSED, () => {
       this.chartManager?.updatePositionLines?.(null);
       this.floatingPosView?.render?.(null);
       this.syncChartTradingLines();
-    }));
-
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ACCOUNT_RESET, () => {
+    });
+    subscribe(TradingEvents.ACCOUNT_RESET, () => {
       this.chartManager?.clearTradingLines?.();
       this.floatingPosView?.render?.(null);
-    }));
-
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ORDER_PLACED, sync));
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ORDER_TRIGGERED, sync));
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ORDER_CANCELLED, sync));
-
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ORDER_FILLED, (payload) => {
+    });
+    subscribe(TradingEvents.ORDER_PLACED, sync);
+    subscribe(TradingEvents.ORDER_TRIGGERED, sync);
+    subscribe(TradingEvents.ORDER_CANCELLED, sync);
+    subscribe(TradingEvents.ORDER_FILLED, (payload) => {
       this.syncChartTradingLines();
-      const o = payload?.order ?? payload;
-      if (o?.type && o.type !== 'MARKET') {
-        const typeLabel = o.type === 'STOP_MARKET' ? 'Stop' : 'Limit';
-        const priceStr = o.filledPrice != null ? ` @ $${Number(o.filledPrice).toFixed(2)}` : '';
-        this.toastView?.show?.(`✓ ${typeLabel} ${o.side} Filled${priceStr}`);
+      const order = payload?.order ?? payload;
+      if (order?.type && order.type !== 'MARKET') {
+        const typeLabel = order.type === 'STOP_MARKET' ? 'Stop' : 'Limit';
+        const priceStr = order.filledPrice != null ? ` @ $${Number(order.filledPrice).toFixed(2)}` : '';
+        this.toastView?.show?.(`✓ ${typeLabel} ${order.side} Filled${priceStr}`);
       }
-    }));
-
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.STOP_LOSS_TRIGGERED, (p) => {
+    });
+    subscribe(TradingEvents.STOP_LOSS_TRIGGERED, (payload) => {
       this.syncChartTradingLines();
-      const priceStr = p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : '';
+      const priceStr = payload?.price != null ? ` @ $${Number(payload.price).toFixed(2)}` : '';
       this.toastView?.show?.(`🛑 Stop Loss Triggered${priceStr}`);
     });
-
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.TAKE_PROFIT_TRIGGERED, (p) => {
+    subscribe(TradingEvents.TAKE_PROFIT_TRIGGERED, (payload) => {
       this.syncChartTradingLines();
-      const priceStr = p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : '';
+      const priceStr = payload?.price != null ? ` @ $${Number(payload.price).toFixed(2)}` : '';
       this.toastView?.show?.(`🎯 Take Profit Triggered${priceStr}`);
-    }));
-
-    this._subscriptions.push(this.tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (p) => {
+    });
+    subscribe(TradingEvents.POSITION_LIQUIDATED, (payload) => {
       this.syncChartTradingLines();
-      const priceStr = p?.liquidationPrice != null ? ` @ $${Number(p.liquidationPrice).toFixed(2)}` : '';
+      const priceStr = payload?.liquidationPrice != null ? ` @ $${Number(payload.liquidationPrice).toFixed(2)}` : '';
       this.toastView?.show?.(`⚠️ Position Liquidated${priceStr}`);
     });
+  }
+
+  destroy() {
+    this._subscriptions.forEach((unsubscribe) => {
+      try { unsubscribe?.(); } catch (error) { console.warn('[ChartTrading] unsubscribe failed', error); }
+    });
+    this._subscriptions = [];
+    if (Array.isArray(this.chartManager?._onChartClickCallbacks)) {
+      this.chartManager._onChartClickCallbacks = this.chartManager._onChartClickCallbacks.filter((cb) => cb !== this._boundOnChartClick);
+    }
   }
 
   syncChartTradingLines() {
     const positions = this.tradingEngine?.getPositions?.() || [];
     const activePos = positions.length > 0 ? positions[0] : null;
-
     this.chartManager?.updatePositionLines?.(activePos);
-
-    const pendingOrders = this.tradingEngine?.getPendingOrders
-      ? this.tradingEngine.getPendingOrders()
-      : [];
+    const pendingOrders = this.tradingEngine?.getPendingOrders ? this.tradingEngine.getPendingOrders() : [];
     this.chartManager?.updateOrderLines?.(pendingOrders);
-
     this.floatingPosView?.render?.(activePos);
   }
 
   handleChartClick({ price }) {
     if (!Number.isFinite(price) || price <= 0) return null;
-
     const positions = this.tradingEngine?.getPositions?.() || [];
     const activePos = positions.length > 0 ? positions[0] : null;
     const intent = TradingIntentResolver.resolveClickIntent(price, activePos);
@@ -127,36 +123,22 @@ export class ChartTradingController {
       if (res.success) {
         if (this.tpInput) this.tpInput.value = intent.price.toFixed(2);
         this.toastView?.show?.(`Take Profit set to $${intent.price.toFixed(2)}`);
-      } else {
-        this.coordinator?.showTradingError?.(res.message);
-      }
+      } else this.coordinator?.showTradingError?.(res.message);
     } else if (intent.action === 'SET_SL') {
       const res = this.tradingEngine.setStopLoss(intent.symbol, intent.price);
       if (res.success) {
         if (this.slInput) this.slInput.value = intent.price.toFixed(2);
         this.toastView?.show?.(`Stop Loss set to $${intent.price.toFixed(2)}`);
-      } else {
-        this.coordinator?.showTradingError?.(res.message);
-      }
+      } else this.coordinator?.showTradingError?.(res.message);
     } else {
-      // PRICE_SELECT (when no active position or setting limit/stop)
-      const type = this.orderFormView?.getOrderType
-        ? this.orderFormView.getOrderType()
-        : (this.orderTypeSelect?.value || 'MARKET');
-
+      const type = this.orderFormView?.getOrderType ? this.orderFormView.getOrderType() : (this.orderTypeSelect?.value || 'MARKET');
       if (type === 'LIMIT') {
-        if (this.orderFormView?.setLimitPrice) {
-          this.orderFormView.setLimitPrice(intent.price);
-        } else if (this.limitPriceInput) {
-          this.limitPriceInput.value = intent.price.toFixed(2);
-        }
+        if (this.orderFormView?.setLimitPrice) this.orderFormView.setLimitPrice(intent.price);
+        else if (this.limitPriceInput) this.limitPriceInput.value = intent.price.toFixed(2);
         this.toastView?.show?.(`Limit Price set to $${intent.price.toFixed(2)}`);
       } else if (type === 'STOP_MARKET') {
-        if (this.orderFormView?.setStopPrice) {
-          this.orderFormView.setStopPrice(intent.price);
-        } else if (this.stopPriceInput) {
-          this.stopPriceInput.value = intent.price.toFixed(2);
-        }
+        if (this.orderFormView?.setStopPrice) this.orderFormView.setStopPrice(intent.price);
+        else if (this.stopPriceInput) this.stopPriceInput.value = intent.price.toFixed(2);
         this.toastView?.show?.(`Stop Price set to $${intent.price.toFixed(2)}`);
       }
     }
