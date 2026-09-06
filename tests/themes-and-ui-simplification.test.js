@@ -351,6 +351,7 @@ describe('ThemeManager & UI Simplification', () => {
     it('ships audit-driven DOM: sparkline, drawer FAB, sr ticker, advanced toggle', () => {
       expect(html).toMatch(/id="timeline-sparkline"/);
       expect(html).toMatch(/id="btn-trading-drawer"/);
+      expect(html).toMatch(/id="drawer-scrim"/);
       expect(html).toMatch(/id="sr-ticker"/);
       expect(html).toMatch(/id="btn-advanced-order"/);
       expect(html).toMatch(/value="colorblind"/);

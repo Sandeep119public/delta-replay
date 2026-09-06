@@ -103,11 +103,27 @@ describe('TimelineSparkline', () => {
     expect(idx).toBeLessThanOrEqual(10);
   });
 
+  it('touch tap and drag scrub to the nearest candle index', () => {
+    const onSeek = vi.fn();
+    const view = new TimelineSparkline({ canvasEl: canvas, candleStore, engine, tradingEngine, onSeek });
+    view._handleTouch({ touches: [{ clientX: 30 }] }, false);
+    expect(onSeek).toHaveBeenCalledTimes(1);
+    // 30/300 * 19 ≈ 1.9 -> index 2
+    expect(onSeek.mock.calls[0][0]).toBe(2);
+
+    const preventDefault = vi.fn();
+    view._handleTouch({ touches: [{ clientX: 270 }], preventDefault }, true);
+    expect(preventDefault).toHaveBeenCalled();
+    expect(onSeek.mock.calls[1][0]).toBe(17);
+  });
+
   it('subscribes to engine and trade events, and cleans up on destroy', () => {
     const view = new TimelineSparkline({ canvasEl: canvas, candleStore, engine, tradingEngine });
     expect(engine.on).toHaveBeenCalledWith('stateChanged', expect.any(Function));
     expect(tradingEngine.on).toHaveBeenCalledWith('tradeExecuted', expect.any(Function));
     view.destroy();
     expect(canvas.removeEventListener).toHaveBeenCalledWith('click', expect.any(Function));
+    expect(canvas.removeEventListener).toHaveBeenCalledWith('touchstart', expect.any(Function));
+    expect(canvas.removeEventListener).toHaveBeenCalledWith('touchmove', expect.any(Function));
   });
 });

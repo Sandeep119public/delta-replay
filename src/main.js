@@ -169,14 +169,40 @@ const commandController = new ReplayCommandController({
 });
 commandController.bindKeyboardShortcuts();
 
-// Mobile trading drawer toggle (bottom sheet on <=768px)
+// Mobile trading drawer (bottom sheet on <=768px): FAB toggle, scrim
+// dismiss, and swipe-down-to-dismiss with native-app feel.
 try {
   const drawerBtn = document.getElementById('btn-trading-drawer');
+  const scrim = document.getElementById('drawer-scrim');
+  const tradingPanelEl = document.getElementById('trading-panel');
+  const setDrawer = (open) => {
+    document.body.classList.toggle('drawer-open', !!open);
+    if (drawerBtn) drawerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
   if (drawerBtn) {
     drawerBtn.addEventListener('click', () => {
-      const open = document.body.classList.toggle('drawer-open');
-      drawerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      setDrawer(!document.body.classList.contains('drawer-open'));
     });
+  }
+  if (scrim) {
+    scrim.addEventListener('click', () => setDrawer(false));
+  }
+  if (tradingPanelEl) {
+    let swipeStartY = null;
+    tradingPanelEl.addEventListener('touchstart', (e) => {
+      const touch = e?.touches?.[0];
+      swipeStartY = touch && Number.isFinite(touch.clientY) ? touch.clientY : null;
+    }, { passive: true });
+    tradingPanelEl.addEventListener('touchend', (e) => {
+      if (swipeStartY === null) return;
+      const touch = e?.changedTouches?.[0];
+      const endY = touch && Number.isFinite(touch.clientY) ? touch.clientY : null;
+      swipeStartY = null;
+      if (endY === null) return;
+      if (endY - swipeStartY > 80 && document.body.classList.contains('drawer-open')) {
+        setDrawer(false);
+      }
+    }, { passive: true });
   }
 } catch {}
 

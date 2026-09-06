@@ -106,6 +106,9 @@
 .fab-trading {
   display: none;
 }
+.drawer-scrim {
+  display: none;
+}
 @media (max-width: 768px) {
   .fab-trading {
     display: inline-flex;
@@ -128,6 +131,17 @@
   }
   body:not(.drawer-open) .trading-section {
     display: none !important;
+  }
+  /* Dismiss scrim behind the open sheet */
+  .drawer-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 50;
+  }
+  body:not(.drawer-open) .drawer-scrim {
+    display: none;
   }
   body.drawer-open .trading-section {
     display: flex !important;

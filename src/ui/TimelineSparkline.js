@@ -35,6 +35,8 @@ export class TimelineSparkline {
     this._onState = () => this.render();
     this._onResize = () => this.render();
     this._boundClick = (e) => this._handleClick(e);
+    this._boundTouchStart = (e) => this._handleTouch(e, false);
+    this._boundTouchMove = (e) => this._handleTouch(e, true);
     this._ro = null;
     this._attach();
   }
@@ -53,6 +55,10 @@ export class TimelineSparkline {
         this._ro.observe(this.canvas.parentElement);
       }
       this.canvas?.addEventListener?.('click', this._boundClick);
+      // Thumb scrubbing: tap to jump, drag to sweep. touchmove is
+      // non-passive so the page doesn't scroll mid-scrub.
+      this.canvas?.addEventListener?.('touchstart', this._boundTouchStart, { passive: true });
+      this.canvas?.addEventListener?.('touchmove', this._boundTouchMove, { passive: false });
     } catch {}
   }
 
@@ -67,6 +73,8 @@ export class TimelineSparkline {
       }
       this._ro?.disconnect?.();
       this.canvas?.removeEventListener?.('click', this._boundClick);
+      this.canvas?.removeEventListener?.('touchstart', this._boundTouchStart);
+      this.canvas?.removeEventListener?.('touchmove', this._boundTouchMove);
     } catch {}
   }
 
@@ -220,9 +228,27 @@ export class TimelineSparkline {
         if (!rect || !Number.isFinite(clientX)) return;
         offsetX = clientX - rect.left;
       }
-      const width = this.canvas?.getBoundingClientRect?.()?.width || this.canvas?.clientWidth || 1;
-      const idx = Math.min(Math.max(0, Math.round((offsetX / width) * (candles.length - 1))), candles.length - 1);
-      if (typeof this.onSeek === 'function') this.onSeek(idx);
+      this._seekAtOffset(offsetX, candles.length);
     } catch {}
+  }
+
+  /** Touch scrub: first touch's x-coordinate; move events block page scroll. */
+  _handleTouch(e, isMove) {
+    try {
+      const candles = this._candles();
+      if (!candles.length) return;
+      const touch = e?.touches?.[0] || e?.changedTouches?.[0];
+      if (!touch || !Number.isFinite(touch.clientX)) return;
+      if (isMove && typeof e?.preventDefault === 'function') e.preventDefault();
+      const rect = this.canvas?.getBoundingClientRect?.();
+      if (!rect) return;
+      this._seekAtOffset(touch.clientX - rect.left, candles.length);
+    } catch {}
+  }
+
+  _seekAtOffset(offsetX, count) {
+    const width = this.canvas?.getBoundingClientRect?.()?.width || this.canvas?.clientWidth || 1;
+    const idx = Math.min(Math.max(0, Math.round((offsetX / width) * (count - 1))), count - 1);
+    if (typeof this.onSeek === 'function') this.onSeek(idx);
   }
 }
