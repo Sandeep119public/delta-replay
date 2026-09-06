@@ -181,13 +181,9 @@ export class PaperTradingEngine extends EventEmitter {
     }
   }
   _fundingMarkPriceAt(symbol, timestamp, previousMarket, currentCandle) {
-    const pos = this._positions.get(symbol); if (!pos) return null;
-    const prevClose = previousMarket && Number.isFinite(previousMarket.candle?.close) ? Number(previousMarket.candle.close) : (Number.isFinite(pos.currentPrice) ? pos.currentPrice : Number(pos.entryPrice));
-    const currClose = Number.isFinite(currentCandle?.close) ? Number(currentCandle.close) : prevClose;
-    const prevTime = Number(previousMarket?.timestamp), currTime = Number(currentCandle?.time);
-    if (!Number.isFinite(prevTime) || !Number.isFinite(currTime) || currTime <= prevTime || timestamp <= prevTime) return timestamp >= currTime ? currClose : prevClose;
-    const ratio = Math.min(1, Math.max(0, (timestamp - prevTime) / (currTime - prevTime)));
-    return prevClose + (currClose - prevClose) * ratio;
+    const pos = this._positions.get(symbol);
+    if (!pos) return null;
+    return this._fundingManager.interpolateMarkPrice({ position: pos, timestamp, previousMarket, currentCandle });
   }
   clearMarketContext() { this._marketBySymbol.clear(); this._latestCandle = null; this._latestCandleIndex = -1; this._latestSymbolContext = null; }
 

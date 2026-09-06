@@ -20,6 +20,8 @@ import { TradingPanel } from './ui/TradingPanel.js';
 import { ToastNotificationView } from './ui/ToastNotificationView.js';
 import { FloatingPositionView } from './ui/FloatingPositionView.js';
 import { ReplayDateSelector } from './ui/ReplayDateSelector.js';
+import { TradingEvents } from './trading/TradingEvents.js';
+import { ReplayEvents } from './replay/ReplayEvents.js';
 
 // ===== 1. CORE ENGINES & STATE =====
 const appState = new AppState();
@@ -321,20 +323,20 @@ chartManager.onChartClick(({ price }) => {
   tradingPanel.render();
 });
 
-tradingEngine.on('positionOpened', syncChartTradingLines);
-tradingEngine.on('positionUpdated', syncChartTradingLines);
-tradingEngine.on('positionClosed', () => {
+tradingEngine.on(TradingEvents.POSITION_OPENED, syncChartTradingLines);
+tradingEngine.on(TradingEvents.POSITION_UPDATED, syncChartTradingLines);
+tradingEngine.on(TradingEvents.POSITION_CLOSED, () => {
   chartManager.updatePositionLines(null);
   floatingPosView.render(null);
   syncChartTradingLines();
 });
-tradingEngine.on('accountReset', () => {
+tradingEngine.on(TradingEvents.ACCOUNT_RESET, () => {
   chartManager.clearTradingLines();
   floatingPosView.render(null);
 });
-tradingEngine.on('orderPlaced', syncChartTradingLines);
-tradingEngine.on('orderTriggered', syncChartTradingLines);
-tradingEngine.on('orderFilled', (payload) => {
+tradingEngine.on(TradingEvents.ORDER_PLACED, syncChartTradingLines);
+tradingEngine.on(TradingEvents.ORDER_TRIGGERED, syncChartTradingLines);
+tradingEngine.on(TradingEvents.ORDER_FILLED, (payload) => {
   syncChartTradingLines();
   const o = payload?.order ?? payload;
   if (o?.type && o.type !== 'MARKET') {
@@ -343,45 +345,45 @@ tradingEngine.on('orderFilled', (payload) => {
     toastView.show(`✓ ${typeLabel} ${o.side} Filled${priceStr}`);
   }
 });
-tradingEngine.on('orderCancelled', syncChartTradingLines);
-tradingEngine.on('stopLossTriggered', (p) => {
+tradingEngine.on(TradingEvents.ORDER_CANCELLED, syncChartTradingLines);
+tradingEngine.on(TradingEvents.STOP_LOSS_TRIGGERED, (p) => {
   syncChartTradingLines();
   toastView.show(`🛑 Stop Loss Triggered${p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : ''}`);
 });
-tradingEngine.on('takeProfitTriggered', (p) => {
+tradingEngine.on(TradingEvents.TAKE_PROFIT_TRIGGERED, (p) => {
   syncChartTradingLines();
   toastView.show(`🎯 Take Profit Triggered${p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : ''}`);
 });
-tradingEngine.on('positionLiquidated', (p) => {
+tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (p) => {
   syncChartTradingLines();
   toastView.show(`⚠️ Position Liquidated${p?.liquidationPrice != null ? ` @ $${Number(p.liquidationPrice).toFixed(2)}` : ''}`);
 });
 
 // ===== 6. ENGINE LIFECYCLE EVENTS =====
-engine.on('stateChanged', (s) => {
+engine.on(ReplayEvents.STATE_CHANGED, (s) => {
   appState.setReplayState(s);
   if (s.currentIndex >= 0) timeline.setPosition(s.currentIndex);
   modeBanner.update({ replayState: s, appState, candleStore });
 });
 
-engine.on('started', (payload) => {
+engine.on(ReplayEvents.STARTED, (payload) => {
   const idx = payload?.index ?? appState.pendingStartIndex;
   timeline.setPosition(idx);
   updateRevealedMax(idx);
   modeBanner.update({ replayState: engine.getState(), appState, candleStore });
 });
 
-engine.on('stepped', (p) => {
+engine.on(ReplayEvents.STEPPED, (p) => {
   modeBanner.update({ replayState: engine.getState(), appState, candleStore });
   if (p?.index !== undefined) updateRevealedMax(p.index);
 });
 
-engine.on('seeked', (p) => {
+engine.on(ReplayEvents.SEEKED, (p) => {
   modeBanner.update({ replayState: engine.getState(), appState, candleStore });
   if (p?.index !== undefined) updateRevealedMax(p.index);
 });
 
-engine.on('reset', (s) => {
+engine.on(ReplayEvents.RESET, (s) => {
   if (s.status === 'ready') {
     coordinator.updatePreviewWindow(appState.pendingStartIndex);
     updateRevealedMax(appState.pendingStartIndex);

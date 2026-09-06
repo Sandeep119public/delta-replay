@@ -2,6 +2,7 @@ import { AccountSummaryView } from './AccountSummaryView.js';
 import { OrderFormView } from './OrderFormView.js';
 import { PositionView } from './PositionView.js';
 import { TradeLogView } from './TradeLogView.js';
+import { TradingEvents } from '../trading/TradingEvents.js';
 
 /**
  * TradingPanel coordinates the paper trading user interface.
@@ -139,19 +140,19 @@ export class TradingPanel {
 
   _bindEngineEvents() {
     const rerender = () => this.render();
-    this.engine.on('accountUpdated', rerender);
-    this.engine.on('positionOpened', rerender);
-    this.engine.on('positionClosed', rerender);
-    this.engine.on('positionUpdated', rerender);
-    this.engine.on('tradeExecuted', rerender);
-    this.engine.on('accountReset', rerender);
-    this.engine.on('orderPlaced', rerender);
-    this.engine.on('orderTriggered', rerender);
-    this.engine.on('orderFilled', rerender);
-    this.engine.on('orderCancelled', rerender);
-    this.engine.on('stopLossTriggered', rerender);
-    this.engine.on('takeProfitTriggered', rerender);
-    this.engine.on('orderRejected', (err) => this.showError(err?.message || err?.reason || 'Order rejected'));
+    this.engine.on(TradingEvents.ACCOUNT_UPDATED, rerender);
+    this.engine.on(TradingEvents.POSITION_OPENED, rerender);
+    this.engine.on(TradingEvents.POSITION_CLOSED, rerender);
+    this.engine.on(TradingEvents.POSITION_UPDATED, rerender);
+    this.engine.on(TradingEvents.TRADE_EXECUTED, rerender);
+    this.engine.on(TradingEvents.ACCOUNT_RESET, rerender);
+    this.engine.on(TradingEvents.ORDER_PLACED, rerender);
+    this.engine.on(TradingEvents.ORDER_TRIGGERED, rerender);
+    this.engine.on(TradingEvents.ORDER_FILLED, rerender);
+    this.engine.on(TradingEvents.ORDER_CANCELLED, rerender);
+    this.engine.on(TradingEvents.STOP_LOSS_TRIGGERED, rerender);
+    this.engine.on(TradingEvents.TAKE_PROFIT_TRIGGERED, rerender);
+    this.engine.on(TradingEvents.ORDER_REJECTED, (err) => this.showError(err?.message || err?.reason || 'Order rejected'));
   }
 
   showError(msg) {

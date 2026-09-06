@@ -7,6 +7,9 @@ import { ReplayCommandController } from '../src/app/ReplayCommandController.js';
 import { ToastNotificationView } from '../src/ui/ToastNotificationView.js';
 import { FloatingPositionView } from '../src/ui/FloatingPositionView.js';
 import { ReplayDateSelector } from '../src/ui/ReplayDateSelector.js';
+import { AppState } from '../src/state/AppState.js';
+import { Order, ORDER_STATUSES } from '../src/trading/Order.js';
+import { FundingManager } from '../src/trading/FundingManager.js';
 
 function createMockElement(initial = {}) {
   const classes = new Set(initial.classes || []);
@@ -316,6 +319,114 @@ describe('SoC and Modularity Deep Audit Verification', () => {
       expect(mockCoord.loadAndPrepareReplay).toHaveBeenCalledWith(expect.objectContaining({
         autoStart: false,
       }));
+    });
+  });
+
+  describe('7. AppState Memory & O(1) Allocation Optimization', () => {
+    it('totalCandles and snapshot() use store.getCount() without calling store.getAll()', () => {
+      const appState = new AppState();
+      const mockStore = {
+        getCount: vi.fn(() => 50000),
+        getAll: vi.fn(() => [{ time: 1 }]),
+        get: vi.fn((idx) => ({ time: idx * 60 })),
+        sliceWindow: vi.fn((s, e) => [{ time: s }]),
+      };
+
+      appState.setCandleStore(mockStore);
+      mockStore.getAll.mockClear();
+
+      expect(appState.totalCandles).toBe(50000);
+      expect(mockStore.getCount).toHaveBeenCalled();
+      expect(mockStore.getAll).not.toHaveBeenCalled();
+
+      const snap = appState.snapshot();
+      expect(snap.total).toBe(50000);
+      expect(mockStore.getAll).not.toHaveBeenCalled();
+
+      const c = appState.getCandle(5);
+      expect(c).toEqual({ time: 300 });
+      expect(mockStore.get).toHaveBeenCalledWith(5);
+
+      const win = appState.sliceWindow(0, 10);
+      expect(win).toEqual([{ time: 0 }]);
+      expect(mockStore.sliceWindow).toHaveBeenCalledWith(0, 10);
+    });
+  });
+
+  describe('8. Order State Machine Transition Invariants', () => {
+    it('fills pending order and updates fields correctly', () => {
+      const order = new Order({ id: 1, symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', quantity: 1, status: ORDER_STATUSES.PENDING });
+      order.fill({ filledPrice: 50000, filledAt: 1700000000, entryFee: 25 });
+
+      expect(order.status).toBe(ORDER_STATUSES.FILLED);
+      expect(order.filledPrice).toBe(50000);
+      expect(order.filledAt).toBe(1700000000);
+      expect(order.entryFee).toBe(25);
+    });
+
+    it('rejects pending order and sets rejection reason', () => {
+      const order = new Order({ id: 2, symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quantity: 1 });
+      order.reject('INSUFFICIENT_CASH');
+
+      expect(order.status).toBe(ORDER_STATUSES.REJECTED);
+      expect(order.rejectionReason).toBe('INSUFFICIENT_CASH');
+    });
+
+    it('cancels pending order and sets cancel reason', () => {
+      const order = new Order({ id: 3, symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', quantity: 1 });
+      order.cancel('USER_CANCEL');
+
+      expect(order.status).toBe(ORDER_STATUSES.CANCELLED);
+      expect(order.cancelReason).toBe('USER_CANCEL');
+    });
+
+    it('throws error when trying to fill an order that is not PENDING', () => {
+      const order = new Order({ id: 4, symbol: 'BTCUSDT', side: 'BUY', type: 'LIMIT', quantity: 1 });
+      order.cancel('CANCELLED');
+
+      expect(() => order.fill({ filledPrice: 50000, filledAt: 100 })).toThrow(/status is CANCELLED, expected PENDING/);
+    });
+  });
+
+  describe('9. FundingManager Mark Price Interpolation', () => {
+    it('interpolates linearly between previous and current candle closes', () => {
+      const funding = new FundingManager();
+      const pos = { symbol: 'BTCUSDT', side: 'LONG', quantity: 1, entryPrice: 50000, currentPrice: 50000 };
+      const previousMarket = { timestamp: 1000, candle: { close: 50000 } };
+      const currentCandle = { time: 2000, close: 60000 };
+
+      // Halfway between 1000 and 2000
+      const markMid = funding.interpolateMarkPrice({
+        position: pos,
+        timestamp: 1500,
+        previousMarket,
+        currentCandle,
+      });
+      expect(markMid).toBe(55000);
+
+      // Quarter way
+      const markQuarter = funding.interpolateMarkPrice({
+        position: pos,
+        timestamp: 1250,
+        previousMarket,
+        currentCandle,
+      });
+      expect(markQuarter).toBe(52500);
+    });
+
+    it('clamps to endpoints if timestamp is beyond interval range', () => {
+      const funding = new FundingManager();
+      const pos = { symbol: 'BTCUSDT', side: 'LONG', quantity: 1, entryPrice: 50000 };
+      const previousMarket = { timestamp: 1000, candle: { close: 50000 } };
+      const currentCandle = { time: 2000, close: 60000 };
+
+      expect(funding.interpolateMarkPrice({ position: pos, timestamp: 900, previousMarket, currentCandle })).toBe(50000);
+      expect(funding.interpolateMarkPrice({ position: pos, timestamp: 2500, previousMarket, currentCandle })).toBe(60000);
+    });
+
+    it('returns null if position is null', () => {
+      const funding = new FundingManager();
+      expect(funding.interpolateMarkPrice({ position: null, timestamp: 1000 })).toBeNull();
     });
   });
 });

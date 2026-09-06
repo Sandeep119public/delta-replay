@@ -60,6 +60,36 @@ export class Order {
     this.cancelReason = cancelReason;
   }
 
+  fill({ filledPrice, filledAt, entryFee = null, exitFee = null } = {}) {
+    if (this.status !== ORDER_STATUSES.PENDING) {
+      throw new Error(`Cannot fill order ${this.id}: status is ${this.status}, expected PENDING`);
+    }
+    this.status = ORDER_STATUSES.FILLED;
+    this.filledPrice = Number(filledPrice);
+    this.filledAt = filledAt;
+    if (entryFee != null) this.entryFee = entryFee;
+    if (exitFee != null) this.exitFee = exitFee;
+    return this;
+  }
+
+  reject(reason) {
+    if (this.status !== ORDER_STATUSES.PENDING) {
+      throw new Error(`Cannot reject order ${this.id}: status is ${this.status}, expected PENDING`);
+    }
+    this.status = ORDER_STATUSES.REJECTED;
+    this.rejectionReason = reason;
+    return this;
+  }
+
+  cancel(reason) {
+    if (this.status !== ORDER_STATUSES.PENDING) {
+      throw new Error(`Cannot cancel order ${this.id}: status is ${this.status}, expected PENDING`);
+    }
+    this.status = ORDER_STATUSES.CANCELLED;
+    this.cancelReason = reason;
+    return this;
+  }
+
   clone() {
     return new Order({ ...this });
   }

@@ -78,4 +78,31 @@ export class FundingManager {
 
     return payments;
   }
+
+  /**
+   * Interpolate mark price across a funding interval boundary between previous and current candle closes.
+   *
+   * @param {object} params
+   * @param {object|null} params.position - Current open position for the symbol
+   * @param {number} params.timestamp - Funding boundary timestamp
+   * @param {object|null} params.previousMarket - Previous market state { timestamp, candle }
+   * @param {object|null} params.currentCandle - Current candle { time, close, ... }
+   * @returns {number|null}
+   */
+  interpolateMarkPrice({ position, timestamp, previousMarket = null, currentCandle = null } = {}) {
+    if (!position) return null;
+    const prevClose = previousMarket && Number.isFinite(previousMarket.candle?.close)
+      ? Number(previousMarket.candle.close)
+      : (Number.isFinite(position.currentPrice) ? position.currentPrice : Number(position.entryPrice));
+    const currClose = Number.isFinite(currentCandle?.close) ? Number(currentCandle.close) : prevClose;
+    const prevTime = Number(previousMarket?.timestamp);
+    const currTime = Number(currentCandle?.time);
+
+    if (!Number.isFinite(prevTime) || !Number.isFinite(currTime) || currTime <= prevTime || timestamp <= prevTime) {
+      return timestamp >= currTime ? currClose : prevClose;
+    }
+
+    const ratio = Math.min(1, Math.max(0, (timestamp - prevTime) / (currTime - prevTime)));
+    return prevClose + (currClose - prevClose) * ratio;
+  }
 }

@@ -24,6 +24,27 @@ export class AppState extends EventEmitter {
   }
   set candles(val) { this._candles = val; }
 
+  get totalCandles() {
+    if (this._store && typeof this._store.getCount === 'function') {
+      return this._store.getCount();
+    }
+    return this._candles ? this._candles.length : 0;
+  }
+
+  getCandle(index) {
+    if (this._store && typeof this._store.get === 'function') {
+      return this._store.get(index);
+    }
+    return this._candles?.[index] ?? null;
+  }
+
+  sliceWindow(start, end) {
+    if (this._store && typeof this._store.sliceWindow === 'function') {
+      return this._store.sliceWindow(start, end);
+    }
+    return this._candles ? this._candles.slice(start, end + 1) : [];
+  }
+
   setCandleStore(store) {
     this._store = store;
     this.emit('candles', this.candles);
@@ -75,12 +96,11 @@ export class AppState extends EventEmitter {
   setCandles(candles) {
     if (this._store) {
       // Single source is CandleStore; avoid duplicating full array in AppState
-      // Keep _candles empty, getter will proxy to store; just emit event
       this._candles = [];
     } else {
       this._candles = candles;
     }
-    this.emit('candles', this.candles);
+    this.emit('candles', candles || []);
     this.emit('change', this.snapshot());
   }
 
@@ -94,7 +114,7 @@ export class AppState extends EventEmitter {
     return {
       symbol: this.symbol,
       timeframe: this.timeframe,
-      total: this.candles.length,
+      total: this.totalCandles,
       loading: this.loading,
       loadingState: this.loadingState,
       error: this.error,
