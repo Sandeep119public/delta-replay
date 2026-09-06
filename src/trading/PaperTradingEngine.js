@@ -341,13 +341,13 @@ export class PaperTradingEngine extends EventEmitter {
       if ((existingLong && incomingLong) || (!existingLong && !incomingLong)) return this._reject('POSITION_ALREADY_OPEN', `Position already open for ${symbol} (${existing.side}). Close it first.`, { symbol });
       if (timing === EXECUTION_TIMING.NEXT_BAR_OPEN) {
         const order = new Order({ id: this._nextOrderId++, symbol, side, type: ORDER_TYPES.MARKET, quantity: q, timing: EXECUTION_TIMING.NEXT_BAR_OPEN, status: ORDER_STATUSES.PENDING, createdAt: Date.now(), createdReplayTime: time, createdIndex: candleIndex });
-        this._orders.set(order.id, order); this._pendingOrderIds.push(order.id); this._emitOrderPlaced(order); return { success: true, order: this._cloneJSON(order.toJSON()), status: ORDER_STATUSES.PENDING };
+        this._orders.set(String(order.id), order); this._pendingOrderIds.push(String(order.id)); this._emitOrderPlaced(order); return { success: true, order: this._cloneJSON(order.toJSON()), status: ORDER_STATUSES.PENDING };
       }
       const result = this._closePositionInternal(symbol, execPrice, time); this._cancelIncompatiblePendings(symbol); return result;
     }
     if (timing === EXECUTION_TIMING.NEXT_BAR_OPEN) {
       const order = new Order({ id: this._nextOrderId++, symbol, side, type: ORDER_TYPES.MARKET, quantity: q, timing: EXECUTION_TIMING.NEXT_BAR_OPEN, status: ORDER_STATUSES.PENDING, createdAt: Date.now(), createdReplayTime: time, createdIndex: candleIndex });
-      this._orders.set(order.id, order); this._pendingOrderIds.push(order.id); this._emitOrderPlaced(order); return { success: true, order: this._cloneJSON(order.toJSON()), status: ORDER_STATUSES.PENDING };
+      this._orders.set(String(order.id), order); this._pendingOrderIds.push(String(order.id)); this._emitOrderPlaced(order); return { success: true, order: this._cloneJSON(order.toJSON()), status: ORDER_STATUSES.PENDING };
     }
     const posSide = side === 'BUY' ? 'LONG' : 'SHORT', entryNotional = execPrice * q, entryFee = calcFee(entryNotional, this.feeRate), marginCheck = this._checkMarginAvailable(execPrice, q);
     if (!marginCheck.valid) return this._reject('INSUFFICIENT_CASH', `Insufficient available margin to place ${side} order: required ${marginCheck.requiredMargin.toFixed(2)}, available ${marginCheck.availableMargin.toFixed(2)}`);
@@ -366,7 +366,7 @@ export class PaperTradingEngine extends EventEmitter {
     if (timing === EXECUTION_TIMING.NEXT_BAR_OPEN) {
       const closeSide = existing.side === 'LONG' ? 'SELL' : 'BUY';
       const order = new Order({ id: this._nextOrderId++, symbol, side: closeSide, type: ORDER_TYPES.MARKET, quantity: existing.quantity, timing: EXECUTION_TIMING.NEXT_BAR_OPEN, status: ORDER_STATUSES.PENDING, createdAt: Date.now(), createdReplayTime: market.candle.time, createdIndex: market.index });
-      this._orders.set(order.id, order); this._pendingOrderIds.push(order.id); this._emitOrderPlaced(order); return { success: true, order: this._cloneJSON(order.toJSON()), status: ORDER_STATUSES.PENDING };
+      this._orders.set(String(order.id), order); this._pendingOrderIds.push(String(order.id)); this._emitOrderPlaced(order); return { success: true, order: this._cloneJSON(order.toJSON()), status: ORDER_STATUSES.PENDING };
     }
     const res = this._closePositionInternal(symbol, market.candle.close, market.candle.time, null); this._cancelIncompatiblePendings(symbol); return res;
   }
