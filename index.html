@@ -22,9 +22,7 @@
       <div class="topbar-left">
         <div class="logo-wrapper">
           <h1 class="logo">DELTA REPLAY</h1>
-          <span class="phase-badge" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg> PRO</span>
         </div>
-        <div id="cache-badge" class="cache-badge hidden" title="Data loaded from local IndexedDB cache"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg> CACHED</div>
       </div>
 
       <nav class="topbar-center" aria-label="Replay controls">
@@ -45,7 +43,6 @@
           <label for="replay-date">Replay From (UTC)</label>
           <div class="datetime-group">
             <input type="date" id="replay-date" aria-label="Replay start date" />
-            <input type="time" id="replay-time" step="60" aria-label="Replay start time" />
           </div>
         </div>
 
@@ -54,9 +51,7 @@
           <label>Quick Presets</label>
           <div class="preset-chips">
             <button type="button" class="preset-chip" data-preset="1d" title="Replay from 1 day ago">1D</button>
-            <button type="button" class="preset-chip" data-preset="3d" title="Replay from 3 days ago">3D</button>
             <button type="button" class="preset-chip" data-preset="7d" title="Replay from 7 days ago">7D</button>
-            <button type="button" class="preset-chip" data-preset="30d" title="Replay from 30 days ago">30D</button>
             <button type="button" class="preset-chip" data-preset="now" title="Replay from recent 24h">Live</button>
           </div>
         </div>
@@ -81,10 +76,18 @@
       <div class="topbar-right">
         <div class="theme-selector-group">
           <div class="theme-pills" role="radiogroup" aria-label="Visual Theme">
-            <button type="button" class="theme-pill active" data-theme="dark" role="radio" aria-checked="true" title="Dark Pro">🌙</button>
-            <button type="button" class="theme-pill" data-theme="paper" role="radio" aria-checked="false" title="Paper Manuscript">📜</button>
-            <button type="button" class="theme-pill" data-theme="light" role="radio" aria-checked="false" title="Clean Light">☀️</button>
-            <button type="button" class="theme-pill" data-theme="midnight" role="radio" aria-checked="false" title="Midnight OLED">🌌</button>
+            <button type="button" class="theme-pill active" data-theme="dark" role="radio" aria-checked="true" tabindex="0" title="Dark Pro" aria-label="Dark Pro">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            </button>
+            <button type="button" class="theme-pill" data-theme="paper" role="radio" aria-checked="false" tabindex="-1" title="Paper Manuscript" aria-label="Paper Manuscript">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            </button>
+            <button type="button" class="theme-pill" data-theme="light" role="radio" aria-checked="false" tabindex="-1" title="Clean Light" aria-label="Clean Light">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>
+            </button>
+            <button type="button" class="theme-pill" data-theme="midnight" role="radio" aria-checked="false" tabindex="-1" title="Midnight OLED" aria-label="Midnight OLED">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"></path></svg>
+            </button>
           </div>
           <select id="theme-select" class="theme-select-legacy" aria-label="Visual Theme">
             <option value="dark" selected>Dark Pro</option>
@@ -97,9 +100,8 @@
       </div>
     </header>
 
-    <!-- STATUS BAR -->
+    <!-- STATUS BAR: slim progress ticker -->
     <div id="mode-banner" class="mode-banner mode-idle" role="status" aria-live="polite">
-      <span id="mode-indicator" class="mode-indicator">PREVIEW MODE — READY TO REPLAY</span>
       <span id="progress-panel" class="progress-panel hidden">
         <span id="progress-text">0 / 0</span>
         <span id="progress-pct">0%</span>
@@ -232,7 +234,6 @@
                     <input id="trade-qty" type="number" min="0.0001" step="0.01" value="1" aria-label="Trade quantity" />
                   </div>
                   <div class="qty-presets-compact">
-                    <button type="button" class="qty-chip" data-qty="0.05">0.05</button>
                     <button type="button" class="qty-chip" data-qty="0.1">0.1</button>
                     <button type="button" class="qty-chip" data-qty="0.5">0.5</button>
                     <button type="button" class="qty-chip" data-qty="1">1.0</button>
@@ -299,12 +300,9 @@
               <div class="setting-item">
                 <label>Starting Capital</label>
                 <div class="capital-presets">
-                  <button type="button" class="capital-chip" data-balance="1000">$1K</button>
                   <button type="button" class="capital-chip" data-balance="5000">$5K</button>
                   <button type="button" class="capital-chip active" data-balance="10000">$10K</button>
-                  <button type="button" class="capital-chip" data-balance="25000">$25K</button>
                   <button type="button" class="capital-chip" data-balance="50000">$50K</button>
-                  <button type="button" class="capital-chip" data-balance="100000">$100K</button>
                 </div>
                 <div class="custom-capital-row">
                   <input id="custom-capital-input" type="number" min="100" step="100" placeholder="Custom USD" aria-label="Custom starting capital in USD" />
@@ -394,10 +392,8 @@
             <option value="10">10x</option>
           </select>
         </div>
-        <span id="replay-status" class="replay-status" aria-live="polite">idle</span>
         <button id="btn-follow" class="btn btn-secondary hidden" title="Follow current replay candle" aria-label="Follow current candle">&#8599; FOLLOW</button>
       </div>
-      <p class="shortcuts-hint">Space: Play/Pause &nbsp;|&nbsp; &rarr; Step &nbsp;|&nbsp; R: Reset &nbsp;|&nbsp; Drag chart to pan history</p>
     </section>
   </div>
   <script type="module" src="/src/main.js"></script>

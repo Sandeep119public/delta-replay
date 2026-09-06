@@ -64,37 +64,63 @@ export class ThemeManager {
     });
   }
 
-  _bindPills() {
+  _getPills() {
     try {
-      if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+      if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return [];
       const pills = document.querySelectorAll('.theme-pill');
-      if (!pills || !pills.length) return;
-      pills.forEach((pill) => {
-        if (typeof pill.addEventListener !== 'function') return;
-        pill.addEventListener('click', () => {
-          const theme = pill.getAttribute ? pill.getAttribute('data-theme') : pill.dataset?.theme;
-          if (theme) this.applyTheme(theme, true);
-        });
+      if (!pills) return [];
+      return Array.from(pills);
+    } catch {
+      return [];
+    }
+  }
+
+  _bindPills() {
+    const pills = this._getPills();
+    if (!pills.length) return;
+    pills.forEach((pill) => {
+      if (!pill || typeof pill.addEventListener !== 'function') return;
+      pill.addEventListener('click', () => {
+        const theme = pill.getAttribute ? pill.getAttribute('data-theme') : pill.dataset?.theme;
+        if (theme) this.applyTheme(theme, true);
       });
-    } catch {}
+      // Roving tabindex arrow-key navigation for the radiogroup
+      pill.addEventListener('keydown', (event) => {
+        if (!event || (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End')) return;
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        const list = this._getPills();
+        if (!list.length) return;
+        const current = list.indexOf(pill);
+        let next = current;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1) % list.length;
+        else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current - 1 + list.length) % list.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = list.length - 1;
+        const target = list[next];
+        if (!target) return;
+        if (typeof target.focus === 'function') target.focus();
+        const theme = target.getAttribute ? target.getAttribute('data-theme') : target.dataset?.theme;
+        if (theme) this.applyTheme(theme, true);
+      });
+    });
   }
 
   _syncPills(theme) {
-    try {
-      if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
-      const pills = document.querySelectorAll('.theme-pill');
-      if (!pills || !pills.length) return;
-      pills.forEach((pill) => {
-        const name = pill.getAttribute ? pill.getAttribute('data-theme') : pill.dataset?.theme;
-        const isActive = name === theme;
-        if (pill.classList && typeof pill.classList.toggle === 'function') {
-          pill.classList.toggle('active', isActive);
-        }
-        if (typeof pill.setAttribute === 'function') {
-          pill.setAttribute('aria-checked', isActive ? 'true' : 'false');
-        }
-      });
-    } catch {}
+    const pills = this._getPills();
+    if (!pills.length) return;
+    pills.forEach((pill) => {
+      if (!pill) return;
+      const name = pill.getAttribute ? pill.getAttribute('data-theme') : pill.dataset?.theme;
+      const isActive = name === theme;
+      if (pill.classList && typeof pill.classList.toggle === 'function') {
+        pill.classList.toggle('active', isActive);
+      }
+      if (typeof pill.setAttribute === 'function') {
+        pill.setAttribute('aria-checked', isActive ? 'true' : 'false');
+        // Roving tabindex: only the active pill is tabbable
+        pill.setAttribute('tabindex', isActive ? '0' : '-1');
+      }
+    });
   }
 
   getTheme() {

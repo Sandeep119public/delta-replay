@@ -37,7 +37,9 @@ export class ModeBanner {
     const currentIndex = replayState?.currentIndex ?? -1;
 
     // 1. Update Mode Banner Styling & Text
-    if (this.modeBanner && this.modeIndicator) {
+    // Note: #mode-indicator was removed from the DOM during decluttering;
+    // the banner now acts purely as a slim progress ticker.
+    if (this.modeBanner) {
       this.modeBanner.className = 'mode-banner';
       let label = '';
       let showProgress = false;
@@ -66,7 +68,7 @@ export class ModeBanner {
         label = st.toUpperCase();
       }
 
-      this.modeIndicator.textContent = label;
+      if (this.modeIndicator) this.modeIndicator.textContent = label;
       if (this.progressPanel) {
         if (showProgress) this.progressPanel.classList.remove('hidden');
         else this.progressPanel.classList.add('hidden');

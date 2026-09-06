@@ -72,8 +72,10 @@ export class ReplayControls {
     const isEnded = state.status === 'ended';
     const hasData = state.totalCandles > 0;
 
-    this.statusEl.textContent = state.status.toUpperCase();
-    this.statusEl.className = `replay-status ${state.status}`;
+    if (this.statusEl) {
+      this.statusEl.textContent = state.status.toUpperCase();
+      this.statusEl.className = `replay-status ${state.status}`;
+    }
 
     this.startReplayBtn.disabled = !hasData || !isReady;
     this.startReplayBtn.textContent = 'START REPLAY';

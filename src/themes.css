@@ -37,35 +37,32 @@
 }
 
 /* ===== UI SIMPLIFICATION & DECLUTTERING ===== */
+/* NOTE (declutter refactor): permanently hidden elements were removed from
+   index.html instead of being masked with CSS — .phase-badge, #cache-badge,
+   #replay-time, surplus preset/qty/capital chips, #mode-indicator,
+   .shortcuts-hint and #replay-status no longer exist in the DOM, so the old
+   `display: none !important` hacks were deleted. The rules below style the
+   slim status bar and graceful empty states that replaced them. */
 
-/* Hide useless badges and decorative noise */
-.phase-badge {
-  display: none !important;
-}
-
-#cache-badge {
-  display: none !important;
-}
-
-/* Slim replay status bar: keeps progress + market time visible without bulk */
+/* Slim progress ticker: info without clutter */
 #mode-banner {
   display: flex !important;
   align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 2px 16px !important;
-  min-height: 0 !important;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 24px !important;
+  min-height: 28px !important;
+  font-size: 12px;
   background: var(--bg-elevated) !important;
   border: none !important;
   border-bottom: 1px solid var(--border) !important;
   margin: 0 !important;
 }
-#mode-banner #mode-indicator {
-  display: none !important;
-}
 #mode-banner .progress-panel:not(.hidden) {
   display: flex !important;
-  gap: 12px;
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  gap: 16px;
   align-items: center;
   padding: 0;
   font-family: var(--font-mono, monospace);
@@ -81,35 +78,6 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
-}
-
-/* Hide secondary time picker by default, focusing on date selection */
-.datetime-group #replay-time {
-  display: none !important;
-}
-
-/* Streamline quick date presets to 3 primary choices: 1D, 7D, Live */
-.preset-chip[data-preset="3d"],
-.preset-chip[data-preset="30d"] {
-  display: none !important;
-}
-
-/* Streamline quantity presets to 3 clean tiers: 0.1, 0.5, 1.0 */
-.qty-chip[data-qty="0.05"] {
-  display: none !important;
-}
-
-/* Streamline capital presets to 3 standard tiers: $5K, $10K, $50K */
-.capital-chip[data-balance="1000"],
-.capital-chip[data-balance="25000"],
-.capital-chip[data-balance="100000"] {
-  display: none !important;
-}
-
-/* Hide redundant replay status badge and verbose shortcuts hint */
-.shortcuts-hint,
-.replay-status {
-  display: none !important;
 }
 
 /* Graceful empty position state: keep card + risk controls visible, dim inputs */
@@ -404,6 +372,15 @@ html[data-theme="dark"] .btn-close-pos:hover:not(:disabled),
 body[data-theme="dark"] .btn-close-pos:hover:not(:disabled),
 [data-theme="dark"] .btn-close-pos:hover:not(:disabled) {
   background: #dc2626 !important;
+}
+/* High-contrast red outline while a position is open */
+html[data-theme="dark"] .btn-close-pos:not(:disabled),
+body[data-theme="dark"] .btn-close-pos:not(:disabled),
+[data-theme="dark"] .btn-close-pos:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: #ef4444 !important;
+  color: #fca5a5 !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25) !important;
 }
 
 html[data-theme="dark"] .timeline-section,

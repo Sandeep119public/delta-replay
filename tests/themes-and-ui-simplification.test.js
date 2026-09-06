@@ -93,6 +93,32 @@ describe('ThemeManager & UI Simplification', () => {
       manager.applyTheme('invalid-theme');
       expect(manager.getTheme()).toBe('dark');
     });
+
+    it('theme pills support arrow-key navigation with roving tabindex', () => {
+      const handlers = {};
+      const mkPill = (theme) => ({
+        dataset: { theme },
+        getAttribute: (n) => (n === 'data-theme' ? theme : null),
+        setAttribute: vi.fn(),
+        classList: { toggle: vi.fn() },
+        focus: vi.fn(),
+        addEventListener: vi.fn((ev, fn) => { handlers[`${theme}:${ev}`] = fn; }),
+      });
+      const pills = [mkPill('dark'), mkPill('paper'), mkPill('light')];
+      global.document.querySelectorAll = vi.fn(() => pills);
+      const selectEl = createMockElement({ value: 'dark' });
+      const onThemeChange = vi.fn();
+      const manager = new ThemeManager({ selectEl, onThemeChange });
+      expect(manager.getTheme()).toBe('dark');
+      // Roving tabindex: only the active pill is tabbable
+      expect(pills[0].setAttribute).toHaveBeenCalledWith('tabindex', '0');
+      expect(pills[1].setAttribute).toHaveBeenCalledWith('tabindex', '-1');
+      // ArrowRight moves focus forward and applies the next theme
+      handlers['dark:keydown']({ key: 'ArrowRight', preventDefault: vi.fn() });
+      expect(pills[1].focus).toHaveBeenCalled();
+      expect(manager.getTheme()).toBe('paper');
+      expect(onThemeChange).toHaveBeenCalledWith('paper');
+    });
   });
 
   describe('2. ChartManager Theme Profiles & applyTheme', () => {
@@ -145,18 +171,34 @@ describe('ThemeManager & UI Simplification', () => {
     const themesCss = fs.readFileSync('src/themes.css', 'utf-8');
     const html = fs.readFileSync('index.html', 'utf-8');
 
-    it('hides phase-badge, shortcuts-hint, and replay-status to declutter interface', () => {
-      expect(themesCss).toMatch(/\.phase-badge\s*\{[\s\S]*?display:\s*none\s*!important/);
-      expect(themesCss).toMatch(/\.shortcuts-hint[\s\S]*?display:\s*none\s*!important/);
-      expect(themesCss).toMatch(/\.replay-status[\s\S]*?display:\s*none\s*!important/);
+    it('declutters by removing dead DOM nodes instead of CSS hiding hacks', () => {
+      // Permanently hidden elements were deleted from index.html …
+      expect(html).not.toMatch(/phase-badge/);
+      expect(html).not.toMatch(/cache-badge/);
+      expect(html).not.toMatch(/id="replay-time"/);
+      expect(html).not.toMatch(/id="mode-indicator"/);
+      expect(html).not.toMatch(/id="replay-status"/);
+      expect(html).not.toMatch(/shortcuts-hint/);
+      // … so no `display: none` masking hack for them may remain in themes.css
+      // (bounded `[^}]*` keeps each check inside a single rule block)
+      expect(themesCss).not.toMatch(/\.phase-badge[^{]*\{[^}]*display:\s*none/);
+      expect(themesCss).not.toMatch(/#cache-badge[^{]*\{[^}]*display:\s*none/);
+      expect(themesCss).not.toMatch(/\.shortcuts-hint[^{]*\{[^}]*display:\s*none/);
+      expect(themesCss).not.toMatch(/\.replay-status[^{]*\{[^}]*display:\s*none/);
+      expect(themesCss).not.toMatch(/#mode-banner[^{]*\{[^}]*display:\s*none/);
+      expect(themesCss).not.toMatch(/\.position-panel\.is-empty\s*\{[^}]*display:\s*none/);
+      expect(themesCss).not.toMatch(/#replay-time[^{]*\{[^}]*display:\s*none/);
     });
 
     it('keeps a slim mode-banner status bar instead of hiding progress', () => {
-      // Banner stays visible as a slim bar; only the bulky indicator text is hidden
+      // Banner stays visible as a slim ticker
       expect(themesCss).toMatch(/#mode-banner\s*\{[\s\S]*?display:\s*flex\s*!important/);
-      expect(themesCss).toMatch(/#mode-banner\s+#mode-indicator\s*\{[\s\S]*?display:\s*none\s*!important/);
       // Progress panel is styled as a mini status bar
       expect(themesCss).toMatch(/\.progress-panel:not\(\.hidden\)\s*\{[\s\S]*?display:\s*flex\s*!important/);
+      // Banner keeps its progress + market-time nodes in the DOM
+      expect(html).toMatch(/id="mode-banner"/);
+      expect(html).toMatch(/id="progress-panel"/);
+      expect(html).toMatch(/id="market-time-full"/);
     });
 
     it('shows a graceful empty position state instead of hiding the card', () => {
@@ -167,21 +209,27 @@ describe('ThemeManager & UI Simplification', () => {
       expect(themesCss).not.toMatch(/\.position-panel\.is-empty\s*\{[\s\S]*?display:\s*none\s*!important/);
     });
 
-    it('streamlines redundant UI options across presets, capital, and quantity', () => {
-      // Streamlined date presets (3d and 30d hidden, leaving 1D, 7D, Live)
-      expect(themesCss).toMatch(/\[data-preset="3d"\]/);
-      expect(themesCss).toMatch(/\[data-preset="30d"\]/);
+    it('ships a streamlined DOM: only 1D/7D/Live presets and 3 capital tiers', () => {
+      // Surplus options were deleted from the DOM (no CSS masking needed)
+      expect(html).not.toMatch(/data-preset="3d"/);
+      expect(html).not.toMatch(/data-preset="30d"/);
+      expect(html).toMatch(/data-preset="1d"/);
+      expect(html).toMatch(/data-preset="7d"/);
+      expect(html).toMatch(/data-preset="now"/);
 
-      // Streamlined quantity (0.05 hidden, leaving 0.1, 0.5, 1.0)
-      expect(themesCss).toMatch(/\[data-qty="0.05"\]/);
+      expect(html).not.toMatch(/data-qty="0\.05"/);
 
-      // Streamlined capital (1k, 25k, 100k hidden, leaving $5K, $10K, $50K)
-      expect(themesCss).toMatch(/\[data-balance="1000"\]/);
-      expect(themesCss).toMatch(/\[data-balance="25000"\]/);
-      expect(themesCss).toMatch(/\[data-balance="100000"\]/);
+      expect(html).not.toMatch(/data-balance="1000"/);
+      expect(html).not.toMatch(/data-balance="25000"/);
+      expect(html).not.toMatch(/data-balance="100000"/);
+      expect(html).toMatch(/data-balance="5000"/);
+      expect(html).toMatch(/data-balance="10000"/);
+      expect(html).toMatch(/data-balance="50000"/);
 
-      // Secondary replay time hidden by default
-      expect(themesCss).toMatch(/\.datetime-group\s+#replay-time\s*\{[\s\S]*?display:\s*none\s*!important/);
+      // … and no attribute-hiding hacks remain in the theme engine
+      expect(themesCss).not.toMatch(/\[data-preset=/);
+      expect(themesCss).not.toMatch(/\[data-qty=/);
+      expect(themesCss).not.toMatch(/\[data-balance=/);
     });
 
     it('contains CSS definitions for all four themes', () => {
@@ -209,11 +257,30 @@ describe('ThemeManager & UI Simplification', () => {
       expect(html).toMatch(/data-theme="midnight"/);
     });
 
+    it('theme pills use cross-platform SVG icons instead of emoji', () => {
+      const pillsBlock = html.match(/class="theme-pills"[\s\S]*?<\/div>/);
+      expect(pillsBlock).not.toBeNull();
+      expect(pillsBlock[0]).toMatch(/<svg/);
+      expect(pillsBlock[0]).not.toMatch(/🌙|📜|☀️|🌌/);
+    });
+
     it('timeline slider has a visual progress fill driven by --timeline-progress', () => {
       const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
       expect(baseCss).toMatch(/--timeline-progress/);
       expect(baseCss).toMatch(/::-webkit-slider-runnable-track/);
       expect(baseCss).toMatch(/::-moz-range-track/);
+    });
+
+    it('close button shows high-contrast red outline while a position is open', () => {
+      const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
+      expect(baseCss).toMatch(/\.btn-close-pos:not\(:disabled\)/);
+      expect(themesCss).toMatch(/\.btn-close-pos:not\(:disabled\)/);
+    });
+
+    it('empty states stay legible: centered trade hints and position message', () => {
+      const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
+      expect(baseCss).toMatch(/\.trades-list\s+\.empty-hint\s*\{[\s\S]*?text-align:\s*center/);
+      expect(baseCss).toMatch(/\.position-panel\.is-empty::after\s*\{[\s\S]*?content:/);
     });
 
     it('Timeline publishes replay progress to --timeline-progress', () => {
