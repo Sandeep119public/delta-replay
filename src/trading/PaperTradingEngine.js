@@ -411,9 +411,10 @@ export class PaperTradingEngine extends EventEmitter {
   }
   placeStopMarketOrder(opts) { return this.placeStopOrder(opts); }
   cancelOrder(orderId) {
-    const order = this._orders.get(String(orderId)); if (!order) return this._reject('ORDER_NOT_FOUND', `Order not found: ${orderId}`, { orderId });
-    if (order.status !== ORDER_STATUSES.PENDING) return this._reject('ORDER_NOT_PENDING', `Cannot cancel order in status ${order.status}`, { orderId, status: order.status });
-    order.status = ORDER_STATUSES.CANCELLED; order.cancelReason = 'USER_CANCELLED'; this._pendingOrderIds = this._pendingOrderIds.filter(id => id !== orderId); this._emitOrderCancelled(order); return { success: true, order: this._cloneJSON(order.toJSON()) };
+    const canonicalId = String(orderId);
+    const order = this._orders.get(canonicalId); if (!order) return this._reject('ORDER_NOT_FOUND', `Order not found: ${orderId}`, { orderId: canonicalId });
+    if (order.status !== ORDER_STATUSES.PENDING) return this._reject('ORDER_NOT_PENDING', `Cannot cancel order in status ${order.status}`, { orderId: canonicalId, status: order.status });
+    order.status = ORDER_STATUSES.CANCELLED; order.cancelReason = 'USER_CANCELLED'; this._pendingOrderIds = this._pendingOrderIds.filter(id => String(id) !== canonicalId); this._emitOrderCancelled(order); return { success: true, order: this._cloneJSON(order.toJSON()) };
   }
   _processPendingOrders(candle, candleIndex, targetSymbol = null) {
     if (!this._pendingOrderIds.length) return;
