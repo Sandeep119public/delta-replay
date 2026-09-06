@@ -68,7 +68,7 @@ export function createApplication() {
 
   bindDatasetSelectors(ui, coordinator);
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, controls: ui.controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner: ui.modeBanner });
-  bindTradingEvents({ tradingEngine, commandController, errorPanel: ui.errorPanel });
+  const unbindTradingEvents = bindTradingEvents({ tradingEngine, commandController, errorPanel: ui.errorPanel });
   ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
   const chartTradingController = new ChartTradingController({
@@ -77,13 +77,13 @@ export function createApplication() {
     orderFormView: views.tradingPanel.orderFormView, coordinator, ...form,
   });
 
-  bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
+  const unbindReplayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
   ui.el('load-btn')?.addEventListener('click', () => coordinator.loadAndPrepareReplay({ autoStart: false }));
   bindMobileDrawer();
 
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts, coordinator, engine, candleCache,
-    resources: [timelineBindings, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
+    resources: [unbindTradingEvents, unbindReplayLifecycle, timelineBindings, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
   });
 
   return {
