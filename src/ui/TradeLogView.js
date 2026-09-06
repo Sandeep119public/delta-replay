@@ -19,7 +19,10 @@ export class TradeLogView {
     this.activityBadge = activityBadge;
     this.onError = onError;
     this.onRender = onRender;
+    this._pendingBindings = [];
   }
+
+  destroy() { this._pendingBindings.forEach(([btn, handler]) => btn.removeEventListener?.('click', handler)); this._pendingBindings = []; }
 
   _fmtMoney(v) {
     const n = Number(v);
@@ -84,9 +87,9 @@ export class TradeLogView {
     }
 
     this.pendingListEl.innerHTML = html;
-    this.pendingListEl.querySelectorAll('[data-cancel-id]').forEach(btn => {
-      btn.addEventListener('click', () => this.cancelOrder(btn.getAttribute('data-cancel-id')));
-    });
+    this._pendingBindings.forEach(([btn, handler]) => btn.removeEventListener?.('click', handler));
+    this._pendingBindings = [];
+    this.pendingListEl.querySelectorAll('[data-cancel-id]').forEach(btn => { const handler = () => this.cancelOrder(btn.getAttribute('data-cancel-id')); btn.addEventListener('click', handler); this._pendingBindings.push([btn, handler]); });
   }
 
   render(trades = []) {
