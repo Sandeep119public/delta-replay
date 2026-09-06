@@ -69,10 +69,22 @@
     min-height: 52px;
   }
 
-  .timeline-section {
-    position: sticky;
-    bottom: 0;
+  .main-layout > .trading-section {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    max-height: min(78dvh, 760px);
+    overflow-y: auto;
+    background: var(--surface);
+    border-top: 1px solid var(--border-strong);
+    transform: translateY(105%);
+    transition: transform 180ms ease;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
+
+  body.drawer-open .main-layout > .trading-section { transform: translateY(0); }
+  body.drawer-open { overflow: hidden; }
+  .timeline-section, .replay-controls-section { padding-bottom: max(var(--page-padding), env(safe-area-inset-bottom)); }
 }
 
 
