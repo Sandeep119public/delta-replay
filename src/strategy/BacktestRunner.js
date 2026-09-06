@@ -40,7 +40,8 @@ export class BacktestRunner {
         this._lastIntents = normalizedIntents;
         for (const intent of normalizedIntents) {
           if (intent?.symbol != null && intent.symbol !== this.symbol) {
-            this.engine._reject?.('SYMBOL_MISMATCH', `BacktestRunner symbol mismatch: expected ${this.symbol}, got ${intent.symbol}`);
+            const rejectFn = typeof this.engine.rejectIntent === 'function' ? this.engine.rejectIntent.bind(this.engine) : this.engine._reject?.bind(this.engine);
+            rejectFn?.('SYMBOL_MISMATCH', `BacktestRunner symbol mismatch: expected ${this.symbol}, got ${intent.symbol}`);
             continue;
           }
           this.engine.submitIntent({ ...intent, symbol: this.symbol });

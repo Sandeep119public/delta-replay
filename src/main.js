@@ -12,11 +12,14 @@ import { Timeline } from './ui/Timeline.js';
 import { ReplayControls } from './ui/ReplayControls.js';
 import { ErrorPanel } from './ui/ErrorPanel.js';
 import { ModeBanner } from './ui/ModeBanner.js';
-import { ReplayCoordinator, VISIBLE_WINDOW } from './app/ReplayCoordinator.js';
+import { ReplayCoordinator } from './app/ReplayCoordinator.js';
+import { ReplayCommandController } from './app/ReplayCommandController.js';
 import { PaperTradingEngine, EXECUTION_TIMING } from './trading/PaperTradingEngine.js';
+import { TradingIntentResolver } from './trading/TradingIntentResolver.js';
 import { TradingPanel } from './ui/TradingPanel.js';
-import { toUnixSeconds, unixToDateTimeInput, formatTime } from './utils/time.js';
-import { resolvePresetTarget, resolveReplayTargetUnixSeconds } from './utils/replayRange.js';
+import { ToastNotificationView } from './ui/ToastNotificationView.js';
+import { FloatingPositionView } from './ui/FloatingPositionView.js';
+import { ReplayDateSelector } from './ui/ReplayDateSelector.js';
 
 // ===== 1. CORE ENGINES & STATE =====
 const appState = new AppState();
@@ -41,7 +44,7 @@ const tradingEngine = new PaperTradingEngine({
   executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE,
 });
 
-// Action guard: prohibit loading or destructive changes during active position
+// Guard: prohibit loading or destructive changes during active position
 engine.registerActionGuard((action) => {
   if (tradingEngine.hasOpenPosition()) {
     const msg = action === 'load'
@@ -74,23 +77,12 @@ const resetBtn = document.getElementById('btn-reset');
 const speedSelect = document.getElementById('speed-select');
 const statusEl = document.getElementById('replay-status');
 const followBtn = document.getElementById('btn-follow');
-const replayDateEl = document.getElementById('replay-date');
-const replayTimeEl = document.getElementById('replay-time');
-const jumpDateEl = document.getElementById('jump-date');
-const jumpTimeEl = document.getElementById('jump-time');
-const jumpBtn = document.getElementById('jump-btn');
-const jumpError = document.getElementById('jump-error');
-const chartFloatingBar = document.getElementById('chart-floating-bar');
-const chartPosBadge = document.getElementById('chart-pos-badge');
-const chartPosEntry = document.getElementById('chart-pos-entry');
-const chartPosPnl = document.getElementById('chart-pos-pnl');
-const btnChartClose = document.getElementById('btn-chart-close');
-const chartToast = document.getElementById('chart-toast');
 const slInput = document.getElementById('sl-price');
 const tpInput = document.getElementById('tp-price');
 const limitPriceInput = document.getElementById('limit-price');
 const stopPriceInput = document.getElementById('stop-price');
 const orderTypeSelect = document.getElementById('order-type');
+const loadBtn = document.getElementById('load-btn');
 
 // ===== 3. COMPONENT INSTANTIATION =====
 const symbolSelector = new SymbolSelector(symbolSelect, appState);
@@ -109,8 +101,6 @@ const timeline = new Timeline({
   indexLabelEl,
   timeLabelEl,
   startIndexLabelEl,
-  appState,
-  engine,
   startTimeLabelEl,
 });
 
@@ -143,6 +133,48 @@ const coordinator = new ReplayCoordinator({
   controls,
   errorPanel,
   modeBanner,
+});
+
+const commandController = new ReplayCommandController({
+  engine,
+  appState,
+  candleStore,
+  tradingEngine,
+  coordinator,
+  headerBtn: headerStartReplayBtn,
+  onError: (msg) => coordinator.showTradingError(msg),
+});
+commandController.bindKeyboardShortcuts();
+
+const toastView = new ToastNotificationView();
+const floatingPosView = new FloatingPositionView({ tradingEngine });
+
+const dateSelector = new ReplayDateSelector({
+  appState,
+  coordinator,
+  candleStore,
+  engine,
+  commandController,
+  timeframeSelect,
+  onJump: (idx) => {
+    const st = engine.getState();
+    if (st.status === 'idle' || st.status === 'ready') {
+      appState.setPendingStartIndex(idx);
+      controls.setStartIndex(idx);
+      timeline.setPosition(idx);
+      modeBanner.update({ replayState: st, appState, candleStore });
+      coordinator.updatePreviewWindow(idx);
+    } else if (st.status === 'playing') {
+      if (!tradingEngine.canSeek()) {
+        dateSelector._showJumpError('Cannot jump while position open');
+        return;
+      }
+      commandController.pause();
+      commandController.trySeek(idx);
+    } else if (st.status === 'paused' || st.status === 'ended') {
+      commandController.trySeek(idx);
+    }
+  },
 });
 
 const tradingPanel = new TradingPanel({
@@ -178,78 +210,9 @@ const tradingPanel = new TradingPanel({
 });
 
 // ===== 4. USER INTERACTIONS & EVENT WIRES =====
+symbolSelector.onChange((symbol) => coordinator.handleSymbolTimeframeChange('symbol', symbol, symbolSelect));
+timeframeSelector.onChange((timeframe) => coordinator.handleSymbolTimeframeChange('timeframe', timeframe, timeframeSelect));
 
-// Symbol & Timeframe Component Listeners
-symbolSelector.onChange((symbol) => {
-  coordinator.handleSymbolTimeframeChange('symbol', symbol, symbolSelect);
-});
-timeframeSelector.onChange((timeframe) => {
-  coordinator.handleSymbolTimeframeChange('timeframe', timeframe, timeframeSelect);
-});
-
-// Date Picker Default Initialization
-function setDefaultRange() {
-  const nowSec = Math.floor(Date.now() / 1000);
-  const toSec = Math.floor(nowSec / 60) * 60;
-  const replaySec = toSec - 86400;
-  const replayInput = unixToDateTimeInput(replaySec);
-
-  if (replayDateEl) {
-    replayDateEl.value = replayInput.date;
-    if (replayTimeEl) replayTimeEl.value = replayInput.time;
-    replayDateEl.min = '2020-01-01';
-    replayDateEl.max = new Date(toSec * 1000).toISOString().slice(0, 10);
-  }
-  if (jumpDateEl) {
-    jumpDateEl.value = replayInput.date;
-    if (jumpTimeEl) jumpTimeEl.value = replayInput.time;
-  }
-}
-setDefaultRange();
-
-// Date Presets
-const presetChips = document.querySelectorAll('.preset-chip');
-function selectPreset(presetKey) {
-  presetChips.forEach(chip => {
-    if (chip.dataset.preset === presetKey) chip.classList.add('active');
-    else chip.classList.remove('active');
-  });
-
-  const { targetSec, recommendedTimeframe } = resolvePresetTarget(presetKey, appState.timeframe);
-  if (recommendedTimeframe !== appState.timeframe && timeframeSelect) {
-    timeframeSelect.value = recommendedTimeframe;
-    appState.timeframe = recommendedTimeframe;
-  }
-
-  const dt = unixToDateTimeInput(targetSec);
-  if (replayDateEl) replayDateEl.value = dt.date;
-  if (replayTimeEl) replayTimeEl.value = dt.time;
-  if (jumpDateEl) jumpDateEl.value = dt.date;
-  if (jumpTimeEl) jumpTimeEl.value = dt.time;
-
-  coordinator.loadAndPrepareReplay({ targetSec, autoStart: false });
-}
-
-presetChips.forEach(chip => {
-  chip.addEventListener('click', () => selectPreset(chip.dataset.preset));
-});
-const defaultChip = document.querySelector('.preset-chip[data-preset="1d"]');
-if (defaultChip) defaultChip.classList.add('active');
-
-// Date Inputs Change (Debounced)
-let dateInputDebounce = null;
-function handleReplayDateInputChange() {
-  presetChips.forEach(c => c.classList.remove('active'));
-  clearTimeout(dateInputDebounce);
-  dateInputDebounce = setTimeout(() => {
-    const targetSec = resolveReplayTargetUnixSeconds(replayDateEl?.value, replayTimeEl?.value);
-    coordinator.loadAndPrepareReplay({ targetSec, autoStart: false });
-  }, 400);
-}
-if (replayDateEl) replayDateEl.addEventListener('change', handleReplayDateInputChange);
-if (replayTimeEl) replayTimeEl.addEventListener('change', handleReplayDateInputChange);
-
-// Quick Quantity Chips
 document.querySelectorAll('.qty-chip').forEach(chip => {
   chip.addEventListener('click', () => {
     const qtyInput = document.getElementById('trade-qty');
@@ -260,7 +223,6 @@ document.querySelectorAll('.qty-chip').forEach(chip => {
   });
 });
 
-// Timeline Slider Sync
 timeline.onChange((idx) => {
   appState.setPendingStartIndex(idx);
   controls.setStartIndex(idx);
@@ -275,8 +237,8 @@ sliderEl.addEventListener('change', () => {
   const idx = Number(sliderEl.value);
   const st = engine.getState();
   if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
-    if (st.status === 'playing') { try { engine.pause(); } catch {} }
-    const ok = trySeek(idx);
+    if (st.status === 'playing') commandController.pause();
+    const ok = commandController.trySeek(idx);
     if (!ok) {
       sliderEl.value = String(st.currentIndex);
       timeline.setPosition(st.currentIndex);
@@ -289,12 +251,8 @@ sliderEl.addEventListener('change', () => {
   }
 });
 
-// Chart Auto-Follow Button
 chartManager.onAutoFollowChange((isFollow) => {
-  if (followBtn) {
-    if (isFollow) followBtn.classList.add('hidden');
-    else followBtn.classList.remove('hidden');
-  }
+  if (followBtn) followBtn.classList.toggle('hidden', isFollow);
 });
 
 if (followBtn) {
@@ -316,64 +274,28 @@ function updateRevealedMax(idx) {
   if (c) chartManager.setRevealedMax(c.time);
 }
 
-// ===== 5. TRADING OVERLAYS & CHART CLICKS =====
-let toastTimeout = null;
-function showTradingToast(msg) {
-  if (!chartToast) return;
-  chartToast.textContent = msg;
-  chartToast.classList.remove('hidden');
-  if (toastTimeout) clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => { chartToast.classList.add('hidden'); }, 2500);
-}
-
-function updateChartPositionPill(pos) {
-  if (!chartFloatingBar) return;
-  if (!pos) {
-    chartFloatingBar.classList.add('hidden');
-    return;
-  }
-  chartFloatingBar.classList.remove('hidden');
-  if (chartPosBadge) {
-    chartPosBadge.textContent = `${pos.side} ${pos.quantity}`;
-    chartPosBadge.className = `chart-pos-badge ${pos.side === 'LONG' ? 'pos-long' : 'pos-short'}`;
-  }
-  if (chartPosEntry) chartPosEntry.textContent = `@ $${Number(pos.entryPrice).toFixed(2)}`;
-  if (chartPosPnl) {
-    const pnl = Number(pos.unrealizedPnL || 0);
-    chartPosPnl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
-    chartPosPnl.className = `chart-pos-pnl ${pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
-  }
-}
-
+// ===== 5. TRADING OVERLAY & EVENT SYNCHRONIZATION =====
 function syncChartTradingLines() {
   const positions = tradingEngine.getPositions();
   const activePos = positions.length > 0 ? positions[0] : null;
   chartManager.updatePositionLines(activePos);
   const pendingOrders = tradingEngine.getPendingOrders ? tradingEngine.getPendingOrders() : [];
   chartManager.updateOrderLines(pendingOrders);
-  updateChartPositionPill(activePos);
+  floatingPosView.render(activePos);
 }
 
-if (btnChartClose) {
-  btnChartClose.addEventListener('click', () => {
-    const positions = tradingEngine.getPositions();
-    if (positions.length > 0) tradingEngine.closePosition(positions[0].symbol);
-  });
-}
-
-// Chart Click Handler for SL / TP / Orders
 chartManager.onChartClick(({ price }) => {
   if (!Number.isFinite(price) || price <= 0) return;
   const positions = tradingEngine.getPositions();
   const activePos = positions.length > 0 ? positions[0] : null;
-  const intent = chartManager.tradingOverlay.resolveClickIntent(price, activePos);
+  const intent = TradingIntentResolver.resolveClickIntent(price, activePos);
   if (!intent) return;
 
   if (intent.action === 'SET_TP') {
     const res = tradingEngine.setTakeProfit(intent.symbol, intent.price);
     if (res.success) {
       if (tpInput) tpInput.value = intent.price.toFixed(2);
-      showTradingToast(`Take Profit set to $${intent.price.toFixed(2)}`);
+      toastView.show(`Take Profit set to $${intent.price.toFixed(2)}`);
     } else {
       coordinator.showTradingError(res.message);
     }
@@ -381,7 +303,7 @@ chartManager.onChartClick(({ price }) => {
     const res = tradingEngine.setStopLoss(intent.symbol, intent.price);
     if (res.success) {
       if (slInput) slInput.value = intent.price.toFixed(2);
-      showTradingToast(`Stop Loss set to $${intent.price.toFixed(2)}`);
+      toastView.show(`Stop Loss set to $${intent.price.toFixed(2)}`);
     } else {
       coordinator.showTradingError(res.message);
     }
@@ -389,27 +311,26 @@ chartManager.onChartClick(({ price }) => {
     const type = orderTypeSelect ? orderTypeSelect.value : 'MARKET';
     if (type === 'LIMIT' && limitPriceInput) {
       limitPriceInput.value = intent.price.toFixed(2);
-      showTradingToast(`Limit Price set to $${intent.price.toFixed(2)}`);
+      toastView.show(`Limit Price set to $${intent.price.toFixed(2)}`);
     } else if (type === 'STOP_MARKET' && stopPriceInput) {
       stopPriceInput.value = intent.price.toFixed(2);
-      showTradingToast(`Stop Price set to $${intent.price.toFixed(2)}`);
+      toastView.show(`Stop Price set to $${intent.price.toFixed(2)}`);
     }
   }
   syncChartTradingLines();
   tradingPanel.render();
 });
 
-// Trading Engine Event Listeners
 tradingEngine.on('positionOpened', syncChartTradingLines);
 tradingEngine.on('positionUpdated', syncChartTradingLines);
 tradingEngine.on('positionClosed', () => {
   chartManager.updatePositionLines(null);
-  updateChartPositionPill(null);
+  floatingPosView.render(null);
   syncChartTradingLines();
 });
 tradingEngine.on('accountReset', () => {
   chartManager.clearTradingLines();
-  updateChartPositionPill(null);
+  floatingPosView.render(null);
 });
 tradingEngine.on('orderPlaced', syncChartTradingLines);
 tradingEngine.on('orderTriggered', syncChartTradingLines);
@@ -419,126 +340,28 @@ tradingEngine.on('orderFilled', (payload) => {
   if (o?.type && o.type !== 'MARKET') {
     const typeLabel = o.type === 'STOP_MARKET' ? 'Stop' : 'Limit';
     const priceStr = o.filledPrice != null ? ` @ $${Number(o.filledPrice).toFixed(2)}` : '';
-    showTradingToast(`✓ ${typeLabel} ${o.side} Filled${priceStr}`);
+    toastView.show(`✓ ${typeLabel} ${o.side} Filled${priceStr}`);
   }
 });
 tradingEngine.on('orderCancelled', syncChartTradingLines);
 tradingEngine.on('stopLossTriggered', (p) => {
   syncChartTradingLines();
-  showTradingToast(`🛑 Stop Loss Triggered${p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : ''}`);
+  toastView.show(`🛑 Stop Loss Triggered${p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : ''}`);
 });
 tradingEngine.on('takeProfitTriggered', (p) => {
   syncChartTradingLines();
-  showTradingToast(`🎯 Take Profit Triggered${p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : ''}`);
+  toastView.show(`🎯 Take Profit Triggered${p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : ''}`);
 });
 tradingEngine.on('positionLiquidated', (p) => {
   syncChartTradingLines();
-  showTradingToast(`⚠️ Position Liquidated${p?.liquidationPrice != null ? ` @ $${Number(p.liquidationPrice).toFixed(2)}` : ''}`);
+  toastView.show(`⚠️ Position Liquidated${p?.liquidationPrice != null ? ` @ $${Number(p.liquidationPrice).toFixed(2)}` : ''}`);
 });
 
-// ===== 6. JUMP TO CANDLE =====
-function trySeek(idx) {
-  if (tradingEngine.hasOpenPosition()) {
-    coordinator.showTradingError('Cannot seek while a position is open — close position first.');
-    return false;
-  }
-  try {
-    engine.seek(idx);
-    return true;
-  } catch (e) {
-    errorPanel.showGeneric(e.message);
-    return false;
-  }
-}
-
-if (jumpBtn) {
-  jumpBtn.addEventListener('click', () => {
-    jumpError.classList.add('hidden');
-    jumpError.textContent = '';
-    const total = candleStore.getCount() || appState.candles.length;
-    if (!total) { jumpError.textContent = 'Load data first'; jumpError.classList.remove('hidden'); return; }
-    if (!jumpDateEl?.value) { jumpError.textContent = 'Select date'; jumpError.classList.remove('hidden'); return; }
-
-    let target;
-    try {
-      target = toUnixSeconds(jumpDateEl.value, jumpTimeEl?.value || '00:00');
-    } catch (e) {
-      jumpError.textContent = e.message;
-      jumpError.classList.remove('hidden');
-      return;
-    }
-
-    const idx = candleStore.findIndexByTime(target);
-    if (idx < 0) {
-      jumpError.textContent = 'No candle found for that time';
-      jumpError.classList.remove('hidden');
-      return;
-    }
-
-    const st = engine.getState();
-    if (st.status === 'idle' || st.status === 'ready') {
-      appState.setPendingStartIndex(idx);
-      controls.setStartIndex(idx);
-      timeline.setPosition(idx);
-      modeBanner.update({ replayState: st, appState, candleStore });
-      coordinator.updatePreviewWindow(idx);
-    } else if (st.status === 'playing') {
-      if (!tradingEngine.canSeek()) {
-        jumpError.textContent = 'Cannot jump while position open';
-        jumpError.classList.remove('hidden');
-        return;
-      }
-      try { engine.pause(); } catch {}
-      trySeek(idx);
-    } else if (st.status === 'paused' || st.status === 'ended') {
-      trySeek(idx);
-    }
-  });
-}
-
-// ===== 7. HEADER START REPLAY BUTTON =====
-if (headerStartReplayBtn) {
-  headerStartReplayBtn.addEventListener('click', () => {
-    const st = engine.getState();
-    const hasData = candleStore.getCount() > 0 || appState.candles.length > 0;
-    if (!hasData) {
-      coordinator.loadAndPrepareReplay({ autoStart: true });
-      return;
-    }
-    if (st.status === 'ready') {
-      engine.start(appState.pendingStartIndex);
-      engine.play();
-    } else if (st.status === 'paused') {
-      engine.play();
-    } else if (st.status === 'playing') {
-      engine.pause();
-    } else if (st.status === 'ended') {
-      engine.reset();
-      engine.start(appState.pendingStartIndex);
-      engine.play();
-    } else {
-      coordinator.loadAndPrepareReplay({ autoStart: true });
-    }
-  });
-}
-
-// ===== 8. ENGINE LIFECYCLE EVENTS =====
+// ===== 6. ENGINE LIFECYCLE EVENTS =====
 engine.on('stateChanged', (s) => {
   appState.setReplayState(s);
   if (s.currentIndex >= 0) timeline.setPosition(s.currentIndex);
   modeBanner.update({ replayState: s, appState, candleStore });
-
-  if (headerStartReplayBtn) {
-    if (s.status === 'ready') {
-      headerStartReplayBtn.innerHTML = '<span class="icon">▶</span> START REPLAY';
-    } else if (s.status === 'playing') {
-      headerStartReplayBtn.innerHTML = '<span class="icon">⏸</span> PAUSE';
-    } else if (s.status === 'paused') {
-      headerStartReplayBtn.innerHTML = '<span class="icon">▶</span> RESUME';
-    } else if (s.status === 'ended') {
-      headerStartReplayBtn.innerHTML = '<span class="icon">↺</span> REPLAY AGAIN';
-    }
-  }
 });
 
 engine.on('started', (payload) => {
@@ -563,67 +386,16 @@ engine.on('reset', (s) => {
     coordinator.updatePreviewWindow(appState.pendingStartIndex);
     updateRevealedMax(appState.pendingStartIndex);
     timeline.setTotal(candleStore.getCount(), candleStore.getAll());
-    if (headerStartReplayBtn) {
-      headerStartReplayBtn.innerHTML = '<span class="icon">▶</span> START REPLAY';
-    }
   } else if (s.index !== undefined) {
     updateRevealedMax(s.index);
   }
   modeBanner.update({ replayState: s, appState, candleStore });
 });
 
-// ===== 9. KEYBOARD SHORTCUTS =====
-document.addEventListener('keydown', (e) => {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
-  if (e.code === 'Space') {
-    e.preventDefault();
-    const s = engine.getState();
-    const hasData = candleStore.getCount() > 0 || appState.candles.length > 0;
-    if (!hasData) return;
-    if (s.status === 'ready') {
-      engine.start(appState.pendingStartIndex);
-      engine.play();
-    } else if (s.status === 'paused') {
-      engine.play();
-    } else if (s.status === 'playing') {
-      engine.pause();
-    } else if (s.status === 'ended') {
-      engine.reset();
-      engine.start(appState.pendingStartIndex);
-      engine.play();
-    }
-  } else if (e.code === 'ArrowRight') {
-    e.preventDefault();
-    try { engine.stepForward(); } catch {}
-  } else if (e.code === 'KeyR') {
-    e.preventDefault();
-    const hasData = candleStore.getCount() > 0 || appState.candles.length > 0;
-    if (!hasData) return;
-    engine.reset();
-    const st = engine.getState();
-    if (st.status === 'ready') {
-      coordinator.updatePreviewWindow(appState.pendingStartIndex);
-      timeline.setTotal(candleStore.getCount(), candleStore.getAll());
-      controls.setStartIndex(appState.pendingStartIndex);
-    } else if (st.status === 'paused' && st.currentIndex >= 0) {
-      updateRevealedMax(st.currentIndex);
-      timeline.setPosition(st.currentIndex);
-      coordinator.applyWindowedChart(st.currentIndex);
-    }
-  } else if (e.code === 'Escape') {
-    const s = engine.getState();
-    if (s.status === 'playing') engine.pause();
-  }
-});
-
-// Legacy load button support
-const loadBtn = document.getElementById('load-btn');
 if (loadBtn) {
-  loadBtn.addEventListener('click', () => {
-    coordinator.loadAndPrepareReplay({ autoStart: false });
-  });
+  loadBtn.addEventListener('click', () => coordinator.loadAndPrepareReplay({ autoStart: false }));
 }
 
-// ===== 10. INITIALIZATION =====
+// ===== 7. BOOTSTRAP =====
 modeBanner.update({ replayState: engine.getState(), appState, candleStore });
 coordinator.loadAndPrepareReplay({ autoStart: false });

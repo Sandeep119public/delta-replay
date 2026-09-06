@@ -1,3 +1,5 @@
+import { TradingIntentResolver } from '../trading/TradingIntentResolver.js';
+
 /**
  * ChartTradingOverlay encapsulates position lines, risk lines (SL/TP),
  * and pending order lines (Limit/Stop Market) drawn on top of lightweight-charts.
@@ -218,27 +220,13 @@ export class ChartTradingOverlay {
 
   /**
    * Determine intent for a clicked chart price based on active position context.
+   * Delegates to TradingIntentResolver for pure Separation of Concerns.
    *
    * @param {number} price
    * @param {object|null} activePosition
    * @returns {{ action: 'SET_TP'|'SET_SL'|'PRICE_SELECT', price: number, isTP?: boolean, symbol?: string } | null}
    */
   resolveClickIntent(price, activePosition = null) {
-    if (!Number.isFinite(price) || price <= 0) return null;
-    if (activePosition && Number.isFinite(Number(activePosition.entryPrice))) {
-      const isLong = activePosition.side === 'LONG';
-      const entryPrice = Number(activePosition.entryPrice);
-      const isTP = isLong ? (price > entryPrice) : (price < entryPrice);
-      return {
-        action: isTP ? 'SET_TP' : 'SET_SL',
-        price,
-        isTP,
-        symbol: activePosition.symbol,
-      };
-    }
-    return {
-      action: 'PRICE_SELECT',
-      price,
-    };
+    return TradingIntentResolver.resolveClickIntent(price, activePosition);
   }
 }

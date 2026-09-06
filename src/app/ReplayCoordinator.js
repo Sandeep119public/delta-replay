@@ -23,15 +23,15 @@ export class ReplayCoordinator {
     controls,
     errorPanel,
     modeBanner,
-    dataStatusEl = document.getElementById('data-status'),
-    cacheBadgeEl = document.getElementById('cache-badge'),
-    startReplayBtn = document.getElementById('start-replay-btn'),
-    headerStartReplayBtn = document.getElementById('header-start-replay-btn'),
-    loadBtn = document.getElementById('load-btn'),
-    fromDateEl = document.getElementById('from-date'),
-    fromTimeEl = document.getElementById('from-time'),
-    toDateEl = document.getElementById('to-date'),
-    toTimeEl = document.getElementById('to-time'),
+    dataStatusEl = (typeof document !== 'undefined' ? document.getElementById('data-status') : null),
+    cacheBadgeEl = (typeof document !== 'undefined' ? document.getElementById('cache-badge') : null),
+    startReplayBtn = (typeof document !== 'undefined' ? document.getElementById('start-replay-btn') : null),
+    headerStartReplayBtn = (typeof document !== 'undefined' ? document.getElementById('header-start-replay-btn') : null),
+    loadBtn = (typeof document !== 'undefined' ? document.getElementById('load-btn') : null),
+    fromDateEl = (typeof document !== 'undefined' ? document.getElementById('from-date') : null),
+    fromTimeEl = (typeof document !== 'undefined' ? document.getElementById('from-time') : null),
+    toDateEl = (typeof document !== 'undefined' ? document.getElementById('to-date') : null),
+    toTimeEl = (typeof document !== 'undefined' ? document.getElementById('to-time') : null),
   }) {
     this.dataManager = dataManager;
     this.candleStore = candleStore;
@@ -126,7 +126,7 @@ export class ReplayCoordinator {
   }
 
   showTradingError(msg) {
-    const errEl = document.getElementById('trading-error');
+    const errEl = typeof document !== 'undefined' ? document.getElementById('trading-error') : null;
     if (errEl) {
       errEl.textContent = msg;
       errEl.classList.remove('hidden');

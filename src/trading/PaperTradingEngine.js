@@ -325,6 +325,7 @@ export class PaperTradingEngine extends EventEmitter {
 
   _cloneJSON(obj) { return JSON.parse(JSON.stringify(obj)); }
   _reject(code, message, extra = {}) { const err = { success: false, code, message, ...extra }; this.emit(TradingEvents.ORDER_REJECTED, this._cloneJSON(err)); return err; }
+  rejectIntent(code, message, extra = {}) { return this._reject(code, message, extra); }
   _emitOrderPlaced(order) { this.emit(TradingEvents.ORDER_PLACED, { order: this._cloneJSON(order.toJSON()) }); }
   _emitOrderFilled(order) { this.emit(TradingEvents.ORDER_FILLED, { order: this._cloneJSON(order.toJSON()) }); }
   _emitOrderCancelled(order) { this.emit(TradingEvents.ORDER_CANCELLED, { order: this._cloneJSON(order.toJSON()) }); }
