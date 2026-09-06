@@ -144,10 +144,29 @@ describe('ThemeManager & UI Simplification', () => {
     const themesCss = fs.readFileSync('src/themes.css', 'utf-8');
     const html = fs.readFileSync('index.html', 'utf-8');
 
-    it('hides phase-badge and shortcuts-hint to declutter interface', () => {
+    it('hides phase-badge, shortcuts-hint, and mode-banner to declutter interface', () => {
       expect(themesCss).toMatch(/\.phase-badge\s*\{[\s\S]*?display:\s*none\s*!important/);
-      expect(themesCss).toMatch(/\.shortcuts-hint\s*\{[\s\S]*?display:\s*none\s*!important/);
+      expect(themesCss).toMatch(/\.shortcuts-hint[\s\S]*?display:\s*none\s*!important/);
+      expect(themesCss).toMatch(/#mode-banner\s*\{[\s\S]*?display:\s*none\s*!important/);
       expect(themesCss).toMatch(/\.position-panel\.is-empty\s*\{[\s\S]*?display:\s*none\s*!important/);
+      expect(themesCss).toMatch(/\.replay-status[\s\S]*?display:\s*none\s*!important/);
+    });
+
+    it('streamlines redundant UI options across presets, capital, and quantity', () => {
+      // Streamlined date presets (3d and 30d hidden, leaving 1D, 7D, Live)
+      expect(themesCss).toMatch(/\[data-preset="3d"\]/);
+      expect(themesCss).toMatch(/\[data-preset="30d"\]/);
+
+      // Streamlined quantity (0.05 hidden, leaving 0.1, 0.5, 1.0)
+      expect(themesCss).toMatch(/\[data-qty="0.05"\]/);
+
+      // Streamlined capital (1k, 25k, 100k hidden, leaving $5K, $10K, $50K)
+      expect(themesCss).toMatch(/\[data-balance="1000"\]/);
+      expect(themesCss).toMatch(/\[data-balance="25000"\]/);
+      expect(themesCss).toMatch(/\[data-balance="100000"\]/);
+
+      // Secondary replay time hidden by default
+      expect(themesCss).toMatch(/\.datetime-group\s+#replay-time\s*\{[\s\S]*?display:\s*none\s*!important/);
     });
 
     it('contains CSS definitions for all four themes', () => {

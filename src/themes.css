@@ -49,31 +49,37 @@
   opacity: 0.7;
 }
 
-/* Streamlined Mode / Status Banner (reduces wasted vertical space) */
+/* Hide redundant banner to maximize chart height */
 #mode-banner {
-  min-height: 24px !important;
-  max-height: 26px !important;
-  padding: 2px 14px !important;
-  font-size: 11px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  border-bottom: 1px solid var(--border) !important;
+  display: none !important;
 }
 
-#mode-indicator {
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.5px !important;
+/* Hide secondary time picker by default, focusing on date selection */
+.datetime-group #replay-time {
+  display: none !important;
 }
 
-.market-time-full {
-  font-size: 10px !important;
-  opacity: 0.85 !important;
+/* Streamline quick date presets to 3 primary choices: 1D, 7D, Live */
+.preset-chip[data-preset="3d"],
+.preset-chip[data-preset="30d"] {
+  display: none !important;
 }
 
-/* Hide verbose shortcuts hint at bottom */
-.shortcuts-hint {
+/* Streamline quantity presets to 3 clean tiers: 0.1, 0.5, 1.0 */
+.qty-chip[data-qty="0.05"] {
+  display: none !important;
+}
+
+/* Streamline capital presets to 3 standard tiers: $5K, $10K, $50K */
+.capital-chip[data-balance="1000"],
+.capital-chip[data-balance="25000"],
+.capital-chip[data-balance="100000"] {
+  display: none !important;
+}
+
+/* Hide redundant replay status badge and verbose shortcuts hint */
+.shortcuts-hint,
+.replay-status {
   display: none !important;
 }
 
