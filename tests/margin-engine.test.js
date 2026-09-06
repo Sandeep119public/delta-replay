@@ -2,6 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { MarginEngine } from '../src/trading/MarginEngine.js';
 
 describe('MarginEngine — Futures Margin & Liquidation Math', () => {
+  it('rejects invalid margin configurations at construction time', () => {
+    expect(() => new MarginEngine({ marginRate: 0 })).toThrow(/marginRate/);
+    expect(() => new MarginEngine({ marginRate: NaN })).toThrow(/marginRate/);
+    expect(() => new MarginEngine({ marginRate: 0.1, maintMarginRate: 0.1 })).toThrow(/maintMarginRate/);
+    expect(() => new MarginEngine({ marginRate: 0.1, maintMarginRate: -0.01 })).toThrow(/maintMarginRate/);
+  });
+
   it('calculates initial margin and maintenance margin correctly', () => {
     const me = new MarginEngine({ marginRate: 0.1, maintMarginRate: 0.05 }); // 10x leverage
     const res = me.calcPositionMargins(50000, 2, 'LONG');
