@@ -1,6 +1,6 @@
 /**
- * Minimal synchronous EventEmitter.
- * No DOM dependency. Suitable for ReplayEngine events.
+ * Minimal synchronous EventEmitter with safe async-handler handling.
+ * No DOM dependency. Suitable for core/replay/trading modules.
  */
 export class EventEmitter {
   constructor() {
@@ -8,15 +8,17 @@ export class EventEmitter {
   }
 
   on(event, handler) {
+    if (typeof handler !== 'function') throw new TypeError('handler must be a function');
     if (!this._listeners.has(event)) this._listeners.set(event, new Set());
     this._listeners.get(event).add(handler);
-    // return unsubscribe
     return () => this.off(event, handler);
   }
 
   off(event, handler) {
     const set = this._listeners.get(event);
-    if (set) set.delete(handler);
+    if (!set) return;
+    set.delete(handler);
+    if (set.size === 0) this._listeners.delete(event);
   }
 
   once(event, handler) {
@@ -24,19 +26,22 @@ export class EventEmitter {
       this.off(event, wrapper);
       handler(...args);
     };
-    this.on(event, wrapper);
-    return () => this.off(event, wrapper);
+    return this.on(event, wrapper);
   }
 
   emit(event, payload) {
     const set = this._listeners.get(event);
     if (!set) return;
-    // copy to avoid mutation during iteration
+
     for (const fn of [...set]) {
       try {
-        fn(payload);
+        const result = fn(payload);
+        if (result && typeof result.then === 'function') {
+          result.catch(err => {
+            console.error(`[EventEmitter] async handler error for "${event}":`, err);
+          });
+        }
       } catch (err) {
-        // Do not swallow - log then continue
         console.error(`[EventEmitter] handler error for "${event}":`, err);
       }
     }
@@ -45,5 +50,9 @@ export class EventEmitter {
   removeAllListeners(event) {
     if (event) this._listeners.delete(event);
     else this._listeners.clear();
+  }
+
+  listenerCount(event) {
+    return this._listeners.get(event)?.size ?? 0;
   }
 }
