@@ -43,6 +43,7 @@ export class ThemeManager {
     this.onThemeChange = onThemeChange;
     this.currentTheme = this._loadSavedTheme() || this.defaultTheme;
 
+    this._listeners = [];
     this._bindSelect();
     this._bindPills();
     this.applyTheme(this.currentTheme, false);
@@ -71,10 +72,12 @@ export class ThemeManager {
   _bindSelect() {
     if (!this.selectEl) return;
     this.selectEl.value = this.currentTheme;
-    this.selectEl.addEventListener('change', () => {
+    this._onSelectChange = () => {
       const selected = this.selectEl.value;
       this.applyTheme(selected, true);
-    });
+    };
+    this.selectEl.addEventListener('change', this._onSelectChange);
+    this._listeners.push([this.selectEl, 'change', this._onSelectChange]);
   }
 
   _getPills() {
@@ -93,12 +96,14 @@ export class ThemeManager {
     if (!pills.length) return;
     pills.forEach((pill) => {
       if (!pill || typeof pill.addEventListener !== 'function') return;
-      pill.addEventListener('click', () => {
+      const onClick = () => {
         const theme = pill.getAttribute ? pill.getAttribute('data-theme') : pill.dataset?.theme;
         if (theme) this.applyTheme(theme, true);
-      });
+      };
+      pill.addEventListener('click', onClick);
+      this._listeners.push([pill, 'click', onClick]);
       // Roving tabindex arrow-key navigation for the radiogroup
-      pill.addEventListener('keydown', (event) => {
+      const onKeydown = (event) => {
         if (!event || (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End')) return;
         if (typeof event.preventDefault === 'function') event.preventDefault();
         const list = this._getPills();
@@ -114,9 +119,13 @@ export class ThemeManager {
         if (typeof target.focus === 'function') target.focus();
         const theme = target.getAttribute ? target.getAttribute('data-theme') : target.dataset?.theme;
         if (theme) this.applyTheme(theme, true);
-      });
+      };
+      pill.addEventListener('keydown', onKeydown);
+      this._listeners.push([pill, 'keydown', onKeydown]);
     });
   }
+
+  destroy() { this._listeners.forEach(([el, type, handler]) => el?.removeEventListener?.(type, handler)); this._listeners = []; this.onThemeChange = null; }
 
   _syncPills(theme) {
     const pills = this._getPills();
