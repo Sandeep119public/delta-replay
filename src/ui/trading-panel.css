@@ -74,7 +74,9 @@
 .equity-highlight { font-size: var(--text-display); font-weight: 600; }
 
 /* PnL tint: peripheral-vision readable, not just colored text. */
+.pnl-hero-pill.is-positive,
 .pnl-hero-pill:has(.pnl-pos) { background: var(--positive-bg); }
+.pnl-hero-pill.is-negative,
 .pnl-hero-pill:has(.pnl-neg) { background: var(--negative-bg); }
 .pnl-pos { color: var(--positive); }
 .pnl-neg { color: var(--negative); }
