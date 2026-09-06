@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Ma+Shan+Zheng&family=Shippori+Mincho:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/src/styles.css" />
   <link rel="stylesheet" href="/src/ui-polish.css" />
   <link rel="stylesheet" href="/src/viewport-fit.css" />
@@ -20,9 +21,9 @@
       <div class="topbar-left">
         <div class="logo-wrapper">
           <h1 class="logo">DELTA REPLAY</h1>
-          <span class="phase-badge" aria-hidden="true">PRO REPLAY</span>
+          <span class="phase-badge" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg> PRO</span>
         </div>
-        <div id="cache-badge" class="cache-badge hidden" title="Data loaded from local IndexedDB cache">💾 CACHED</div>
+        <div id="cache-badge" class="cache-badge hidden" title="Data loaded from local IndexedDB cache"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg> CACHED</div>
       </div>
 
       <nav class="topbar-center" aria-label="Replay controls">
@@ -62,7 +63,7 @@
         <!-- Primary Start Button -->
         <div class="header-action-group">
           <button id="header-start-replay-btn" class="btn btn-primary btn-replay-accent" aria-label="Start replaying from selected date">
-            <span class="icon">▶</span> START REPLAY
+            <span class="icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></span> START REPLAY
           </button>
         </div>
 
@@ -78,7 +79,7 @@
 
       <div class="topbar-right">
         <div class="theme-selector-group">
-          <label for="theme-select" class="theme-label" title="Switch Theme">🎨</label>
+          <label for="theme-select" class="theme-label" title="Switch Theme"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h2.36c2.583 0 4.65-2.066 4.65-4.65C21.95 6.167 17.5 2 12 2z"/></svg></label>
           <select id="theme-select" aria-label="Visual Theme">
             <option value="dark" selected>Dark Pro</option>
             <option value="paper">Paper Manuscript</option>
@@ -130,8 +131,8 @@
             <span id="chart-pos-pnl" class="chart-pos-pnl pnl-pos">+$0.00</span>
           </div>
           <div class="chart-floating-right">
-            <span class="chart-click-hint">🎯 Click chart to set SL / TP</span>
-            <button id="btn-chart-close" type="button" class="btn btn-xs btn-chart-close">✕ Close</button>
+            <span class="chart-click-hint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Click chart to set SL / TP</span>
+            <button id="btn-chart-close" type="button" class="btn btn-xs btn-chart-close"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg> Close</button>
           </div>
         </div>
 
@@ -167,9 +168,9 @@
 
         <!-- Navigation Tabs -->
         <div class="trading-tab-nav" role="tablist">
-          <button type="button" class="panel-tab-btn active" data-tab="trade" role="tab" aria-selected="true"><span class="tab-glyph" aria-hidden="true">易</span> TRADE</button>
-          <button type="button" class="panel-tab-btn" data-tab="account" role="tab" aria-selected="false"><span class="tab-glyph" aria-hidden="true">帳</span> ACCOUNT</button>
-          <button type="button" class="panel-tab-btn" data-tab="activity" role="tab" aria-selected="false"><span class="tab-glyph" aria-hidden="true">錄</span> ACTIVITY <span id="activity-badge" class="tab-badge">0</span></button>
+          <button type="button" class="panel-tab-btn active" data-tab="trade" role="tab" aria-selected="true"><span class="tab-glyph" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span> TRADE</button>
+          <button type="button" class="panel-tab-btn" data-tab="account" role="tab" aria-selected="false"><span class="tab-glyph" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg></span> ACCOUNT</button>
+          <button type="button" class="panel-tab-btn" data-tab="activity" role="tab" aria-selected="false"><span class="tab-glyph" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span> ACTIVITY <span id="activity-badge" class="tab-badge">0</span></button>
         </div>
 
         <div class="trading-tab-contents">
@@ -200,7 +201,7 @@
                   <input id="sl-price" type="number" min="0.0001" step="0.01" placeholder="SL Price" aria-label="Stop Loss price" />
                   <input id="tp-price" type="number" min="0.0001" step="0.01" placeholder="TP Price" aria-label="Take Profit price" />
                   <button id="btn-set-risk" class="btn btn-sm btn-primary" disabled>SET</button>
-                  <button id="btn-clear-risk" class="btn btn-sm btn-secondary" disabled>✕</button>
+                  <button id="btn-clear-risk" class="btn btn-sm btn-secondary" disabled aria-label="Clear risk"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                 </div>
               </div>
             </div>
