@@ -67,7 +67,7 @@ export function createApplication() {
   });
 
   bindDatasetSelectors(ui, coordinator);
-  bindTimelineInteractions({ timeline: ui.timeline, controls: ui.controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner: ui.modeBanner });
+  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, controls: ui.controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner: ui.modeBanner });
   bindTradingEvents({ tradingEngine, commandController, errorPanel: ui.errorPanel });
   ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
@@ -83,7 +83,7 @@ export function createApplication() {
 
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts, coordinator, engine, candleCache,
-    resources: [chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
+    resources: [timelineBindings, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
   });
 
   return {
