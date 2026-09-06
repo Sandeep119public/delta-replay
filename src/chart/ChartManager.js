@@ -145,12 +145,9 @@ export class ChartManager {
     for (let i = 0; i < candles.length; i++) {
       const c = candles[i];
       const time = Number(c.time), open = Number(c.open), close = Number(c.close);
-      let high = Number(c.high), low = Number(c.low);
-      if (high <= low || Math.abs(high - low) < 1e-4) {
-        const tickSpread = Math.max(close * 0.00015, Math.abs(close) > 0 ? Math.abs(close) * 0.00001 : 0.0001);
-        high = Math.max(open, close) + tickSpread * 0.5;
-        low = Math.min(open, close) - tickSpread * 0.5;
-      }
+      const high = Number(c.high), low = Number(c.low);
+      if (![time, open, high, low, close].every(Number.isFinite)) continue;
+      if (high < Math.max(open, close) || low > Math.min(open, close) || high < low) continue;
       result.push({ time, open, high, low, close });
     }
     return result;
