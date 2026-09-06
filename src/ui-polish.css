@@ -1,775 +1,395 @@
-/* UI polish: layout, hierarchy, spacing, and responsive behavior */
+/* UI polish: coherent desktop workspace, paper-first hierarchy, responsive behavior. */
 
-#app {
-  grid-template-columns: minmax(0, 1fr) var(--trading-w);
-  grid-template-rows: auto auto auto minmax(420px, 1fr) auto auto;
-  grid-template-areas:
-    "header header"
-    "mode mode"
-    "error error"
-    "main main"
-    "timeline timeline"
-    "controls controls";
-  min-height: 100dvh;
-  background: var(--bg);
+:root {
+  --workspace-gap: 0px;
+  --sidebar-w-desktop: clamp(360px, 29vw, 460px);
 }
 
-#app > .error-panel { grid-area: error; }
+/* --------------------------------------------------------------------------
+   APP SHELL
+   The previous shell declared two columns but placed the main layout in a
+   full-width grid area, leaving the trading column stranded. Keep one grid
+   row for the actual workspace and let .main-layout own the chart/sidebar
+   split. This removes the unused right-side browser-sized void.
+   -------------------------------------------------------------------------- */
+#app {
+  width: 100%;
+  min-height: 100dvh;
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "header"
+    "mode"
+    "error"
+    "main"
+    "timeline"
+    "controls";
+  overflow: hidden;
+}
 
-/* Header: give the data controls a real layout instead of squeezing flex items. */
-/* Header: sleek, responsive flex layout for symbol, timeframe, replay date, and presets. */
+#app > .main-layout {
+  grid-area: main;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-w-desktop);
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+#app > .main-layout > .main {
+  min-width: 0;
+  min-height: 0;
+  width: auto;
+  border-right: 1px solid var(--border);
+  border-bottom: 0;
+}
+
+#app > .main-layout > .trading-section {
+  grid-area: auto;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Paper workspace: frame the chart as the primary canvas, not a blank page. */
+.main,
+.chart-container {
+  background: var(--paper-card, #fbf8f0) !important;
+}
+
+.chart-container::after {
+  width: 6%;
+  opacity: 0.34;
+}
+
+/* --------------------------------------------------------------------------
+   HEADER UX
+   -------------------------------------------------------------------------- */
 .topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 8px 16px;
-  background: var(--paper-card, #fbf8f0);
-  border-bottom: 1px solid var(--border);
+  min-height: 68px;
+  height: auto;
+  flex-wrap: nowrap;
+  gap: 14px;
+  padding: 9px 16px;
 }
 
 .topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+}
+
+.logo {
+  font-size: 15px;
+  letter-spacing: 0.16em;
 }
 
 .topbar-center {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
   min-width: 0;
   flex: 1 1 auto;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-}
-
-.symbol-group {
-  width: 120px;
-  min-width: 100px;
-  flex: 0 0 auto;
-}
-
-.tf-group {
-  width: 90px;
-  min-width: 70px;
-  flex: 0 0 auto;
-}
-
-.replay-date-group {
-  min-width: 220px;
-  flex: 0 1 auto;
-}
-
-.preset-group {
-  flex-shrink: 0;
-}
-
-.header-action-group {
-  display: flex;
+  justify-content: center;
   align-items: flex-end;
-  flex-shrink: 0;
-}
-
-#header-start-replay-btn {
-  min-height: 38px;
-  padding: 0 16px;
-  font-size: 12px;
-  font-weight: 700;
-  border-radius: var(--radius);
-}
-
-.selector-group,
-.selector-datetime {
-  max-width: none;
-  min-width: 0;
-}
-
-.selector-group select,
-.selector-group input[type="date"],
-.selector-group input[type="time"] {
-  min-height: 38px;
-  padding: 6px 10px;
-  font-size: 13px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.datetime-group {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 90px;
-  gap: 6px;
-}
-
-.datetime-group input,
-.datetime-group input[type="time"] {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-}
-
-#load-btn {
-  min-height: 38px;
-  padding-inline: 16px;
+  flex-wrap: nowrap;
+  gap: 8px;
 }
 
 .topbar-right {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  max-width: 240px;
+}
+
+.selector-group label,
+.preset-group label {
+  margin-bottom: 1px;
+}
+
+.symbol-group { width: 116px; }
+.tf-group { width: 84px; }
+.replay-date-group { min-width: 190px; max-width: 220px; }
+
+.datetime-group {
+  display: block;
+}
+
+.datetime-group input[type="date"] {
+  width: 100%;
+}
+
+.preset-group {
+  min-width: 96px;
+}
+
+.preset-chips {
+  gap: 3px;
+}
+
+.preset-chip {
+  min-width: 30px;
+  padding-inline: 7px !important;
+}
+
+#header-start-replay-btn {
+  height: 38px;
+  min-height: 38px;
+  padding-inline: 14px;
 }
 
 .data-status {
-  display: block;
-  font-size: 12px;
-  color: var(--text-muted);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.phase-badge {
-  opacity: 0.9;
-}
-
-/* Mode/status bar */
-.mode-banner {
-  min-height: 34px;
-  padding: 6px 16px;
-}
-
-.mode-banner .progress-panel {
-  flex: 1 1 auto;
-  justify-content: center;
-}
-
-.market-time-full {
-  margin-left: auto;
-}
-
-/* Error state lives in its own intentional row. */
-.error-panel {
-  margin: 8px 16px 0;
-  padding: 12px 14px;
-  background: linear-gradient(180deg, rgba(239,68,68,0.10), rgba(239,68,68,0.06));
-  border-color: rgba(239,68,68,0.45);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.16);
-}
-
-.error-panel-header {
-  margin-bottom: 5px;
-}
-
-.error-panel-message {
-  margin: 0;
-  max-width: 900px;
-}
-
-.error-panel-actions {
-  align-items: center;
-}
-
-/* Main work area */
-.main-layout {
-  min-height: 0;
-  overflow: hidden;
-  background: var(--bg);
-}
-
-.main {
-  min-height: 0;
-  background: var(--bg);
-  border-right: 1px solid var(--border);
-}
-
-.chart-container {
-  min-height: 0;
-}
-
-.chart-overlay {
-  background: rgba(9, 12, 17, 0.78);
-  backdrop-filter: blur(2px);
-}
-
-.chart-overlay-content {
-  padding: 28px;
-  border: 1px solid rgba(42,51,66,0.9);
-  border-radius: 10px;
-  background: rgba(23,27,34,0.88);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.25);
-}
-
-.chart-overlay-content p {
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-/* Sidebar: compact but readable instead of a tall stack of tiny cards. */
-.trading-section {
-  width: var(--trading-w);
-  min-width: var(--trading-w);
-  max-width: var(--trading-w);
-  padding: 12px;
-  gap: 10px;
-  background: var(--paper-card, #fbf8f0);
-  border-left: 1px solid var(--border);
-  scrollbar-width: thin;
-}
-
-.trading-header {
-  position: sticky;
-  top: -12px;
-  z-index: 3;
-  margin: -12px -12px 0;
-  padding: 12px;
-  background: transparent;
-  border-bottom: 1px dashed var(--rule-strong, rgba(69,60,48,0.3));
-}
-
-.trading-title {
-  font-size: 13px;
-}
-
-.trading-panels {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.account-panel,
-.position-panel,
-.order-panel {
-  padding: 11px;
-  border-radius: 8px;
-  background: var(--bg-input);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.015);
-}
-
-.account-panel h3,
-.position-panel h3,
-.order-panel h3,
-.trades-history h3,
-.pending-orders h3 {
-  margin-bottom: 10px;
-  color: #a7b0c0;
-  font-size: 10px;
-  letter-spacing: 0.8px;
-}
-
-.kv {
-  padding: 3px 0;
+  max-width: 18ch;
   font-size: 11px;
 }
 
-.kv span:last-child {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
+/* --------------------------------------------------------------------------
+   STATUS + TIMELINE
+   -------------------------------------------------------------------------- */
+.mode-banner {
+  padding: 4px 16px !important;
 }
 
-.risk-controls {
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px solid rgba(42,51,66,0.75);
-}
-
-.risk-controls input,
-.order-row input,
-.order-row select {
-  min-height: 36px;
-}
-
-.order-row {
-  margin-bottom: 7px;
-}
-
-.order-row label {
-  min-width: 76px;
-}
-
-.order-row select {
-  flex: 1 1 auto;
-  width: 100%;
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 7px 8px;
-}
-
-.order-buttons .btn,
-.risk-buttons .btn {
-  min-height: 38px;
-}
-
-.pending-orders,
-.trades-history {
-  gap: 6px;
-}
-
-.trades-list {
-  max-height: 132px;
-  padding: 7px 8px;
-  background: var(--bg-input);
-  border-radius: 8px;
-}
-
-/* Timeline: compact, structured and easy to scan. */
 .timeline-section {
-  padding: 12px 16px;
-  background: var(--paper-deep, #eee5d4);
+  padding: 8px 16px !important;
 }
 
-.timeline-header,
-.timeline-meta {
-  font-variant-numeric: tabular-nums;
-}
-
-.timeline-track-wrap {
-  margin: 6px 0 8px;
-}
-
-#timeline-slider {
-  height: 26px;
-}
-
-.timeline-start-controls {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(360px, 440px) auto;
-  align-items: end;
-  gap: 14px;
-  margin-top: 8px;
-}
-
-.start-info {
-  min-width: 0;
-}
-
-#start-index-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.jump-group {
-  max-width: none;
-  min-width: 0;
-}
-
-.jump-datetime {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 100px auto;
-  gap: 6px;
-  flex-wrap: nowrap;
-}
-
-.jump-datetime input {
-  width: 100%;
-  flex: none;
-  min-height: 36px;
-}
-
-#jump-btn,
-#start-replay-btn {
-  min-height: 36px;
-}
-
-/* Replay controls */
 .controls-section {
-  padding: 10px 16px 12px;
-  background: var(--paper-deep, #eee5d4);
+  padding: 7px 16px 9px !important;
 }
 
-.controls-row {
-  min-height: 36px;
+/* --------------------------------------------------------------------------
+   TRADING SIDEBAR
+   Dense where useful, generous where the user's eye needs a rest. The
+   sidebar now fills the entire workspace height and keeps its summary and
+   tabs visually connected.
+   -------------------------------------------------------------------------- */
+.trading-section {
+  padding: 10px;
+  gap: 8px;
+  background:
+    linear-gradient(180deg, rgba(253,250,243,0.98), rgba(244,236,221,0.96)) !important;
+  border-left: 0 !important;
+  box-shadow: inset 1px 0 0 var(--rule-strong), -5px 0 18px rgba(60,48,30,0.04);
 }
 
-.shortcuts-hint {
+.trading-top-summary {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin-bottom: 0 !important;
+  padding: 8px !important;
+  background: color-mix(in srgb, var(--paper-card) 94%, transparent) !important;
+  backdrop-filter: blur(8px);
+}
+
+.trading-header {
+  padding: 2px 1px 7px !important;
+  margin-bottom: 7px !important;
+}
+
+.trading-title {
+  font-size: 12.5px !important;
+  letter-spacing: 0.16em !important;
+}
+
+.equity-hero-bar {
+  min-height: 66px;
+}
+
+.equity-highlight {
+  font-size: 21px !important;
+}
+
+.pnl-hero-pill {
+  min-width: 90px;
+}
+
+.trading-tab-nav {
+  position: sticky;
+  top: 84px;
+  z-index: 5;
+  margin: 0;
+}
+
+.trading-tab-contents {
+  overflow-y: visible;
+  padding-bottom: 4px;
+}
+
+.tab-panel {
+  gap: 9px;
+}
+
+.compact-card,
+.position-panel,
+.order-panel,
+.account-details-card,
+.performance-card,
+.acct-settings-card,
+.activity-card {
+  padding: 10px;
+  border-radius: 7px;
+  gap: 9px;
+}
+
+.card-header-row {
+  margin-bottom: 2px;
+}
+
+.card-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.pos-compact-grid {
+  gap: 6px;
+  padding: 7px;
+}
+
+.pos-metric {
+  padding: 7px;
+}
+
+.order-form-compact {
+  gap: 9px;
+}
+
+.order-row-compact {
+  gap: 6px;
+}
+
+.order-actions-grid .btn {
+  height: 42px;
+}
+
+/* Strong action affordance: Buy/Sell should dominate the ticket visually. */
+.order-actions-grid {
+  gap: 7px;
+}
+
+.btn-buy-main,
+.btn-sell-main {
+  min-height: 44px;
+  font-size: 13px;
+}
+
+.order-secondary-grid {
   margin-top: 5px;
 }
 
-/* Error/status and disabled controls should look intentional, not broken. */
-.btn:disabled,
-select:disabled,
-input:disabled {
-  filter: saturate(0.55);
+.trades-list {
+  min-height: 72px;
+  max-height: 118px;
 }
 
-/* Wide desktop */
-@media (min-width: 1440px) {
-  :root { --trading-w: 390px; }
+/* --------------------------------------------------------------------------
+   RESPONSIVE BREAKPOINTS
+   -------------------------------------------------------------------------- */
+@media (min-width: 1500px) {
+  :root { --sidebar-w-desktop: 430px; }
+  .topbar { padding-inline: 20px; }
 }
 
-/* Medium desktop / laptops */
-@media (max-width: 1280px) {
-  :root { --trading-w: 350px; --trading-w-min: 320px; }
+@media (max-width: 1280px) and (min-width: 1025px) {
+  :root { --sidebar-w-desktop: 360px; }
+
   .topbar {
-    grid-template-columns: minmax(190px, 1fr) minmax(0, 2.5fr) minmax(150px, 190px);
-    gap: 10px;
+    gap: 9px;
+    padding-inline: 12px;
   }
+
   .topbar-center {
-    grid-template-columns: minmax(100px, 1fr) minmax(100px, 1fr) minmax(170px, 1.5fr) minmax(170px, 1.5fr) auto;
-  }
-  .data-status { font-size: 11px; }
-  .trading-section { min-width: 350px; }
-}
-
-/* Collapse data controls before they become cramped. */
-@media (max-width: 1024px) {
-  #app {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "header"
-      "mode"
-      "error"
-      "main"
-      "timeline"
-      "controls";
+    gap: 6px;
   }
 
-  .topbar {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    padding: 10px 12px 12px;
-  }
+  .symbol-group { width: 104px; }
+  .tf-group { width: 78px; }
+  .replay-date-group { min-width: 172px; }
+  .preset-group { min-width: 86px; }
 
-  .topbar-left,
-  .topbar-right {
-    width: 100%;
-  }
-
-  .topbar-right {
-    justify-content: flex-start;
+  #header-start-replay-btn {
+    padding-inline: 10px;
+    font-size: 11px;
   }
 
   .data-status {
-    text-align: left;
+    max-width: 15ch;
+  }
+}
+
+@media (max-width: 1024px) {
+  #app {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    grid-template-rows: auto auto auto auto auto auto;
   }
 
-  .topbar-center {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .selector-datetime {
-    grid-column: span 1;
-  }
-
-  #load-btn {
-    width: 100%;
-  }
-
-  .main-layout {
+  #app > .main-layout {
+    display: flex;
     flex-direction: column;
     overflow: visible;
   }
 
-  .main {
-    min-height: 500px;
-    border-right: none;
+  #app > .main-layout > .main {
+    min-height: min(68dvh, 620px);
+    border-right: 0;
     border-bottom: 1px solid var(--border);
   }
 
-  .trading-section {
+  #app > .main-layout > .trading-section {
     width: 100%;
-    min-width: 0;
-    max-width: none;
-    border-left: none;
+    height: auto;
     max-height: none;
     overflow: visible;
+    border-left: 0 !important;
+    box-shadow: none;
   }
 
-  .timeline-start-controls {
-    grid-template-columns: minmax(160px, 1fr) minmax(340px, 1.6fr) auto;
+  .topbar {
+    flex-wrap: wrap;
+    align-items: center;
   }
-}
 
-@media (max-width: 800px) {
   .topbar-center {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .selector-datetime {
-    grid-column: 1 / -1;
-  }
-
-  .datetime-group {
-    grid-template-columns: minmax(0, 1fr) 100px;
-  }
-
-  .timeline-start-controls {
-    grid-template-columns: 1fr;
-  }
-
-  .jump-datetime {
-    grid-template-columns: minmax(0, 1fr) 100px auto;
-  }
-
-  #start-replay-btn {
+    order: 3;
     width: 100%;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
-  .trading-panels {
-    grid-template-columns: 1fr;
+  .topbar-right {
+    margin-left: auto;
   }
 
-  .order-panel {
-    grid-column: auto;
+  .trading-tab-nav,
+  .trading-top-summary {
+    position: static;
   }
 }
 
-@media (max-width: 560px) {
-  .topbar-center,
-  .trading-panels,
-  .order-buttons,
-  .risk-buttons,
-  .jump-datetime {
-    grid-template-columns: 1fr;
-    display: grid;
+@media (max-width: 768px) {
+  .topbar {
+    padding: 8px 10px;
   }
 
-  .datetime-group {
-    grid-template-columns: 1fr;
+  .topbar-left,
+  .topbar-right {
+    width: auto;
   }
 
-  .mode-banner {
-    align-items: flex-start;
-    padding-inline: 10px;
-  }
-
-  .market-time-full {
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .error-panel {
-    margin-inline: 10px;
-  }
-
-  .timeline-section,
-  .controls-section {
-    padding-inline: 10px;
-  }
-
-  .chart-overlay-content {
-    max-width: calc(100vw - 32px);
-    padding: 20px;
-  }
-}
-
-/* FINAL DESKTOP VIEWPORT FIT */
-@media (min-width: 1025px) {
-  html,
-  body {
-    width: 100%;
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  #app {
-    width: 100%;
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-    grid-template-rows: auto auto auto minmax(0, 1fr) 132px 62px;
-  }
-
-  .main-layout,
-  .main,
-  .chart-container,
-  .trading-section {
-    height: 100%;
-    min-height: 0;
-  }
-
-  .main-layout {
-    overflow: hidden;
+  .topbar-center {
+    gap: 7px;
   }
 
   .trading-section {
-    overflow: hidden;
+    padding: 9px;
   }
 
-  /* Do not waste half the sidebar on disabled risk controls. */
-  .position-panel:has(#btn-set-risk:disabled) .risk-controls {
-    display: none;
+  .equity-highlight {
+    font-size: 19px !important;
   }
-
-  .trading-panels {
-    gap: 8px;
-  }
-
-  .account-panel,
-  .position-panel,
-  .order-panel {
-    padding: 8px;
-  }
-
-  .account-panel h3,
-  .position-panel h3,
-  .order-panel h3,
-  .pending-orders h3,
-  .trades-history h3 {
-    margin-bottom: 5px;
-  }
-
-  .kv {
-    padding: 2px 0;
-    line-height: 1.15;
-  }
-
-  .order-row {
-    margin-bottom: 4px;
-  }
-
-  .order-row input,
-  .order-row select,
-  .order-buttons .btn,
-  .risk-buttons .btn {
-    min-height: 31px;
-  }
-
-  .pending-orders,
-  .trades-history {
-    min-height: 0;
-  }
-
-  .trades-list {
-    max-height: 48px;
-    min-height: 30px;
-    overflow: auto;
-    padding: 4px 6px;
-  }
-
-  .timeline-section {
-    height: 132px;
-    min-height: 0;
-    padding: 7px 16px;
-    overflow: hidden;
-  }
-
-  .timeline-track-wrap {
-    margin: 2px 0 4px;
-  }
-
-  #timeline-slider {
-    height: 22px;
-  }
-
-  .timeline-start-controls {
-    margin-top: 3px;
-    gap: 8px;
-  }
-
-  #jump-btn,
-  #start-replay-btn {
-    min-height: 32px;
-  }
-
-  .controls-section {
-    height: 62px;
-    min-height: 0;
-    padding: 5px 16px 7px;
-    overflow: hidden;
-  }
-
-  .controls-row {
-    min-height: 32px;
-  }
-
-  .controls-row .btn,
-  #speed-select {
-    min-height: 31px;
-  }
-
-  .shortcuts-hint {
-    margin-top: 2px;
-    line-height: 1.1;
-  }
-
-  /* An error must not push the timeline below the viewport. */
-  .error-panel {
-    max-height: 92px;
-    margin-top: 6px;
-    padding: 8px 12px;
-    overflow: hidden;
-  }
-
-  .error-panel-header {
-    margin-bottom: 3px;
-  }
-
-  .error-panel-actions {
-    margin-top: 4px;
-  }
-
-  .error-panel-context {
-    max-height: 28px;
-    overflow: auto;
-  }
-}
-
-/* ==========================================================================
-   UNIFIED DESIGN SYSTEM POLISH (appended — preserves all layout above)
-   Component spacing, hierarchy, and token-driven polish.
-   ========================================================================== */
-
-/* Header Polish */
-.topbar-left, .topbar-center, .topbar-right { display: flex; align-items: center; gap: var(--sp-3, 12px); }
-
-/* Trading Panel Polish */
-.trading-title { font-size: 14px; font-weight: 600; color: var(--text); margin: 0; display: flex; align-items: center; gap: var(--sp-2, 8px); }
-.seal-mark { color: var(--color-short); font-family: var(--font-serif, Georgia, serif); font-size: 16px; }
-
-.equity-main { display: flex; flex-direction: column; }
-.pnl-hero-pill { background: var(--bg-input); padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: var(--radius-md, 8px); display: flex; flex-direction: column; align-items: flex-end; }
-
-/* Position Panel Grid */
-.pos-compact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2, 8px); margin-bottom: var(--sp-3, 12px); }
-.pos-metric { background: var(--bg-input); padding: var(--sp-2, 8px); border-radius: var(--radius-sm, 4px); border: 1px solid var(--border-subtle, var(--border)); }
-
-.risk-inputs-row { display: flex; gap: var(--sp-2, 8px); }
-.risk-inputs-row input { flex: 1; }
-.risk-inputs-row button { flex-shrink: 0; }
-
-/* Order Panel Polish — segmented control: tabs touch inside a recessed container */
-.order-type-tabs { display: flex; gap: 0; padding: 3px; margin-bottom: var(--sp-3, 12px); }
-.order-type-tabs button { flex: 1; }
-.order-form-compact { display: flex; flex-direction: column; gap: var(--sp-3, 12px); }
-.order-row-compact { display: flex; flex-direction: column; gap: var(--sp-2, 8px); }
-.qty-presets-compact { display: flex; gap: var(--sp-2, 8px); }
-.qty-presets-compact button { flex: 1; }
-
-.order-actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2, 8px); }
-.order-actions-grid .btn { height: 44px; font-size: 14px; }
-
-.order-secondary-grid { margin-top: var(--sp-2, 8px); }
-.order-secondary-grid .btn { width: 100%; height: 36px; font-size: 12px; }
-
-/* KV Grid (Account Tab) */
-.kv-grid { display: flex; flex-direction: column; gap: var(--sp-2, 8px); }
-.kv { display: flex; justify-content: space-between; padding-bottom: var(--sp-2, 8px); border-bottom: 1px dashed var(--border); }
-.kv span:first-child { color: var(--text-muted); }
-.kv span:last-child { font-family: var(--font-mono, monospace); font-weight: 600; }
-
-/* Stats Mini Grid */
-.stats-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2, 8px); }
-.stat-tile { background: var(--bg-input); padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: var(--radius-md, 8px); border: 1px solid var(--border); }
-
-/* Activity Tab Polish */
-.trades-list { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md, 8px); padding: var(--sp-3, 12px); min-height: 100px; font-size: 12px; color: var(--text-muted); }
-
-/* Capital Settings */
-.capital-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2, 8px); margin: var(--sp-2, 8px) 0; }
-.capital-presets button { width: 100%; }
-.custom-capital-row { display: flex; gap: var(--sp-2, 8px); }
-.custom-capital-row input { flex: 1; }
-
-/* Chart Floating Bar Detail */
-.chart-pos-badge {
-  font-weight: 700; padding: 2px 6px; border-radius: var(--radius-sm, 4px);
-  background: var(--accent-subtle); color: var(--accent); font-size: 11px; margin-right: var(--sp-3, 12px);
 }
