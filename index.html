@@ -15,10 +15,14 @@
   <link rel="stylesheet" href="/src/viewport-fit.css" />
   <link rel="stylesheet" href="/src/paper-theme.css" />
   <link rel="stylesheet" href="/src/themes.css" />
+  <link rel="stylesheet" href="/src/animations.css" />
+  <link rel="stylesheet" href="/src/pages.css" />
 </head>
 <body>
   <div id="app">
-    <!-- HEADER -->
+    <!-- PAGE: REPLAY -->
+    <div id="page-replay" class="page active" data-page="replay">
+      <!-- HEADER -->
     <header class="topbar" role="banner">
       <div class="topbar-left">
         <div class="logo-wrapper">
@@ -421,6 +425,163 @@
         <button id="btn-follow" class="btn btn-secondary hidden" title="Follow current replay candle" aria-label="Follow current candle">&#8599; FOLLOW</button>
       </div>
     </section>
+    </div> <!-- END PAGE: REPLAY -->
+
+    <!-- PAGE: DASHBOARD -->
+    <div id="page-dashboard" class="page" data-page="dashboard" style="display: none;">
+      <div class="page-container">
+        <!-- Dashboard content rendered by JS -->
+      </div>
+    </div>
+
+    <!-- PAGE: ANALYTICS -->
+    <div id="page-analytics" class="page" data-page="analytics" style="display: none;">
+      <div class="page-container">
+        <div class="page-header">
+          <h1 class="page-title">Analytics</h1>
+          <p class="page-subtitle">Deep dive into your trading performance</p>
+        </div>
+        
+        <div class="analytics-grid">
+          <div class="analytics-card">
+            <h3>Performance by Day</h3>
+            <canvas id="day-performance-chart"></canvas>
+          </div>
+          <div class="analytics-card">
+            <h3>Performance by Hour</h3>
+            <canvas id="hour-performance-chart"></canvas>
+          </div>
+          <div class="analytics-card">
+            <h3>Win/Loss Distribution</h3>
+            <canvas id="winloss-chart"></canvas>
+          </div>
+          <div class="analytics-card">
+            <h3>Drawdown Analysis</h3>
+            <canvas id="drawdown-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: STRATEGIES -->
+    <div id="page-strategies" class="page" data-page="strategies" style="display: none;">
+      <div class="page-container"></div>
+    </div>
+
+    <!-- PAGE: JOURNAL -->
+    <div id="page-journal" class="page" data-page="journal" style="display: none;">
+      <div class="page-container"></div>
+    </div>
+
+    <!-- PAGE: SETTINGS -->
+    <div id="page-settings" class="page" data-page="settings" style="display: none;">
+      <div class="page-container">
+        <div class="page-header">
+          <h1 class="page-title">Settings</h1>
+          <p class="page-subtitle">Customize your trading environment</p>
+        </div>
+        
+        <div class="settings-sections">
+          <section class="settings-group">
+            <h2 class="settings-group-title">Appearance</h2>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Theme</span>
+                <span class="setting-desc">Choose your visual style</span>
+              </div>
+              <div class="theme-pills">
+                <button type="button" class="theme-pill active" data-theme="dark">Dark Pro</button>
+                <button type="button" class="theme-pill" data-theme="light">Light</button>
+                <button type="button" class="theme-pill" data-theme="paper">Paper</button>
+                <button type="button" class="theme-pill" data-theme="midnight">Midnight</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Compact Mode</span>
+                <span class="setting-desc">Reduce spacing for more content</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-compact" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Animations</span>
+                <span class="setting-desc">Enable UI animations and transitions</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-animations" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </section>
+          
+          <section class="settings-group">
+            <h2 class="settings-group-title">Trading</h2>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Sound Effects</span>
+                <span class="setting-desc">Play sounds on trade execution</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-sounds" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Auto-Scroll Chart</span>
+                <span class="setting-desc">Follow current candle during replay</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-autoscroll" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Default Quantity</span>
+                <span class="setting-desc">Default order size</span>
+              </div>
+              <input type="number" id="setting-default-qty" value="1" min="0.01" step="0.01" class="setting-input" />
+            </div>
+          </section>
+          
+          <section class="settings-group">
+            <h2 class="settings-group-title">Data</h2>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Cache Storage</span>
+                <span class="setting-desc">Manage local data cache</span>
+              </div>
+              <button type="button" class="btn btn-secondary" id="btn-clear-cache">Clear Cache</button>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Export Data</span>
+                <span class="setting-desc">Download your trading history</span>
+              </div>
+              <button type="button" class="btn btn-secondary" id="btn-export">Export CSV</button>
+            </div>
+          </section>
+          
+          <section class="settings-group">
+            <h2 class="settings-group-title">About</h2>
+            <div class="about-info">
+              <p><strong>Delta Replay</strong> v0.1.0</p>
+              <p>Historical market replay with paper trading and strategy backtesting.</p>
+              <p class="about-links">
+                <a href="https://github.com/Sandeep119public/delta-replay" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <span class="separator">·</span>
+                <a href="https://github.com/Sandeep119public/delta-replay/issues" target="_blank" rel="noopener noreferrer">Report Issue</a>
+              </p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   </div>
   <!-- Mobile trading drawer: dismiss scrim + toggle FAB -->
   <div id="drawer-scrim" class="drawer-scrim" aria-hidden="true"></div>
