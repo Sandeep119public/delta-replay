@@ -291,7 +291,7 @@ export class PaperTradingEngine extends EventEmitter {
     if (!this._pendingOrderIds.length) return;
     const remaining = [];
     for (const id of this._pendingOrderIds) {
-      const order = this._orders.get(id);
+      const order = this._orders.get(String(id));
       if (!order || order.status !== ORDER_STATUSES.PENDING) continue;
       if (order.type !== ORDER_TYPES.MARKET) { remaining.push(id); continue; }
       if (symbol && order.symbol !== symbol) { remaining.push(id); continue; }
@@ -411,7 +411,7 @@ export class PaperTradingEngine extends EventEmitter {
   }
   placeStopMarketOrder(opts) { return this.placeStopOrder(opts); }
   cancelOrder(orderId) {
-    const order = this._orders.get(orderId); if (!order) return this._reject('ORDER_NOT_FOUND', `Order not found: ${orderId}`, { orderId });
+    const order = this._orders.get(String(orderId)); if (!order) return this._reject('ORDER_NOT_FOUND', `Order not found: ${orderId}`, { orderId });
     if (order.status !== ORDER_STATUSES.PENDING) return this._reject('ORDER_NOT_PENDING', `Cannot cancel order in status ${order.status}`, { orderId, status: order.status });
     order.status = ORDER_STATUSES.CANCELLED; order.cancelReason = 'USER_CANCELLED'; this._pendingOrderIds = this._pendingOrderIds.filter(id => id !== orderId); this._emitOrderCancelled(order); return { success: true, order: this._cloneJSON(order.toJSON()) };
   }
@@ -419,7 +419,7 @@ export class PaperTradingEngine extends EventEmitter {
     if (!this._pendingOrderIds.length) return;
     const snapshot = [...this._pendingOrderIds], toRemove = new Set();
     for (const id of snapshot) {
-      const order = this._orders.get(id); if (toRemove.has(id)) continue;
+      const order = this._orders.get(String(id)); if (toRemove.has(id)) continue;
       if (!order) { toRemove.add(id); continue; }
       if (order.status !== ORDER_STATUSES.PENDING) { toRemove.add(id); continue; }
       if (targetSymbol && order.symbol !== targetSymbol) continue;
@@ -428,7 +428,7 @@ export class PaperTradingEngine extends EventEmitter {
       if (order.type === ORDER_TYPES.LIMIT) { if (order.side === 'BUY' && candle.low <= order.limitPrice) shouldFill = true; if (order.side === 'SELL' && candle.high >= order.limitPrice) shouldFill = true; if (shouldFill) { this._executeLimitFill(order, candle); toRemove.add(id); } }
       else if (order.type === ORDER_TYPES.STOP_MARKET) { if (order.side === 'BUY' && candle.high >= order.stopPrice) shouldFill = true; if (order.side === 'SELL' && candle.low <= order.stopPrice) shouldFill = true; if (shouldFill) { this._executeStopFill(order, candle); toRemove.add(id); } }
     }
-    this._pendingOrderIds = this._pendingOrderIds.filter(pid => !toRemove.has(pid) && this._orders.get(pid)?.status === ORDER_STATUSES.PENDING);
+    this._pendingOrderIds = this._pendingOrderIds.filter(pid => !toRemove.has(pid) && this._orders.get(String(pid))?.status === ORDER_STATUSES.PENDING);
   }
   _processPendingLimitOrders(candle, candleIndex) { return this._processPendingOrders(candle, candleIndex); }
 
@@ -485,11 +485,11 @@ export class PaperTradingEngine extends EventEmitter {
   _cancelStaleExitPendings(closedMap, candleIndex) {
     for (const [symbol, closedSide] of closedMap.entries()) {
       const staleIds = this._pendingOrderIds.filter(id => {
-        const o = this._orders.get(id); if (!o || o.status !== ORDER_STATUSES.PENDING || o.symbol !== symbol || o.createdIndex >= candleIndex) return false;
+        const o = this._orders.get(String(id)); if (!o || o.status !== ORDER_STATUSES.PENDING || o.symbol !== symbol || o.createdIndex >= candleIndex) return false;
         const orderIsLong = o.side === 'BUY', closedIsLong = closedSide === 'LONG';
         return (closedIsLong && !orderIsLong) || (!closedIsLong && orderIsLong);
       });
-      for (const id of staleIds) { const o = this._orders.get(id); o.status = ORDER_STATUSES.CANCELLED; o.cancelReason = 'STALE_EXIT_AFTER_RISK_CLOSE'; this._pendingOrderIds = this._pendingOrderIds.filter(i => i !== id); this._emitOrderCancelled(o); }
+      for (const id of staleIds) { const o = this._orders.get(String(id)); o.status = ORDER_STATUSES.CANCELLED; o.cancelReason = 'STALE_EXIT_AFTER_RISK_CLOSE'; this._pendingOrderIds = this._pendingOrderIds.filter(i => i !== id); this._emitOrderCancelled(o); }
     }
   }
   _processStopLossTakeProfit(candle, candleIndex, targetSymbol = null) {
@@ -546,14 +546,14 @@ export class PaperTradingEngine extends EventEmitter {
   _cancelIncompatiblePendings(symbol) {
     const pos = this._positions.get(symbol); if (!pos) return;
     const posIsLong = pos.side === 'LONG';
-    const incompatibleIds = this._pendingOrderIds.filter(id => { const o = this._orders.get(id); if (!o || o.status !== ORDER_STATUSES.PENDING || o.symbol !== symbol) return false; const orderIsLong = o.side === 'BUY'; return (posIsLong && orderIsLong) || (!posIsLong && !orderIsLong); });
-    for (const id of incompatibleIds) { const o = this._orders.get(id); o.status = ORDER_STATUSES.REJECTED; o.rejectionReason = 'POSITION_ALREADY_OPEN'; this._pendingOrderIds = this._pendingOrderIds.filter(i => i !== id); this._emitOrderRejected(o, 'POSITION_ALREADY_OPEN', `Position already open for ${symbol} (${pos.side}). Pending order rejected.`); }
+    const incompatibleIds = this._pendingOrderIds.filter(id => { const o = this._orders.get(String(id)); if (!o || o.status !== ORDER_STATUSES.PENDING || o.symbol !== symbol) return false; const orderIsLong = o.side === 'BUY'; return (posIsLong && orderIsLong) || (!posIsLong && !orderIsLong); });
+    for (const id of incompatibleIds) { const o = this._orders.get(String(id)); o.status = ORDER_STATUSES.REJECTED; o.rejectionReason = 'POSITION_ALREADY_OPEN'; this._pendingOrderIds = this._pendingOrderIds.filter(i => i !== id); this._emitOrderRejected(o, 'POSITION_ALREADY_OPEN', `Position already open for ${symbol} (${pos.side}). Pending order rejected.`); }
   }
-  _clearPendingOrders(reason = 'CLEARED') { if (!this._pendingOrderIds.length) return; const ids = [...this._pendingOrderIds]; for (const id of ids) { const o = this._orders.get(id); if (o && o.status === ORDER_STATUSES.PENDING) { o.status = ORDER_STATUSES.CANCELLED; o.cancelReason = reason; this._emitOrderCancelled(o); } } this._pendingOrderIds = []; }
+  _clearPendingOrders(reason = 'CLEARED') { if (!this._pendingOrderIds.length) return; const ids = [...this._pendingOrderIds]; for (const id of ids) { const o = this._orders.get(String(id)); if (o && o.status === ORDER_STATUSES.PENDING) { o.status = ORDER_STATUSES.CANCELLED; o.cancelReason = reason; this._emitOrderCancelled(o); } } this._pendingOrderIds = []; }
   clearPendingOrders(reason) { return this._clearPendingOrders(reason || 'CLEARED'); }
-  getPendingOrders() { return this._pendingOrderIds.map(id => this._orders.get(id)).filter(Boolean).map(o => this._cloneJSON(o.toJSON())); }
+  getPendingOrders() { return this._pendingOrderIds.map(id => this._orders.get(String(id))).filter(Boolean).map(o => this._cloneJSON(o.toJSON())); }
   getOrders() { return Array.from(this._orders.values()).map(o => this._cloneJSON(o.toJSON())); }
-  getOrder(id) { const o = this._orders.get(id); return o ? this._cloneJSON(o.toJSON()) : null; }
+  getOrder(id) { const o = this._orders.get(String(id)); return o ? this._cloneJSON(o.toJSON()) : null; }
   resetAccount(pendingCancelReason = 'ACCOUNT_RESET') { this._positions.clear(); this._trades = []; this._nextTradeId = 1; this._ambiguousBarCount = 0; this._totalBarsEvaluated = 0; this._fundingHistory = []; this._lastFundingTimestamp = null; this._equityHistory = [this.account.startingBalance]; this.clearMarketContext(); this.account.reset(); this._clearPendingOrders(pendingCancelReason); this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot()); this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot()); return this.getAccountSnapshot(); }
   resetAll({ clearMarket = false } = {}) { this._positions.clear(); this._trades = []; this._nextTradeId = 1; this._nextOrderId = 1; this._orders.clear(); this._pendingOrderIds = []; this._ambiguousBarCount = 0; this._totalBarsEvaluated = 0; this._fundingHistory = []; this._lastFundingTimestamp = null; this._equityHistory = [this.account.startingBalance]; if (clearMarket) this.clearMarketContext(); this.account.reset(); this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot()); this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot()); return this.getAccountSnapshot(); }
   setStartingBalance(newBalance) { const val = Number(newBalance); if (!Number.isFinite(val) || val <= 0) return { success: false, message: 'Invalid starting balance' }; this.account.startingBalance = val; this.account.cashBalance = val; this.account.realizedPnL = 0; this.account.unrealizedPnL = 0; this.account.totalFees = 0; this.account.totalFundingPaid = 0; this.account.totalFundingReceived = 0; this.account.netFunding = 0; this._positions.clear(); this._trades = []; this._clearPendingOrders('BALANCE_CHANGED'); this._equityHistory = [val]; this.emit(TradingEvents.ACCOUNT_RESET, this.getAccountSnapshot()); this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot()); return { success: true, balance: val }; }
@@ -578,7 +578,7 @@ export class PaperTradingEngine extends EventEmitter {
       + Array.from(this._positions.values()).reduce((sum, position) => sum + (Number(position.entryFee) || 0), 0);
     const feesOk = Math.abs(acct.totalFees - feesSum) < 1e-9;
     const pendingIdsUnique = new Set(this._pendingOrderIds).size === this._pendingOrderIds.length;
-    const pendingAllPending = this._pendingOrderIds.every(id => this._orders.get(id)?.status === ORDER_STATUSES.PENDING);
+    const pendingAllPending = this._pendingOrderIds.every(id => this._orders.get(String(id))?.status === ORDER_STATUSES.PENDING);
     return { equityOk, unrealizedOk, feesOk, pendingIdsUnique, pendingAllPending, equity, computedUnrealized, unrealizedPnL: acct.unrealizedPnL, cashBalance: acct.cashBalance, totalFees: acct.totalFees, computedFeesSum: feesSum };
   }
   hasOpenPosition(symbol = null) { return symbol ? this._positions.has(symbol) : this._positions.size > 0; }
