@@ -1,6 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Ma+Shan+Zheng&family=Shippori+Mincho:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@400;600;700&display=swap');
 
 /* ==========================================================================
+   COMPATIBILITY SHIM — Kyoto Manuscript now lives in themes.css
+   ([data-theme="paper"]). This file is intentionally preserved: responsive
+   audit tests read it, and it provides legacy paper variables / textures.
+   New paper work should go in themes.css; keep this file in sync.
+   ========================================================================== */
+
+/* ==========================================================================
    ANCIENT CHINA & JAPAN PAPER THEME (和紙 / 宣紙 / 書画 / 印鑑)
    Tactile Xuan & Washi paper textures, classical calligraphy & stone-carved
    Mincho/Cinzel typography, sumi-e pine-soot ink, cinnabar & jade seals.

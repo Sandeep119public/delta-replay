@@ -1,6 +1,6 @@
 /* ==========================================================================
-   DELTA REPLAY — MULTI-THEME ENGINE & UI SIMPLIFICATION
-   Themes: Dark Pro (default), Paper Manuscript, Clean Light, Midnight OLED
+   DELTA REPLAY — MULTI-THEME ENGINE
+   Themes: Obsidian (Dark), Kyoto (Paper), Studio (Light), Cyberpunk (Midnight)
    ========================================================================== */
 
 /* ===== THEME SELECTOR & HEADER ACTIONS ===== */
@@ -44,9 +44,7 @@
 }
 
 #cache-badge {
-  font-size: 9px;
-  padding: 1px 4px;
-  opacity: 0.7;
+  display: none !important;
 }
 
 /* Hide redundant banner to maximize chart height */
@@ -111,174 +109,230 @@
 }
 
 /* ==========================================================================
-   THEME 1: DARK PRO (Default Modern Crypto Terminal)
+   THEME 1: OBSIDIAN TERMINAL (Default Dark)
+   Deep blacks, crisp borders, modern trading aesthetic.
    ========================================================================== */
+:root,
 html[data-theme="dark"],
 body[data-theme="dark"],
 [data-theme="dark"] {
-  --bg: #0B0D12;
-  --bg-card: #13161C;
-  --bg-input: #1A1E26;
-  --border: #242933;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --text: #F8FAFC;
-  --text-muted: #94A3B8;
-  --text-faint: #64748B;
-  --accent: #3B82F6;
-  --accent-hover: #2563EB;
-  --green: #10B981;
-  --green-dark: #059669;
-  --green-glow: rgba(16, 185, 129, 0.12);
-  --red: #EF4444;
-  --red-dark: #DC2626;
-  --red-glow: rgba(239, 68, 68, 0.12);
-  --yellow: #FBBF24;
+  --bg-base: #09090b; --bg-surface: #111114; --bg-elevated: #18181b;
+  --bg-card: #111114; --bg-input: #18181b; --bg-hover: #27272a;
+  --bg: #09090b;
+  --border: #27272a; --border-strong: #3f3f46; --border-subtle: #18181b;
+  --border-default: #27272a;
+  --text: #fafafa; --text-muted: #a1a1aa; --text-faint: #71717a;
+  --text-primary: #fafafa; --text-secondary: #a1a1aa; --text-tertiary: #71717a;
+  --accent: #3b82f6; --accent-hover: #2563eb; --accent-subtle: rgba(59, 130, 246, 0.15);
+  --accent-primary: #3b82f6;
+  --color-long: #22c55e; --color-long-hover: #16a34a; --color-long-bg: rgba(34, 197, 94, 0.1);
+  --color-short: #ef4444; --color-short-hover: #dc2626; --color-short-bg: rgba(239, 68, 68, 0.1);
+  --green: #22c55e; --green-dark: #16a34a; --green-glow: rgba(34, 197, 94, 0.1);
+  --red: #ef4444; --red-dark: #dc2626; --red-glow: rgba(239, 68, 68, 0.1);
+  --yellow: #f59e0b;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4); --shadow-md: 0 4px 6px rgba(0,0,0,0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
 html[data-theme="dark"],
 body[data-theme="dark"] {
-  background: #0B0D12 !important;
+  background: #09090b !important;
   background-image: none !important;
-  color: #F8FAFC !important;
+  color: #fafafa !important;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
 }
 
+html[data-theme="dark"] .topbar,
+body[data-theme="dark"] .topbar,
 [data-theme="dark"] .topbar {
-  background: #13161C !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  background: #111114 !important;
+  border-bottom: 1px solid #27272a !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
 }
 
+html[data-theme="dark"] .logo,
+body[data-theme="dark"] .logo,
 [data-theme="dark"] .logo {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.12em !important;
-  color: #f8fafc !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  color: #fafafa !important;
   text-shadow: none !important;
 }
 
+html[data-theme="dark"] #mode-banner,
+body[data-theme="dark"] #mode-banner,
 [data-theme="dark"] #mode-banner {
-  background: #0d131f !important;
-  border-color: #1e293b !important;
-  color: #94a3b8 !important;
+  background: #0d0d0f !important;
+  border-color: #27272a !important;
+  color: #a1a1aa !important;
 }
 
+html[data-theme="dark"] .main,
+html[data-theme="dark"] .main-layout,
+html[data-theme="dark"] .chart-container,
+body[data-theme="dark"] .main,
+body[data-theme="dark"] .main-layout,
+body[data-theme="dark"] .chart-container,
 [data-theme="dark"] .main,
 [data-theme="dark"] .main-layout,
 [data-theme="dark"] .chart-container {
-  background: #0b0f17 !important;
+  background: #09090b !important;
 }
 
+html[data-theme="dark"] .trading-section,
+body[data-theme="dark"] .trading-section,
 [data-theme="dark"] .trading-section {
-  background: #0e1422 !important;
-  border-left: 1px solid #222f43 !important;
+  background: #111114 !important;
+  border-left: 1px solid #27272a !important;
   box-shadow: none !important;
 }
 
+html[data-theme="dark"] .trading-top-summary,
+body[data-theme="dark"] .trading-top-summary,
 [data-theme="dark"] .trading-top-summary {
-  background: #131b2c !important;
-  border: 1px solid #222f43 !important;
+  background: #18181b !important;
+  border: 1px solid #27272a !important;
   border-radius: 6px !important;
   box-shadow: none !important;
 }
 
+html[data-theme="dark"] .trading-header,
+body[data-theme="dark"] .trading-header,
 [data-theme="dark"] .trading-header {
-  border-bottom: 1px solid #222f43 !important;
+  border-bottom: 1px solid #27272a !important;
 }
 
+html[data-theme="dark"] .trading-title,
+body[data-theme="dark"] .trading-title,
 [data-theme="dark"] .trading-title {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
   font-weight: 700 !important;
   letter-spacing: 0.08em !important;
-  color: #f8fafc !important;
+  color: #fafafa !important;
   text-shadow: none !important;
 }
 
+html[data-theme="dark"] .seal-mark,
+html[data-theme="dark"] .tab-glyph,
+body[data-theme="dark"] .seal-mark,
+body[data-theme="dark"] .tab-glyph,
 [data-theme="dark"] .seal-mark,
 [data-theme="dark"] .tab-glyph {
   display: none !important;
 }
 
+html[data-theme="dark"] .equity-hero-bar,
+body[data-theme="dark"] .equity-hero-bar,
 [data-theme="dark"] .equity-hero-bar {
-  background: #172134 !important;
-  border: 1px solid #283852 !important;
+  background: #18181b !important;
+  border: 1px solid #3f3f46 !important;
   border-radius: 6px !important;
   box-shadow: none !important;
 }
 
+html[data-theme="dark"] .equity-highlight,
+body[data-theme="dark"] .equity-highlight,
 [data-theme="dark"] .equity-highlight {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace !important;
+  font-family: 'JetBrains Mono', monospace !important;
   font-weight: 700 !important;
-  color: #38bdf8 !important;
+  color: #22c55e !important;
 }
 
+html[data-theme="dark"] .pnl-hero-pill,
+body[data-theme="dark"] .pnl-hero-pill,
 [data-theme="dark"] .pnl-hero-pill {
-  background: #111827 !important;
-  border: 1px solid #222f43 !important;
+  background: #111114 !important;
+  border: 1px solid #27272a !important;
 }
 
+html[data-theme="dark"] .trading-tab-nav,
+body[data-theme="dark"] .trading-tab-nav,
 [data-theme="dark"] .trading-tab-nav {
-  background: #111827 !important;
-  border: 1px solid #222f43 !important;
+  background: #111114 !important;
+  border: 1px solid #27272a !important;
   border-radius: 6px !important;
   padding: 3px !important;
 }
 
+html[data-theme="dark"] .panel-tab-btn,
+body[data-theme="dark"] .panel-tab-btn,
 [data-theme="dark"] .panel-tab-btn {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-weight: 600 !important;
-  color: #94a3b8 !important;
+  color: #a1a1aa !important;
   border-radius: 4px !important;
   border: none !important;
+  border-bottom: 2px solid transparent !important;
   background: transparent !important;
   box-shadow: none !important;
 }
 
+html[data-theme="dark"] .panel-tab-btn.active,
+body[data-theme="dark"] .panel-tab-btn.active,
 [data-theme="dark"] .panel-tab-btn.active {
-  background: #2563eb !important;
-  color: #ffffff !important;
+  background: #18181b !important;
+  color: #3b82f6 !important;
+  border-bottom-color: #3b82f6 !important;
 }
 
+html[data-theme="dark"] .compact-card,
+body[data-theme="dark"] .compact-card,
 [data-theme="dark"] .compact-card {
-  background: #131b2c !important;
-  border: 1px solid #222f43 !important;
-  border-radius: 6px !important;
+  background: #111114 !important;
+  border: 1px solid #27272a !important;
+  border-radius: 8px !important;
   box-shadow: none !important;
 }
 
+html[data-theme="dark"] .order-type-tabs,
+body[data-theme="dark"] .order-type-tabs,
 [data-theme="dark"] .order-type-tabs {
-  background: #0b0f17 !important;
-  border: 1px solid #222f43 !important;
+  background: #09090b !important;
+  border: 1px solid #27272a !important;
   border-radius: 5px !important;
   padding: 2px !important;
 }
 
+html[data-theme="dark"] .order-tab,
+body[data-theme="dark"] .order-tab,
 [data-theme="dark"] .order-tab {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-weight: 600 !important;
-  color: #94a3b8 !important;
+  color: #a1a1aa !important;
   border-radius: 4px !important;
   border: none !important;
   background: transparent !important;
 }
 
+html[data-theme="dark"] .order-tab.active,
+body[data-theme="dark"] .order-tab.active,
 [data-theme="dark"] .order-tab.active {
-  background: #1e293b !important;
-  color: #f8fafc !important;
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
 }
 
+html[data-theme="dark"] .btn-buy-main,
+body[data-theme="dark"] .btn-buy-main,
 [data-theme="dark"] .btn-buy-main {
-  background: #10b981 !important;
-  border-color: #059669 !important;
+  background: #22c55e !important;
+  border-color: #16a34a !important;
   color: #ffffff !important;
   font-weight: 700 !important;
   border-radius: 5px !important;
 }
 
+html[data-theme="dark"] .btn-buy-main:hover:not(:disabled),
+body[data-theme="dark"] .btn-buy-main:hover:not(:disabled),
 [data-theme="dark"] .btn-buy-main:hover:not(:disabled) {
-  background: #059669 !important;
+  background: #16a34a !important;
 }
 
+html[data-theme="dark"] .btn-sell-main,
+body[data-theme="dark"] .btn-sell-main,
 [data-theme="dark"] .btn-sell-main {
   background: #ef4444 !important;
   border-color: #dc2626 !important;
@@ -287,98 +341,193 @@ body[data-theme="dark"] {
   border-radius: 5px !important;
 }
 
+html[data-theme="dark"] .btn-sell-main:hover:not(:disabled),
+body[data-theme="dark"] .btn-sell-main:hover:not(:disabled),
 [data-theme="dark"] .btn-sell-main:hover:not(:disabled) {
   background: #dc2626 !important;
 }
 
+html[data-theme="dark"] .btn-close-pos,
+body[data-theme="dark"] .btn-close-pos,
 [data-theme="dark"] .btn-close-pos {
-  background: #334155 !important;
-  border-color: #475569 !important;
-  color: #f8fafc !important;
+  background: #27272a !important;
+  border-color: #3f3f46 !important;
+  color: #fafafa !important;
   font-weight: 700 !important;
   border-radius: 5px !important;
 }
 
+html[data-theme="dark"] .btn-close-pos:hover:not(:disabled),
+body[data-theme="dark"] .btn-close-pos:hover:not(:disabled),
 [data-theme="dark"] .btn-close-pos:hover:not(:disabled) {
   background: #dc2626 !important;
 }
 
+html[data-theme="dark"] .timeline-section,
+body[data-theme="dark"] .timeline-section,
 [data-theme="dark"] .timeline-section {
-  background: #0d131f !important;
-  border-top: 1px solid #222f43 !important;
+  background: #0d0d0f !important;
+  border-top: 1px solid #27272a !important;
 }
 
+html[data-theme="dark"] .controls-section,
+body[data-theme="dark"] .controls-section,
 [data-theme="dark"] .controls-section {
-  background: #111827 !important;
-  border-top: 1px solid #222f43 !important;
+  background: #111114 !important;
+  border-top: 1px solid #27272a !important;
 }
 
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+body[data-theme="dark"] input,
+body[data-theme="dark"] select,
 [data-theme="dark"] input,
 [data-theme="dark"] select {
-  background: #0b0f17 !important;
-  border-color: #283852 !important;
-  color: #f8fafc !important;
+  background: #18181b !important;
+  border-color: #3f3f46 !important;
+  color: #fafafa !important;
 }
 
+html[data-theme="dark"] .qty-chip,
+html[data-theme="dark"] .preset-chip,
+body[data-theme="dark"] .qty-chip,
+body[data-theme="dark"] .preset-chip,
 [data-theme="dark"] .qty-chip,
 [data-theme="dark"] .preset-chip {
-  background: #1e293b !important;
-  border-color: #334155 !important;
-  color: #e2e8f0 !important;
+  background: #18181b !important;
+  border-color: #3f3f46 !important;
+  color: #e4e4e7 !important;
 }
 
+html[data-theme="dark"] .qty-chip:hover,
+html[data-theme="dark"] .preset-chip:hover,
+body[data-theme="dark"] .qty-chip:hover,
+body[data-theme="dark"] .preset-chip:hover,
 [data-theme="dark"] .qty-chip:hover,
 [data-theme="dark"] .preset-chip:hover {
-  background: #2563eb !important;
-  border-color: #2563eb !important;
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
   color: #ffffff !important;
 }
 
+html[data-theme="dark"] .trades-list,
+body[data-theme="dark"] .trades-list,
 [data-theme="dark"] .trades-list {
-  background: #0b0f17 !important;
-  border-color: #222f43 !important;
-  color: #e2e8f0 !important;
+  background: #09090b !important;
+  border-color: #27272a !important;
+  color: #e4e4e7 !important;
 }
 
 /* ==========================================================================
-   THEME 2: PAPER MANUSCRIPT (和紙 / 宣紙 Ancient Scholar)
-   Uses the existing rich paper-theme styles when data-theme="paper"
+   THEME 2: KYOTO MANUSCRIPT (Paper)
+   Warm Xuan paper, jade & cinnabar accents, serif elegance.
    ========================================================================== */
 html[data-theme="paper"],
-body[data-theme="paper"] {
-  background-color: var(--paper, #f6f1e2) !important;
-  color: var(--ink-sumi, #211c17) !important;
-  font-family: var(--font-scholar, Georgia, serif) !important;
+body[data-theme="paper"],
+[data-theme="paper"] {
+  --bg-base: #f5f1e6; --bg-surface: #fdfbf5; --bg-elevated: #fffdf7;
+  --bg-card: #fdfbf5; --bg-input: #fffdf7; --bg-hover: #ebe5d5;
+  --bg: #f5f1e6;
+  --border: #dcd3bd; --border-strong: #c5b899; --border-subtle: #ebe5d5;
+  --border-default: #dcd3bd;
+  --text: #292115; --text-muted: #6b5e4f; --text-faint: #968875;
+  --text-primary: #292115; --text-secondary: #6b5e4f; --text-tertiary: #968875;
+  --accent: #2b5336; --accent-hover: #1e3f28; --accent-subtle: rgba(43, 83, 54, 0.12);
+  --accent-primary: #2b5336;
+  --color-long: #2b5336; --color-long-hover: #1e3f28; --color-long-bg: rgba(43, 83, 54, 0.08);
+  --color-short: #a83324; --color-short-hover: #842318; --color-short-bg: rgba(168, 51, 36, 0.08);
+  --green: #2b5336; --green-dark: #1e3f28; --green-glow: rgba(43, 83, 54, 0.08);
+  --red: #a83324; --red-dark: #842318; --red-glow: rgba(168, 51, 36, 0.08);
+  --yellow: #b38232;
+  --font-sans: 'Shippori Mincho', 'Noto Serif SC', Georgia, serif;
+  --font-mono: 'Courier New', Courier, serif;
+  --shadow-sm: 0 1px 2px rgba(90, 70, 40, 0.05); --shadow-md: 0 4px 12px rgba(90, 70, 40, 0.08);
+  --shadow-lg: 0 10px 15px -3px rgba(90, 70, 40, 0.12);
 }
 
+html[data-theme="paper"],
+body[data-theme="paper"] {
+  background-color: #f5f1e6 !important;
+  color: #292115 !important;
+  font-family: 'Shippori Mincho', 'Noto Serif SC', Georgia, serif !important;
+}
+
+/* Subtle paper texture overlay for Kyoto theme */
+html[data-theme="paper"] body, body[data-theme="paper"] {
+  background-color: var(--bg-base) !important;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  background-blend-mode: multiply;
+  background-size: 200px 200px;
+}
+
+html[data-theme="paper"] .seal-mark,
+html[data-theme="paper"] .tab-glyph,
+body[data-theme="paper"] .seal-mark,
+body[data-theme="paper"] .tab-glyph,
 [data-theme="paper"] .seal-mark,
 [data-theme="paper"] .tab-glyph {
   display: inline-flex !important;
 }
 
+html[data-theme="paper"] .topbar,
+body[data-theme="paper"] .topbar,
+[data-theme="paper"] .topbar {
+  background: #fdfbf5 !important;
+  border-bottom: 2px solid #c5b899 !important;
+}
+
+html[data-theme="paper"] .main,
+html[data-theme="paper"] .main-layout,
+html[data-theme="paper"] .chart-container,
+body[data-theme="paper"] .main,
+body[data-theme="paper"] .main-layout,
+body[data-theme="paper"] .chart-container,
+[data-theme="paper"] .main,
+[data-theme="paper"] .main-layout,
+[data-theme="paper"] .chart-container {
+  background: #fdfbf5 !important;
+}
+
+html[data-theme="paper"] .trading-section,
+body[data-theme="paper"] .trading-section,
+[data-theme="paper"] .trading-section {
+  background: #fdfbf5 !important;
+  border-left: 2px solid #c5b899 !important;
+}
+
+html[data-theme="paper"] .timeline-section,
+html[data-theme="paper"] .controls-section,
+body[data-theme="paper"] .timeline-section,
+body[data-theme="paper"] .controls-section,
+[data-theme="paper"] .timeline-section,
+[data-theme="paper"] .controls-section {
+  background: #f5f1e6 !important;
+  border-top: 1.5px solid #c5b899 !important;
+}
+
 /* ==========================================================================
-   THEME 3: CLEAN LIGHT (Minimalist Day Mode)
+   THEME 3: STUDIO LIGHT (Clean Light)
+   Apple-esque minimalism, soft shadows, crisp typography.
    ========================================================================== */
 html[data-theme="light"],
 body[data-theme="light"],
 [data-theme="light"] {
+  --bg-base: #f8fafc; --bg-surface: #ffffff; --bg-elevated: #ffffff;
+  --bg-card: #ffffff; --bg-input: #f1f5f9; --bg-hover: #e2e8f0;
   --bg: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-input: #f1f5f9;
-  --border: #e2e8f0;
-  --border-subtle: #edf2f7;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --text-faint: #94a3b8;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --green: #16a34a;
-  --green-dark: #15803d;
-  --green-glow: rgba(22, 163, 74, 0.12);
-  --red: #dc2626;
-  --red-dark: #b91c1c;
-  --red-glow: rgba(220, 38, 38, 0.12);
+  --border: #e2e8f0; --border-strong: #cbd5e1; --border-subtle: #f1f5f9;
+  --border-default: #e2e8f0;
+  --text: #0f172a; --text-muted: #475569; --text-faint: #94a3b8;
+  --text-primary: #0f172a; --text-secondary: #475569; --text-tertiary: #94a3b8;
+  --accent: #0f172a; --accent-hover: #1e293b; --accent-subtle: rgba(15, 23, 42, 0.1);
+  --accent-primary: #0f172a;
+  --color-long: #16a34a; --color-long-hover: #15803d; --color-long-bg: rgba(22, 163, 74, 0.08);
+  --color-short: #dc2626; --color-short-hover: #b91c1c; --color-short-bg: rgba(220, 38, 38, 0.08);
+  --green: #16a34a; --green-dark: #15803d; --green-glow: rgba(22, 163, 74, 0.08);
+  --red: #dc2626; --red-dark: #b91c1c; --red-glow: rgba(220, 38, 38, 0.08);
   --yellow: #d97706;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.02); --shadow-md: 0 4px 6px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
 }
 
 html[data-theme="light"],
@@ -386,41 +535,57 @@ body[data-theme="light"] {
   background: #f8fafc !important;
   background-image: none !important;
   color: #0f172a !important;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
 }
 
+html[data-theme="light"] .topbar,
+body[data-theme="light"] .topbar,
 [data-theme="light"] .topbar {
   background: #ffffff !important;
   border-bottom: 1px solid #e2e8f0 !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
 }
 
+html[data-theme="light"] .logo,
+body[data-theme="light"] .logo,
 [data-theme="light"] .logo {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.12em !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
   color: #0f172a !important;
   text-shadow: none !important;
 }
 
+html[data-theme="light"] #mode-banner,
+body[data-theme="light"] #mode-banner,
 [data-theme="light"] #mode-banner {
   background: #f1f5f9 !important;
   border-color: #e2e8f0 !important;
   color: #475569 !important;
 }
 
+html[data-theme="light"] .main,
+html[data-theme="light"] .main-layout,
+html[data-theme="light"] .chart-container,
+body[data-theme="light"] .main,
+body[data-theme="light"] .main-layout,
+body[data-theme="light"] .chart-container,
 [data-theme="light"] .main,
 [data-theme="light"] .main-layout,
 [data-theme="light"] .chart-container {
   background: #ffffff !important;
 }
 
+html[data-theme="light"] .trading-section,
+body[data-theme="light"] .trading-section,
 [data-theme="light"] .trading-section {
   background: #fcfcfd !important;
   border-left: 1px solid #e2e8f0 !important;
   box-shadow: none !important;
 }
 
+html[data-theme="light"] .trading-top-summary,
+body[data-theme="light"] .trading-top-summary,
 [data-theme="light"] .trading-top-summary {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
@@ -428,22 +593,32 @@ body[data-theme="light"] {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
 }
 
+html[data-theme="light"] .trading-header,
+body[data-theme="light"] .trading-header,
 [data-theme="light"] .trading-header {
   border-bottom: 1px solid #e2e8f0 !important;
 }
 
+html[data-theme="light"] .trading-title,
+body[data-theme="light"] .trading-title,
 [data-theme="light"] .trading-title {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-weight: 700 !important;
   color: #0f172a !important;
   text-shadow: none !important;
 }
 
+html[data-theme="light"] .seal-mark,
+html[data-theme="light"] .tab-glyph,
+body[data-theme="light"] .seal-mark,
+body[data-theme="light"] .tab-glyph,
 [data-theme="light"] .seal-mark,
 [data-theme="light"] .tab-glyph {
   display: none !important;
 }
 
+html[data-theme="light"] .equity-hero-bar,
+body[data-theme="light"] .equity-hero-bar,
 [data-theme="light"] .equity-hero-bar {
   background: #f8fafc !important;
   border: 1px solid #e2e8f0 !important;
@@ -451,17 +626,23 @@ body[data-theme="light"] {
   box-shadow: none !important;
 }
 
+html[data-theme="light"] .equity-highlight,
+body[data-theme="light"] .equity-highlight,
 [data-theme="light"] .equity-highlight {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace !important;
+  font-family: 'JetBrains Mono', monospace !important;
   font-weight: 700 !important;
-  color: #2563eb !important;
+  color: #0f172a !important;
 }
 
+html[data-theme="light"] .pnl-hero-pill,
+body[data-theme="light"] .pnl-hero-pill,
 [data-theme="light"] .pnl-hero-pill {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
 }
 
+html[data-theme="light"] .trading-tab-nav,
+body[data-theme="light"] .trading-tab-nav,
 [data-theme="light"] .trading-tab-nav {
   background: #f1f5f9 !important;
   border: 1px solid #e2e8f0 !important;
@@ -469,8 +650,10 @@ body[data-theme="light"] {
   padding: 3px !important;
 }
 
+html[data-theme="light"] .panel-tab-btn,
+body[data-theme="light"] .panel-tab-btn,
 [data-theme="light"] .panel-tab-btn {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-weight: 600 !important;
   color: #64748b !important;
   border-radius: 4px !important;
@@ -479,19 +662,26 @@ body[data-theme="light"] {
   box-shadow: none !important;
 }
 
+html[data-theme="light"] .panel-tab-btn.active,
+body[data-theme="light"] .panel-tab-btn.active,
 [data-theme="light"] .panel-tab-btn.active {
   background: #ffffff !important;
   color: #0f172a !important;
+  border-bottom-color: #0f172a !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
 }
 
+html[data-theme="light"] .compact-card,
+body[data-theme="light"] .compact-card,
 [data-theme="light"] .compact-card {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
-  border-radius: 6px !important;
+  border-radius: 8px !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
 }
 
+html[data-theme="light"] .order-type-tabs,
+body[data-theme="light"] .order-type-tabs,
 [data-theme="light"] .order-type-tabs {
   background: #f1f5f9 !important;
   border: 1px solid #e2e8f0 !important;
@@ -499,8 +689,10 @@ body[data-theme="light"] {
   padding: 2px !important;
 }
 
+html[data-theme="light"] .order-tab,
+body[data-theme="light"] .order-tab,
 [data-theme="light"] .order-tab {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-weight: 600 !important;
   color: #64748b !important;
   border-radius: 4px !important;
@@ -508,12 +700,16 @@ body[data-theme="light"] {
   background: transparent !important;
 }
 
+html[data-theme="light"] .order-tab.active,
+body[data-theme="light"] .order-tab.active,
 [data-theme="light"] .order-tab.active {
   background: #ffffff !important;
   color: #0f172a !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
 }
 
+html[data-theme="light"] .btn-buy-main,
+body[data-theme="light"] .btn-buy-main,
 [data-theme="light"] .btn-buy-main {
   background: #16a34a !important;
   border-color: #15803d !important;
@@ -522,6 +718,8 @@ body[data-theme="light"] {
   border-radius: 5px !important;
 }
 
+html[data-theme="light"] .btn-sell-main,
+body[data-theme="light"] .btn-sell-main,
 [data-theme="light"] .btn-sell-main {
   background: #dc2626 !important;
   border-color: #b91c1c !important;
@@ -530,16 +728,24 @@ body[data-theme="light"] {
   border-radius: 5px !important;
 }
 
+html[data-theme="light"] .timeline-section,
+body[data-theme="light"] .timeline-section,
 [data-theme="light"] .timeline-section {
   background: #f8fafc !important;
   border-top: 1px solid #e2e8f0 !important;
 }
 
+html[data-theme="light"] .controls-section,
+body[data-theme="light"] .controls-section,
 [data-theme="light"] .controls-section {
   background: #ffffff !important;
   border-top: 1px solid #e2e8f0 !important;
 }
 
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+body[data-theme="light"] input,
+body[data-theme="light"] select,
 [data-theme="light"] input,
 [data-theme="light"] select {
   background: #ffffff !important;
@@ -547,6 +753,10 @@ body[data-theme="light"] {
   color: #0f172a !important;
 }
 
+html[data-theme="light"] .qty-chip,
+html[data-theme="light"] .preset-chip,
+body[data-theme="light"] .qty-chip,
+body[data-theme="light"] .preset-chip,
 [data-theme="light"] .qty-chip,
 [data-theme="light"] .preset-chip {
   background: #f1f5f9 !important;
@@ -554,13 +764,19 @@ body[data-theme="light"] {
   color: #334155 !important;
 }
 
+html[data-theme="light"] .qty-chip:hover,
+html[data-theme="light"] .preset-chip:hover,
+body[data-theme="light"] .qty-chip:hover,
+body[data-theme="light"] .preset-chip:hover,
 [data-theme="light"] .qty-chip:hover,
 [data-theme="light"] .preset-chip:hover {
-  background: #2563eb !important;
-  border-color: #2563eb !important;
+  background: #0f172a !important;
+  border-color: #0f172a !important;
   color: #ffffff !important;
 }
 
+html[data-theme="light"] .trades-list,
+body[data-theme="light"] .trades-list,
 [data-theme="light"] .trades-list {
   background: #ffffff !important;
   border-color: #e2e8f0 !important;
@@ -568,214 +784,305 @@ body[data-theme="light"] {
 }
 
 /* ==========================================================================
-   THEME 4: MIDNIGHT OLED (Pure Cyber Black & Neon Glow)
+   THEME 4: CYBERPUNK OLED (Midnight)
+   True black background, neon glowing accents, cyberpunk vibes.
    ========================================================================== */
 html[data-theme="midnight"],
 body[data-theme="midnight"],
 [data-theme="midnight"] {
-  --bg: #030712;
-  --bg-card: #080d1a;
-  --bg-input: #0f172a;
-  --border: #1e293b;
-  --border-subtle: #111827;
-  --text: #f1f5f9;
-  --text-muted: #64748b;
-  --text-faint: #475569;
-  --accent: #00f2fe;
-  --accent-hover: #38bdf8;
-  --green: #00ff88;
-  --green-dark: #00cc6a;
-  --green-glow: rgba(0, 255, 136, 0.2);
-  --red: #ff3b69;
-  --red-dark: #e11d48;
-  --red-glow: rgba(255, 59, 105, 0.2);
+  --bg-base: #000000; --bg-surface: #050505; --bg-elevated: #0a0a0a;
+  --bg-card: #050505; --bg-input: #0a0a0a; --bg-hover: #171717;
+  --bg: #000000;
+  --border: #262626; --border-strong: #404040; --border-subtle: #0a0a0a;
+  --border-default: #262626;
+  --text: #f9fafb; --text-muted: #a3a3a3; --text-faint: #737373;
+  --text-primary: #f9fafb; --text-secondary: #a3a3a3; --text-tertiary: #737373;
+  --accent: #06b6d4; --accent-hover: #0891b2; --accent-subtle: rgba(6, 182, 212, 0.2);
+  --accent-primary: #06b6d4;
+  --color-long: #39ff14; --color-long-hover: #22c55e; --color-long-bg: rgba(57, 255, 20, 0.15);
+  --color-short: #ff007f; --color-short-hover: #e11d48; --color-short-bg: rgba(255, 0, 127, 0.15);
+  --green: #39ff14; --green-dark: #22c55e; --green-glow: rgba(57, 255, 20, 0.15);
+  --red: #ff007f; --red-dark: #e11d48; --red-glow: rgba(255, 0, 127, 0.15);
   --yellow: #facc15;
+  --shadow-sm: 0 0 10px rgba(6, 182, 212, 0.1); --shadow-md: 0 0 20px rgba(6, 182, 212, 0.15);
+  --shadow-lg: 0 0 24px rgba(6, 182, 212, 0.2);
 }
 
 html[data-theme="midnight"],
 body[data-theme="midnight"] {
-  background: #030712 !important;
+  background: #000000 !important;
   background-image: none !important;
-  color: #f1f5f9 !important;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace !important;
+  color: #f9fafb !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace !important;
 }
 
+html[data-theme="midnight"] .topbar,
+body[data-theme="midnight"] .topbar,
 [data-theme="midnight"] .topbar {
-  background: #060a14 !important;
-  border-bottom: 1px solid #1e293b !important;
-  box-shadow: 0 1px 10px rgba(0, 242, 254, 0.05) !important;
+  background: #050505 !important;
+  border-bottom: 1px solid #262626 !important;
+  box-shadow: 0 1px 10px rgba(6, 182, 212, 0.05) !important;
 }
 
+html[data-theme="midnight"] .logo,
+body[data-theme="midnight"] .logo,
 [data-theme="midnight"] .logo {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.16em !important;
-  color: #00f2fe !important;
-  text-shadow: 0 0 12px rgba(0, 242, 254, 0.4) !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  color: #06b6d4 !important;
+  text-shadow: 0 0 12px rgba(6, 182, 212, 0.4) !important;
 }
 
+html[data-theme="midnight"] #mode-banner,
+body[data-theme="midnight"] #mode-banner,
 [data-theme="midnight"] #mode-banner {
-  background: #050912 !important;
-  border-color: #1e293b !important;
-  color: #64748b !important;
+  background: #050505 !important;
+  border-color: #262626 !important;
+  color: #a3a3a3 !important;
 }
 
+html[data-theme="midnight"] .main,
+html[data-theme="midnight"] .main-layout,
+html[data-theme="midnight"] .chart-container,
+body[data-theme="midnight"] .main,
+body[data-theme="midnight"] .main-layout,
+body[data-theme="midnight"] .chart-container,
 [data-theme="midnight"] .main,
 [data-theme="midnight"] .main-layout,
 [data-theme="midnight"] .chart-container {
-  background: #030712 !important;
+  background: #000000 !important;
 }
 
+html[data-theme="midnight"] .trading-section,
+body[data-theme="midnight"] .trading-section,
 [data-theme="midnight"] .trading-section {
-  background: #060a14 !important;
-  border-left: 1px solid #1e293b !important;
+  background: #050505 !important;
+  border-left: 1px solid #262626 !important;
   box-shadow: none !important;
 }
 
+html[data-theme="midnight"] .trading-top-summary,
+body[data-theme="midnight"] .trading-top-summary,
 [data-theme="midnight"] .trading-top-summary {
-  background: #090f1e !important;
-  border: 1px solid #1e293b !important;
+  background: #0a0a0a !important;
+  border: 1px solid #262626 !important;
   border-radius: 6px !important;
-  box-shadow: 0 0 15px rgba(0, 242, 254, 0.04) !important;
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.04) !important;
 }
 
+html[data-theme="midnight"] .trading-header,
+body[data-theme="midnight"] .trading-header,
 [data-theme="midnight"] .trading-header {
-  border-bottom: 1px solid #1e293b !important;
+  border-bottom: 1px solid #262626 !important;
 }
 
+html[data-theme="midnight"] .trading-title,
+body[data-theme="midnight"] .trading-title,
 [data-theme="midnight"] .trading-title {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-weight: 700 !important;
-  color: #00f2fe !important;
-  text-shadow: 0 0 8px rgba(0, 242, 254, 0.3) !important;
+  color: #06b6d4 !important;
+  text-shadow: 0 0 8px rgba(6, 182, 212, 0.3) !important;
 }
 
+html[data-theme="midnight"] .seal-mark,
+html[data-theme="midnight"] .tab-glyph,
+body[data-theme="midnight"] .seal-mark,
+body[data-theme="midnight"] .tab-glyph,
 [data-theme="midnight"] .seal-mark,
 [data-theme="midnight"] .tab-glyph {
   display: none !important;
 }
 
+html[data-theme="midnight"] .equity-hero-bar,
+body[data-theme="midnight"] .equity-hero-bar,
 [data-theme="midnight"] .equity-hero-bar {
-  background: #0a1122 !important;
-  border: 1px solid #1e2e4a !important;
+  background: #0a0a0a !important;
+  border: 1px solid #404040 !important;
   border-radius: 6px !important;
   box-shadow: none !important;
 }
 
+html[data-theme="midnight"] .equity-highlight,
+body[data-theme="midnight"] .equity-highlight,
 [data-theme="midnight"] .equity-highlight {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace !important;
+  font-family: 'JetBrains Mono', monospace !important;
   font-weight: 700 !important;
-  color: #00f2fe !important;
-  text-shadow: 0 0 8px rgba(0, 242, 254, 0.4) !important;
+  color: #06b6d4 !important;
+  text-shadow: 0 0 8px rgba(6, 182, 212, 0.4), 0 0 8px rgba(255,255,255,0.2) !important;
 }
 
+html[data-theme="midnight"] .pnl-hero-pill,
+body[data-theme="midnight"] .pnl-hero-pill,
 [data-theme="midnight"] .pnl-hero-pill {
-  background: #030712 !important;
-  border: 1px solid #1e293b !important;
+  background: #000000 !important;
+  border: 1px solid #262626 !important;
 }
 
+html[data-theme="midnight"] .pnl-val,
+body[data-theme="midnight"] .pnl-val,
+[data-theme="midnight"] .pnl-val {
+  text-shadow: 0 0 8px rgba(255,255,255,0.2) !important;
+}
+
+html[data-theme="midnight"] .trading-tab-nav,
+body[data-theme="midnight"] .trading-tab-nav,
 [data-theme="midnight"] .trading-tab-nav {
-  background: #050912 !important;
-  border: 1px solid #1e293b !important;
+  background: #050505 !important;
+  border: 1px solid #262626 !important;
   border-radius: 6px !important;
   padding: 3px !important;
 }
 
+html[data-theme="midnight"] .panel-tab-btn,
+body[data-theme="midnight"] .panel-tab-btn,
 [data-theme="midnight"] .panel-tab-btn {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-weight: 600 !important;
-  color: #64748b !important;
+  color: #a3a3a3 !important;
   border-radius: 4px !important;
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
 }
 
+html[data-theme="midnight"] .panel-tab-btn.active,
+body[data-theme="midnight"] .panel-tab-btn.active,
 [data-theme="midnight"] .panel-tab-btn.active {
-  background: #0284c7 !important;
+  background: #0891b2 !important;
   color: #ffffff !important;
-  box-shadow: 0 0 10px rgba(2, 132, 199, 0.4) !important;
+  box-shadow: 0 0 10px rgba(8, 145, 178, 0.4) !important;
 }
 
+html[data-theme="midnight"] .compact-card,
+body[data-theme="midnight"] .compact-card,
 [data-theme="midnight"] .compact-card {
-  background: #090f1e !important;
-  border: 1px solid #1e293b !important;
-  border-radius: 6px !important;
+  background: #0a0a0a !important;
+  border: 1px solid #262626 !important;
+  border-radius: 8px !important;
   box-shadow: none !important;
 }
 
+html[data-theme="midnight"] .order-type-tabs,
+body[data-theme="midnight"] .order-type-tabs,
 [data-theme="midnight"] .order-type-tabs {
-  background: #030712 !important;
-  border: 1px solid #1e293b !important;
+  background: #000000 !important;
+  border: 1px solid #262626 !important;
   border-radius: 5px !important;
   padding: 2px !important;
 }
 
+html[data-theme="midnight"] .order-tab,
+body[data-theme="midnight"] .order-tab,
 [data-theme="midnight"] .order-tab {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-weight: 600 !important;
-  color: #64748b !important;
+  color: #a3a3a3 !important;
   border-radius: 4px !important;
   border: none !important;
   background: transparent !important;
 }
 
+html[data-theme="midnight"] .order-tab.active,
+body[data-theme="midnight"] .order-tab.active,
 [data-theme="midnight"] .order-tab.active {
-  background: #0f172a !important;
-  color: #00f2fe !important;
+  background: #0a0a0a !important;
+  color: #06b6d4 !important;
 }
 
+/* Neon glow effects exclusive to Midnight theme */
+html[data-theme="midnight"] .btn-primary,
+html[data-theme="midnight"] .preset-chip.active,
+html[data-theme="midnight"] .capital-chip.active,
+html[data-theme="midnight"] .order-tab.active,
+body[data-theme="midnight"] .btn-primary,
+body[data-theme="midnight"] .preset-chip.active,
+body[data-theme="midnight"] .capital-chip.active,
+body[data-theme="midnight"] .order-tab.active,
+[data-theme="midnight"] .btn-primary,
+[data-theme="midnight"] .preset-chip.active,
+[data-theme="midnight"] .capital-chip.active,
+[data-theme="midnight"] .order-tab.active {
+  box-shadow: 0 0 12px var(--accent-subtle) !important;
+  text-shadow: 0 0 4px var(--accent) !important;
+}
+
+html[data-theme="midnight"] .btn-buy-main,
+body[data-theme="midnight"] .btn-buy-main,
 [data-theme="midnight"] .btn-buy-main {
-  background: #00ff88 !important;
-  border-color: #00cc6a !important;
-  color: #030712 !important;
-  font-weight: 800 !important;
+  background: #39ff14 !important;
+  border-color: #22c55e !important;
+  color: #000000 !important;
+  font-weight: 700 !important;
   border-radius: 5px !important;
-  box-shadow: 0 0 12px rgba(0, 255, 136, 0.3) !important;
+  box-shadow: 0 0 12px var(--color-long-bg) !important;
+  text-shadow: 0 0 4px var(--color-long) !important;
 }
 
+html[data-theme="midnight"] .btn-sell-main,
+body[data-theme="midnight"] .btn-sell-main,
 [data-theme="midnight"] .btn-sell-main {
-  background: #ff3b69 !important;
+  background: #ff007f !important;
   border-color: #e11d48 !important;
   color: #ffffff !important;
-  font-weight: 800 !important;
+  font-weight: 700 !important;
   border-radius: 5px !important;
-  box-shadow: 0 0 12px rgba(255, 59, 105, 0.3) !important;
+  box-shadow: 0 0 12px var(--color-short-bg) !important;
+  text-shadow: 0 0 4px var(--color-short) !important;
 }
 
+html[data-theme="midnight"] .timeline-section,
+body[data-theme="midnight"] .timeline-section,
 [data-theme="midnight"] .timeline-section {
-  background: #050912 !important;
-  border-top: 1px solid #1e293b !important;
+  background: #050505 !important;
+  border-top: 1px solid #262626 !important;
 }
 
+html[data-theme="midnight"] .controls-section,
+body[data-theme="midnight"] .controls-section,
 [data-theme="midnight"] .controls-section {
-  background: #060a14 !important;
-  border-top: 1px solid #1e293b !important;
+  background: #050505 !important;
+  border-top: 1px solid #262626 !important;
 }
 
+html[data-theme="midnight"] input,
+html[data-theme="midnight"] select,
+body[data-theme="midnight"] input,
+body[data-theme="midnight"] select,
 [data-theme="midnight"] input,
 [data-theme="midnight"] select {
-  background: #030712 !important;
-  border-color: #1e2e4a !important;
-  color: #f1f5f9 !important;
+  background: #000000 !important;
+  border-color: #404040 !important;
+  color: #f9fafb !important;
 }
 
+html[data-theme="midnight"] .qty-chip,
+html[data-theme="midnight"] .preset-chip,
+body[data-theme="midnight"] .qty-chip,
+body[data-theme="midnight"] .preset-chip,
 [data-theme="midnight"] .qty-chip,
 [data-theme="midnight"] .preset-chip {
-  background: #0f172a !important;
-  border-color: #1e293b !important;
-  color: #94a3b8 !important;
+  background: #0a0a0a !important;
+  border-color: #262626 !important;
+  color: #a3a3a3 !important;
 }
 
+html[data-theme="midnight"] .qty-chip:hover,
+html[data-theme="midnight"] .preset-chip:hover,
+body[data-theme="midnight"] .qty-chip:hover,
+body[data-theme="midnight"] .preset-chip:hover,
 [data-theme="midnight"] .qty-chip:hover,
 [data-theme="midnight"] .preset-chip:hover {
-  background: #00f2fe !important;
-  border-color: #00f2fe !important;
-  color: #030712 !important;
+  background: #06b6d4 !important;
+  border-color: #06b6d4 !important;
+  color: #000000 !important;
 }
 
+html[data-theme="midnight"] .trades-list,
+body[data-theme="midnight"] .trades-list,
 [data-theme="midnight"] .trades-list {
-  background: #030712 !important;
-  border-color: #1e293b !important;
-  color: #cbd5e1 !important;
+  background: #000000 !important;
+  border-color: #262626 !important;
+  color: #d4d4d4 !important;
 }

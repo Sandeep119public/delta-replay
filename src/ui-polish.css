@@ -711,3 +711,65 @@ input:disabled {
     overflow: auto;
   }
 }
+
+/* ==========================================================================
+   UNIFIED DESIGN SYSTEM POLISH (appended — preserves all layout above)
+   Component spacing, hierarchy, and token-driven polish.
+   ========================================================================== */
+
+/* Header Polish */
+.topbar-left, .topbar-center, .topbar-right { display: flex; align-items: center; gap: var(--sp-3, 12px); }
+
+/* Trading Panel Polish */
+.trading-title { font-size: 14px; font-weight: 600; color: var(--text); margin: 0; display: flex; align-items: center; gap: var(--sp-2, 8px); }
+.seal-mark { color: var(--color-short); font-family: var(--font-serif, Georgia, serif); font-size: 16px; }
+
+.equity-main { display: flex; flex-direction: column; }
+.pnl-hero-pill { background: var(--bg-input); padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: var(--radius-md, 8px); display: flex; flex-direction: column; align-items: flex-end; }
+
+/* Position Panel Grid */
+.pos-compact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2, 8px); margin-bottom: var(--sp-3, 12px); }
+.pos-metric { background: var(--bg-input); padding: var(--sp-2, 8px); border-radius: var(--radius-sm, 4px); border: 1px solid var(--border-subtle, var(--border)); }
+
+.risk-inputs-row { display: flex; gap: var(--sp-2, 8px); }
+.risk-inputs-row input { flex: 1; }
+.risk-inputs-row button { flex-shrink: 0; }
+
+/* Order Panel Polish */
+.order-type-tabs { display: flex; gap: var(--sp-2, 8px); margin-bottom: var(--sp-3, 12px); }
+.order-type-tabs button { flex: 1; }
+.order-form-compact { display: flex; flex-direction: column; gap: var(--sp-3, 12px); }
+.order-row-compact { display: flex; flex-direction: column; gap: var(--sp-2, 8px); }
+.qty-presets-compact { display: flex; gap: var(--sp-2, 8px); }
+.qty-presets-compact button { flex: 1; }
+
+.order-actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2, 8px); }
+.order-actions-grid .btn { height: 44px; font-size: 14px; }
+
+.order-secondary-grid { margin-top: var(--sp-2, 8px); }
+.order-secondary-grid .btn { width: 100%; height: 36px; font-size: 12px; }
+
+/* KV Grid (Account Tab) */
+.kv-grid { display: flex; flex-direction: column; gap: var(--sp-2, 8px); }
+.kv { display: flex; justify-content: space-between; padding-bottom: var(--sp-2, 8px); border-bottom: 1px dashed var(--border); }
+.kv span:first-child { color: var(--text-muted); }
+.kv span:last-child { font-family: var(--font-mono, monospace); font-weight: 600; }
+
+/* Stats Mini Grid */
+.stats-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2, 8px); }
+.stat-tile { background: var(--bg-input); padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: var(--radius-md, 8px); border: 1px solid var(--border); }
+
+/* Activity Tab Polish */
+.trades-list { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md, 8px); padding: var(--sp-3, 12px); min-height: 100px; font-size: 12px; color: var(--text-muted); }
+
+/* Capital Settings */
+.capital-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2, 8px); margin: var(--sp-2, 8px) 0; }
+.capital-presets button { width: 100%; }
+.custom-capital-row { display: flex; gap: var(--sp-2, 8px); }
+.custom-capital-row input { flex: 1; }
+
+/* Chart Floating Bar Detail */
+.chart-pos-badge {
+  font-weight: 700; padding: 2px 6px; border-radius: var(--radius-sm, 4px);
+  background: var(--accent-subtle); color: var(--accent); font-size: 11px; margin-right: var(--sp-3, 12px);
+}
