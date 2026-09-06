@@ -26,6 +26,7 @@ export class ReplayCommandController {
     this.headerBtn = headerBtn;
     this.onError = onError;
 
+    this._subscriptions = [];
     this._bindEngineEvents();
     this._bindHeaderBtn();
     this.renderHeaderBtn();
@@ -184,14 +185,17 @@ export class ReplayCommandController {
   }
 
   _bindEngineEvents() {
-    this.engine.on('stateChanged', () => this.renderHeaderBtn());
-    this.engine.on('reset', () => this.renderHeaderBtn());
+    this._subscriptions.push(this.engine.on('stateChanged', () => this.renderHeaderBtn()));
+    this._subscriptions.push(this.engine.on('reset', () => this.renderHeaderBtn()));
   }
 
   _bindHeaderBtn() {
     if (!this.headerBtn) return;
-    this.headerBtn.addEventListener('click', () => this.togglePlayPause());
+    this._onHeaderClick = () => this.togglePlayPause();
+    this.headerBtn.addEventListener('click', this._onHeaderClick);
   }
+
+  destroy() { this.headerBtn?.removeEventListener?.('click', this._onHeaderClick); this._subscriptions.forEach((unsubscribe) => unsubscribe?.()); this._subscriptions = []; }
 
   renderHeaderBtn() {
     if (!this.headerBtn) return;
