@@ -43,7 +43,13 @@ export class ReplayControls {
     this.render(this.engine.getState());
   }
 
-  destroy() { this._listeners.forEach(([el, type, handler]) => el?.removeEventListener?.(type, handler)); this._subscriptions.forEach((unsubscribe) => unsubscribe?.()); this._listeners = []; this._subscriptions = []; }
+  destroy() {
+    this._listeners.forEach(([el, type, handler]) => el?.removeEventListener?.(type, handler));
+    this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch {} });
+    this._listeners = [];
+    this._subscriptions = [];
+    try { document?.body?.classList?.remove('velocity-boost'); } catch {}
+  }
 
   _safeAction(action, onError = null) {
     try {
