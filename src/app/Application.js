@@ -22,10 +22,8 @@ function registerActionGuard(engine, tradingEngine, coordinator) {
 }
 
 function bindDatasetSelectors(ui, coordinator) {
-  ui.symbolSelector.onChange((symbol) =>
-    coordinator.handleSymbolTimeframeChange('symbol', symbol, ui.el('symbol-select')));
-  ui.timeframeSelector.onChange((timeframe) =>
-    coordinator.handleSymbolTimeframeChange('timeframe', timeframe, ui.el('timeframe-select')));
+  ui.symbolSelector.onChange((symbol) => coordinator.handleSymbolTimeframeChange('symbol', symbol, ui.el('symbol-select')));
+  ui.timeframeSelector.onChange((timeframe) => coordinator.handleSymbolTimeframeChange('timeframe', timeframe, ui.el('timeframe-select')));
 }
 
 export function createApplication() {
@@ -77,13 +75,13 @@ export function createApplication() {
     orderFormView: views.tradingPanel.orderFormView, coordinator, ...form,
   });
 
-  bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
+  const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
   ui.el('load-btn')?.addEventListener('click', () => coordinator.loadAndPrepareReplay({ autoStart: false }));
   const mobileDrawer = bindMobileDrawer();
 
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts, coordinator, engine, candleCache,
-    resources: [timelineBindings, commandController, mobileDrawer, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
+    resources: [timelineBindings, replayLifecycle, commandController, mobileDrawer, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView],
   });
 
   return {
