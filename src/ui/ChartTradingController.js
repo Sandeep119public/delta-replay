@@ -37,6 +37,7 @@ export class ChartTradingController {
     this.orderTypeSelect = orderTypeSelect;
 
     this._boundOnChartClick = (e) => this.handleChartClick(e);
+    this._subscriptions = [];
     this._init();
   }
 
@@ -53,24 +54,24 @@ export class ChartTradingController {
 
     const sync = () => this.syncChartTradingLines();
 
-    this.tradingEngine.on(TradingEvents.POSITION_OPENED, sync);
-    this.tradingEngine.on(TradingEvents.POSITION_UPDATED, sync);
-    this.tradingEngine.on(TradingEvents.POSITION_CLOSED, () => {
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.POSITION_OPENED, sync));
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.POSITION_UPDATED, sync));
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.POSITION_CLOSED, () => {
       this.chartManager?.updatePositionLines?.(null);
       this.floatingPosView?.render?.(null);
       this.syncChartTradingLines();
-    });
+    }));
 
-    this.tradingEngine.on(TradingEvents.ACCOUNT_RESET, () => {
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ACCOUNT_RESET, () => {
       this.chartManager?.clearTradingLines?.();
       this.floatingPosView?.render?.(null);
-    });
+    }));
 
-    this.tradingEngine.on(TradingEvents.ORDER_PLACED, sync);
-    this.tradingEngine.on(TradingEvents.ORDER_TRIGGERED, sync);
-    this.tradingEngine.on(TradingEvents.ORDER_CANCELLED, sync);
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ORDER_PLACED, sync));
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ORDER_TRIGGERED, sync));
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ORDER_CANCELLED, sync));
 
-    this.tradingEngine.on(TradingEvents.ORDER_FILLED, (payload) => {
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.ORDER_FILLED, (payload) => {
       this.syncChartTradingLines();
       const o = payload?.order ?? payload;
       if (o?.type && o.type !== 'MARKET') {
@@ -78,21 +79,21 @@ export class ChartTradingController {
         const priceStr = o.filledPrice != null ? ` @ $${Number(o.filledPrice).toFixed(2)}` : '';
         this.toastView?.show?.(`✓ ${typeLabel} ${o.side} Filled${priceStr}`);
       }
-    });
+    }));
 
-    this.tradingEngine.on(TradingEvents.STOP_LOSS_TRIGGERED, (p) => {
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.STOP_LOSS_TRIGGERED, (p) => {
       this.syncChartTradingLines();
       const priceStr = p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : '';
       this.toastView?.show?.(`🛑 Stop Loss Triggered${priceStr}`);
     });
 
-    this.tradingEngine.on(TradingEvents.TAKE_PROFIT_TRIGGERED, (p) => {
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.TAKE_PROFIT_TRIGGERED, (p) => {
       this.syncChartTradingLines();
       const priceStr = p?.price != null ? ` @ $${Number(p.price).toFixed(2)}` : '';
       this.toastView?.show?.(`🎯 Take Profit Triggered${priceStr}`);
-    });
+    }));
 
-    this.tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (p) => {
+    this._subscriptions.push(this.tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (p) => {
       this.syncChartTradingLines();
       const priceStr = p?.liquidationPrice != null ? ` @ $${Number(p.liquidationPrice).toFixed(2)}` : '';
       this.toastView?.show?.(`⚠️ Position Liquidated${priceStr}`);
