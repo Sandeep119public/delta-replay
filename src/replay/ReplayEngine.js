@@ -201,7 +201,8 @@ export class ReplayEngine extends EventEmitter {
     if (this._state.status === ReplayStatus.PLAYING) this._clearTimer();
     this._state.currentIndex = index;
     this._state.status = index >= this._candles.length - 1 ? ReplayStatus.ENDED : ReplayStatus.PAUSED;
-    if (this._state.startIndex === -1) this._state.startIndex = index;
+    // Seeking before start establishes a visual anchor only; it must not redefine
+    // the execution start point because that would make navigation mutate replay semantics.
     const candle = this._candles[index];
     this.emit(ReplayEvents.SEEKED, { index, candle: this._cloneCandle(candle), visibleCandles: this.getVisibleCandles() });
     // Seeking is navigation, not market execution. Consumers that mutate trading state
