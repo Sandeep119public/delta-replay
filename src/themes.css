@@ -1,0 +1,775 @@
+/* ==========================================================================
+   DELTA REPLAY — MULTI-THEME ENGINE & UI SIMPLIFICATION
+   Themes: Dark Pro (default), Paper Manuscript, Clean Light, Midnight OLED
+   ========================================================================== */
+
+/* ===== THEME SELECTOR & HEADER ACTIONS ===== */
+.theme-selector-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.theme-label {
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+#theme-select {
+  min-height: 32px;
+  height: 32px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  background: var(--bg-input, #1e293b);
+  color: var(--text, #f8fafc);
+  border: 1px solid var(--border, #334155);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+#theme-select:hover {
+  border-color: var(--accent, #38bdf8);
+}
+
+/* ===== UI SIMPLIFICATION & DECLUTTERING ===== */
+
+/* Hide useless badges and decorative noise */
+.phase-badge {
+  display: none !important;
+}
+
+#cache-badge {
+  font-size: 9px;
+  padding: 1px 4px;
+  opacity: 0.7;
+}
+
+/* Streamlined Mode / Status Banner (reduces wasted vertical space) */
+#mode-banner {
+  min-height: 24px !important;
+  max-height: 26px !important;
+  padding: 2px 14px !important;
+  font-size: 11px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+#mode-indicator {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+}
+
+.market-time-full {
+  font-size: 10px !important;
+  opacity: 0.85 !important;
+}
+
+/* Hide verbose shortcuts hint at bottom */
+.shortcuts-hint {
+  display: none !important;
+}
+
+/* Hide active position card completely when empty */
+.position-panel.is-empty {
+  display: none !important;
+}
+
+/* Clean up header quick presets */
+.preset-group label {
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  color: var(--text-muted) !important;
+}
+
+.preset-chips {
+  display: flex !important;
+  gap: 4px !important;
+}
+
+.preset-chip {
+  min-height: 26px !important;
+  height: 26px !important;
+  padding: 0 7px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 3px !important;
+}
+
+/* ==========================================================================
+   THEME 1: DARK PRO (Default Modern Crypto Terminal)
+   ========================================================================== */
+html[data-theme="dark"],
+body[data-theme="dark"],
+[data-theme="dark"] {
+  --bg: #0b0f17;
+  --bg-card: #111827;
+  --bg-input: #1e293b;
+  --border: #222f43;
+  --border-subtle: #1e293b;
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+  --accent: #38bdf8;
+  --accent-hover: #0ea5e9;
+  --green: #10b981;
+  --green-dark: #059669;
+  --green-glow: rgba(16, 185, 129, 0.15);
+  --red: #ef4444;
+  --red-dark: #dc2626;
+  --red-glow: rgba(239, 68, 68, 0.15);
+  --yellow: #f59e0b;
+}
+
+html[data-theme="dark"],
+body[data-theme="dark"] {
+  background: #0b0f17 !important;
+  background-image: none !important;
+  color: #f8fafc !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+[data-theme="dark"] .topbar {
+  background: #111827 !important;
+  border-bottom: 1px solid #222f43 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .logo {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.12em !important;
+  color: #f8fafc !important;
+  text-shadow: none !important;
+}
+
+[data-theme="dark"] #mode-banner {
+  background: #0d131f !important;
+  border-color: #1e293b !important;
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .main,
+[data-theme="dark"] .main-layout,
+[data-theme="dark"] .chart-container {
+  background: #0b0f17 !important;
+}
+
+[data-theme="dark"] .trading-section {
+  background: #0e1422 !important;
+  border-left: 1px solid #222f43 !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .trading-top-summary {
+  background: #131b2c !important;
+  border: 1px solid #222f43 !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .trading-header {
+  border-bottom: 1px solid #222f43 !important;
+}
+
+[data-theme="dark"] .trading-title {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  color: #f8fafc !important;
+  text-shadow: none !important;
+}
+
+[data-theme="dark"] .seal-mark,
+[data-theme="dark"] .tab-glyph {
+  display: none !important;
+}
+
+[data-theme="dark"] .equity-hero-bar {
+  background: #172134 !important;
+  border: 1px solid #283852 !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .equity-highlight {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace !important;
+  font-weight: 700 !important;
+  color: #38bdf8 !important;
+}
+
+[data-theme="dark"] .pnl-hero-pill {
+  background: #111827 !important;
+  border: 1px solid #222f43 !important;
+}
+
+[data-theme="dark"] .trading-tab-nav {
+  background: #111827 !important;
+  border: 1px solid #222f43 !important;
+  border-radius: 6px !important;
+  padding: 3px !important;
+}
+
+[data-theme="dark"] .panel-tab-btn {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 600 !important;
+  color: #94a3b8 !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .panel-tab-btn.active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .compact-card {
+  background: #131b2c !important;
+  border: 1px solid #222f43 !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .order-type-tabs {
+  background: #0b0f17 !important;
+  border: 1px solid #222f43 !important;
+  border-radius: 5px !important;
+  padding: 2px !important;
+}
+
+[data-theme="dark"] .order-tab {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 600 !important;
+  color: #94a3b8 !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+[data-theme="dark"] .order-tab.active {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .btn-buy-main {
+  background: #10b981 !important;
+  border-color: #059669 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-radius: 5px !important;
+}
+
+[data-theme="dark"] .btn-buy-main:hover:not(:disabled) {
+  background: #059669 !important;
+}
+
+[data-theme="dark"] .btn-sell-main {
+  background: #ef4444 !important;
+  border-color: #dc2626 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-radius: 5px !important;
+}
+
+[data-theme="dark"] .btn-sell-main:hover:not(:disabled) {
+  background: #dc2626 !important;
+}
+
+[data-theme="dark"] .btn-close-pos {
+  background: #334155 !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+  font-weight: 700 !important;
+  border-radius: 5px !important;
+}
+
+[data-theme="dark"] .btn-close-pos:hover:not(:disabled) {
+  background: #dc2626 !important;
+}
+
+[data-theme="dark"] .timeline-section {
+  background: #0d131f !important;
+  border-top: 1px solid #222f43 !important;
+}
+
+[data-theme="dark"] .controls-section {
+  background: #111827 !important;
+  border-top: 1px solid #222f43 !important;
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] select {
+  background: #0b0f17 !important;
+  border-color: #283852 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .qty-chip,
+[data-theme="dark"] .preset-chip {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .qty-chip:hover,
+[data-theme="dark"] .preset-chip:hover {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .trades-list {
+  background: #0b0f17 !important;
+  border-color: #222f43 !important;
+  color: #e2e8f0 !important;
+}
+
+/* ==========================================================================
+   THEME 2: PAPER MANUSCRIPT (和紙 / 宣紙 Ancient Scholar)
+   Uses the existing rich paper-theme styles when data-theme="paper"
+   ========================================================================== */
+html[data-theme="paper"],
+body[data-theme="paper"] {
+  background-color: var(--paper, #f6f1e2) !important;
+  color: var(--ink-sumi, #211c17) !important;
+  font-family: var(--font-scholar, Georgia, serif) !important;
+}
+
+[data-theme="paper"] .seal-mark,
+[data-theme="paper"] .tab-glyph {
+  display: inline-flex !important;
+}
+
+/* ==========================================================================
+   THEME 3: CLEAN LIGHT (Minimalist Day Mode)
+   ========================================================================== */
+html[data-theme="light"],
+body[data-theme="light"],
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-input: #f1f5f9;
+  --border: #e2e8f0;
+  --border-subtle: #edf2f7;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --green: #16a34a;
+  --green-dark: #15803d;
+  --green-glow: rgba(22, 163, 74, 0.12);
+  --red: #dc2626;
+  --red-dark: #b91c1c;
+  --red-glow: rgba(220, 38, 38, 0.12);
+  --yellow: #d97706;
+}
+
+html[data-theme="light"],
+body[data-theme="light"] {
+  background: #f8fafc !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+[data-theme="light"] .topbar {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="light"] .logo {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.12em !important;
+  color: #0f172a !important;
+  text-shadow: none !important;
+}
+
+[data-theme="light"] #mode-banner {
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+[data-theme="light"] .main,
+[data-theme="light"] .main-layout,
+[data-theme="light"] .chart-container {
+  background: #ffffff !important;
+}
+
+[data-theme="light"] .trading-section {
+  background: #fcfcfd !important;
+  border-left: 1px solid #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+[data-theme="light"] .trading-top-summary {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="light"] .trading-header {
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="light"] .trading-title {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  text-shadow: none !important;
+}
+
+[data-theme="light"] .seal-mark,
+[data-theme="light"] .tab-glyph {
+  display: none !important;
+}
+
+[data-theme="light"] .equity-hero-bar {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+[data-theme="light"] .equity-highlight {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace !important;
+  font-weight: 700 !important;
+  color: #2563eb !important;
+}
+
+[data-theme="light"] .pnl-hero-pill {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="light"] .trading-tab-nav {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  padding: 3px !important;
+}
+
+[data-theme="light"] .panel-tab-btn {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-theme="light"] .panel-tab-btn.active {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .compact-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .order-type-tabs {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 5px !important;
+  padding: 2px !important;
+}
+
+[data-theme="light"] .order-tab {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+[data-theme="light"] .order-tab.active {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme="light"] .btn-buy-main {
+  background: #16a34a !important;
+  border-color: #15803d !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-radius: 5px !important;
+}
+
+[data-theme="light"] .btn-sell-main {
+  background: #dc2626 !important;
+  border-color: #b91c1c !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-radius: 5px !important;
+}
+
+[data-theme="light"] .timeline-section {
+  background: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="light"] .controls-section {
+  background: #ffffff !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="light"] input,
+[data-theme="light"] select {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .qty-chip,
+[data-theme="light"] .preset-chip {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+[data-theme="light"] .qty-chip:hover,
+[data-theme="light"] .preset-chip:hover {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+[data-theme="light"] .trades-list {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #1e293b !important;
+}
+
+/* ==========================================================================
+   THEME 4: MIDNIGHT OLED (Pure Cyber Black & Neon Glow)
+   ========================================================================== */
+html[data-theme="midnight"],
+body[data-theme="midnight"],
+[data-theme="midnight"] {
+  --bg: #030712;
+  --bg-card: #080d1a;
+  --bg-input: #0f172a;
+  --border: #1e293b;
+  --border-subtle: #111827;
+  --text: #f1f5f9;
+  --text-muted: #64748b;
+  --text-faint: #475569;
+  --accent: #00f2fe;
+  --accent-hover: #38bdf8;
+  --green: #00ff88;
+  --green-dark: #00cc6a;
+  --green-glow: rgba(0, 255, 136, 0.2);
+  --red: #ff3b69;
+  --red-dark: #e11d48;
+  --red-glow: rgba(255, 59, 105, 0.2);
+  --yellow: #facc15;
+}
+
+html[data-theme="midnight"],
+body[data-theme="midnight"] {
+  background: #030712 !important;
+  background-image: none !important;
+  color: #f1f5f9 !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace !important;
+}
+
+[data-theme="midnight"] .topbar {
+  background: #060a14 !important;
+  border-bottom: 1px solid #1e293b !important;
+  box-shadow: 0 1px 10px rgba(0, 242, 254, 0.05) !important;
+}
+
+[data-theme="midnight"] .logo {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.16em !important;
+  color: #00f2fe !important;
+  text-shadow: 0 0 12px rgba(0, 242, 254, 0.4) !important;
+}
+
+[data-theme="midnight"] #mode-banner {
+  background: #050912 !important;
+  border-color: #1e293b !important;
+  color: #64748b !important;
+}
+
+[data-theme="midnight"] .main,
+[data-theme="midnight"] .main-layout,
+[data-theme="midnight"] .chart-container {
+  background: #030712 !important;
+}
+
+[data-theme="midnight"] .trading-section {
+  background: #060a14 !important;
+  border-left: 1px solid #1e293b !important;
+  box-shadow: none !important;
+}
+
+[data-theme="midnight"] .trading-top-summary {
+  background: #090f1e !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 6px !important;
+  box-shadow: 0 0 15px rgba(0, 242, 254, 0.04) !important;
+}
+
+[data-theme="midnight"] .trading-header {
+  border-bottom: 1px solid #1e293b !important;
+}
+
+[data-theme="midnight"] .trading-title {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 700 !important;
+  color: #00f2fe !important;
+  text-shadow: 0 0 8px rgba(0, 242, 254, 0.3) !important;
+}
+
+[data-theme="midnight"] .seal-mark,
+[data-theme="midnight"] .tab-glyph {
+  display: none !important;
+}
+
+[data-theme="midnight"] .equity-hero-bar {
+  background: #0a1122 !important;
+  border: 1px solid #1e2e4a !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+[data-theme="midnight"] .equity-highlight {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace !important;
+  font-weight: 700 !important;
+  color: #00f2fe !important;
+  text-shadow: 0 0 8px rgba(0, 242, 254, 0.4) !important;
+}
+
+[data-theme="midnight"] .pnl-hero-pill {
+  background: #030712 !important;
+  border: 1px solid #1e293b !important;
+}
+
+[data-theme="midnight"] .trading-tab-nav {
+  background: #050912 !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 6px !important;
+  padding: 3px !important;
+}
+
+[data-theme="midnight"] .panel-tab-btn {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-theme="midnight"] .panel-tab-btn.active {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(2, 132, 199, 0.4) !important;
+}
+
+[data-theme="midnight"] .compact-card {
+  background: #090f1e !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+[data-theme="midnight"] .order-type-tabs {
+  background: #030712 !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 5px !important;
+  padding: 2px !important;
+}
+
+[data-theme="midnight"] .order-tab {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+[data-theme="midnight"] .order-tab.active {
+  background: #0f172a !important;
+  color: #00f2fe !important;
+}
+
+[data-theme="midnight"] .btn-buy-main {
+  background: #00ff88 !important;
+  border-color: #00cc6a !important;
+  color: #030712 !important;
+  font-weight: 800 !important;
+  border-radius: 5px !important;
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.3) !important;
+}
+
+[data-theme="midnight"] .btn-sell-main {
+  background: #ff3b69 !important;
+  border-color: #e11d48 !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  border-radius: 5px !important;
+  box-shadow: 0 0 12px rgba(255, 59, 105, 0.3) !important;
+}
+
+[data-theme="midnight"] .timeline-section {
+  background: #050912 !important;
+  border-top: 1px solid #1e293b !important;
+}
+
+[data-theme="midnight"] .controls-section {
+  background: #060a14 !important;
+  border-top: 1px solid #1e293b !important;
+}
+
+[data-theme="midnight"] input,
+[data-theme="midnight"] select {
+  background: #030712 !important;
+  border-color: #1e2e4a !important;
+  color: #f1f5f9 !important;
+}
+
+[data-theme="midnight"] .qty-chip,
+[data-theme="midnight"] .preset-chip {
+  background: #0f172a !important;
+  border-color: #1e293b !important;
+  color: #94a3b8 !important;
+}
+
+[data-theme="midnight"] .qty-chip:hover,
+[data-theme="midnight"] .preset-chip:hover {
+  background: #00f2fe !important;
+  border-color: #00f2fe !important;
+  color: #030712 !important;
+}
+
+[data-theme="midnight"] .trades-list {
+  background: #030712 !important;
+  border-color: #1e293b !important;
+  color: #cbd5e1 !important;
+}

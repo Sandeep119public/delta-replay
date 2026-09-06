@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/src/ui-polish.css" />
   <link rel="stylesheet" href="/src/viewport-fit.css" />
   <link rel="stylesheet" href="/src/paper-theme.css" />
+  <link rel="stylesheet" href="/src/themes.css" />
 </head>
 <body>
   <div id="app">
@@ -76,6 +77,15 @@
       </nav>
 
       <div class="topbar-right">
+        <div class="theme-selector-group">
+          <label for="theme-select" class="theme-label" title="Switch Theme">🎨</label>
+          <select id="theme-select" aria-label="Visual Theme">
+            <option value="dark" selected>Dark Pro</option>
+            <option value="paper">Paper Manuscript</option>
+            <option value="light">Clean Light</option>
+            <option value="midnight">Midnight OLED</option>
+          </select>
+        </div>
         <span id="data-status" class="data-status" role="status" aria-live="polite">Ready to replay</span>
       </div>
     </header>

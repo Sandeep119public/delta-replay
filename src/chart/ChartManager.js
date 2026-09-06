@@ -1,6 +1,57 @@
 import { createChart, ColorType } from 'lightweight-charts';
 import { ChartTradingOverlay } from './ChartTradingOverlay.js';
 
+export const CHART_THEMES = {
+  dark: {
+    layout: { background: { type: ColorType.Solid, color: '#0b0f17' }, textColor: '#94a3b8' },
+    grid: { vertLines: { color: 'rgba(30, 41, 59, 0.5)' }, horzLines: { color: 'rgba(30, 41, 59, 0.5)' } },
+    crosshair: { vertLine: { color: '#475569', labelBackgroundColor: '#0284c7' }, horzLine: { color: '#475569', labelBackgroundColor: '#0284c7' } },
+    timeScale: { borderColor: '#1e293b' },
+    rightPriceScale: { borderColor: '#1e293b' },
+    series: {
+      upColor: '#10b981', downColor: '#ef4444',
+      borderUpColor: '#10b981', borderDownColor: '#ef4444',
+      wickUpColor: '#10b981', wickDownColor: '#ef4444',
+    },
+  },
+  paper: {
+    layout: { background: { type: ColorType.Solid, color: '#fbf8f1' }, textColor: '#756d62' },
+    grid: { vertLines: { color: 'rgba(191, 179, 162, 0.28)' }, horzLines: { color: 'rgba(191, 179, 162, 0.28)' } },
+    crosshair: { vertLine: { color: '#9b9286', labelBackgroundColor: '#315f8c' }, horzLine: { color: '#9b9286', labelBackgroundColor: '#315f8c' } },
+    timeScale: { borderColor: '#d7cebf' },
+    rightPriceScale: { borderColor: '#d7cebf' },
+    series: {
+      upColor: '#2f7d58', downColor: '#b44842',
+      borderUpColor: '#2f7d58', borderDownColor: '#b44842',
+      wickUpColor: '#2f7d58', wickDownColor: '#b44842',
+    },
+  },
+  light: {
+    layout: { background: { type: ColorType.Solid, color: '#ffffff' }, textColor: '#475569' },
+    grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+    crosshair: { vertLine: { color: '#94a3b8', labelBackgroundColor: '#2563eb' }, horzLine: { color: '#94a3b8', labelBackgroundColor: '#2563eb' } },
+    timeScale: { borderColor: '#e2e8f0' },
+    rightPriceScale: { borderColor: '#e2e8f0' },
+    series: {
+      upColor: '#16a34a', downColor: '#dc2626',
+      borderUpColor: '#16a34a', borderDownColor: '#dc2626',
+      wickUpColor: '#16a34a', wickDownColor: '#dc2626',
+    },
+  },
+  midnight: {
+    layout: { background: { type: ColorType.Solid, color: '#030712' }, textColor: '#64748b' },
+    grid: { vertLines: { color: 'rgba(31, 41, 55, 0.4)' }, horzLines: { color: 'rgba(31, 41, 55, 0.4)' } },
+    crosshair: { vertLine: { color: '#374151', labelBackgroundColor: '#00f2fe' }, horzLine: { color: '#374151', labelBackgroundColor: '#00f2fe' } },
+    timeScale: { borderColor: '#1f2937' },
+    rightPriceScale: { borderColor: '#1f2937' },
+    series: {
+      upColor: '#00ff88', downColor: '#ff3b69',
+      borderUpColor: '#00ff88', borderDownColor: '#ff3b69',
+      wickUpColor: '#00ff88', wickDownColor: '#ff3b69',
+    },
+  },
+};
+
 /**
  * ChartManager owns lightweight-charts instance. No replay logic inside.
  */
@@ -12,22 +63,25 @@ export class ChartManager {
     this.series = null;
   }
 
-  init() {
+  init(initialTheme = null) {
     if (this.chart) return;
+    const currentThemeName = initialTheme || (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark';
+    const config = CHART_THEMES[currentThemeName] || CHART_THEMES.dark;
+
     this.chart = createChart(this.container, {
-      layout: { background: { type: ColorType.Solid, color: '#fbf8f1' }, textColor: '#756d62' },
-      grid: { vertLines: { color: 'rgba(191, 179, 162, 0.28)' }, horzLines: { color: 'rgba(191, 179, 162, 0.28)' } },
-      crosshair: { mode: 1, vertLine: { color: '#9b9286', width: 1, style: 2, labelBackgroundColor: '#315f8c' }, horzLine: { color: '#9b9286', width: 1, style: 2, labelBackgroundColor: '#315f8c' } },
-      timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#d7cebf', rightOffset: 12, barSpacing: 10, minBarSpacing: 4, ticksVisible: true },
-      rightPriceScale: { borderColor: '#d7cebf', autoScale: true, scaleMargins: { top: 0.08, bottom: 0.08 } },
+      layout: config.layout,
+      grid: config.grid,
+      crosshair: { mode: 1, ...config.crosshair },
+      timeScale: { timeVisible: true, secondsVisible: false, borderColor: config.timeScale.borderColor, rightOffset: 12, barSpacing: 10, minBarSpacing: 4, ticksVisible: true },
+      rightPriceScale: { borderColor: config.rightPriceScale.borderColor, autoScale: true, scaleMargins: { top: 0.08, bottom: 0.08 } },
       width: this.container.clientWidth || 800,
       height: this.container.clientHeight || 450,
     });
 
     this.series = this.chart.addCandlestickSeries({
-      upColor: '#2f7d58', downColor: '#b44842', borderVisible: true,
-      borderUpColor: '#2f7d58', borderDownColor: '#b44842',
-      wickUpColor: '#2f7d58', wickDownColor: '#b44842', wickVisible: true,
+      borderVisible: true,
+      wickVisible: true,
+      ...config.series,
     });
 
     this._revealedMaxTime = null;
@@ -176,6 +230,31 @@ export class ChartManager {
   clear() {
     this.clearTradingLines();
     if (this.series) this.series.setData([]);
+  }
+
+  applyTheme(themeName) {
+    const config = CHART_THEMES[themeName] || CHART_THEMES.dark;
+    if (this.chart) {
+      try {
+        this.chart.applyOptions({
+          layout: config.layout,
+          grid: config.grid,
+          crosshair: { mode: 1, ...config.crosshair },
+          timeScale: { borderColor: config.timeScale.borderColor },
+          rightPriceScale: { borderColor: config.rightPriceScale.borderColor },
+        });
+      } catch (err) {
+        console.warn('[ChartManager] applyTheme chart options error:', err);
+      }
+    }
+    if (this.series) {
+      try {
+        this.series.applyOptions(config.series);
+      } catch (err) {
+        console.warn('[ChartManager] applyTheme series options error:', err);
+      }
+    }
+    return config;
   }
 
   destroy() {

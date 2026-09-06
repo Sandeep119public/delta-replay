@@ -21,6 +21,7 @@ import { ToastNotificationView } from './ui/ToastNotificationView.js';
 import { FloatingPositionView } from './ui/FloatingPositionView.js';
 import { ReplayDateSelector } from './ui/ReplayDateSelector.js';
 import { ChartTradingController } from './ui/ChartTradingController.js';
+import { ThemeManager } from './ui/ThemeManager.js';
 import { TradingEvents } from './trading/TradingEvents.js';
 import { ReplayEvents } from './replay/ReplayEvents.js';
 
@@ -86,12 +87,19 @@ const limitPriceInput = document.getElementById('limit-price');
 const stopPriceInput = document.getElementById('stop-price');
 const orderTypeSelect = document.getElementById('order-type');
 const loadBtn = document.getElementById('load-btn');
+const themeSelect = document.getElementById('theme-select');
 
 // ===== 3. COMPONENT INSTANTIATION =====
+const chartManager = new ChartManager(chartContainer);
+const themeManager = new ThemeManager({
+  selectEl: themeSelect,
+  defaultTheme: 'dark',
+  onThemeChange: (theme) => chartManager.applyTheme(theme),
+});
+
 const symbolSelector = new SymbolSelector(symbolSelect, appState);
 const timeframeSelector = new TimeframeSelector(timeframeSelect, appState);
-const chartManager = new ChartManager(chartContainer);
-try { chartManager.init(); } catch (e) { console.error('Chart init failed:', e); }
+try { chartManager.init(themeManager.getTheme()); } catch (e) { console.error('Chart init failed:', e); }
 
 const adapter = new ChartAdapter(engine, chartManager);
 adapter.attach();
