@@ -50,7 +50,12 @@ export function bindTimelineInteractions({ timeline, controls, appState, engine,
       timeline.setMarkers(markers);
     } catch (error) { console.warn('[Timeline] marker refresh failed', error); }
   };
-  tradingEngine.on(TradingEvents.TRADE_EXECUTED, refreshMarkers);
-  tradingEngine.on(TradingEvents.POSITION_CLOSED, refreshMarkers);
-  return { refreshMarkers };
+  const subscriptions = [
+    tradingEngine.on(TradingEvents.TRADE_EXECUTED, refreshMarkers),
+    tradingEngine.on(TradingEvents.POSITION_CLOSED, refreshMarkers),
+  ];
+  return {
+    refreshMarkers,
+    destroy() { subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[Timeline] unsubscribe failed', error); } }); },
+  };
 }
