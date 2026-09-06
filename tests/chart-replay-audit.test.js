@@ -30,46 +30,18 @@ function makeCandles(count, startSec = 1700000000) {
 }
 
 describe('Chart and Replay Deep Audit Fixes', () => {
-  describe('ChartManager flat candle spread calculation', () => {
-    it('scales flat candle spread proportionally for low-priced coins ($0.50)', () => {
+  describe('ChartManager candle preparation integrity', () => {
+    it('preserves valid flat candles without fabricating a price range', () => {
       const cm = Object.create(ChartManager.prototype);
-      const flatCandleLowPrice = [{
-        time: 1700000000,
-        open: 0.50,
-        high: 0.50,
-        low: 0.50,
-        close: 0.50,
-        volume: 100
-      }];
-      const prepared = cm._prepareCandlesForChart(flatCandleLowPrice);
+      const prepared = cm._prepareCandlesForChart([{ time: 1700000000, open: 0.50, high: 0.50, low: 0.50, close: 0.50, volume: 100 }]);
       expect(prepared).toHaveLength(1);
-      const c = prepared[0];
-      // High and low should have a small non-zero spread, but NOT artificially inflated by $0.20
-      expect(c.high).toBeGreaterThan(c.low);
-      const spread = c.high - c.low;
-      expect(spread).toBeLessThan(0.01); // should be around 0.50 * 0.00015 = 0.000075
-      expect(c.high).toBeCloseTo(0.50, 2);
-      expect(c.low).toBeCloseTo(0.50, 2);
+      expect(prepared[0]).toMatchObject({ open: 0.50, high: 0.50, low: 0.50, close: 0.50 });
     });
 
-    it('scales flat candle spread for high-priced coins ($65,000 BTC)', () => {
+    it('drops structurally invalid candles instead of inventing market prices', () => {
       const cm = Object.create(ChartManager.prototype);
-      const flatCandleHighPrice = [{
-        time: 1700000000,
-        open: 65000,
-        high: 65000,
-        low: 65000,
-        close: 65000,
-        volume: 100
-      }];
-      const prepared = cm._prepareCandlesForChart(flatCandleHighPrice);
-      expect(prepared).toHaveLength(1);
-      const c = prepared[0];
-      expect(c.high).toBeGreaterThan(c.low);
-      const spread = c.high - c.low;
-      // 65000 * 0.00015 = 9.75
-      expect(spread).toBeGreaterThan(5);
-      expect(spread).toBeLessThan(15);
+      const prepared = cm._prepareCandlesForChart([{ time: 1, open: 100, high: 90, low: 95, close: 98 }]);
+      expect(prepared).toEqual([]);
     });
   });
 
