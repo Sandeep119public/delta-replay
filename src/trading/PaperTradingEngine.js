@@ -568,7 +568,19 @@ export class PaperTradingEngine extends EventEmitter {
   getPositions() { return Array.from(this._positions.values()).map(p => this._cloneJSON(p.toJSON())); }
   getTrades() { return this._trades.map(t => this._cloneJSON(t.toJSON())); }
   getTradeHistory() { return this.getTrades(); }
-  checkInvariants() { const acct = this.account, equity = acct.cashBalance + acct.unrealizedPnL, equityOk = Math.abs(acct.equity - equity) < 1e-9, feesSum = this._trades.reduce((s, t) => s + (t.totalFee || 0), 0) + Array.from(this._positions.values()).reduce((s, p) => s + (p.entryFee || 0), 0), unrealizedOk = this._positions.size === 0 ? Math.abs(acct.unrealizedPnL) < 1e-9 : true, pendingIdsUnique = new Set(this._pendingOrderIds).size === this._pendingOrderIds.length, pendingAllPending = this._pendingOrderIds.every(id => this._orders.get(id)?.status === ORDER_STATUSES.PENDING); return { equityOk, unrealizedOk, pendingIdsUnique, pendingAllPending, equity, unrealizedPnL: acct.unrealizedPnL, cashBalance: acct.cashBalance, totalFees: acct.totalFees, computedFeesSum: feesSum }; }
+  checkInvariants() {
+    const acct = this.account;
+    const equity = acct.cashBalance + acct.unrealizedPnL;
+    const equityOk = Math.abs(acct.equity - equity) < 1e-9;
+    const computedUnrealized = Array.from(this._positions.values()).reduce((sum, position) => sum + (Number(position.unrealizedPnL) || 0), 0);
+    const unrealizedOk = Math.abs(acct.unrealizedPnL - computedUnrealized) < 1e-9;
+    const feesSum = this._trades.reduce((sum, trade) => sum + (Number(trade.totalFee) || 0), 0)
+      + Array.from(this._positions.values()).reduce((sum, position) => sum + (Number(position.entryFee) || 0), 0);
+    const feesOk = Math.abs(acct.totalFees - feesSum) < 1e-9;
+    const pendingIdsUnique = new Set(this._pendingOrderIds).size === this._pendingOrderIds.length;
+    const pendingAllPending = this._pendingOrderIds.every(id => this._orders.get(id)?.status === ORDER_STATUSES.PENDING);
+    return { equityOk, unrealizedOk, feesOk, pendingIdsUnique, pendingAllPending, equity, computedUnrealized, unrealizedPnL: acct.unrealizedPnL, cashBalance: acct.cashBalance, totalFees: acct.totalFees, computedFeesSum: feesSum };
+  }
   hasOpenPosition(symbol = null) { return symbol ? this._positions.has(symbol) : this._positions.size > 0; }
   canSeek() { return !this.hasOpenPosition(); }
   getLatestCandle(symbol = null) { if (symbol && this._marketBySymbol.has(symbol)) return this._cloneJSON(this._marketBySymbol.get(symbol).candle); return this._latestCandle ? this._cloneJSON(this._latestCandle) : null; }
