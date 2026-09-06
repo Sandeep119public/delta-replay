@@ -12,27 +12,11 @@ const MAX_RETRIES = 3;
  */
 export class ReplayCoordinator {
   constructor({
-    dataManager,
-    candleStore,
-    appState,
-    replayEngine,
-    tradingEngine,
-    chartManager,
-    chartAdapter,
-    timeline,
-    controls,
-    errorPanel,
-    modeBanner,
-    tradingErrorView = null,
-    dataStatusEl = null,
-    cacheBadgeEl = null,
-    startReplayBtn = null,
-    headerStartReplayBtn = null,
-    loadBtn = null,
-    fromDateEl = null,
-    fromTimeEl = null,
-    toDateEl = null,
-    toTimeEl = null,
+    dataManager, candleStore, appState, replayEngine, tradingEngine, chartManager,
+    chartAdapter, timeline, controls, errorPanel, modeBanner, tradingErrorView = null,
+    dataStatusEl = null, cacheBadgeEl = null, startReplayBtn = null,
+    headerStartReplayBtn = null, loadBtn = null, fromDateEl = null, fromTimeEl = null,
+    toDateEl = null, toTimeEl = null,
   }) {
     this.dataManager = dataManager;
     this.candleStore = candleStore;
@@ -59,6 +43,8 @@ export class ReplayCoordinator {
     this._currentAbort = null;
     this._retryTimer = null;
     this._retryCount = 0;
+    this._progressUnsubscribe = null;
+    this._destroyed = false;
   }
 
   updateLoadButton() {
@@ -95,10 +81,10 @@ export class ReplayCoordinator {
     }
     if (kind === 'symbol') this.appState.symbol = newValue;
     else this.appState.timeframe = newValue;
-    try { this.tradingEngine?.clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE'); } catch {}
+    try { this.tradingEngine?.clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE'); } catch (error) { console.warn('[ReplayCoordinator] clear pending orders failed', error); }
     this._loadToken++;
     this._clearCurrentLoad();
-    try { this.replayEngine.stop(); } catch {}
+    try { this.replayEngine.stop(); } catch (error) { console.warn('[ReplayCoordinator] stop during dataset change failed', error); }
     this.candleStore.clear();
     this.appState.setCandles([]);
     this.timeline?.setTotal(0, []);
@@ -117,9 +103,16 @@ export class ReplayCoordinator {
     this.tradingErrorView?.show(msg);
   }
 
+  _clearProgressSubscription() {
+    if (!this._progressUnsubscribe) return;
+    try { this._progressUnsubscribe(); } catch (error) { console.warn('[ReplayCoordinator] progress unsubscribe failed', error); }
+    this._progressUnsubscribe = null;
+  }
+
   _clearCurrentLoad() {
+    this._clearProgressSubscription();
     if (this._currentAbort) {
-      try { this._currentAbort.abort(); } catch {}
+      try { this._currentAbort.abort(); } catch (error) { console.warn('[ReplayCoordinator] abort failed', error); }
       this._currentAbort = null;
     }
     if (this._retryTimer) {
@@ -129,13 +122,15 @@ export class ReplayCoordinator {
   }
 
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
     this._loadToken++;
     this._clearCurrentLoad();
-    this.dataManager?.off?.(DataEvents.PROGRESS);
     this.tradingErrorView?.destroy?.();
   }
 
   async loadAndPrepareReplay({ targetSec = null, autoStart = false } = {}) {
+    if (this._destroyed) return;
     if (this.tradingEngine && this.tradingEngine.hasOpenPosition()) {
       this.showTradingError('Cannot change replay date while a position is open — close position or reset account first.');
       return;
@@ -158,7 +153,7 @@ export class ReplayCoordinator {
         if (this.fromTimeEl) this.fromTimeEl.value = fromIso.slice(11, 16);
         this.toDateEl.value = toIso.slice(0, 10);
         if (this.toTimeEl) this.toTimeEl.value = toIso.slice(11, 16);
-      } catch {}
+      } catch (error) { console.warn('[ReplayCoordinator] sync legacy date controls failed', error); }
     }
 
     this.appState.transitionLoading(LoadingState.LOADING);
@@ -168,15 +163,15 @@ export class ReplayCoordinator {
     this.modeBanner?.update({ replayState: this.replayEngine.getState(), appState: this.appState, candleStore: this.candleStore });
 
     const onProgress = ({ completed, totalChunks, pct, loaded }) => {
-      if (token !== this._loadToken) return;
+      if (token !== this._loadToken || this._destroyed) return;
       if (this.dataStatusEl) this.dataStatusEl.textContent = `Loading ${symbol} · ${timeframe} — chunk ${completed}/${totalChunks} (${pct}%) — ${loaded} candles`;
     };
-    this.dataManager.on(DataEvents.PROGRESS, onProgress);
+    this._progressUnsubscribe = this.dataManager.on(DataEvents.PROGRESS, onProgress);
 
     try {
       const { candles, metadata } = await this.dataManager.load({ symbol, timeframe, from, to, signal, strict: true, halfOpen: true });
-      this.dataManager.off(DataEvents.PROGRESS, onProgress);
-      if (token !== this._loadToken || signal.aborted) return;
+      this._clearProgressSubscription();
+      if (token !== this._loadToken || signal.aborted || this._destroyed) return;
       if (!candles || !candles.length) throw Object.assign(new Error('No candles returned'), { code: 'NO_DATA' });
 
       this._retryCount = 0;
@@ -205,7 +200,7 @@ export class ReplayCoordinator {
       this.modeBanner?.update({ replayState: this.replayEngine.getState(), appState: this.appState, candleStore: this.candleStore });
       if (autoStart) this.replayEngine.start(replayIdx);
     } catch (err) {
-      this.dataManager.off(DataEvents.PROGRESS, onProgress);
+      this._clearProgressSubscription();
       if (err?.name === 'AbortError') {
         if (token === this._loadToken) {
           this.appState.transitionLoading(LoadingState.ABORTED);
@@ -213,7 +208,7 @@ export class ReplayCoordinator {
         }
         return;
       }
-      if (token !== this._loadToken) return;
+      if (token !== this._loadToken || this._destroyed) return;
       let dataErr;
       if (err instanceof DataError) dataErr = err;
       else if (err?.category) dataErr = new DataError({ category: err.category, technicalMessage: err.message, context: err.context || {} });
@@ -251,7 +246,7 @@ export class ReplayCoordinator {
         this.appState.transitionLoading(LoadingState.LOADING);
         this._retryTimer = setTimeout(() => {
           this._retryTimer = null;
-          if (token === this._loadToken) this.loadAndPrepareReplay({ targetSec: resolvedTarget, autoStart });
+          if (token === this._loadToken && !this._destroyed) this.loadAndPrepareReplay({ targetSec: resolvedTarget, autoStart });
         }, backoff);
         return;
       }
