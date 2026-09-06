@@ -548,7 +548,7 @@ export class PaperTradingEngine extends EventEmitter {
     const pos = this._positions.get(symbol); if (!pos) return;
     const posIsLong = pos.side === 'LONG';
     const incompatibleIds = this._pendingOrderIds.filter(id => { const o = this._orders.get(String(id)); if (!o || o.status !== ORDER_STATUSES.PENDING || o.symbol !== symbol) return false; const orderIsLong = o.side === 'BUY'; return (posIsLong && orderIsLong) || (!posIsLong && !orderIsLong); });
-    for (const id of incompatibleIds) { const o = this._orders.get(String(id)); o.status = ORDER_STATUSES.REJECTED; o.rejectionReason = 'POSITION_ALREADY_OPEN'; this._pendingOrderIds = this._pendingOrderIds.filter(i => i !== id); this._emitOrderRejected(o, 'POSITION_ALREADY_OPEN', `Position already open for ${symbol} (${pos.side}). Pending order rejected.`); }
+    for (const id of incompatibleIds) { const o = this._orders.get(String(id)); o.status = ORDER_STATUSES.REJECTED; o.rejectionReason = 'POSITION_ALREADY_OPEN'; this._pendingOrderIds = this._pendingOrderIds.filter(i => String(i) !== String(id)); this._emitOrderRejected(o, 'POSITION_ALREADY_OPEN', `Position already open for ${symbol} (${pos.side}). Pending order rejected.`); }
   }
   _clearPendingOrders(reason = 'CLEARED') { if (!this._pendingOrderIds.length) return; const ids = [...this._pendingOrderIds]; for (const id of ids) { const o = this._orders.get(String(id)); if (o && o.status === ORDER_STATUSES.PENDING) { o.status = ORDER_STATUSES.CANCELLED; o.cancelReason = reason; this._emitOrderCancelled(o); } } this._pendingOrderIds = []; }
   clearPendingOrders(reason) { return this._clearPendingOrders(reason || 'CLEARED'); }
