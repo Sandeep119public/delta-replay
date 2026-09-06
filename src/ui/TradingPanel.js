@@ -26,6 +26,8 @@ export class TradingPanel {
     const getEl = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
     this.errorEl = errorEl || getEl('trading-error');
     this.errorTimeout = null;
+    this._tabBindings = [];
+    this._engineSubscriptions = [];
 
     // Keep legacy element properties for backward compatibility
     this.balanceEl = balanceEl;
@@ -122,7 +124,7 @@ export class TradingPanel {
     try {
       const tabBtns = document.querySelectorAll('.panel-tab-btn');
       tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
+        const handler = () => {
           tabBtns.forEach(b => {
             b.classList.remove('active');
             b.setAttribute('aria-selected', 'false');
@@ -134,26 +136,41 @@ export class TradingPanel {
             if (panel.id === `tab-view-${targetTab}`) panel.classList.add('active');
             else panel.classList.remove('active');
           });
-        });
+        };
+        btn.addEventListener('click', handler);
+        this._tabBindings.push([btn, handler]);
       });
     } catch {}
   }
 
   _bindEngineEvents() {
     const rerender = () => this.render();
-    this.engine.on(TradingEvents.ACCOUNT_UPDATED, rerender);
-    this.engine.on(TradingEvents.POSITION_OPENED, rerender);
-    this.engine.on(TradingEvents.POSITION_CLOSED, rerender);
-    this.engine.on(TradingEvents.POSITION_UPDATED, rerender);
-    this.engine.on(TradingEvents.TRADE_EXECUTED, rerender);
-    this.engine.on(TradingEvents.ACCOUNT_RESET, rerender);
-    this.engine.on(TradingEvents.ORDER_PLACED, rerender);
-    this.engine.on(TradingEvents.ORDER_TRIGGERED, rerender);
-    this.engine.on(TradingEvents.ORDER_FILLED, rerender);
-    this.engine.on(TradingEvents.ORDER_CANCELLED, rerender);
-    this.engine.on(TradingEvents.STOP_LOSS_TRIGGERED, rerender);
-    this.engine.on(TradingEvents.TAKE_PROFIT_TRIGGERED, rerender);
-    this.engine.on(TradingEvents.ORDER_REJECTED, (err) => this.showError(err?.message || err?.reason || 'Order rejected'));
+    const events = [
+      TradingEvents.ACCOUNT_UPDATED, TradingEvents.POSITION_OPENED, TradingEvents.POSITION_CLOSED,
+      TradingEvents.POSITION_UPDATED, TradingEvents.TRADE_EXECUTED, TradingEvents.ACCOUNT_RESET,
+      TradingEvents.ORDER_PLACED, TradingEvents.ORDER_TRIGGERED, TradingEvents.ORDER_FILLED,
+      TradingEvents.ORDER_CANCELLED, TradingEvents.STOP_LOSS_TRIGGERED, TradingEvents.TAKE_PROFIT_TRIGGERED,
+    ];
+    events.forEach((event) => this._engineSubscriptions.push(this.engine.on(event, rerender)));
+    this._engineSubscriptions.push(this.engine.on(
+      TradingEvents.ORDER_REJECTED,
+      (err) => this.showError(err?.message || err?.reason || 'Order rejected'),
+    ));
+  }
+
+  destroy() {
+    clearTimeout(this.errorTimeout);
+    this.errorTimeout = null;
+    this._tabBindings.forEach(([btn, handler]) => btn.removeEventListener?.('click', handler));
+    this._tabBindings = [];
+    this._engineSubscriptions.forEach((unsubscribe) => {
+      try { unsubscribe?.(); } catch (error) { console.warn('[TradingPanel] unsubscribe failed', error); }
+    });
+    this._engineSubscriptions = [];
+    this.accountSummaryView?.destroy?.();
+    this.orderFormView?.destroy?.();
+    this.positionView?.destroy?.();
+    this.tradeLogView?.destroy?.();
   }
 
   showError(msg) {
