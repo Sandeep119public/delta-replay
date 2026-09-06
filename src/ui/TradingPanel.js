@@ -25,6 +25,7 @@ export class TradingPanel {
     this.engine = tradingEngine;
     const getEl = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
     this.errorEl = errorEl || getEl('trading-error');
+    this.errorTimeout = null;
 
     // Keep legacy element properties for backward compatibility
     this.balanceEl = balanceEl;
