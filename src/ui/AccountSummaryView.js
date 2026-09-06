@@ -33,15 +33,12 @@ export class AccountSummaryView {
     this.onError = onError;
     this.onRender = onRender;
 
+    this._listeners = [];
     this._bindControls();
   }
 
   _bindControls() {
-    if (this.resetBtn) {
-      this.resetBtn.addEventListener('click', () => {
-        this.engine.resetAccount();
-      });
-    }
+    if (this.resetBtn) { const handler = () => this.engine.resetAccount(); this.resetBtn.addEventListener('click', handler); this._listeners.push([this.resetBtn, 'click', handler]); }
 
     try {
       // Capital preset chips
@@ -105,6 +102,8 @@ export class AccountSummaryView {
       }
     } catch {}
   }
+
+  destroy() { this._listeners.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler)); this._listeners = []; }
 
   _fmtMoney(v) {
     const n = Number(v);
