@@ -20,6 +20,18 @@ describe('replay/trading lifecycle hardening', () => {
     expect(trading.getAccountSnapshot().totalBars).toBe(1);
   });
 
+  it('does not mutate trading state when replay seek is used for navigation', () => {
+    const replay = new ReplayEngine();
+    const trading = new PaperTradingEngine({ replayEngine: replay });
+    const candles = [candle(100, 100), candle(200, 101), candle(300, 102)];
+    replay.load(candles);
+    replay.start(0);
+    expect(trading.getAccountSnapshot().totalBars).toBe(1);
+    replay.seek(2);
+    expect(trading.getAccountSnapshot().totalBars).toBe(1);
+    expect(trading.getLatestCandleIndex()).toBe(0);
+  });
+
   it('resets the account when a new replay is loaded', () => {
     const replay = new ReplayEngine();
     const trading = new PaperTradingEngine({ replayEngine: replay, executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE });
