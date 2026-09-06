@@ -11,34 +11,39 @@ export class ReplayControls {
     this.followBtn = followBtn;
     this.onFollowClick = onFollowClick;
 
-    this.playBtn.addEventListener('click', () => this._safeAction(() => this.engine.play()));
-    this.pauseBtn.addEventListener('click', () => this._safeAction(() => this.engine.pause()));
-    this.stepBtn.addEventListener('click', () => this._safeAction(() => this.engine.stepForward()));
-    this.resetBtn.addEventListener('click', () => this._safeAction(() => this.engine.reset()));
-    this.startReplayBtn.addEventListener('click', () => {
+    this._listeners = [];
+    this._subscriptions = [];
+    this._listen = (el, type, handler) => { el?.addEventListener?.(type, handler); this._listeners.push([el, type, handler]); };
+    this._listen(this.playBtn, 'click', () => this._safeAction(() => this.engine.play()));
+    this._listen(this.pauseBtn, 'click', () => this._safeAction(() => this.engine.pause()));
+    this._listen(this.stepBtn, 'click', () => this._safeAction(() => this.engine.stepForward()));
+    this._listen(this.resetBtn, 'click', () => this._safeAction(() => this.engine.reset()));
+    this._listen(this.startReplayBtn, 'click', () => {
       const idx = Number(this.startReplayBtn.dataset.startIndex ?? '0');
       this._safeAction(() => this.engine.start(idx));
     });
-    this.speedSelect.addEventListener('change', () => {
+    this._listen(this.speedSelect, 'change', () => {
       this._safeAction(() => this.engine.setSpeed(this.speedSelect.value), () => {
         this.speedSelect.value = String(this.engine.getState().speed);
       });
     });
 
     if (this.followBtn) {
-      this.followBtn.addEventListener('click', () => {
+      this._listen(this.followBtn, 'click', () => {
         if (this.onFollowClick) this.onFollowClick();
         this.followBtn.classList.add('hidden');
       });
     }
 
-    this.engine.on('stateChanged', (state) => this.render(state));
-    this.engine.on('speedChanged', ({ speed }) => { this.speedSelect.value = String(speed); });
+    this._subscriptions.push(this.engine.on('stateChanged', (state) => this.render(state)));
+    this._subscriptions.push(this.engine.on('speedChanged', ({ speed }) => { this.speedSelect.value = String(speed); }));
 
     // Render immediately so the control state is correct even if the engine
     // was loaded before the controls were constructed.
     this.render(this.engine.getState());
   }
+
+  destroy() { this._listeners.forEach(([el, type, handler]) => el?.removeEventListener?.(type, handler)); this._subscriptions.forEach((unsubscribe) => unsubscribe?.()); this._listeners = []; this._subscriptions = []; }
 
   _safeAction(action, onError = null) {
     try {
