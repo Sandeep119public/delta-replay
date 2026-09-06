@@ -29,6 +29,8 @@ import { TradingErrorView } from './ui/TradingErrorView.js';
 import { createCoreServices } from './app/createCoreServices.js';
 import { bindApplicationLifecycle } from './app/bindApplicationLifecycle.js';
 import { bindMobileDrawer } from './app/bindMobileDrawer.js';
+import { bindTimelineInteractions } from './app/bindTimelineInteractions.js';
+import { bindTradingEvents } from './app/bindTradingEvents.js';
 
 const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = createCoreServices();
 
@@ -255,91 +257,9 @@ const tradingPanel = new TradingPanel({
 symbolSelector.onChange((symbol) => coordinator.handleSymbolTimeframeChange('symbol', symbol, symbolSelect));
 timeframeSelector.onChange((timeframe) => coordinator.handleSymbolTimeframeChange('timeframe', timeframe, timeframeSelect));
 
-// Timeline scrub: preview before start, seek during replay.
-timeline.onChange((idx) => {
-  appState.setPendingStartIndex(idx);
-  controls.setStartIndex(idx);
-  modeBanner.update({ replayState: engine.getState(), appState, candleStore });
-  const st = engine.getState();
-  if (st.status === 'ready' || st.status === 'idle') {
-    coordinator.updatePreviewWindow(idx);
-  }
-});
-
-timeline.onCommit((idx) => {
-  const st = engine.getState();
-  if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
-    if (st.status === 'playing') commandController.pause();
-    const ok = commandController.trySeek(idx);
-    if (!ok) {
-      sliderEl.value = String(st.currentIndex);
-      timeline.setPosition(st.currentIndex);
-    }
-  } else {
-    appState.setPendingStartIndex(idx);
-    controls.setStartIndex(idx);
-    modeBanner.update({ replayState: st, appState, candleStore });
-    coordinator.updatePreviewWindow(idx);
-  }
-});
-
-// Chart-first entry point: scrub the timeline, then "Start here".
-timeline.onStartHere((idx) => {
-  const n = Number(idx);
-  if (!Number.isFinite(n) || n < 0) return;
-  appState.setPendingStartIndex(n);
-  controls.setStartIndex(n);
-  try {
-    commandController.startAt?.(n) ?? engine.start(n);
-  } catch (e) {
-    coordinator.showTradingError(e?.message || 'Cannot start replay here');
-  }
-});
-
-// Timeline trade markers: map each closed trade to its entry candle index.
-function refreshTimelineMarkers() {
-  try {
-    const trades = tradingEngine.getTrades?.() || [];
-    if (!trades.length || !candleStore.getCount()) { timeline.setMarkers([]); return; }
-    const markers = [];
-    const all = candleStore.getAll?.() || [];
-    for (const t of trades) {
-      const ts = t.openedAt ?? t.entryTime ?? t.time;
-      let index = -1;
-      if (Number.isInteger(t.entryIndex)) index = t.entryIndex;
-      else if (Number.isFinite(ts)) {
-        let lo = 0, hi = all.length - 1;
-        while (lo <= hi) {
-          const mid = lo + Math.floor((hi - lo) / 2);
-          if (all[mid].time <= ts) { index = mid; lo = mid + 1; }
-          else hi = mid - 1;
-        }
-        if (index < 0) index = 0;
-      }
-      if (index >= 0) markers.push({ index, side: t.side });
-    }
-    timeline.setMarkers(markers);
-  } catch (error) {
-    console.warn('[Timeline] marker refresh failed', error);
-  }
-}
-tradingEngine.on(TradingEvents.TRADE_EXECUTED, refreshTimelineMarkers);
-tradingEngine.on(TradingEvents.POSITION_CLOSED, refreshTimelineMarkers);
-
-// Critical financial errors pause the replay so the trader sees them.
-tradingEngine.on(TradingEvents.POSITION_LIQUIDATED, (payload) => {
-  try { commandController.pause(); } catch (error) { console.warn('[Replay] pause failed', error); }
-  errorPanel.show(
-    { category: 'LIQUIDATION', userMessage: `Position liquidated: ${payload?.symbol || ''} @ ${payload?.liquidationPrice ?? '—'}`, message: 'Position liquidated', code: 'LIQUIDATION', context: {} },
-    { severity: 'critical', onPause: () => { try { commandController.pause(); } catch (error) { console.warn('[Replay] liquidation pause failed', error); } } },
-  );
-});
-tradingEngine.on(TradingEvents.ORDER_REJECTED, (err) => {
-  errorPanel.show(
-    { category: 'ORDER', userMessage: err?.message || 'Order rejected', message: err?.message || 'Order rejected', code: err?.code || 'ORDER_REJECTED', context: {} },
-    { severity: 'error', pauseReplay: false },
-  );
-});
+// Timeline interaction ownership lives in src/app/bindTimelineInteractions.js.
+bindTimelineInteractions({ timeline, controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner });
+bindTradingEvents({ tradingEngine, commandController, errorPanel });
 
 chartManager.onAutoFollowChange((isFollow) => {
   controls.setAutoFollow(isFollow);
