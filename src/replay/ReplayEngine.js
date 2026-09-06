@@ -204,7 +204,8 @@ export class ReplayEngine extends EventEmitter {
     if (this._state.startIndex === -1) this._state.startIndex = index;
     const candle = this._candles[index];
     this.emit(ReplayEvents.SEEKED, { index, candle: this._cloneCandle(candle), visibleCandles: this.getVisibleCandles() });
-    this._emitCandle(candle, index);
+    // Seeking is navigation, not market execution. Consumers that mutate trading state
+    // only receive MARKET_CANDLE events from start/step/play/reset execution paths.
     this.emit(ReplayEvents.STATE_CHANGED, this.getState());
     if (this._state.status === ReplayStatus.ENDED) this.emit(ReplayEvents.ENDED, this.getState());
     return this.getState();
