@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Ma+Shan+Zheng&family=Shippori+Mincho:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@400;600;700&display=swap');
+/* NOTE: paper font payloads (Cinzel, Ma Shan Zheng, Shippori Mincho) are NOT
+   @imported here — ThemeManager injects them on demand (THEME_FONT_URLS) so
+   the default Obsidian/Light themes skip the extra download. */
 
 /* ==========================================================================
    COMPATIBILITY SHIM — Kyoto Manuscript now lives in themes.css

@@ -3,6 +3,7 @@ export const THEMES = {
   PAPER: 'paper',
   LIGHT: 'light',
   MIDNIGHT: 'midnight',
+  COLORBLIND: 'colorblind',
 };
 
 export const THEME_NAMES = {
@@ -10,6 +11,18 @@ export const THEME_NAMES = {
   [THEMES.PAPER]: 'Paper Manuscript',
   [THEMES.LIGHT]: 'Clean Light',
   [THEMES.MIDNIGHT]: 'Midnight OLED',
+  [THEMES.COLORBLIND]: 'Colorblind Safe',
+};
+
+/**
+ * Heavy per-theme font payloads. Only Obsidian/Light/Midnight fonts (Inter,
+ * JetBrains Mono) load globally via index.html; paper-only families are
+ * injected on demand right before the paper transition so default-theme
+ * users skip the extra download entirely.
+ */
+export const THEME_FONT_URLS = {
+  [THEMES.PAPER]:
+    'https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Ma+Shan+Zheng&family=Shippori+Mincho:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@400;600;700&display=swap',
 };
 
 /**
@@ -127,11 +140,41 @@ export class ThemeManager {
     return this.currentTheme;
   }
 
+  /**
+   * Injects the theme's font stylesheet on first use (no-op when the link
+   * already exists or the theme needs no extra fonts). Called right before
+   * the data-theme transition so glyphs arrive with the palette swap.
+   */
+  _ensureThemeFonts(theme) {
+    try {
+      const url = THEME_FONT_URLS[theme];
+      if (!url) return false;
+      if (typeof document === 'undefined') return false;
+      const selector = `link[data-theme-fonts="${theme}"]`;
+      if (typeof document.querySelector === 'function' && document.querySelector(selector)) return true;
+      if (typeof document.createElement !== 'function') return false;
+      const link = document.createElement('link');
+      if (!link || typeof link.setAttribute !== 'function') return false;
+      link.setAttribute('rel', 'stylesheet');
+      link.setAttribute('href', url);
+      link.setAttribute('data-theme-fonts', theme);
+      const head = document.head || (typeof document.getElementsByTagName === 'function' ? document.getElementsByTagName('head')[0] : null) || document.documentElement;
+      if (head && typeof head.appendChild === 'function') {
+        head.appendChild(link);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   applyTheme(theme, save = true) {
     if (!theme || !Object.values(THEMES).includes(theme)) {
       theme = this.defaultTheme;
     }
     this.currentTheme = theme;
+    this._ensureThemeFonts(theme);
 
     if (typeof document !== 'undefined') {
       document.documentElement.setAttribute('data-theme', theme);

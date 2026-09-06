@@ -191,10 +191,14 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
       expect(sellBtn.textContent).toBe('SELL');
       expect(limitPriceRow.classList.contains('hidden')).toBe(true);
 
+      // Progressive disclosure: advanced price rows stay hidden until enabled
       orderTypeSelect.value = 'LIMIT';
       view.updateOrderTypeUI();
       expect(buyBtn.textContent).toBe('BUY LIMIT');
       expect(sellBtn.textContent).toBe('SELL LIMIT');
+      expect(limitPriceRow.classList.contains('hidden')).toBe(true);
+
+      view.setAdvanced(true);
       expect(limitPriceRow.classList.contains('hidden')).toBe(false);
 
       orderTypeSelect.value = 'STOP_MARKET';

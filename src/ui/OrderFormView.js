@@ -13,6 +13,7 @@ export class OrderFormView {
     stopPriceInput = typeof document !== 'undefined' ? document.getElementById('stop-price') : null,
     limitPriceRow = typeof document !== 'undefined' ? document.getElementById('limit-price-row') : null,
     stopPriceRow = typeof document !== 'undefined' ? document.getElementById('stop-price-row') : null,
+    advancedToggle = typeof document !== 'undefined' ? document.getElementById('btn-advanced-order') : null,
     getSymbol = () => (typeof document !== 'undefined' ? document.getElementById('symbol-select')?.value : null) || 'BTCUSDT',
     onError = null,
     onSuccess = null,
@@ -27,6 +28,9 @@ export class OrderFormView {
     this.stopPriceInput = stopPriceInput;
     this.limitPriceRow = limitPriceRow;
     this.stopPriceRow = stopPriceRow;
+    this.advancedToggle = advancedToggle;
+    // Progressive disclosure: advanced price rows stay hidden until requested.
+    this.advanced = false;
     this.getSymbol = getSymbol;
     this.onError = onError;
     this.onSuccess = onSuccess;
@@ -35,7 +39,30 @@ export class OrderFormView {
     this._bindEvents();
     this._bindTabs();
     this._bindPresets();
+    this._bindAdvanced();
+    this.updateAdvancedUI();
     this.updateOrderTypeUI();
+  }
+
+  _bindAdvanced() {
+    if (this.advancedToggle && typeof this.advancedToggle.addEventListener === 'function') {
+      this.advancedToggle.addEventListener('click', () => this.setAdvanced(!this.advanced));
+    }
+  }
+
+  setAdvanced(on) {
+    this.advanced = !!on;
+    this.updateAdvancedUI();
+    this.updateOrderTypeUI();
+  }
+
+  updateAdvancedUI() {
+    if (!this.advancedToggle) return;
+    try {
+      this.advancedToggle.setAttribute('aria-expanded', this.advanced ? 'true' : 'false');
+      this.advancedToggle.classList.toggle('active', this.advanced);
+      this.advancedToggle.textContent = this.advanced ? 'Advanced Order ▾' : 'Advanced Order ▸';
+    } catch {}
   }
 
   _updateOrderTypeUI() {
@@ -141,11 +168,11 @@ export class OrderFormView {
     } catch {}
 
     if (this.limitPriceRow) {
-      if (type === 'LIMIT') this.limitPriceRow.classList.remove('hidden');
+      if (type === 'LIMIT' && this.advanced) this.limitPriceRow.classList.remove('hidden');
       else this.limitPriceRow.classList.add('hidden');
     }
     if (this.stopPriceRow) {
-      if (type === 'STOP_MARKET') this.stopPriceRow.classList.remove('hidden');
+      if (type === 'STOP_MARKET' && this.advanced) this.stopPriceRow.classList.remove('hidden');
       else this.stopPriceRow.classList.add('hidden');
     }
 

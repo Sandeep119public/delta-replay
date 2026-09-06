@@ -9,6 +9,7 @@ import { AppState } from './state/AppState.js';
 import { SymbolSelector } from './ui/SymbolSelector.js';
 import { TimeframeSelector } from './ui/TimeframeSelector.js';
 import { Timeline } from './ui/Timeline.js';
+import { TimelineSparkline } from './ui/TimelineSparkline.js';
 import { ReplayControls } from './ui/ReplayControls.js';
 import { ErrorPanel } from './ui/ErrorPanel.js';
 import { ModeBanner } from './ui/ModeBanner.js';
@@ -167,6 +168,40 @@ const commandController = new ReplayCommandController({
   onError: (msg) => coordinator.showTradingError(msg),
 });
 commandController.bindKeyboardShortcuts();
+
+// Mobile trading drawer toggle (bottom sheet on <=768px)
+try {
+  const drawerBtn = document.getElementById('btn-trading-drawer');
+  if (drawerBtn) {
+    drawerBtn.addEventListener('click', () => {
+      const open = document.body.classList.toggle('drawer-open');
+      drawerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  }
+} catch {}
+
+// Contextual sparkline scrubber: click a pip/setup to jump there
+const sparklineEl = document.getElementById('timeline-sparkline');
+const sparkline = new TimelineSparkline({
+  canvasEl: sparklineEl,
+  candleStore,
+  engine,
+  tradingEngine,
+  onSeek: (idx) => {
+    const st = engine.getState();
+    if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
+      if (st.status === 'playing') commandController.pause();
+      const ok = commandController.trySeek(idx);
+      if (!ok) timeline.setPosition(st.currentIndex);
+    } else {
+      appState.setPendingStartIndex(idx);
+      controls.setStartIndex(idx);
+      modeBanner.update({ replayState: st, appState, candleStore });
+      coordinator.updatePreviewWindow(idx);
+      timeline.setPosition(idx);
+    }
+  },
+});
 
 const toastView = new ToastNotificationView();
 const floatingPosView = new FloatingPositionView({ tradingEngine });

@@ -14,6 +14,7 @@ export class ModeBanner {
     progressPct = document.getElementById('progress-pct'),
     marketTimeEl = document.getElementById('market-time'),
     marketTimeFull = document.getElementById('market-time-full'),
+    srTicker = document.getElementById('sr-ticker'),
     overlay = document.getElementById('chart-overlay'),
     overlayText = document.getElementById('overlay-text'),
   } = {}) {
@@ -24,8 +25,13 @@ export class ModeBanner {
     this.progressPct = progressPct;
     this.marketTimeEl = marketTimeEl;
     this.marketTimeFull = marketTimeFull;
+    this.srTicker = srTicker;
     this.overlay = overlay;
     this.overlayText = overlayText;
+    // Screen-reader announcements are throttled: visuals update every tick,
+    // assistive tech hears status changes or a 5s heartbeat while playing.
+    this._lastAnnounceAt = 0;
+    this._lastAnnouncedStatus = '';
   }
 
   update({ replayState = null, appState = null, candleStore = null } = {}) {
@@ -132,5 +138,20 @@ export class ModeBanner {
         this.overlay.classList.add('hidden');
       }
     }
+
+    // 4. Throttled screen-reader announcement (see constructor note)
+    try {
+      const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now();
+      const statusChanged = st !== this._lastAnnouncedStatus;
+      if (this.srTicker && (statusChanged || now - this._lastAnnounceAt >= 5000)) {
+        this._lastAnnouncedStatus = st;
+        this._lastAnnounceAt = now;
+        const progress = this.progressText?.textContent || '';
+        const market = this.marketTimeFull?.textContent || '';
+        this.srTicker.textContent = `Replay ${st}. ${progress}. ${market}.`.trim();
+      }
+    } catch {}
   }
 }

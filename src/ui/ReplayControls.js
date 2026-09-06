@@ -77,6 +77,13 @@ export class ReplayControls {
       this.statusEl.className = `replay-status ${state.status}`;
     }
 
+    // Velocity treatment: ambient momentum cue at 5x/10x (data never blurs)
+    try {
+      if (typeof document !== 'undefined' && document.body && document.body.classList) {
+        document.body.classList.toggle('velocity-boost', Number(state.speed) >= 5);
+      }
+    } catch {}
+
     this.startReplayBtn.disabled = !hasData || !isReady;
     this.startReplayBtn.textContent = 'START REPLAY';
 

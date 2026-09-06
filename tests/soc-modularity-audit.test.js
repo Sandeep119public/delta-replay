@@ -233,6 +233,58 @@ describe('SoC and Modularity Deep Audit Verification', () => {
 
       unbind();
     });
+
+    it('ArrowLeft steps one candle back via guarded seek', () => {
+      mockEngine._state.status = 'paused';
+      mockEngine._state.currentIndex = 5;
+      const mockDoc = createMockElement();
+      const unbind = controller.bindKeyboardShortcuts(mockDoc);
+
+      mockDoc.dispatchEvent({ type: 'keydown', code: 'ArrowLeft', preventDefault: vi.fn(), target: {} });
+      expect(mockEngine.seek).toHaveBeenCalledWith(4);
+
+      unbind();
+    });
+
+    it('Shift+arrows jump ±10 candles clamped to bounds', () => {
+      mockEngine._state.status = 'paused';
+      mockEngine._state.currentIndex = 50;
+      mockEngine.getTotalCandles = vi.fn(() => 100);
+      const mockDoc = createMockElement();
+      const unbind = controller.bindKeyboardShortcuts(mockDoc);
+
+      mockDoc.dispatchEvent({ type: 'keydown', code: 'ArrowRight', shiftKey: true, preventDefault: vi.fn(), target: {} });
+      expect(mockEngine.seek).toHaveBeenCalledWith(60);
+
+      mockEngine._state.currentIndex = 3;
+      mockDoc.dispatchEvent({ type: 'keydown', code: 'ArrowLeft', shiftKey: true, preventDefault: vi.fn(), target: {} });
+      expect(mockEngine.seek).toHaveBeenCalledWith(0);
+
+      unbind();
+    });
+
+    it('stepBackward is blocked while a position is open', () => {
+      mockEngine._state.status = 'paused';
+      mockEngine._state.currentIndex = 5;
+      mockTradingEngine.hasOpenPosition.mockReturnValue(true);
+      expect(controller.stepBackward()).toBe(false);
+      expect(mockEngine.seek).not.toHaveBeenCalled();
+    });
+
+    it('KeyX/KeyZ cycle playback speed through notches', () => {
+      mockEngine._state.speed = 1;
+      mockEngine.setSpeed = vi.fn(function (s) { this._state.speed = s; });
+      const mockDoc = createMockElement();
+      const unbind = controller.bindKeyboardShortcuts(mockDoc);
+
+      mockDoc.dispatchEvent({ type: 'keydown', code: 'KeyX', preventDefault: vi.fn(), target: {} });
+      expect(mockEngine.setSpeed).toHaveBeenCalledWith(2);
+
+      mockDoc.dispatchEvent({ type: 'keydown', code: 'KeyZ', preventDefault: vi.fn(), target: {} });
+      expect(mockEngine.setSpeed).toHaveBeenCalledWith(1);
+
+      unbind();
+    });
   });
 
   describe('4. ToastNotificationView', () => {

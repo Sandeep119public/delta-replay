@@ -50,6 +50,18 @@ export const CHART_THEMES = {
       wickUpColor: '#00ff88', wickDownColor: '#ff3b69',
     },
   },
+  colorblind: {
+    layout: { background: { type: ColorType.Solid, color: '#0b0d12' }, textColor: '#94a3b8' },
+    grid: { vertLines: { color: 'rgba(36, 41, 51, 0.6)' }, horzLines: { color: 'rgba(36, 41, 51, 0.6)' } },
+    crosshair: { vertLine: { color: '#475569', labelBackgroundColor: '#3b82f6' }, horzLine: { color: '#475569', labelBackgroundColor: '#3b82f6' } },
+    timeScale: { borderColor: '#242933' },
+    rightPriceScale: { borderColor: '#242933' },
+    series: {
+      upColor: '#60a5fa', downColor: '#fb923c',
+      borderUpColor: '#60a5fa', borderDownColor: '#fb923c',
+      wickUpColor: '#60a5fa', wickDownColor: '#fb923c',
+    },
+  },
 };
 
 /**

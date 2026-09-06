@@ -230,6 +230,40 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
       view.setOrderType('LIMIT');
       expect(orderTypeSelect.value).toBe('LIMIT');
     });
+
+    it('gates limit/stop rows behind the Advanced toggle (progressive disclosure)', () => {
+      const limitRow = createMockElement({ classes: ['hidden'] });
+      const stopRow = createMockElement({ classes: ['hidden'] });
+      const toggle = createMockElement();
+      const orderTypeSelect = createMockElement({ value: 'MARKET' });
+      const view = new OrderFormView({
+        qtyInput: createMockElement({ value: '1' }),
+        limitPriceInput: createMockElement({ value: '' }),
+        stopPriceInput: createMockElement({ value: '' }),
+        orderTypeSelect,
+        buyBtn: createMockElement(),
+        sellBtn: createMockElement(),
+        limitPriceRow: limitRow,
+        stopPriceRow: stopRow,
+        advancedToggle: toggle,
+      });
+
+      expect(view.advanced).toBe(false);
+      // LIMIT selected but advanced off -> row stays hidden
+      orderTypeSelect.value = 'LIMIT';
+      view.updateOrderTypeUI();
+      expect(limitRow.classList.contains('hidden')).toBe(true);
+      // Toggle reveals it and flips accessibility state
+      toggle.click();
+      expect(view.advanced).toBe(true);
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      expect(limitRow.classList.contains('hidden')).toBe(false);
+      // STOP type swaps the visible row
+      orderTypeSelect.value = 'STOP_MARKET';
+      view.updateOrderTypeUI();
+      expect(stopRow.classList.contains('hidden')).toBe(false);
+      expect(limitRow.classList.contains('hidden')).toBe(true);
+    });
   });
 
   describe('3. Timeline onCommit Support', () => {

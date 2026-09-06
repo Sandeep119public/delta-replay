@@ -98,10 +98,55 @@
 
 /* Clean up header quick presets */
 .preset-group label {
-  font-size: 10px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.5px !important;
+  font-size: 12px !important;
   color: var(--text-muted) !important;
+}
+
+/* Mobile trading drawer: FAB toggles a bottom sheet instead of the stacked grid */
+.fab-trading {
+  display: none;
+}
+@media (max-width: 768px) {
+  .fab-trading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    width: 52px;
+    height: 52px;
+    min-height: 52px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #fff;
+    box-shadow: var(--shadow-lg);
+    cursor: pointer;
+    z-index: 60;
+  }
+  body:not(.drawer-open) .trading-section {
+    display: none !important;
+  }
+  body.drawer-open .trading-section {
+    display: flex !important;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    max-height: 70dvh;
+    border-left: none !important;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: var(--shadow-lg);
+    z-index: 55;
+    overflow-y: auto;
+  }
 }
 
 .preset-chips {
@@ -1107,4 +1152,88 @@ body[data-theme="midnight"] .trades-list,
   background: #000000 !important;
   border-color: #262626 !important;
   color: #d4d4d4 !important;
+}
+
+/* ==========================================================================
+   THEME 5: COLORBLIND SAFE (Deuteranopia/Protanopia)
+   Dark base with a blue/orange long/short palette instead of green/red.
+   Base component styles consume var(--color-long/short), so buttons, badges
+   and PnL tints follow automatically.
+   ========================================================================== */
+html[data-theme="colorblind"],
+body[data-theme="colorblind"],
+[data-theme="colorblind"] {
+  --bg-base: #0B0D12; --bg-surface: #13161C; --bg-elevated: #1A1E26;
+  --bg-card: #13161C; --bg-input: #1A1E26; --bg-hover: #242933;
+  --bg: #0B0D12;
+  --border: #242933; --border-strong: #3b4763; --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: #242933;
+  --text: #F8FAFC; --text-muted: #94A3B8; --text-faint: #64748B;
+  --text-primary: #F8FAFC; --text-secondary: #94A3B8; --text-tertiary: #64748B;
+  --accent: #3B82F6; --accent-hover: #2563EB; --accent-subtle: rgba(59, 130, 246, 0.15);
+  --accent-primary: #3B82F6;
+  --color-long: #60a5fa; --color-long-hover: #3b82f6; --color-long-bg: rgba(96, 165, 250, 0.14);
+  --color-short: #fb923c; --color-short-hover: #f97316; --color-short-bg: rgba(251, 146, 60, 0.14);
+  --green: #60a5fa; --green-dark: #3b82f6; --green-glow: rgba(96, 165, 250, 0.14);
+  --red: #fb923c; --red-dark: #f97316; --red-glow: rgba(251, 146, 60, 0.14);
+  --yellow: #facc15;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4); --shadow-md: 0 4px 6px rgba(0,0,0,0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+}
+
+html[data-theme="colorblind"],
+body[data-theme="colorblind"] {
+  background: #0B0D12 !important;
+  background-image: none !important;
+  color: #F8FAFC !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+html[data-theme="colorblind"] .topbar,
+body[data-theme="colorblind"] .topbar,
+[data-theme="colorblind"] .topbar {
+  background: #13161C !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme="colorblind"] .main,
+html[data-theme="colorblind"] .main-layout,
+html[data-theme="colorblind"] .chart-container,
+body[data-theme="colorblind"] .main,
+body[data-theme="colorblind"] .main-layout,
+body[data-theme="colorblind"] .chart-container,
+[data-theme="colorblind"] .main,
+[data-theme="colorblind"] .main-layout,
+[data-theme="colorblind"] .chart-container {
+  background: #0B0D12 !important;
+}
+
+html[data-theme="colorblind"] .trading-section,
+body[data-theme="colorblind"] .trading-section,
+[data-theme="colorblind"] .trading-section {
+  background: #13161C !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme="colorblind"] .seal-mark,
+html[data-theme="colorblind"] .tab-glyph,
+body[data-theme="colorblind"] .seal-mark,
+body[data-theme="colorblind"] .tab-glyph,
+[data-theme="colorblind"] .seal-mark,
+[data-theme="colorblind"] .tab-glyph {
+  display: none !important;
+}
+
+html[data-theme="colorblind"] .timeline-section,
+body[data-theme="colorblind"] .timeline-section,
+[data-theme="colorblind"] .timeline-section {
+  background: #13161C !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme="colorblind"] .controls-section,
+body[data-theme="colorblind"] .controls-section,
+[data-theme="colorblind"] .controls-section {
+  background: #13161C !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
 }

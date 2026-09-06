@@ -119,6 +119,30 @@ describe('ThemeManager & UI Simplification', () => {
       expect(manager.getTheme()).toBe('paper');
       expect(onThemeChange).toHaveBeenCalledWith('paper');
     });
+
+    it('injects paper font stylesheet on demand and only once', () => {
+      const appended = [];
+      const injected = {};
+      global.document.querySelector = vi.fn((sel) => injected[sel] || null);
+      global.document.createElement = vi.fn(() => ({
+        setAttribute: vi.fn(function (n, v) { this[n] = v; }),
+      }));
+      global.document.head = { appendChild: vi.fn((el) => appended.push(el)) };
+      const selectEl = createMockElement({ value: 'dark' });
+      const manager = new ThemeManager({ selectEl });
+      // Non-paper themes need no extra fonts
+      expect(global.document.createElement).not.toHaveBeenCalled();
+      manager.applyTheme('paper');
+      expect(global.document.createElement).toHaveBeenCalledWith('link');
+      expect(appended.length).toBe(1);
+      expect(appended[0].href).toMatch(/Cinzel/);
+      expect(appended[0].href).toMatch(/Shippori/);
+      // Second switch reuses the existing link instead of duplicating it
+      injected['link[data-theme-fonts="paper"]'] = appended[0];
+      manager.applyTheme('light');
+      manager.applyTheme('paper');
+      expect(appended.length).toBe(1);
+    });
   });
 
   describe('2. ChartManager Theme Profiles & applyTheme', () => {
@@ -132,6 +156,26 @@ describe('ThemeManager & UI Simplification', () => {
       expect(CHART_THEMES.paper.layout.background.color).toBe('#fbf8f1');
       expect(CHART_THEMES.light.layout.background.color).toBe('#ffffff');
       expect(CHART_THEMES.midnight.layout.background.color).toBe('#030712');
+    });
+
+    it('defines a blue/orange colorblind-safe chart palette', () => {
+      expect(CHART_THEMES.colorblind).toBeDefined();
+      expect(CHART_THEMES.colorblind.series).toMatchObject({
+        upColor: '#60a5fa',
+        downColor: '#fb923c',
+      });
+    });
+
+    it('applyTheme switches to the colorblind chart palette', () => {
+      const mockContainer = { clientWidth: 800, clientHeight: 500 };
+      const manager = new ChartManager(mockContainer);
+      manager.chart = { applyOptions: vi.fn() };
+      manager.series = { applyOptions: vi.fn() };
+      manager.applyTheme('colorblind');
+      expect(manager.series.applyOptions).toHaveBeenCalledWith(expect.objectContaining({
+        upColor: '#60a5fa',
+        downColor: '#fb923c',
+      }));
     });
 
     it('applyTheme updates chart and series options', () => {
@@ -302,6 +346,56 @@ describe('ThemeManager & UI Simplification', () => {
       const calls = sliderEl.style.setProperty.mock.calls.filter(([k]) => k === '--timeline-progress');
       expect(calls.length).toBeGreaterThan(0);
       expect(calls[calls.length - 1][1]).toMatch(/%/);
+    });
+
+    it('ships audit-driven DOM: sparkline, drawer FAB, sr ticker, advanced toggle', () => {
+      expect(html).toMatch(/id="timeline-sparkline"/);
+      expect(html).toMatch(/id="btn-trading-drawer"/);
+      expect(html).toMatch(/id="sr-ticker"/);
+      expect(html).toMatch(/id="btn-advanced-order"/);
+      expect(html).toMatch(/value="colorblind"/);
+      expect(html).toMatch(/data-theme="colorblind"/);
+    });
+
+    it('ships audit-driven CSS: fog, velocity, clamp sidebar, drawer, sr-only', () => {
+      const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
+      expect(baseCss).toMatch(/\.chart-container::after/);
+      expect(baseCss).toMatch(/velocity-boost/);
+      expect(baseCss).toMatch(/clamp\(280px, 25vw, 420px\)/);
+      expect(baseCss).toMatch(/max-width:\s*1200px/);
+      expect(baseCss).toMatch(/\.sr-only/);
+      expect(baseCss).toMatch(/\.timeline-sparkline/);
+      expect(themesCss).toMatch(/\.fab-trading/);
+      expect(themesCss).toMatch(/drawer-open/);
+      expect(themesCss).toMatch(/html\[data-theme="colorblind"\]/);
+    });
+
+    it('ModeBanner throttles screen-reader announcements', async () => {
+      const { ModeBanner } = await import('../src/ui/ModeBanner.js');
+      const mkEl = (txt = '') => ({ textContent: txt, className: '', classList: { add() {}, remove() {} } });
+      const srTicker = mkEl();
+      const banner = new ModeBanner({
+        modeBanner: { className: '', classList: { add() {}, remove() {} } },
+        modeIndicator: null,
+        progressPanel: mkEl(),
+        progressText: mkEl(),
+        progressPct: mkEl(),
+        marketTimeEl: mkEl(),
+        marketTimeFull: mkEl(),
+        srTicker,
+        overlay: mkEl(),
+        overlayText: mkEl(),
+      });
+      const candleStore = { getCount: () => 100, get: (i) => ({ time: 1000 + i * 60 }) };
+      banner.update({ replayState: { status: 'paused', currentIndex: 5 }, appState: { candles: [], pendingStartIndex: 0 }, candleStore });
+      expect(srTicker.textContent).toMatch(/paused/i);
+      const first = srTicker.textContent;
+      // Same status in the same tick window -> no repeated announcement
+      banner.update({ replayState: { status: 'paused', currentIndex: 6 }, appState: { candles: [], pendingStartIndex: 0 }, candleStore });
+      expect(srTicker.textContent).toBe(first);
+      // Status change always announces immediately
+      banner.update({ replayState: { status: 'playing', currentIndex: 7 }, appState: { candles: [], pendingStartIndex: 0 }, candleStore });
+      expect(srTicker.textContent).toMatch(/playing/i);
     });
   });
 });

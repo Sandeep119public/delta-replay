@@ -5,6 +5,9 @@
  *
  * Eliminates duplicate state machine checks and enforces unified execution guards.
  */
+
+/** Playback speeds offered by the speed selector, slowest to fastest. */
+export const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 5, 10];
 export class ReplayCommandController {
   constructor({
     engine,
@@ -72,6 +75,44 @@ export class ReplayCommandController {
     } catch (e) {
       this._notifyError(e.message);
       return false;
+    }
+  }
+
+  /**
+   * Step one candle backwards. The engine auto-pauses when seeking from
+   * playing state; the open-position guard in trySeek prevents corrupting
+   * an active backtest.
+   */
+  stepBackward() {
+    if (!this.hasData()) return false;
+    const idx = this.engine.getState().currentIndex - 1;
+    if (idx < 0) return false;
+    return this.trySeek(idx);
+  }
+
+  /** Jump a relative number of candles (e.g. ±10), clamped to data bounds. */
+  jumpBy(delta) {
+    if (!this.hasData()) return false;
+    const st = this.engine.getState();
+    const total = this.engine.getTotalCandles?.() ?? this.candleStore?.getCount?.() ?? 0;
+    if (!Number.isFinite(total) || total <= 0) return false;
+    const idx = Math.min(Math.max(0, st.currentIndex + delta), total - 1);
+    if (idx === st.currentIndex) return false;
+    return this.trySeek(idx);
+  }
+
+  /** Move one notch through PLAYBACK_SPEEDS. direction: +1 faster, -1 slower. */
+  cycleSpeed(direction = 1) {
+    try {
+      const cur = Number(this.engine.getState().speed ?? 1);
+      let i = PLAYBACK_SPEEDS.indexOf(cur);
+      if (i === -1) i = PLAYBACK_SPEEDS.indexOf(1);
+      const next = PLAYBACK_SPEEDS[Math.min(Math.max(0, i + direction), PLAYBACK_SPEEDS.length - 1)];
+      this.engine.setSpeed(next);
+      return next;
+    } catch (e) {
+      this._notifyError(e.message);
+      return null;
     }
   }
 
@@ -149,7 +190,8 @@ export class ReplayCommandController {
   }
 
   /**
-   * Bind global keyboard shortcuts (Space, ArrowRight, KeyR, Escape)
+   * Bind global keyboard shortcuts (Space, ArrowRight/ArrowLeft, Shift+arrows,
+   * KeyZ/KeyX speed, KeyR, Escape)
    */
   bindKeyboardShortcuts(target = document) {
     if (!target) return () => {};
@@ -172,7 +214,18 @@ export class ReplayCommandController {
         this.togglePlayPause();
       } else if (e.code === 'ArrowRight') {
         e.preventDefault();
-        this.stepForward();
+        if (e.shiftKey) this.jumpBy(10);
+        else this.stepForward();
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        if (e.shiftKey) this.jumpBy(-10);
+        else this.stepBackward();
+      } else if (e.code === 'KeyZ') {
+        e.preventDefault();
+        this.cycleSpeed(-1);
+      } else if (e.code === 'KeyX') {
+        e.preventDefault();
+        this.cycleSpeed(1);
       } else if (e.code === 'KeyR') {
         e.preventDefault();
         this.reset();
