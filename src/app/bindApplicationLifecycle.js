@@ -1,6 +1,7 @@
 export function bindApplicationLifecycle({ unbindKeyboardShortcuts, coordinator, engine, candleCache, resources = [], extraCleanup = [] }) {
   let destroyed = false;
   const destroy = () => {
+    window.removeEventListener('pagehide', destroy);
     if (destroyed) return;
     destroyed = true;
     const cleanup = [
