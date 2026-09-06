@@ -26,30 +26,13 @@ import { TradingEvents } from './trading/TradingEvents.js';
 import { ReplayEvents } from './replay/ReplayEvents.js';
 import { TradingErrorView } from './ui/TradingErrorView.js';
 
-// ===== 1. CORE ENGINES & STATE =====
-const appState = new AppState();
-const candleStore = new CandleStore();
-appState.setCandleStore(candleStore);
+import { createCoreServices } from './app/createCoreServices.js';
+import { bindApplicationLifecycle } from './app/bindApplicationLifecycle.js';
+import { bindMobileDrawer } from './app/bindMobileDrawer.js';
 
-const engine = new ReplayEngine();
-const binanceProvider = new BinanceCandleProvider();
-const candleCache = new CandleCache({ dbName: 'delta-replay-futures-v1' });
-const dataManager = new HistoricalDataManager({
-  provider: binanceProvider,
-  store: candleStore,
-  cache: candleCache,
-  concurrency: 2,
-  chunkSize: 1000,
-  strictMode: true,
-});
+const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = createCoreServices();
 
-const tradingEngine = new PaperTradingEngine({
-  startingBalance: 10000,
-  replayEngine: engine,
-  executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE,
-});
-
-// ===== 2. DOM REFERENCES =====
+// ===== DOM REFERENCES =====
 const symbolSelect = document.getElementById('symbol-select');
 const timeframeSelect = document.getElementById('timeframe-select');
 const chartContainer = document.getElementById('chart-container');
@@ -425,46 +408,8 @@ if (loadBtn) {
 modeBanner.update({ replayState: engine.getState(), appState, candleStore });
 coordinator.loadAndPrepareReplay({ autoStart: false });
 
-// Mobile trading drawer (bottom sheet on <=768px): FAB toggle, scrim dismiss,
-// and swipe-down-to-dismiss with native-app feel.
-try {
-  const drawerBtn = document.getElementById('btn-trading-drawer');
-  const scrim = document.getElementById('drawer-scrim');
-  const tradingPanelEl = document.getElementById('trading-panel');
-  const setDrawer = (open) => {
-    document.body.classList.toggle('drawer-open', !!open);
-    if (drawerBtn) drawerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  };
-  if (drawerBtn) drawerBtn.addEventListener('click', () => setDrawer(!document.body.classList.contains('drawer-open')));
-  if (scrim) scrim.addEventListener('click', () => setDrawer(false));
-  if (tradingPanelEl) {
-    let swipeStartY = null;
-    tradingPanelEl.addEventListener('touchstart', (e) => {
-      const touch = e?.touches?.[0];
-      swipeStartY = touch && Number.isFinite(touch.clientY) ? touch.clientY : null;
-    }, { passive: true });
-    tradingPanelEl.addEventListener('touchend', (e) => {
-      if (swipeStartY === null) return;
-      const touch = e?.changedTouches?.[0];
-      const endY = touch && Number.isFinite(touch.clientY) ? touch.clientY : null;
-      const startY = swipeStartY;
-      swipeStartY = null;
-      if (endY === null) return;
-      if (endY - startY > 80 && document.body.classList.contains('drawer-open')) setDrawer(false);
-    }, { passive: true });
-  }
-} catch (error) {
-  console.warn('[Mobile drawer] setup failed', error);
-}
+// Mobile trading drawer.
+bindMobileDrawer();
 
-// Clean up long-lived browser resources when the application is unloaded.
-let destroyed = false;
-const destroyApplication = () => {
-  if (destroyed) return;
-  destroyed = true;
-  try { unbindKeyboardShortcuts?.(); } catch (error) { console.warn('[App] keyboard cleanup failed', error); }
-  try { coordinator.destroy(); } catch (error) { console.warn('[App] coordinator cleanup failed', error); }
-  try { engine.destroy(); } catch (error) { console.warn('[App] engine cleanup failed', error); }
-  try { candleCache.close(); } catch (error) { console.warn('[App] cache cleanup failed', error); }
-};
-window.addEventListener('pagehide', destroyApplication, { once: true });
+// Clean up long-lived browser resources.
+bindApplicationLifecycle({ unbindKeyboardShortcuts, coordinator, engine, candleCache });
