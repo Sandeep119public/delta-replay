@@ -44,8 +44,8 @@ describe('ChartManager Trading Overlays and Price Lines', () => {
     expect(mockSeries.createPriceLine).toHaveBeenCalledTimes(1);
     expect(mockSeries.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({
       price: 65000,
-      color: '#2f7d58',
-      title: 'LONG 1.5 @ 65000.00',
+      color: '#10B981',
+      title: 'LONG 1.500 @ 65,000.00  |  +$0.00',
     }));
   });
 

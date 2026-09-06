@@ -73,8 +73,14 @@ export class ChartTradingOverlay {
 
     const isLong = position.side === 'LONG';
     const entryPrice = Number(position.entryPrice);
-    const posColor = isLong ? '#2f7d58' : '#b44842';
-    const title = `${position.side} ${position.quantity} @ ${entryPrice.toFixed(2)}`;
+    const pnl = Number(position.unrealizedPnL || 0);
+    const pnlStr = `${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    // Standard terminal colors
+    const posColor = isLong ? '#10B981' : '#EF4444';
+
+    // Display Live PnL on the chart axis
+    const title = `${position.side} ${Number(position.quantity).toFixed(3)} @ ${entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}  |  ${pnlStr}`;
 
     if (!this._positionLine) {
       try {

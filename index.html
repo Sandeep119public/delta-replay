@@ -139,15 +139,33 @@
         
         <!-- On-Chart Floating Trading Status Bar -->
         <div id="chart-floating-bar" class="chart-floating-bar hidden">
-          <div class="chart-floating-left">
-            <span id="chart-pos-badge" class="chart-pos-badge">LONG 1.0</span>
-            <span id="chart-pos-entry" class="chart-pos-entry">@ $65,000.00</span>
-            <span id="chart-pos-pnl" class="chart-pos-pnl pnl-pos">+$0.00</span>
+          <div class="capsule-side-indicator" id="chart-pos-icon">
+            <!-- SVG injected by JS -->
           </div>
-          <div class="chart-floating-right">
-            <span class="chart-click-hint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Click chart to set SL / TP</span>
-            <button id="btn-chart-close" type="button" class="btn btn-xs btn-chart-close"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg> Close</button>
+          <div class="capsule-details">
+            <div class="capsule-symbol-side">
+              <span id="chart-pos-symbol">BTCUSDT</span>
+              <span id="chart-pos-side-text" class="capsule-side">LONG</span>
+            </div>
+            <span id="chart-pos-qty" class="capsule-qty">0.000 BTC</span>
           </div>
+
+          <div class="capsule-metrics">
+            <div class="capsule-metric-col">
+              <span class="capsule-lbl">Entry</span>
+              <span id="chart-pos-entry" class="capsule-val">$0.00</span>
+            </div>
+            <div class="capsule-metric-col">
+              <span class="capsule-lbl">Mark</span>
+              <span id="chart-pos-mark" class="capsule-val">$0.00</span>
+            </div>
+          </div>
+
+          <div id="chart-pos-pnl" class="capsule-pnl pos">+$0.00</div>
+
+          <button id="btn-chart-close" type="button" class="btn-capsule-close" aria-label="Close Position">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
         </div>
 
         <!-- On-Chart Notification Toast -->

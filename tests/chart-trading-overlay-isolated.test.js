@@ -35,8 +35,8 @@ describe('ChartTradingOverlay — Isolated Component', () => {
     expect(mockSeries.createPriceLine).toHaveBeenCalledTimes(1);
     expect(mockSeries.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({
       price: 60000,
-      color: '#2f7d58',
-      title: 'LONG 1 @ 60000.00',
+      color: '#10B981',
+      title: 'LONG 1.000 @ 60,000.00  |  +$0.00',
     }));
   });
 
