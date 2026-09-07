@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:architecture": "node --test tests/architecture/boundaries.test.js"
   },
   "dependencies": {
     "lightweight-charts": "4.2.3"
