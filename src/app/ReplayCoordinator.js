@@ -9,21 +9,29 @@ export { VISIBLE_WINDOW };
  * lifecycle capabilities. Async loading/session state, chart preview, and
  * dataset switching are owned by focused services and delegated here.
  * DOM elements are injected by the composition root. Trading access is
- * expressed to child services through narrow capabilities.
+ * supplied through explicit capabilities, never a raw trading engine.
  */
 export class ReplayCoordinator {
   constructor({
-    dataManager, candleStore, appState, replayEngine, tradingEngine, chartManager,
+    dataManager, candleStore, appState, replayEngine, tradingCapabilities, chartManager,
     chartAdapter, timeline, controls, errorPanel, modeBanner, tradingErrorView = null,
     dataStatusEl = null, cacheBadgeEl = null, startReplayBtn = null,
     headerStartReplayBtn = null, loadBtn = null, fromDateEl = null, fromTimeEl = null,
     toDateEl = null, toTimeEl = null,
   }) {
+    if (!tradingCapabilities || typeof tradingCapabilities !== 'object') {
+      throw new TypeError('ReplayCoordinator requires trading capabilities');
+    }
+    if (typeof tradingCapabilities.hasOpenPosition !== 'function') {
+      throw new TypeError('ReplayCoordinator requires tradingCapabilities.hasOpenPosition()');
+    }
+    if (typeof tradingCapabilities.notifyMarketCandle !== 'function') {
+      throw new TypeError('ReplayCoordinator requires tradingCapabilities.notifyMarketCandle()');
+    }
+    if (typeof tradingCapabilities.clearPendingOrders !== 'function') {
+      throw new TypeError('ReplayCoordinator requires tradingCapabilities.clearPendingOrders()');
+    }
     this.tradingErrorView = tradingErrorView;
-
-    const hasOpenPosition = () => tradingEngine?.hasOpenPosition?.() === true;
-    const notifyMarketCandle = (payload) => tradingEngine?.onMarketCandle?.(payload);
-    const clearPendingOrders = (reason) => tradingEngine?.clearPendingOrders?.(reason);
 
     const previewService = createReplayPreviewService({
       candleStore,
@@ -37,8 +45,8 @@ export class ReplayCoordinator {
       candleStore,
       appState,
       replayEngine,
-      hasOpenPosition,
-      notifyMarketCandle,
+      hasOpenPosition: tradingCapabilities.hasOpenPosition,
+      notifyMarketCandle: tradingCapabilities.notifyMarketCandle,
       timeline,
       controls,
       modeBanner,
@@ -57,8 +65,8 @@ export class ReplayCoordinator {
     });
 
     this.datasetChangeService = createDatasetChangeService({
-      hasOpenPosition,
-      clearPendingOrders,
+      hasOpenPosition: tradingCapabilities.hasOpenPosition,
+      clearPendingOrders: tradingCapabilities.clearPendingOrders,
       appState,
       candleStore,
       replayEngine,
