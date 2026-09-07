@@ -109,12 +109,19 @@ export function createApplication() {
     appState,
     candleStore,
     headerBtn: coordinatorPorts.headerStartReplayBtn,
-    onLoad: ({ autoStart }) => coordinator?.loadAndPrepareReplay({ autoStart }),
-    onPreview: (index) => coordinator?.updatePreviewWindow(index),
-    canExecute: () => trading.actions.hasOpenPosition(),
+    onLoad: ({ autoStart }) => replayCapabilities.load({ autoStart }),
+    onPreview: (index) => replayCapabilities.preview(index),
+    canExecute: (action) => {
+      if (!trading.actions.hasOpenPosition()) return { allowed: true };
+      const reason = action === 'start'
+        ? 'Cannot start replay while a position is open — close position first.'
+        : action === 'seek'
+          ? 'Cannot seek while a position is open — close position first.'
+          : `Cannot ${action} while a position is open — close position first.`;
+      return { allowed: false, reason };
+    },
     onError: (msg) => coordinator?.showTradingError(msg),
   });
-  const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
   const actions = createApplicationActions({
     replay: replayCapabilities,
@@ -165,7 +172,16 @@ export function createApplication() {
     ...form,
   });
   const tradingStateBridge = bindTradingState({ tradingEvents, trading, onChange: () => chartTradingController.syncChartTradingLines() });
-  const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, statusView, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
+  const replayLifecycle = bindReplayLifecycle({
+    engine,
+    appState,
+    candleStore,
+    statusView,
+    timeline: ui.timeline,
+    modeBanner: ui.modeBanner,
+    preview: replayCapabilities.preview,
+    chartManager: ui.chartManager,
+  });
   const actionGuardUnsub = registerActionGuard(engine, () => trading.actions.hasOpenPosition(), (msg) => coordinator?.showTradingError(msg));
   const loadBtn = coordinatorPorts.loadBtn;
   const onLoadClick = () => actions.load();
@@ -174,8 +190,8 @@ export function createApplication() {
   const mobileDrawer = bindMobileDrawer();
 
   const destroy = bindApplicationLifecycle({
-    unbindKeyboardShortcuts,
-    coordinator,
+    unbindKeyboardShortcuts: () => commandController?.bindKeyboardShortcuts?.(),
+    onDestroy: () => coordinator?.destroy?.(),
     engine,
     candleCache,
     resources: [
