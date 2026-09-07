@@ -37,26 +37,19 @@ export function createApplication() {
     dataManager, candleStore, appState, replayEngine: engine, tradingEngine,
     chartManager: ui.chartManager, chartAdapter: ui.adapter, timeline: ui.timeline,
     controls: ui.controls, errorPanel: ui.errorPanel, modeBanner: ui.modeBanner,
-    tradingErrorView: ui.tradingErrorView, dataStatusEl: ui.el('data-status'),
-    cacheBadgeEl: ui.el('cache-badge'), startReplayBtn: ui.el('start-replay-btn'),
-    headerStartReplayBtn: ui.el('header-start-replay-btn'), loadBtn: ui.el('load-btn'),
-    fromDateEl: ui.el('from-date'), fromTimeEl: ui.el('from-time'),
-    toDateEl: ui.el('to-date'), toTimeEl: ui.el('to-time'),
+    tradingErrorView: ui.tradingErrorView, ...ui.getCoordinatorPorts(),
   });
   coordinatorRef.current = coordinator;
 
+  const coordinatorPorts = ui.getCoordinatorPorts();
   const commandController = new ReplayCommandController({
     engine, appState, candleStore, tradingEngine, coordinator,
-    headerBtn: ui.el('header-start-replay-btn'),
+    headerBtn: coordinatorPorts.headerStartReplayBtn,
     onError: (msg) => coordinator.showTradingError(msg),
   });
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
-  const form = {
-    timeframeSelect: ui.el('timeframe-select'), orderTypeSelect: ui.el('order-type'),
-    limitPriceInput: ui.el('limit-price'), stopPriceInput: ui.el('stop-price'),
-    slInput: ui.el('sl-price'), tpInput: ui.el('tp-price'),
-  };
+  const form = ui.getOrderFormPorts();
   const views = ui.createTerminalViews({ appState, candleStore, engine, tradingEngine, commandController, coordinator, timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, ...form });
 
   const selectorBindings = bindDatasetSelectors(ui, coordinator);
@@ -67,7 +60,7 @@ export function createApplication() {
   const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, coordinator, ...form });
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
 
-  const loadBtn = ui.el('load-btn');
+  const loadBtn = coordinatorPorts.loadBtn;
   const onLoadClick = () => coordinator.loadAndPrepareReplay({ autoStart: false });
   if (loadBtn) loadBtn.addEventListener('click', onLoadClick);
   const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
