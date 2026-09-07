@@ -8,21 +8,13 @@ const LAYERS = [
 ];
 
 const ALLOWED = {
-  core: new Set(),
-  data: new Set(['core']),
-  indicators: new Set(['core']),
-  replay: new Set(['core', 'data']),
-  trading: new Set(['core', 'replay', 'data']),
-  strategy: new Set(['core', 'trading']),
-  state: new Set(['core', 'data']),
+  core: new Set(), data: new Set(['core']), indicators: new Set(['core']), replay: new Set(['core', 'data']),
+  trading: new Set(['core', 'replay', 'data']), strategy: new Set(['core', 'trading']), state: new Set(['core', 'data']),
   app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'ports', 'personality']),
   chart: new Set(['trading', 'replay', 'utils', 'ports']),
   ui: new Set(['trading', 'replay', 'data', 'chart', 'app', 'state', 'strategy', 'pages', 'personality', 'core', 'utils', 'ports']),
   pages: new Set(['trading', 'replay', 'data', 'state', 'chart', 'utils', 'ports']),
-  router: new Set(['app', 'ui', 'pages', 'utils']),
-  utils: new Set(['data']),
-  ports: new Set(),
-  personality: new Set(),
+  router: new Set(['app', 'ui', 'pages', 'utils']), utils: new Set(['data']), ports: new Set(), personality: new Set(),
 };
 
 const INTEGRATION_LAYERS = new Set(['ui', 'pages', 'chart', 'app', 'router']);
@@ -42,12 +34,8 @@ async function collectFiles(dir) {
 }
 
 function stripCommentsAndStrings(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/.*$/gm, '')
-    .replace(/'(?:\\.|[^'\\])*'/g, "''")
-    .replace(/"(?:\\.|[^"\\])*"/g, '""')
-    .replace(/`(?:\\.|[^`\\])*`/g, '``');
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+    .replace(/'(?:\\.|[^'\\])*'/g, "''").replace(/"(?:\\.|[^"\\])*"/g, '""').replace(/`(?:\\.|[^`\\])*`/g, '``');
 }
 
 function resolveLayerFromSpecifier(file, specifier) {
@@ -55,37 +43,22 @@ function resolveLayerFromSpecifier(file, specifier) {
   const target = path.normalize(path.join(path.dirname(path.join(ROOT, file)), specifier));
   const srcRoot = path.join(ROOT, 'src') + path.sep;
   if (!target.startsWith(srcRoot)) return null;
-  const relative = path.relative(path.join(ROOT, 'src'), target).replaceAll(path.sep, '/');
-  const [layer] = relative.split('/');
+  const [layer] = path.relative(path.join(ROOT, 'src'), target).replaceAll(path.sep, '/').split('/');
   return LAYERS.includes(layer) ? layer : null;
 }
 
-function importedLayers(source, file) {
-  const layers = new Set();
-  for (const match of source.matchAll(IMPORT_PATTERN)) {
-    const specifier = match[1] || match[2] || match[3] || match[4];
-    const layer = resolveLayerFromSpecifier(file, specifier);
-    if (layer) layers.add(layer);
-  }
-  return [...layers];
+function importedSpecifiers(source) {
+  return [...source.matchAll(IMPORT_PATTERN)].map((m) => m[1] || m[2] || m[3] || m[4]).filter(Boolean);
 }
 
 function assertAcyclic(graph) {
-  const visiting = new Set();
-  const visited = new Set();
-  const stack = [];
+  const visiting = new Set(); const visited = new Set(); const stack = [];
   function visit(node) {
-    if (visiting.has(node)) {
-      const start = stack.indexOf(node);
-      throw new Error(`Architecture cycle detected: ${[...stack.slice(start), node].join(' -> ')}`);
-    }
+    if (visiting.has(node)) { const start = stack.indexOf(node); throw new Error(`Architecture cycle detected: ${[...stack.slice(start), node].join(' -> ')}`); }
     if (visited.has(node)) return;
-    visiting.add(node);
-    stack.push(node);
+    visiting.add(node); stack.push(node);
     for (const next of graph.get(node) || []) visit(next);
-    stack.pop();
-    visiting.delete(node);
-    visited.add(node);
+    stack.pop(); visiting.delete(node); visited.add(node);
   }
   for (const layer of LAYERS) visit(layer);
 }
@@ -94,28 +67,20 @@ const violations = [];
 const graph = new Map(LAYERS.map(layer => [layer, new Set()]));
 
 for (const layer of LAYERS) {
-  const files = await collectFiles(`src/${layer}`);
-  for (const relative of files) {
+  for (const relative of await collectFiles(`src/${layer}`)) {
     const source = await fs.readFile(path.join(ROOT, relative), 'utf8');
     const code = stripCommentsAndStrings(source);
-
-    for (const imported of importedLayers(source, relative)) {
-      if (imported === layer) continue;
+    for (const specifier of importedSpecifiers(source)) {
+      const imported = resolveLayerFromSpecifier(relative, specifier);
+      if (!imported || imported === layer) continue;
       graph.get(layer).add(imported);
       if (!ALLOWED[layer].has(imported)) violations.push(`${relative}: ${layer} -> ${imported} is forbidden`);
+      if ((layer === 'ui' || layer === 'pages') && imported === 'trading') violations.push(`${relative}: presentation layer must use application trading ports, not trading domain imports`);
     }
-
-    if (!INTEGRATION_LAYERS.has(layer) && BROWSER_GLOBALS.test(code)) {
-      violations.push(`${relative}: browser global access is forbidden outside presentation/integration layers`);
-    }
+    if (!INTEGRATION_LAYERS.has(layer) && BROWSER_GLOBALS.test(code)) violations.push(`${relative}: browser global access is forbidden outside presentation/integration layers`);
   }
 }
 
 try { assertAcyclic(graph); } catch (error) { violations.push(error.message); }
-
-if (violations.length) {
-  console.error(['Architecture violations:', ...violations.map(v => `- ${v}`)].join('\n'));
-  process.exit(1);
-}
-
+if (violations.length) { console.error(['Architecture violations:', ...violations.map(v => `- ${v}`)].join('\n')); process.exit(1); }
 console.log('Architecture dependency graph: PASS');
