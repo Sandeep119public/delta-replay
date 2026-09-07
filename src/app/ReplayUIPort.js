@@ -1,8 +1,15 @@
-import { EventEmitter } from '../core/EventEmitter.js';
-
-/** Neutral presentation adapter for replay engine events and commands. */
+/**
+ * Narrow, immutable replay capability exposed to presentation code.
+ * The UI can drive replay and observe presentation events, but cannot receive
+ * execution-only market events or reach replay internals.
+ */
 export function createReplayUIPort(engine) {
-  if (!engine) throw new TypeError('createReplayUIPort requires an engine');
+  const required = ['play', 'pause', 'stepForward', 'reset', 'start', 'setSpeed', 'seek', 'getState', 'getTotalCandles', 'getVisibleCandles', 'on'];
+  if (!engine || required.some((name) => typeof engine[name] !== 'function')) {
+    throw new TypeError(`createReplayUIPort requires replay capabilities: ${required.join(', ')}`);
+  }
+
+  const subscribe = (event, listener) => engine.on(event, listener);
   return Object.freeze({
     play: () => engine.play(),
     pause: () => engine.pause(),
@@ -13,6 +20,12 @@ export function createReplayUIPort(engine) {
     seek: (index) => engine.seek(index),
     getState: () => Object.freeze({ ...engine.getState() }),
     getTotalCandles: () => engine.getTotalCandles(),
-    on: (event, listener) => engine.on(event, listener),
+    getVisibleCandles: () => engine.getVisibleCandles().map((candle) => Object.freeze({ ...candle })),
+    onStateChanged: (listener) => subscribe('stateChanged', listener),
+    onSpeedChanged: (listener) => subscribe('speedChanged', listener),
+    onStarted: (listener) => subscribe('started', listener),
+    onSeeked: (listener) => subscribe('seeked', listener),
+    onReset: (listener) => subscribe('reset', listener),
+    onStepped: (listener) => subscribe('stepped', listener),
   });
 }
