@@ -1,21 +1,39 @@
 /**
- * Application event bridge. UI modules dispatch intent; application code owns effects.
+ * Application intent bridge. Presentation dispatches intent; injected
+ * capabilities own the concrete effects.
  */
-export function createApplicationActions({ coordinator, commandController, appState, engine, candleStore, statusView = null, modeBanner, timeline, controls, errorPanel }) {
+export function createApplicationActions({
+  replay,
+  commandController,
+  appState,
+  engine,
+  statusView = null,
+  modeBanner,
+  timeline,
+  controls,
+  errorPanel,
+}) {
+  if (!replay || typeof replay !== 'object') throw new TypeError('createApplicationActions requires replay capabilities');
+  if (!commandController || typeof commandController !== 'object') throw new TypeError('createApplicationActions requires command capabilities');
+  if (!appState || !engine || !modeBanner || !timeline || !controls || !errorPanel) {
+    throw new TypeError('createApplicationActions requires application presentation dependencies');
+  }
+
   const reportStatus = () => {
     if (statusView) modeBanner.update(statusView.snapshot());
-    else modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+    else modeBanner.update({ replayState: engine.getState(), appState });
   };
-  return {
+
+  return Object.freeze({
     changeDataset(kind, value, sourceEl) {
-      return coordinator.handleSymbolTimeframeChange(kind, value, sourceEl);
+      return replay.changeDataset(kind, value, sourceEl);
     },
     previewTimeline(index) {
       appState.setPendingStartIndex(index);
       controls.setStartIndex(index);
       reportStatus();
       const state = engine.getState();
-      if (state.status === 'ready' || state.status === 'idle') coordinator.updatePreviewWindow(index);
+      if (state.status === 'ready' || state.status === 'idle') replay.preview(index);
     },
     commitTimeline(index) {
       const state = engine.getState();
@@ -28,7 +46,7 @@ export function createApplicationActions({ coordinator, commandController, appSt
       appState.setPendingStartIndex(index);
       controls.setStartIndex(index);
       reportStatus();
-      coordinator.updatePreviewWindow(index);
+      replay.preview(index);
     },
     startAt(index) {
       if (!Number.isFinite(Number(index)) || Number(index) < 0) return;
@@ -39,8 +57,14 @@ export function createApplicationActions({ coordinator, commandController, appSt
     pause() { commandController.pause(); },
     handleLiquidation(payload) {
       try { commandController.pause(); } catch (error) { console.warn('[Replay] liquidation pause failed', error); }
-      errorPanel.show({ category: 'LIQUIDATION', userMessage: `Position liquidated: ${payload?.symbol || ''} @ ${payload?.liquidationPrice ?? '—'}`, message: 'Position liquidated', code: 'LIQUIDATION', context: {} }, { severity: 'critical', onPause: () => commandController.pause() });
+      errorPanel.show({
+        category: 'LIQUIDATION',
+        userMessage: `Position liquidated: ${payload?.symbol || ''} @ ${payload?.liquidationPrice ?? '—'}`,
+        message: 'Position liquidated',
+        code: 'LIQUIDATION',
+        context: {},
+      }, { severity: 'critical', onPause: () => commandController.pause() });
     },
-    load() { return coordinator.loadAndPrepareReplay({ autoStart: false }); },
-  };
+    load() { return replay.load(); },
+  });
 }
