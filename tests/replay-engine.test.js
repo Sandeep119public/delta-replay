@@ -30,7 +30,7 @@ describe('ReplayEngine', () => {
   it('reject invalid candles', () => {
     const e = new ReplayEngine();
     const bad = makeCandles(5);
-    bad[2] = { ...bad[2], high: 1 }; // high < open
+    bad[2] = { ...bad[2], high: 1 };
     expect(() => e.load(bad)).toThrow(/Invalid candle/);
   });
 
@@ -49,7 +49,6 @@ describe('ReplayEngine', () => {
     e.start(50);
     expect(e.getVisibleCandles().length).toBe(51);
     expect(e.getVisibleCandles()[50].time).toBe(candles[50].time);
-    // ensure future not exposed
     expect(e.getVisibleCandles().every(c => c.time <= candles[50].time)).toBe(true);
   });
 
@@ -69,11 +68,10 @@ describe('ReplayEngine', () => {
     const e = new ReplayEngine();
     e.load(makeCandles(10));
     e.start(0);
-    e.setSpeed(10); // 10 candles/sec => 100ms per candle
+    e.setSpeed(10);
     e.play();
     expect(e.getState().status).toBe(ReplayStatus.PLAYING);
     await new Promise(r => setTimeout(r, 250));
-    // should have advanced at least 2 candles
     expect(e.getState().currentIndex).toBeGreaterThan(1);
     e.pause();
   });
@@ -98,11 +96,10 @@ describe('ReplayEngine', () => {
     e.start(0);
     e.setSpeed(10);
     e.play();
-    e.play(); // second call idempotent
+    e.play();
     e.play();
     await new Promise(r => setTimeout(r, 250));
     const idx = e.getState().currentIndex;
-    // At 10x, ~2-3 ticks in 250ms. If duplicate timers, would be ~4-6. Check <5
     expect(idx).toBeLessThan(5);
     expect(idx).toBeGreaterThanOrEqual(2);
     e.pause();
@@ -128,7 +125,7 @@ describe('ReplayEngine', () => {
     e.start(2);
     expect(e.getState().status).toBe(ReplayStatus.ENDED);
     const before = e.getState().currentIndex;
-    e.stepForward(); // should stay at end
+    e.stepForward();
     expect(e.getState().currentIndex).toBe(before);
     expect(e.getState().status).toBe(ReplayStatus.ENDED);
   });
@@ -142,6 +139,36 @@ describe('ReplayEngine', () => {
     expect(e.getVisibleCandles().length).toBe(3);
     e.seek(9);
     expect(e.getState().status).toBe(ReplayStatus.ENDED);
+  });
+
+  it('action guards block state-changing navigation and can be removed', () => {
+    const e = new ReplayEngine();
+    e.load(makeCandles(10));
+    e.start(2);
+    const before = e.getState();
+    const seen = [];
+    const unregister = e.registerActionGuard((action) => {
+      seen.push(action);
+      return { allowed: false, reason: `${action} blocked for test` };
+    });
+
+    expect(e.seek(7)).toEqual(before);
+    expect(e.getState().currentIndex).toBe(2);
+    expect(seen).toContain('seek');
+
+    unregister();
+    expect(e.seek(7).currentIndex).toBe(7);
+  });
+
+  it('guard exceptions fail closed without mutating state', () => {
+    const e = new ReplayEngine();
+    e.load(makeCandles(10));
+    e.start(2);
+    const before = e.getState();
+    e.registerActionGuard(() => { throw new Error('guard exploded'); });
+
+    expect(e.reset()).toEqual(before);
+    expect(e.getState()).toEqual(before);
   });
 
   it('reset restores to startIndex', () => {
@@ -174,10 +201,8 @@ describe('ReplayEngine', () => {
     e.on('marketCandle', () => order.push('marketCandle'));
     e.on('stateChanged', () => order.push('stateChanged'));
     e.load(makeCandles(5));
-    // clear
     order.length = 0;
     e.start(2);
-    // started -> marketCandle -> stateChanged (plus loaded already)
     expect(order[0]).toBe('started');
     expect(order).toContain('marketCandle');
     expect(order[order.length - 1]).toBe('stateChanged');
