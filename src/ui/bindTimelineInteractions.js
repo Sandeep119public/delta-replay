@@ -1,19 +1,19 @@
 import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
 
-export function bindTimelineInteractions({ timeline, tradingEngine = null, tradingEvents = null, candleStore, actions }) {
+export function bindTimelineInteractions({ timeline, tradingEngine = null, tradingEvents = null, tradingState = null, candleStore, actions }) {
   timeline.onChange((idx) => actions.previewTimeline(idx));
   timeline.onCommit((idx) => actions.commitTimeline(idx));
   timeline.onStartHere((idx) => actions.startAt(idx));
+  if (!candleStore) throw new TypeError('candleStore is required');
 
   const eventPort = tradingEvents || (tradingEngine ? {
     events: TRADING_PRESENTATION_EVENTS,
     on: (event, handler) => tradingEngine.on?.(event, handler),
   } : null);
-  if (!candleStore) throw new TypeError('candleStore is required');
 
   const refreshMarkers = () => {
     try {
-      const trades = eventPort?.snapshot?.()?.trades || tradingEngine?.getTrades?.() || [];
+      const trades = tradingState?.snapshot?.().trades || tradingEngine?.getTrades?.() || [];
       if (!trades.length || !candleStore.getCount()) return timeline.setMarkers([]);
       const all = candleStore.getAll?.() || [];
       const markers = [];
