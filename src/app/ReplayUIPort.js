@@ -1,18 +1,16 @@
-import { ReplayEngine } from './ReplayEngine.js';
+import { EventEmitter } from '../core/EventEmitter.js';
 
-/** Creates a narrow, immutable application-facing replay port. */
+/** Neutral presentation adapter for replay engine events and commands. */
 export function createReplayUIPort(engine) {
-  if (!(engine instanceof ReplayEngine) && (!engine || typeof engine.play !== 'function')) {
-    throw new TypeError('createReplayUIPort requires a ReplayEngine-compatible object');
-  }
+  if (!engine) throw new TypeError('createReplayUIPort requires an engine');
   return Object.freeze({
     play: () => engine.play(),
     pause: () => engine.pause(),
     stepForward: () => engine.stepForward(),
     reset: () => engine.reset(),
     start: (index) => engine.start(index),
-    seek: (index) => engine.seek(index),
     setSpeed: (speed) => engine.setSpeed(speed),
+    seek: (index) => engine.seek(index),
     getState: () => Object.freeze({ ...engine.getState() }),
     getTotalCandles: () => engine.getTotalCandles(),
     on: (event, listener) => engine.on(event, listener),
