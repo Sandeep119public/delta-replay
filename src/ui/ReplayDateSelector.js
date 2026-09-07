@@ -10,7 +10,8 @@ export class ReplayDateSelector {
     appState,
     coordinator,
     candleStore,
-    engine,
+    replayPort = null,
+    engine = null,
     commandController = null,
     timeframeSelect = null,
     replayDateEl = (typeof document !== 'undefined' ? document.getElementById('replay-date') : null),
@@ -25,7 +26,7 @@ export class ReplayDateSelector {
     this.appState = appState;
     this.coordinator = coordinator;
     this.candleStore = candleStore;
-    this.engine = engine;
+    this.replayPort = replayPort || engine;
     this.commandController = commandController;
     this.timeframeSelect = timeframeSelect || (typeof document !== 'undefined' ? document.getElementById('timeframe-select') : null);
     this.replayDateEl = replayDateEl;
@@ -36,6 +37,8 @@ export class ReplayDateSelector {
     this.jumpErrorEl = jumpErrorEl;
     this.presetChips = presetChips;
     this.onJump = onJump;
+
+    if (!this.replayPort) throw new TypeError('ReplayDateSelector requires replayPort');
 
     this._debounceTimer = null;
     this._handlers = [];
@@ -88,7 +91,11 @@ export class ReplayDateSelector {
   }
 
   _bindEvents() {
-    this.presetChips.forEach(chip => { const handler = () => this.selectPreset(chip.dataset.preset); chip.addEventListener('click', handler); this._handlers.push([chip, 'click', handler]); });
+    this.presetChips.forEach(chip => {
+      const handler = () => this.selectPreset(chip.dataset.preset);
+      chip.addEventListener('click', handler);
+      this._handlers.push([chip, 'click', handler]);
+    });
     const defaultChip = typeof document !== 'undefined' ? document.querySelector('.preset-chip[data-preset="1d"]') : null;
     if (defaultChip) defaultChip.classList.add('active');
 
@@ -101,15 +108,26 @@ export class ReplayDateSelector {
       }, 400);
     };
 
-    if (this.replayDateEl) { this.replayDateEl.addEventListener('change', handleInputChange); this._handlers.push([this.replayDateEl, 'change', handleInputChange]); }
-    if (this.replayTimeEl) { this.replayTimeEl.addEventListener('change', handleInputChange); this._handlers.push([this.replayTimeEl, 'change', handleInputChange]); }
-    if (this.jumpBtn) { const handler = () => this.handleJump(); this.jumpBtn.addEventListener('click', handler); this._handlers.push([this.jumpBtn, 'click', handler]); }
+    if (this.replayDateEl) {
+      this.replayDateEl.addEventListener('change', handleInputChange);
+      this._handlers.push([this.replayDateEl, 'change', handleInputChange]);
+    }
+    if (this.replayTimeEl) {
+      this.replayTimeEl.addEventListener('change', handleInputChange);
+      this._handlers.push([this.replayTimeEl, 'change', handleInputChange]);
+    }
+    if (this.jumpBtn) {
+      const handler = () => this.handleJump();
+      this.jumpBtn.addEventListener('click', handler);
+      this._handlers.push([this.jumpBtn, 'click', handler]);
+    }
   }
 
   destroy() {
     clearTimeout(this._debounceTimer);
     this._handlers.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler));
     this._handlers = [];
+    this.replayPort = null;
   }
 
   handleJump() {
@@ -147,7 +165,7 @@ export class ReplayDateSelector {
       return;
     }
 
-    const st = this.engine.getState();
+    const st = this.replayPort.getState();
     if (st.status === 'idle' || st.status === 'ready') {
       this.appState.setPendingStartIndex(idx);
       this.coordinator?.updatePreviewWindow?.(idx);
