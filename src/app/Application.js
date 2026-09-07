@@ -12,10 +12,11 @@ import { createChartTradingActions } from './ChartTradingActions.js';
 import { createTradingUIState } from './TradingUIState.js';
 import { createTradingUIEvents } from './TradingUIEvents.js';
 import { createTradingUIPort } from './TradingUIPort.js';
+import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
 
 function registerActionGuard(engine, tradingEngine, coordinator) {
-  engine.registerActionGuard((action) => {
+  return engine.registerActionGuard((action) => {
     if (!tradingEngine.hasOpenPosition()) return { allowed: true };
     const msg = action === 'load'
       ? 'Cannot load new data while a position is open — close position or reset account first.'
@@ -40,50 +41,129 @@ export function createApplication() {
   const tradingState = createTradingUIState(tradingEngine);
   const tradingEvents = createTradingUIEvents(tradingEngine);
   const tradingPort = createTradingUIPort(tradingEngine);
-  const ui = createPaperUI({ engine, candleStore, appState, coordinatorRef, tradingPort, tradingEvents, tradingState });
+  const replayPort = createReplayUIPort(engine);
+
+  const ui = createPaperUI({
+    replayPort,
+    candleStore,
+    appState,
+    coordinatorRef,
+    tradingPort,
+    tradingEvents,
+    tradingState,
+  });
 
   const coordinator = new ReplayCoordinator({
-    dataManager, candleStore, appState, replayEngine: engine, tradingEngine,
-    chartManager: ui.chartManager, chartAdapter: ui.adapter, timeline: ui.timeline,
-    controls: ui.controls, errorPanel: ui.errorPanel, modeBanner: ui.modeBanner,
-    tradingErrorView: ui.tradingErrorView, ...ui.getCoordinatorPorts(),
+    dataManager,
+    candleStore,
+    appState,
+    replayEngine: engine,
+    tradingEngine,
+    chartManager: ui.chartManager,
+    chartAdapter: ui.adapter,
+    timeline: ui.timeline,
+    controls: ui.controls,
+    errorPanel: ui.errorPanel,
+    modeBanner: ui.modeBanner,
+    tradingErrorView: ui.tradingErrorView,
+    ...ui.getCoordinatorPorts(),
   });
   coordinatorRef.current = coordinator;
 
   const coordinatorPorts = ui.getCoordinatorPorts();
   const commandController = new ReplayCommandController({
-    engine, appState, candleStore, tradingEngine, coordinator,
+    engine,
+    appState,
+    candleStore,
+    tradingEngine,
+    coordinator,
     headerBtn: coordinatorPorts.headerStartReplayBtn,
     onError: (msg) => coordinator.showTradingError(msg),
   });
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
-
-  const actions = createApplicationActions({ coordinator, commandController, appState, engine, candleStore, modeBanner: ui.modeBanner, timeline: ui.timeline, controls: ui.controls, errorPanel: ui.errorPanel });
+  const actions = createApplicationActions({
+    coordinator,
+    commandController,
+    appState,
+    engine,
+    candleStore,
+    modeBanner: ui.modeBanner,
+    timeline: ui.timeline,
+    controls: ui.controls,
+    errorPanel: ui.errorPanel,
+  });
 
   const form = ui.getOrderFormPorts();
-  const views = ui.createTerminalViews({ appState, candleStore, engine, tradingPort, tradingEvents, tradingState, commandController, coordinator, timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, ...form });
+  const views = ui.createTerminalViews({
+    appState,
+    candleStore,
+    replayPort,
+    tradingPort,
+    tradingEvents,
+    tradingState,
+    commandController,
+    coordinator,
+    timeline: ui.timeline,
+    controls: ui.controls,
+    modeBanner: ui.modeBanner,
+    ...form,
+  });
 
   const selectorBindings = bindDatasetSelectors(ui, actions);
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candleStore, tradingEvents, tradingState, actions });
   const tradingBindings = bindTradingEvents({ tradingEvents, actions, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
-
   const chartTradingActions = createChartTradingActions({ tradingEngine, coordinator });
-  const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingEvents, tradingState, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, actions: chartTradingActions, ...form });
+  const chartTradingController = ui.createChartTradingController({
+    chartManager: ui.chartManager,
+    tradingEvents,
+    tradingState,
+    tradingPanel: views.tradingPanel,
+    floatingPosView: views.floatingPosView,
+    toastView: views.toastView,
+    orderFormView: views.tradingPanel.orderFormView,
+    actions: chartTradingActions,
+    ...form,
+  });
   const tradingStateBridge = bindTradingState({ tradingEvents, tradingState, onChange: () => chartTradingController.syncChartTradingLines() });
-
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
-
+  const actionGuardUnsub = registerActionGuard(engine, tradingEngine, coordinator);
   const loadBtn = coordinatorPorts.loadBtn;
   const onLoadClick = () => actions.load();
-  if (loadBtn) loadBtn.addEventListener('click', onLoadClick);
+  loadBtn?.addEventListener('click', onLoadClick);
   const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
   const mobileDrawer = bindMobileDrawer();
 
   const destroy = bindApplicationLifecycle({
-    unbindKeyboardShortcuts, coordinator, engine, candleCache,
-    resources: [selectorBindings, timelineBindings, tradingBindings, tradingStateBridge, replayLifecycle, commandController, mobileDrawer, loadBinding, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView, views.toastView],
-    extraCleanup: [unbindAutoFollow],
+    unbindKeyboardShortcuts,
+    coordinator,
+    engine,
+    candleCache,
+    resources: [
+      selectorBindings,
+      timelineBindings,
+      tradingBindings,
+      tradingStateBridge,
+      replayLifecycle,
+      commandController,
+      mobileDrawer,
+      loadBinding,
+      ui.symbolSelector,
+      ui.timeframeSelector,
+      ui.timeline,
+      ui.controls,
+      ui.themeManager,
+      ui.errorPanel,
+      chartTradingController,
+      ui.adapter,
+      ui.chartManager,
+      views.tradingPanel,
+      views.dateSelector,
+      views.sparkline,
+      views.floatingPosView,
+      views.toastView,
+    ],
+    extraCleanup: [unbindAutoFollow, actionGuardUnsub],
   });
 
   let started = false;
@@ -93,6 +173,7 @@ export function createApplication() {
     destroyed = true;
     destroy();
   };
+
   return {
     start() {
       if (destroyed || started) return;
@@ -103,6 +184,8 @@ export function createApplication() {
       });
     },
     destroy: guardedDestroy,
-    services, ui, coordinator,
+    services,
+    ui,
+    coordinator,
   };
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ReplayEngine } from '../src/replay/ReplayEngine.js';
 import { ChartAdapter } from '../src/chart/ChartAdapter.js';
+import { createReplayUIPort } from '../src/app/ReplayUIPort.js';
 import { formatTime, toUnixSeconds } from '../src/utils/time.js';
 
 function makeCandles(n, start = 1700000000, step = 60) {
@@ -19,6 +20,7 @@ function createMockChart() {
     update(c) { calls.update.push({ ...c }); },
     clear() { calls.clear.push(true); },
     followCurrent() { calls.followCurrent = (calls.followCurrent || 0) + 1; },
+    setRevealedMax() {},
     _calls: calls
   };
 }
@@ -36,11 +38,10 @@ describe('Replay UX — state synchronization (derived from ReplayEngine)', () =
     expect(engine.getState().status).toBe('playing');
     engine.pause();
     expect(engine.getState().status).toBe('paused');
-    // step to end
-    engine.stepForward(); // 1
-    engine.stepForward(); // 2
-    engine.stepForward(); // 3
-    engine.stepForward(); // 4 -> ended
+    engine.stepForward();
+    engine.stepForward();
+    engine.stepForward();
+    engine.stepForward();
     expect(engine.getState().status).toBe('ended');
     expect(engine.getState().currentIndex).toBe(4);
   });
@@ -49,7 +50,7 @@ describe('Replay UX — state synchronization (derived from ReplayEngine)', () =
     const eng = new ReplayEngine();
     eng.load(makeCandles(10));
     eng.start(2);
-    eng.stepForward(); // 3
+    eng.stepForward();
     eng.reset();
     expect(eng.getState().currentIndex).toBe(2);
     expect(eng.getState().status).toBe('paused');
@@ -58,11 +59,12 @@ describe('Replay UX — state synchronization (derived from ReplayEngine)', () =
   it('ended state disables play', () => {
     const eng = new ReplayEngine();
     eng.load(makeCandles(3));
-    eng.start(2); // last index -> ended
+    eng.start(2);
     expect(eng.getState().status).toBe('ended');
     const before = eng.getState().status;
     eng.play();
     expect(eng.getState().status).toBe('ended');
+    expect(before).toBe('ended');
   });
 });
 
@@ -86,10 +88,9 @@ describe('Replay UX — speed changes', () => {
     eng.setSpeed(2);
     expect(eng.getState().speed).toBe(2);
     expect(eng.getState().status).toBe('playing');
-    // timer should be recreated (not duplicated)
     const timerAfter = eng._timer;
     expect(timerAfter).not.toBeNull();
-    // changing speed again quickly should still have single timer
+    expect(timerAfter).not.toBe(timerBefore);
     eng.setSpeed(10);
     expect(eng._timer).not.toBeNull();
     eng.pause();
@@ -152,7 +153,7 @@ describe('Replay UX — progress', () => {
     eng.load(makeCandles(3));
     eng.start(0);
     eng.stepForward();
-    eng.stepForward(); // now at 2 last
+    eng.stepForward();
     expect(eng.getState().status).toBe('ended');
     const pct = ((eng.getState().currentIndex + 1) / eng.getState().totalCandles * 100).toFixed(2);
     expect(pct).toBe('100.00');
@@ -207,13 +208,15 @@ describe('Replay UX — start selection', () => {
 
   it('jumpTo helper finds closest candle', () => {
     const candles = makeCandles(10, 1700000000, 60);
-    // simulate findClosest: target between 2 and 3
-    const target = 1700000000 + 2 * 60 + 15; // 15s after candle 2
-    // nearest should be candle 2 (diff 15) vs 3 (45)
-    let lo = 0, hi = candles.length - 1, best = 0, minDiff = Infinity;
+    const target = 1700000000 + 2 * 60 + 15;
+    let best = 0;
+    let minDiff = Infinity;
     for (let i = 0; i < candles.length; i++) {
       const diff = Math.abs(candles[i].time - target);
-      if (diff < minDiff) { minDiff = diff; best = i; }
+      if (diff < minDiff) {
+        minDiff = diff;
+        best = i;
+      }
     }
     expect(best).toBe(2);
   });
@@ -224,28 +227,27 @@ describe('Replay UX — future data regression', () => {
     const eng = new ReplayEngine();
     eng.load(makeCandles(10));
     eng.start(2);
-    expect(eng.getVisibleCandles().length).toBe(3); // 0..2
+    expect(eng.getVisibleCandles().length).toBe(3);
     eng.stepForward();
     expect(eng.getVisibleCandles().length).toBe(4);
     eng.seek(5);
     expect(eng.getVisibleCandles().length).toBe(6);
     expect(eng.getTotalCandles()).toBe(10);
-    // ensure future not in visible
     const visibleTimes = eng.getVisibleCandles().map(c => c.time);
     expect(Math.max(...visibleTimes)).toBe(1700000000 + 5 * 60);
   });
 
   it('ChartAdapter does not expose future via chart during replay', () => {
     const eng = new ReplayEngine();
+    const port = createReplayUIPort(eng);
     const mockChart = createMockChart();
-    const adapter = new ChartAdapter(eng, mockChart);
+    const adapter = new ChartAdapter(port, mockChart);
     adapter.attach();
     const candles = makeCandles(5);
     eng.load(candles);
-    // Preview would show full but adapter preview is manual; after start, chart should show visible only
     eng.start(1);
     expect(mockChart._calls.setData.length).toBe(1);
-    expect(mockChart._calls.setData[0].length).toBe(2); // 0..1
+    expect(mockChart._calls.setData[0].length).toBe(2);
     eng.stepForward();
     expect(mockChart._calls.setData.length).toBe(2);
     expect(mockChart._calls.setData[1].length).toBe(3);
@@ -255,15 +257,15 @@ describe('Replay UX — future data regression', () => {
 
   it('reset during replay restores to startIndex not full preview', () => {
     const eng = new ReplayEngine();
+    const port = createReplayUIPort(eng);
     const mockChart = createMockChart();
-    const adapter = new ChartAdapter(eng, mockChart);
+    const adapter = new ChartAdapter(port, mockChart);
     adapter.attach();
     eng.load(makeCandles(10));
     eng.start(3);
     eng.stepForward();
     eng.stepForward();
     eng.reset();
-    // after reset, setData should be visible at startIndex (3+1 =4)
     const lastSet = mockChart._calls.setData[mockChart._calls.setData.length - 1];
     expect(lastSet.length).toBe(4);
     adapter.detach();
@@ -281,15 +283,15 @@ describe('Replay UX — future data regression', () => {
 
 describe('Chart followCurrent', () => {
   it('ChartManager.followCurrent preserves method and does not fitContent', () => {
-    // This test ensures auto-follow does not call fitContent
-    // Mock verified via adapter.
     const eng = new ReplayEngine();
+    const port = createReplayUIPort(eng);
     const mockChart = createMockChart();
-    const adapter = new ChartAdapter(eng, mockChart);
+    const adapter = new ChartAdapter(port, mockChart);
     adapter.attach();
     eng.load(makeCandles(5));
     eng.start(0);
     eng.stepForward();
     expect(mockChart._calls.followCurrent).toBe(1);
+    adapter.detach();
   });
 });

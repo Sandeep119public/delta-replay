@@ -33,7 +33,7 @@ export class ReplayEngine extends EventEmitter {
     if (typeof guardFn !== 'function') throw new Error('guardFn must be a function');
     this._actionGuards.push(guardFn);
     return () => {
-      this._actionGuards = this._actionGuards.filter(g => g !== guardFn);
+      this._actionGuards = this._actionGuards.filter((g) => g !== guardFn);
     };
   }
 
@@ -49,11 +49,24 @@ export class ReplayEngine extends EventEmitter {
     return { allowed: true };
   }
 
-  setSymbol(symbol) { this._assertAlive(); this._symbol = symbol; }
-  getSymbol() { return this._symbol; }
+  setSymbol(symbol) {
+    this._assertAlive();
+    this._symbol = symbol;
+  }
+
+  getSymbol() {
+    return this._symbol;
+  }
 
   _cloneCandle(c) {
-    return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
+    return {
+      time: c.time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume,
+    };
   }
 
   load(candles, meta = {}) {
@@ -66,7 +79,7 @@ export class ReplayEngine extends EventEmitter {
     if (!Array.isArray(candles) || candles.length === 0) throw new Error('load: candles must be a non-empty array');
 
     let prev = null;
-    for (let i = 0; i < candles.length; i++) {
+    for (let i = 0; i < candles.length; i += 1) {
       const res = CandleValidator.validate(candles[i], prev);
       if (!res.valid) {
         logger.warn(`Invalid candle at index ${i}: ${res.reason}`);
@@ -75,7 +88,7 @@ export class ReplayEngine extends EventEmitter {
       prev = candles[i].time;
     }
 
-    this._candles = candles.map(c => Object.freeze(this._cloneCandle(c)));
+    this._candles = candles.map((c) => Object.freeze(this._cloneCandle(c)));
     this._symbol = symbol || candles[0]?.symbol || this._symbol || null;
     this._state = {
       ...createInitialState(),
@@ -95,8 +108,10 @@ export class ReplayEngine extends EventEmitter {
     this._assertAlive();
     const check = this._checkGuards('start', { startIndex });
     if (!check.allowed) return this.getState();
-    if (this._candles.length === 0) throw new Error('No candles loaded');
-    if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= this._candles.length) throw new Error(`Invalid startIndex: ${startIndex}`);
+    if (!this._candles.length) throw new Error('No candles loaded');
+    if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= this._candles.length) {
+      throw new Error(`Invalid startIndex: ${startIndex}`);
+    }
     this._clearTimer();
     this._state.startIndex = startIndex;
     this._state.currentIndex = startIndex;
@@ -104,7 +119,7 @@ export class ReplayEngine extends EventEmitter {
     this._accum = 0;
     const candle = this._candles[startIndex];
     this.emit(ReplayEvents.STARTED, { index: startIndex, candle: this._cloneCandle(candle) });
-    this._emitCandle(candle, startIndex);
+    this._emitCandle(candle, startIndex, true);
     this.emit(ReplayEvents.STATE_CHANGED, this.getState());
     if (this._state.status === ReplayStatus.ENDED) this.emit(ReplayEvents.ENDED, this.getState());
     return this.getState();
@@ -149,7 +164,7 @@ export class ReplayEngine extends EventEmitter {
 
   stepForward() {
     this._assertAlive();
-    if (this._candles.length === 0) throw new Error('No candles loaded');
+    if (!this._candles.length) throw new Error('No candles loaded');
     if (this._state.status === ReplayStatus.IDLE || this._state.status === ReplayStatus.READY) throw new Error('Cannot step: replay not started');
     if (this._state.currentIndex >= this._candles.length - 1) {
       this._state.status = ReplayStatus.ENDED;
@@ -160,7 +175,7 @@ export class ReplayEngine extends EventEmitter {
     this._state.currentIndex += 1;
     const candle = this._candles[this._state.currentIndex];
     this.emit(ReplayEvents.STEPPED, { index: this._state.currentIndex, candle: this._cloneCandle(candle) });
-    this._emitCandle(candle, this._state.currentIndex);
+    this._emitCandle(candle, this._state.currentIndex, true);
     if (this._state.currentIndex >= this._candles.length - 1) {
       this._clearTimer();
       this._state.status = ReplayStatus.ENDED;
@@ -170,13 +185,15 @@ export class ReplayEngine extends EventEmitter {
     return this.getState();
   }
 
-  step() { return this.stepForward(); }
+  step() {
+    return this.stepForward();
+  }
 
   stepCount(count = 1) {
     this._assertAlive();
     if (!Number.isInteger(count) || count < 0) throw new Error(`Invalid step count: ${count}. Must be a non-negative integer.`);
     let state = this.getState();
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       if (this._state.status === ReplayStatus.ENDED) break;
       state = this.stepForward();
     }
@@ -196,7 +213,7 @@ export class ReplayEngine extends EventEmitter {
     this._assertAlive();
     const check = this._checkGuards('seek', { index });
     if (!check.allowed) return this.getState();
-    if (this._candles.length === 0) throw new Error('No candles loaded');
+    if (!this._candles.length) throw new Error('No candles loaded');
     if (!Number.isInteger(index) || index < 0 || index >= this._candles.length) throw new Error(`Invalid seek index: ${index}`);
     if (this._state.status === ReplayStatus.PLAYING) this._clearTimer();
     this._state.currentIndex = index;
@@ -204,7 +221,6 @@ export class ReplayEngine extends EventEmitter {
     if (this._state.startIndex === -1) this._state.startIndex = index;
     const candle = this._candles[index];
     this.emit(ReplayEvents.SEEKED, { index, candle: this._cloneCandle(candle), visibleCandles: this.getVisibleCandles() });
-    this._emitCandle(candle, index);
     this.emit(ReplayEvents.STATE_CHANGED, this.getState());
     if (this._state.status === ReplayStatus.ENDED) this.emit(ReplayEvents.ENDED, this.getState());
     return this.getState();
@@ -239,13 +255,16 @@ export class ReplayEngine extends EventEmitter {
     this._assertAlive();
     const check = this._checkGuards('reset', {});
     if (!check.allowed) return this.getState();
-    if (this._candles.length === 0) return this.stop();
+    if (!this._candles.length) return this.stop();
     this._clearTimer();
     if (this._state.startIndex >= 0) {
       this._state.currentIndex = this._state.startIndex;
       this._state.status = this._state.currentIndex >= this._candles.length - 1 ? ReplayStatus.ENDED : ReplayStatus.PAUSED;
-      this.emit(ReplayEvents.RESET, { ...this.getState(), visibleCandles: this.getVisibleCandles(), index: this._state.currentIndex });
-      this._emitCandle(this._candles[this._state.currentIndex], this._state.currentIndex);
+      this.emit(ReplayEvents.RESET, {
+        ...this.getState(),
+        visibleCandles: this.getVisibleCandles(),
+        index: this._state.currentIndex,
+      });
       this.emit(ReplayEvents.STATE_CHANGED, this.getState());
       if (this._state.status === ReplayStatus.ENDED) this.emit(ReplayEvents.ENDED, this.getState());
     } else {
@@ -258,11 +277,13 @@ export class ReplayEngine extends EventEmitter {
     return this.getState();
   }
 
-  getState() { return { ...this._state }; }
+  getState() {
+    return { ...this._state };
+  }
 
   getVisibleCandles() {
     if (this._state.currentIndex < 0) return [];
-    return this._candles.slice(0, this._state.currentIndex + 1).map(c => this._cloneCandle(c));
+    return this._candles.slice(0, this._state.currentIndex + 1).map((c) => this._cloneCandle(c));
   }
 
   getCurrentCandle() {
@@ -284,20 +305,22 @@ export class ReplayEngine extends EventEmitter {
   getVisibleWindow(size = 1000) {
     if (this._state.currentIndex < 0) return [];
     const from = Math.max(0, this._state.currentIndex - size + 1);
-    return this._candles.slice(from, this._state.currentIndex + 1).map(c => this._cloneCandle(c));
+    return this._candles.slice(from, this._state.currentIndex + 1).map((c) => this._cloneCandle(c));
   }
 
   getContextCandles() {
     if (this._state.startIndex <= 0) return [];
-    return this._candles.slice(0, this._state.startIndex).map(c => this._cloneCandle(c));
+    return this._candles.slice(0, this._state.startIndex).map((c) => this._cloneCandle(c));
   }
 
   getRevealedCandles() {
     if (this._state.startIndex < 0 || this._state.currentIndex < this._state.startIndex) return [];
-    return this._candles.slice(this._state.startIndex, this._state.currentIndex + 1).map(c => this._cloneCandle(c));
+    return this._candles.slice(this._state.startIndex, this._state.currentIndex + 1).map((c) => this._cloneCandle(c));
   }
 
-  getTotalCandles() { return this._candles.length; }
+  getTotalCandles() {
+    return this._candles.length;
+  }
 
   destroy() {
     if (this._destroyed) return;
@@ -312,7 +335,7 @@ export class ReplayEngine extends EventEmitter {
     this.removeAllListeners();
   }
 
-  _emitCandle(candle, index) {
+  _emitCandle(candle, index, execution = false) {
     const cloned = this._cloneCandle(candle);
     const payload = {
       symbol: this._symbol || candle.symbol || null,
@@ -322,7 +345,7 @@ export class ReplayEngine extends EventEmitter {
       replayState: this.getState(),
     };
     this.emit(ReplayEvents.CANDLE, payload);
-    this.emit(ReplayEvents.MARKET_CANDLE, payload);
+    if (execution) this.emit(ReplayEvents.MARKET_CANDLE, payload);
   }
 
   _clearTimer() {
@@ -348,8 +371,9 @@ export class ReplayEngine extends EventEmitter {
       this._state.currentIndex += 1;
       const candle = this._candles[this._state.currentIndex];
       this.emit(ReplayEvents.STEPPED, { index: this._state.currentIndex, candle: this._cloneCandle(candle) });
-      this._emitCandle(candle, this._state.currentIndex);
+      this._emitCandle(candle, this._state.currentIndex, true);
       if (this._state.currentIndex >= this._candles.length - 1) {
+        this._clearTimer();
         this._state.status = ReplayStatus.ENDED;
         this.emit(ReplayEvents.ENDED, this.getState());
         this.emit(ReplayEvents.STATE_CHANGED, this.getState());

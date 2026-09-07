@@ -1,5 +1,6 @@
 export class ReplayControls {
-  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, engine, followBtn = null, onFollowClick = null }) {
+  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, replayPort, followBtn = null, onFollowClick = null }) {
+    if (!replayPort) throw new TypeError('ReplayControls requires replayPort');
     this.playBtn = playBtn;
     this.pauseBtn = pauseBtn;
     this.stepBtn = stepBtn;
@@ -7,40 +8,41 @@ export class ReplayControls {
     this.startReplayBtn = startReplayBtn;
     this.speedSelect = speedSelect;
     this.statusEl = statusEl;
-    this.engine = engine;
+    this.replayPort = replayPort;
     this.followBtn = followBtn;
     this.onFollowClick = onFollowClick;
 
     this._listeners = [];
     this._subscriptions = [];
-    this._listen = (el, type, handler) => { el?.addEventListener?.(type, handler); this._listeners.push([el, type, handler]); };
-    this._listen(this.playBtn, 'click', () => this._safeAction(() => this.engine.play()));
-    this._listen(this.pauseBtn, 'click', () => this._safeAction(() => this.engine.pause()));
-    this._listen(this.stepBtn, 'click', () => this._safeAction(() => this.engine.stepForward()));
-    this._listen(this.resetBtn, 'click', () => this._safeAction(() => this.engine.reset()));
+    this._listen = (el, type, handler) => {
+      el?.addEventListener?.(type, handler);
+      this._listeners.push([el, type, handler]);
+    };
+
+    this._listen(this.playBtn, 'click', () => this._safeAction(() => this.replayPort.play()));
+    this._listen(this.pauseBtn, 'click', () => this._safeAction(() => this.replayPort.pause()));
+    this._listen(this.stepBtn, 'click', () => this._safeAction(() => this.replayPort.stepForward()));
+    this._listen(this.resetBtn, 'click', () => this._safeAction(() => this.replayPort.reset()));
     this._listen(this.startReplayBtn, 'click', () => {
       const idx = Number(this.startReplayBtn.dataset.startIndex ?? '0');
-      this._safeAction(() => this.engine.start(idx));
+      this._safeAction(() => this.replayPort.start(idx));
     });
     this._listen(this.speedSelect, 'change', () => {
-      this._safeAction(() => this.engine.setSpeed(this.speedSelect.value), () => {
-        this.speedSelect.value = String(this.engine.getState().speed);
+      this._safeAction(() => this.replayPort.setSpeed(this.speedSelect.value), () => {
+        this.speedSelect.value = String(this.replayPort.getState().speed);
       });
     });
 
     if (this.followBtn) {
       this._listen(this.followBtn, 'click', () => {
-        if (this.onFollowClick) this.onFollowClick();
+        this.onFollowClick?.();
         this.followBtn.classList.add('hidden');
       });
     }
 
-    this._subscriptions.push(this.engine.on('stateChanged', (state) => this.render(state)));
-    this._subscriptions.push(this.engine.on('speedChanged', ({ speed }) => { this.speedSelect.value = String(speed); }));
-
-    // Render immediately so the control state is correct even if the engine
-    // was loaded before the controls were constructed.
-    this.render(this.engine.getState());
+    this._subscriptions.push(this.replayPort.onStateChanged((state) => this.render(state)));
+    this._subscriptions.push(this.replayPort.onSpeedChanged(({ speed }) => { this.speedSelect.value = String(speed); }));
+    this.render(this.replayPort.getState());
   }
 
   destroy() {
@@ -48,7 +50,7 @@ export class ReplayControls {
     this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch {} });
     this._listeners = [];
     this._subscriptions = [];
-    try { document?.body?.classList?.remove('velocity-boost'); } catch {}
+    this.onFollowClick = null;
   }
 
   _safeAction(action, onError = null) {
@@ -56,14 +58,14 @@ export class ReplayControls {
       return action();
     } catch (error) {
       console.warn('[ReplayControls]', error?.message || error);
-      if (onError) onError(error);
-      return this.engine.getState();
+      onError?.(error);
+      return this.replayPort.getState();
     }
   }
 
   setStartIndex(idx) {
     const n = Number(idx);
-    const valid = Number.isInteger(n) && n >= 0 && n < this.engine.getTotalCandles();
+    const valid = Number.isInteger(n) && n >= 0 && n < this.replayPort.getTotalCandles();
     if (valid) {
       this.startReplayBtn.dataset.startIndex = String(n);
       this.startReplayBtn.disabled = false;
@@ -71,11 +73,11 @@ export class ReplayControls {
       delete this.startReplayBtn.dataset.startIndex;
       this.startReplayBtn.disabled = true;
     }
+    return valid;
   }
 
   render(state) {
     if (!state) return;
-
     const isIdle = state.status === 'idle';
     const isReady = state.status === 'ready';
     const isPlaying = state.status === 'playing';
@@ -87,10 +89,8 @@ export class ReplayControls {
       this.statusEl.textContent = state.status.toUpperCase();
       this.statusEl.className = `replay-status ${state.status}`;
     }
-
-    // Velocity treatment: ambient momentum cue at 5x/10x (data never blurs)
     try {
-      if (typeof document !== 'undefined' && document.body && document.body.classList) {
+      if (typeof document !== 'undefined' && document.body?.classList) {
         document.body.classList.toggle('velocity-boost', Number(state.speed) >= 5);
       }
     } catch {}
@@ -114,8 +114,6 @@ export class ReplayControls {
     this.resetBtn.disabled = !hasData || isIdle || isReady;
     this.speedSelect.disabled = !hasData || isIdle;
 
-    // The start button is a pre-play control. PLAY/STEP become the active
-    // controls only after a replay start event moves the engine to PAUSED.
     if (isReady) {
       this.playBtn.disabled = true;
       this.pauseBtn.disabled = true;
@@ -129,13 +127,9 @@ export class ReplayControls {
     }
   }
 
-  setEnabledForPreview() {
-    // State-driven rendering handles preview/replay controls.
-  }
+  setEnabledForPreview() {}
 
   setAutoFollow(isFollowing) {
-    if (this.followBtn) {
-      this.followBtn.classList.toggle('hidden', isFollowing);
-    }
+    this.followBtn?.classList.toggle('hidden', isFollowing);
   }
 }

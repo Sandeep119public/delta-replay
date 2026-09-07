@@ -1,12 +1,12 @@
 import { ReplayEvents } from '../replay/ReplayEvents.js';
 
 /**
- * ChartAdapter is the only bridge between ReplayEngine and ChartManager.
- * ReplayEngine remains completely chart-agnostic.
+ * ChartAdapter bridges replay presentation state to ChartManager.
+ * It deliberately consumes only the narrow replay presentation port.
  */
 export class ChartAdapter {
-  constructor(engine, chartManager) {
-    this.engine = engine;
+  constructor(replayPort, chartManager) {
+    this.replayPort = replayPort;
     this.chart = chartManager;
     this._unsubs = [];
     this._lastRenderedIndex = -1;
@@ -14,13 +14,13 @@ export class ChartAdapter {
   }
 
   attach() {
-    if (this._destroyed || !this.engine || !this.chart) return;
+    if (this._destroyed || !this.replayPort || !this.chart) return;
     this.detach();
 
     const WINDOW = 1000;
     const visibleWindow = () => {
-      if (this._destroyed || !this.engine) return [];
-      const visible = this.engine.getVisibleCandles();
+      if (this._destroyed || !this.replayPort) return [];
+      const visible = this.replayPort.getVisibleCandles?.() || [];
       return visible.length > WINDOW ? visible.slice(-WINDOW) : visible;
     };
 
@@ -33,34 +33,32 @@ export class ChartAdapter {
         return;
       }
 
-      // Full redraw from the authoritative replay snapshot. This deliberately
-      // avoids lightweight-charts incremental-update state and guarantees the
-      // chart contents match the replay cursor exactly.
       if (typeof this.chart.renderReplayWindow === 'function') {
         this.chart.renderReplayWindow(window, { fit });
       } else {
         this.chart.setRevealedMax?.(window[window.length - 1].time);
         this.chart.setData(window, { fit });
-        if (!fit && this.chart.followCurrent) {
-          this.chart.followCurrent();
-        }
+        if (!fit && this.chart.followCurrent) this.chart.followCurrent();
       }
       this._lastRenderedIndex = index;
     };
 
-    this._unsubs.push(this.engine.on(ReplayEvents.STARTED, ({ index }) => render(index, { fit: true })));
-    this._unsubs.push(this.engine.on(ReplayEvents.SEEKED, ({ index }) => render(index, { fit: true })));
-    this._unsubs.push(this.engine.on(ReplayEvents.RESET, (payload) => {
-      render(payload?.index ?? this.engine.getState().currentIndex, { fit: true });
-    }));
-    this._unsubs.push(this.engine.on(ReplayEvents.STEPPED, ({ index }) => {
-      if (index > this._lastRenderedIndex) render(index, { fit: false });
-    }));
+    const subscriptions = [
+      [this.replayPort.onStarted, ({ index }) => render(index, { fit: true })],
+      [this.replayPort.onSeeked, ({ index }) => render(index, { fit: true })],
+      [this.replayPort.onReset, (payload) => render(payload?.index ?? this.replayPort.getState().currentIndex, { fit: true })],
+      [this.replayPort.onStepped, ({ index }) => { if (index > this._lastRenderedIndex) render(index, { fit: false }); }],
+    ];
+
+    for (const [subscribe, handler] of subscriptions) {
+      const unsubscribe = typeof subscribe === 'function' ? subscribe(handler) : null;
+      if (typeof unsubscribe === 'function') this._unsubs.push(unsubscribe);
+    }
   }
 
   detach() {
-    this._unsubs.forEach(unsub => {
-      try { unsub(); } catch {}
+    this._unsubs.forEach((unsubscribe) => {
+      try { unsubscribe(); } catch {}
     });
     this._unsubs = [];
     this._lastRenderedIndex = -1;
@@ -70,7 +68,7 @@ export class ChartAdapter {
     if (this._destroyed) return;
     this._destroyed = true;
     this.detach();
-    this.engine = null;
+    this.replayPort = null;
     this.chart = null;
   }
 
@@ -104,4 +102,3 @@ export class ChartAdapter {
     return this.showPreview(candles, centerIdx, windowSize);
   }
 }
-

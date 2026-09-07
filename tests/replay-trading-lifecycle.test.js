@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ReplayEngine } from '../src/replay/ReplayEngine.js';
+import { ReplayCommandController } from '../src/app/ReplayCommandController.js';
 import { PaperTradingEngine, EXECUTION_TIMING } from '../src/trading/PaperTradingEngine.js';
 
 const candle = (time, open, high = open, low = open, close = open, symbol = 'BTCUSDT') => ({
@@ -18,6 +19,8 @@ describe('replay/trading lifecycle hardening', () => {
     replay.start(1);
     expect(trading.getLatestCandleIndex()).toBe(1);
     expect(trading.getAccountSnapshot().totalBars).toBe(1);
+    replay.destroy();
+    trading.destroy();
   });
 
   it('resets the account when a new replay is loaded', () => {
@@ -37,24 +40,35 @@ describe('replay/trading lifecycle hardening', () => {
     expect(trading.getPendingOrders()).toHaveLength(0);
     expect(trading.getAccountSnapshot().cashBalance).toBeCloseTo(10000, 10);
     expect(trading.getAccountSnapshot().totalBars).toBe(0);
+    replay.destroy();
+    trading.destroy();
   });
 
-  it('resets the account when replay is reset after a completed position', () => {
+  it('reset clears the trading session without replaying a market candle', () => {
     const replay = new ReplayEngine();
     const trading = new PaperTradingEngine({ replayEngine: replay, executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE });
     const candles = [candle(100, 100), candle(200, 110)];
+    const candleStore = { getCount: () => candles.length, get: (index) => candles[index] };
+    const appState = { pendingStartIndex: 0 };
+    const controller = new ReplayCommandController({ engine: replay, appState, candleStore, tradingEngine: trading });
+
     replay.load(candles);
     replay.start(0);
     expect(trading.placeOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 1 }).success).toBe(true);
     trading.closePositionImmediate('BTCUSDT');
     expect(trading.getTrades()).toHaveLength(1);
-    replay.reset();
+
+    controller.reset();
+
     expect(trading.getTrades()).toHaveLength(0);
     expect(trading.getPositions()).toHaveLength(0);
     expect(trading.getAccountSnapshot().cashBalance).toBeCloseTo(10000, 10);
-    // Replay reset returns to the start candle, so the trading feed receives that candle again.
-    expect(trading.getLatestCandleIndex()).toBe(0);
-    expect(trading.getLatestCandle().time).toBe(100);
+    expect(trading.getLatestCandleIndex()).toBe(-1);
+    expect(trading.getLatestCandle()).toBeNull();
+
+    controller.destroy();
+    replay.destroy();
+    trading.destroy();
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ReplayEngine } from '../src/replay/ReplayEngine.js';
 import { ChartAdapter } from '../src/chart/ChartAdapter.js';
+import { createReplayUIPort } from '../src/app/ReplayUIPort.js';
 
 function candles(n, start = 1700000000) {
   return Array.from({ length: n }, (_, i) => {
@@ -12,7 +13,7 @@ function candles(n, start = 1700000000) {
       high: close + 0.5,
       low: open - 0.5,
       close,
-      volume: 10
+      volume: 10,
     };
   });
 }
@@ -23,15 +24,16 @@ function chartMock() {
     update: vi.fn(),
     clear: vi.fn(),
     followCurrent: vi.fn(),
-    setRevealedMax: vi.fn()
+    setRevealedMax: vi.fn(),
   };
 }
 
 describe('Chart replay integration', () => {
   it('renders the starting candle, then renders each replay step', () => {
     const engine = new ReplayEngine();
+    const port = createReplayUIPort(engine);
     const chart = chartMock();
-    new ChartAdapter(engine, chart).attach();
+    new ChartAdapter(port, chart).attach();
     const data = candles(6);
     engine.load(data);
     engine.start(2);
@@ -50,12 +52,14 @@ describe('Chart replay integration', () => {
     expect(chart.setData.mock.calls[2][0][4].time).toBe(data[4].time);
     expect(chart.followCurrent).toHaveBeenCalledTimes(2);
     expect(chart.setRevealedMax).toHaveBeenCalledWith(data[4].time);
+    engine.destroy();
   });
 
   it('keeps the rendered window bounded at 1000 candles', () => {
     const engine = new ReplayEngine();
+    const port = createReplayUIPort(engine);
     const chart = chartMock();
-    new ChartAdapter(engine, chart).attach();
+    new ChartAdapter(port, chart).attach();
     const data = candles(1105);
     engine.load(data);
     engine.start(1000);
@@ -65,47 +69,55 @@ describe('Chart replay integration', () => {
     expect(latest).toHaveLength(1000);
     expect(latest[0].time).toBe(data[2].time);
     expect(latest.at(-1).time).toBe(data[1001].time);
+    engine.destroy();
   });
 
   it('rebuilds the chart on seek instead of trying to append backwards', () => {
     const engine = new ReplayEngine();
+    const port = createReplayUIPort(engine);
     const chart = chartMock();
-    new ChartAdapter(engine, chart).attach();
+    new ChartAdapter(port, chart).attach();
     engine.load(candles(6));
     engine.start(4);
     chart.setData.mockClear();
     chart.update.mockClear();
 
-    engine.seek(1);
+    port.seek(1);
 
     expect(chart.setData).toHaveBeenCalledTimes(1);
     expect(chart.setData.mock.calls[0][0]).toHaveLength(2);
     expect(chart.update).not.toHaveBeenCalled();
+    engine.destroy();
   });
 
   it('does not render the starting candle twice', () => {
     const engine = new ReplayEngine();
+    const port = createReplayUIPort(engine);
     const chart = chartMock();
-    new ChartAdapter(engine, chart).attach();
+    new ChartAdapter(port, chart).attach();
     engine.load(candles(4));
 
     engine.start(1);
 
     expect(chart.setData).toHaveBeenCalledTimes(1);
+    engine.destroy();
   });
 
   it('reset rebuilds the visible replay window', () => {
     const engine = new ReplayEngine();
+    const port = createReplayUIPort(engine);
     const chart = chartMock();
-    new ChartAdapter(engine, chart).attach();
-    engine.load(candles(5));
+    new ChartAdapter(port, chart).attach();
+    const data = candles(5);
+    engine.load(data);
     engine.start(1);
     engine.stepForward();
     chart.setData.mockClear();
-    engine.reset();
+    port.reset();
 
     expect(chart.setData).toHaveBeenCalledTimes(1);
     expect(chart.setData.mock.calls[0][0]).toHaveLength(2);
-    expect(chart.setData.mock.calls[0][0][1].time).toBe(candles(5)[1].time);
+    expect(chart.setData.mock.calls[0][0][1].time).toBe(data[1].time);
+    engine.destroy();
   });
 });
