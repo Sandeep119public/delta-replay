@@ -1,10 +1,10 @@
-import { TradingIntentResolver } from '../trading/TradingIntentResolver.js';
-
 /**
  * ChartTradingOverlay encapsulates position lines, risk lines (SL/TP),
  * and pending order lines (Limit/Stop Market) drawn on top of lightweight-charts.
  *
- * Keeps domain trading concepts cleanly separated from core chart infrastructure.
+ * It renders chart presentation data only. Click-intent resolution lives in
+ * the application layer (ChartTradingActions); this overlay never imports
+ * the trading domain.
  */
 export class ChartTradingOverlay {
   constructor(context = null) {
@@ -227,17 +227,5 @@ export class ChartTradingOverlay {
   destroy() {
     this.clearTradingLines();
     this._ctx = null;
-  }
-
-  /**
-   * Determine intent for a clicked chart price based on active position context.
-   * Delegates to TradingIntentResolver for pure Separation of Concerns.
-   *
-   * @param {number} price
-   * @param {object|null} activePosition
-   * @returns {{ action: 'SET_TP'|'SET_SL'|'PRICE_SELECT', price: number, isTP?: boolean, symbol?: string } | null}
-   */
-  resolveClickIntent(price, activePosition = null) {
-    return TradingIntentResolver.resolveClickIntent(price, activePosition);
   }
 }

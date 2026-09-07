@@ -1,6 +1,8 @@
+import { assertDashboardView } from '../ports/DashboardPresentationPort.js';
+
 export class DashboardPage {
-  constructor(tradingEngine) {
-    this.tradingEngine = tradingEngine;
+  constructor(dashboard) {
+    this.dashboard = assertDashboardView(dashboard);
     this.el = document.getElementById('page-dashboard');
   }
 
@@ -10,17 +12,15 @@ export class DashboardPage {
       if (!this.el) return;
     }
 
-    const stats = typeof this.tradingEngine?.getStatistics === 'function'
-      ? this.tradingEngine.getStatistics()
-      : (this.tradingEngine?.getPerformanceStats?.() || {});
-    
-    const equity = stats.equity ?? this.tradingEngine?.account?.equity ?? 10000;
+    const { stats } = this.dashboard.snapshot();
+
+    const equity = stats.equity ?? 10000;
     const returnPct = stats.returnPct ?? stats.netReturn ?? 0;
     const totalTrades = stats.totalTrades ?? 0;
     const wins = stats.wins ?? stats.winningTrades ?? 0;
     const losses = stats.losses ?? stats.losingTrades ?? 0;
     const winRate = stats.winRate ?? (totalTrades > 0 ? (wins / totalTrades) * 100 : 0);
-    const netPnl = stats.netPnl ?? this.tradingEngine?.account?.realizedPnL ?? 0;
+    const netPnl = stats.netPnl ?? 0;
 
     this.el.innerHTML = `
       <div class="page-container">
@@ -94,7 +94,7 @@ export class DashboardPage {
   }
 
   renderRecentTrades() {
-    const trades = this.tradingEngine?.getTradeHistory?.() || [];
+    const trades = this.dashboard.snapshot().recentTrades || [];
     const recent = trades.slice(-8).reverse();
     
     if (recent.length === 0) {
@@ -128,7 +128,7 @@ export class DashboardPage {
     if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
-    const history = this.tradingEngine?.getEquityHistory?.() || [];
+    const history = this.dashboard.snapshot().equityCurve || [];
     
     if (history.length < 2) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);

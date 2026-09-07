@@ -78,10 +78,15 @@ describe('SoC and Modularity Deep Audit Verification', () => {
       expect(TradingIntentResolver.resolveClickIntent(-10, null)).toBeNull();
       expect(TradingIntentResolver.resolveClickIntent(NaN, null)).toBeNull();
     });
-    it('ChartTradingOverlay delegates resolveClickIntent to TradingIntentResolver', () => {
+    it('ChartTradingOverlay renders only: intent resolution lives in the application layer', async () => {
+      const { createChartTradingActions } = await import('../src/app/ChartTradingActions.js');
       const overlay = new ChartTradingOverlay();
-      const pos = { symbol: 'ETHUSDT', side: 'LONG', entryPrice: 3000 };
-      const res = overlay.resolveClickIntent(3200, pos);
+      expect(overlay.resolveClickIntent).toBeUndefined();
+      const actions = createChartTradingActions({
+        tradingEngine: { getPositions: () => [{ symbol: 'ETHUSDT', side: 'LONG', entryPrice: 3000 }] },
+        coordinator: null,
+      });
+      const res = actions.resolveClick(3200);
       expect(res.action).toBe('SET_TP');
       expect(res.isTP).toBe(true);
       expect(res.symbol).toBe('ETHUSDT');

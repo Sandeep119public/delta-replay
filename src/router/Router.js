@@ -1,8 +1,25 @@
+/**
+ * Browser page router.
+ *
+ * Browser globals are injected ({ win, doc }) so navigation is testable
+ * without a real browser. When omitted they default to the live
+ * globalThis.window / globalThis.document at call time.
+ */
 export class Router {
-  constructor() {
+  constructor({ win = null, doc = null } = {}) {
     this.pages = new Map();
     this.currentPage = null;
     this.container = null;
+    this._win = win;
+    this._doc = doc;
+  }
+
+  get win() {
+    return this._win ?? globalThis.window;
+  }
+
+  get doc() {
+    return this._doc ?? globalThis.document;
   }
 
   register(name, component, options = {}) {
@@ -14,46 +31,48 @@ export class Router {
     if (!page) return;
 
     // Update URL hash without extra re-trigger if already there
-    if (window.location.hash.slice(1) !== pageName) {
-      window.location.hash = pageName;
+    if (this.win.location.hash.slice(1) !== pageName) {
+      this.win.location.hash = pageName;
     }
 
     // Hide all pages (specifically select .page elements to avoid hiding .nav-link)
-    document.querySelectorAll('.page[data-page], .page').forEach(el => {
+    this.doc.querySelectorAll('.page[data-page], .page').forEach(el => {
       el.classList.remove('active');
       el.style.display = 'none';
     });
 
     // Show target page
-    const pageEl = document.getElementById(`page-${pageName}`);
+    const pageEl = this.doc.getElementById(`page-${pageName}`);
     if (pageEl) {
       pageEl.classList.add('active', 'page-enter');
       pageEl.style.display = '';
       this.currentPage = pageName;
-      
+
       // Update nav active state
       this.updateNav(pageName);
-      
+
       // Dispatch custom event
-      window.dispatchEvent(new CustomEvent('pagechange', { detail: { page: pageName } }));
+      this.win.dispatchEvent(new CustomEvent('pagechange', { detail: { page: pageName } }));
     }
   }
 
   updateNav(pageName) {
-    document.querySelectorAll('.nav-link').forEach(link => {
+    this.doc.querySelectorAll('.nav-link').forEach(link => {
       link.classList.toggle('active', link.dataset.page === pageName);
     });
   }
 
+  onHashChange() {
+    const hash = this.win.location.hash.slice(1) || 'replay';
+    this.navigate(hash);
+  }
+
   init() {
     // Handle hash changes
-    window.addEventListener('hashchange', () => {
-      const hash = window.location.hash.slice(1) || 'replay';
-      this.navigate(hash);
-    });
+    this.win.addEventListener('hashchange', () => this.onHashChange());
 
     // Navigate to initial page
-    const initial = window.location.hash.slice(1) || 'replay';
+    const initial = this.win.location.hash.slice(1) || 'replay';
     this.navigate(initial);
   }
 }

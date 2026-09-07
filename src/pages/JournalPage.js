@@ -1,6 +1,15 @@
+const JOURNAL_STORAGE_KEY = 'delta-journal';
+
+function browserStorage() {
+  return {
+    load: () => localStorage.getItem(JOURNAL_STORAGE_KEY),
+    save: (value) => localStorage.setItem(JOURNAL_STORAGE_KEY, value),
+  };
+}
+
 export class JournalPage {
-  constructor(tradingEngine) {
-    this.tradingEngine = tradingEngine;
+  constructor({ storage = null } = {}) {
+    this.storage = storage || browserStorage();
     this.el = document.getElementById('page-journal');
     this.entries = this.loadEntries();
     this.selectedTag = null;
@@ -8,10 +17,10 @@ export class JournalPage {
 
   loadEntries() {
     try {
-      const stored = localStorage.getItem('delta-journal');
+      const stored = this.storage.load();
       if (stored) return JSON.parse(stored);
     } catch (e) {
-      console.error('Failed to load journal entries from localStorage:', e);
+      console.error('Failed to load journal entries from storage:', e);
     }
     // Default starter entries if empty
     return [
@@ -42,7 +51,7 @@ export class JournalPage {
 
   saveEntries() {
     try {
-      localStorage.setItem('delta-journal', JSON.stringify(this.entries));
+      this.storage.save(JSON.stringify(this.entries));
     } catch (e) {
       console.error('Failed to save journal entries:', e);
     }

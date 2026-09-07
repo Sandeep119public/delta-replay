@@ -2,8 +2,10 @@ import { DataEvents } from '../data/HistoricalDataManager.js';
 import { DataError, ErrorCategory, LoadingState } from '../data/DataError.js';
 import { calculateAutoRange, findClosestCandleIndex } from '../utils/replayRange.js';
 import { isRetryableCategory as isRetryableErrorCategory } from '../ports/ErrorPresentationPort.js';
+import { createReplayPreviewService, VISIBLE_WINDOW } from './ReplayPreviewService.js';
+import { createDatasetChangeService } from './DatasetChangeService.js';
 
-export const VISIBLE_WINDOW = 1000;
+export { VISIBLE_WINDOW };
 const MAX_RETRIES = 3;
 
 /**
@@ -45,6 +47,31 @@ export class ReplayCoordinator {
     this._retryCount = 0;
     this._progressUnsubscribe = null;
     this._destroyed = false;
+    // Capability services: preview rendering and dataset switching live
+    // outside the coordinator; it remains a thin orchestrator that owns the
+    // load session and delegates.
+    this.previewService = createReplayPreviewService({
+      candleStore: this.candleStore,
+      chartManager: this.chartManager,
+      chartAdapter: this.chartAdapter,
+    });
+    this.datasetChangeService = createDatasetChangeService({
+      tradingEngine: this.tradingEngine,
+      appState: this.appState,
+      candleStore: this.candleStore,
+      replayEngine: this.replayEngine,
+      chartManager: this.chartManager,
+      timeline: this.timeline,
+      controls: this.controls,
+      startReplayBtn: this.startReplayBtn,
+      headerStartReplayBtn: this.headerStartReplayBtn,
+      reportError: (msg) => this.showTradingError(msg),
+      invalidateLoad: () => {
+        this._loadToken++;
+        this._clearCurrentLoad();
+      },
+      reload: () => this.loadAndPrepareReplay({ autoStart: false }),
+    });
   }
 
   updateLoadButton() {
@@ -59,44 +86,15 @@ export class ReplayCoordinator {
   }
 
   updatePreviewWindow(idx) {
-    if (!this.candleStore.getCount()) return;
-    this.chartAdapter.showPreview(this.candleStore, idx, VISIBLE_WINDOW);
-    this.chartManager.setAutoFollow(true);
+    this.previewService.updatePreviewWindow(idx);
   }
 
   applyWindowedChart(idx) {
-    const total = this.candleStore.getCount();
-    if (total === 0) return;
-    const start = Math.max(0, idx - VISIBLE_WINDOW + 1);
-    const win = this.candleStore.sliceWindow(start, idx);
-    this.chartManager.setData(win, { fit: false });
+    this.previewService.applyWindowedChart(idx);
   }
 
   handleSymbolTimeframeChange(kind, newValue, selectElement) {
-    if (this.tradingEngine && this.tradingEngine.hasOpenPosition()) {
-      const msg = `Cannot change ${kind} while a position is open — close position first.`;
-      this.showTradingError(msg);
-      if (selectElement) selectElement.value = kind === 'symbol' ? this.appState.symbol : this.appState.timeframe;
-      return false;
-    }
-    if (kind === 'symbol') this.appState.symbol = newValue;
-    else this.appState.timeframe = newValue;
-    try { this.tradingEngine?.clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE'); } catch (error) { console.warn('[ReplayCoordinator] clear pending orders failed', error); }
-    this._loadToken++;
-    this._clearCurrentLoad();
-    try { this.replayEngine.stop(); } catch (error) { console.warn('[ReplayCoordinator] stop during dataset change failed', error); }
-    this.candleStore.clear();
-    this.appState.setCandles([]);
-    this.timeline?.setTotal(0, []);
-    this.chartManager?.clear();
-    this.chartManager?.setRevealedMax(null);
-    this.chartManager?.setAutoFollow(true);
-    this.appState.setPendingStartIndex(0);
-    this.controls?.setStartIndex(0);
-    if (this.startReplayBtn) this.startReplayBtn.disabled = true;
-    if (this.headerStartReplayBtn) this.headerStartReplayBtn.disabled = false;
-    this.appState.transitionLoading(LoadingState.IDLE);
-    return this.loadAndPrepareReplay({ autoStart: false });
+    return this.datasetChangeService.handleSymbolTimeframeChange(kind, newValue, selectElement);
   }
 
   showTradingError(msg) {

@@ -1,9 +1,15 @@
+/**
+ * StrategiesPage renders the strategy library. Navigation is injected via
+ * `onNavigate(page)` so the page never touches browser location state
+ * directly; when no callback is provided it falls back to hash navigation.
+ */
 export class StrategiesPage {
-  constructor() {
+  constructor({ onNavigate = null, strategies = null } = {}) {
     this.el = document.getElementById('page-strategies');
     this.currentFilter = 'all';
     this.searchQuery = '';
-    this.strategies = [
+    this.onNavigate = onNavigate;
+    this.strategies = strategies ?? [
       {
         id: 'golden-cross',
         name: 'Golden Cross',
@@ -50,6 +56,14 @@ export class StrategiesPage {
         status: 'active'
       }
     ];
+  }
+
+  goTo(page) {
+    if (typeof this.onNavigate === 'function') {
+      this.onNavigate(page);
+      return;
+    }
+    window.location.hash = page;
   }
 
   render() {
@@ -169,7 +183,7 @@ export class StrategiesPage {
 
     this.el.querySelectorAll('[data-action="backtest"]').forEach(btn => {
       btn.addEventListener('click', () => {
-        window.location.hash = 'replay';
+        this.goTo('replay');
       });
     });
   }

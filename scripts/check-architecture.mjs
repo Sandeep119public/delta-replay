@@ -13,13 +13,15 @@ const ALLOWED = {
   // app is the composition root: the only layer allowed to wire domain,
   // stores, chart, and presentation objects together.
   app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'ports', 'personality']),
-  chart: new Set(['trading', 'replay', 'utils', 'ports']),
+  chart: new Set(['replay', 'utils', 'ports']),
   // ui is a hard presentation boundary: it may only use shared utilities and
   // neutral port contracts (plus other ui modules). Stores, coordinators,
   // chart internals, and domain layers must be projected into view models and
   // capability callbacks by the composition root before crossing the boundary.
   ui: new Set(['utils', 'ports']),
-  pages: new Set(['trading', 'replay', 'data', 'state', 'chart', 'utils', 'ports']),
+  // pages is presentation code under the same hard boundary as ui: it renders
+  // frozen view models and port callbacks, never domain/store/chart layers.
+  pages: new Set(['utils', 'ports']),
   router: new Set(['app', 'ui', 'pages', 'utils']), utils: new Set(['data']), ports: new Set(), personality: new Set(),
 };
 
@@ -133,10 +135,10 @@ for (const layer of LAYERS) {
       if ((layer === 'ui' || layer === 'pages') && imported === 'trading') violations.push(`${relative}: presentation layer must use application trading ports, not trading domain imports`);
     }
     if (!INTEGRATION_LAYERS.has(layer) && BROWSER_GLOBALS.test(code)) violations.push(`${relative}: browser global access is forbidden outside presentation/integration layers`);
-    if (layer === 'ui' && relative.replaceAll(path.sep, '/') !== PRESENTATION_COMPAT_FILE) {
+    if ((layer === 'ui' || layer === 'pages') && relative.replaceAll(path.sep, '/') !== PRESENTATION_COMPAT_FILE) {
       for (const pattern of BANNED_PRESENTATION_TOKENS) {
         const match = code.match(pattern);
-        if (match) violations.push(`${relative}: presentation boundary leak — capability token '${match[0]}' must not appear in src/ui (use a *PresentationPort contract instead)`);
+        if (match) violations.push(`${relative}: presentation boundary leak — capability token '${match[0]}' must not appear in src/${layer} (use a *PresentationPort contract instead)`);
       }
     }
   }

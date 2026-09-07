@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ChartTradingOverlay } from '../src/chart/ChartTradingOverlay.js';
+import { createChartTradingActions } from '../src/app/ChartTradingActions.js';
 
 describe('ChartTradingOverlay — Isolated Component', () => {
   function createMockSeries() {
@@ -58,35 +59,45 @@ describe('ChartTradingOverlay — Isolated Component', () => {
     expect(overlay._takeProfitLine).not.toBeNull();
   });
 
-  it('resolves click intent for Long position: higher price is TP, lower price is SL', () => {
+  it('does not resolve trading intent: the overlay renders presentation data only', () => {
     const overlay = new ChartTradingOverlay();
+    expect(overlay.resolveClickIntent).toBeUndefined();
+  });
+
+  it('resolves click intent for Long position in the application layer', () => {
+    const actions = createChartTradingActions({
+      tradingEngine: { getPositions: () => [{ symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 }] },
+      coordinator: null,
+    });
     const longPos = { symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 };
 
-    const tpIntent = overlay.resolveClickIntent(65000, longPos);
+    const tpIntent = actions.resolveClick(65000, longPos);
     expect(tpIntent.action).toBe('SET_TP');
     expect(tpIntent.isTP).toBe(true);
 
-    const slIntent = overlay.resolveClickIntent(58000, longPos);
+    const slIntent = actions.resolveClick(58000, longPos);
     expect(slIntent.action).toBe('SET_SL');
     expect(slIntent.isTP).toBe(false);
   });
 
-  it('resolves click intent for Short position: lower price is TP, higher price is SL', () => {
-    const overlay = new ChartTradingOverlay();
-    const shortPos = { symbol: 'BTCUSDT', side: 'SHORT', entryPrice: 60000 };
+  it('resolves click intent for Short position in the application layer', () => {
+    const actions = createChartTradingActions({
+      tradingEngine: { getPositions: () => [{ symbol: 'BTCUSDT', side: 'SHORT', entryPrice: 60000 }] },
+      coordinator: null,
+    });
 
-    const tpIntent = overlay.resolveClickIntent(55000, shortPos);
+    const tpIntent = actions.resolveClick(55000);
     expect(tpIntent.action).toBe('SET_TP');
     expect(tpIntent.isTP).toBe(true);
 
-    const slIntent = overlay.resolveClickIntent(63000, shortPos);
+    const slIntent = actions.resolveClick(63000);
     expect(slIntent.action).toBe('SET_SL');
     expect(slIntent.isTP).toBe(false);
   });
 
   it('resolves click intent to PRICE_SELECT when no position is open', () => {
-    const overlay = new ChartTradingOverlay();
-    const intent = overlay.resolveClickIntent(60500, null);
+    const actions = createChartTradingActions({ tradingEngine: { getPositions: () => [] }, coordinator: null });
+    const intent = actions.resolveClick(60500);
     expect(intent.action).toBe('PRICE_SELECT');
     expect(intent.price).toBe(60500);
   });
