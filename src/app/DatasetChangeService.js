@@ -2,14 +2,15 @@ import { LoadingState } from '../data/DataError.js';
 
 /**
  * DatasetChangeService owns symbol/timeframe switching: position guard,
- * state reset, and reload triggering. Extracted from ReplayCoordinator so
- * dataset lifecycle is a capability service with explicit dependencies.
+ * state reset, and reload triggering. Trading access is expressed through
+ * narrow capabilities rather than a raw trading engine dependency.
  *
- * Load-session invalidation and the reload itself stay with the caller
- * (the coordinator), injected here as `invalidateLoad` and `reload`.
+ * Load-session invalidation and reload stay with the caller, injected here
+ * as `invalidateLoad` and `reload`.
  */
 export function createDatasetChangeService({
-  tradingEngine = null,
+  hasOpenPosition,
+  clearPendingOrders = null,
   appState,
   candleStore,
   replayEngine,
@@ -25,13 +26,14 @@ export function createDatasetChangeService({
   if (!appState || !candleStore || !replayEngine) {
     throw new TypeError('createDatasetChangeService requires appState, candleStore, and replayEngine');
   }
+  if (typeof hasOpenPosition !== 'function') throw new TypeError('createDatasetChangeService requires hasOpenPosition() capability');
   if (typeof reportError !== 'function' || typeof invalidateLoad !== 'function' || typeof reload !== 'function') {
     throw new TypeError('createDatasetChangeService requires reportError, invalidateLoad, and reload callbacks');
   }
 
-  return {
+  return Object.freeze({
     handleSymbolTimeframeChange(kind, newValue, selectElement) {
-      if (tradingEngine && tradingEngine.hasOpenPosition()) {
+      if (hasOpenPosition()) {
         const msg = `Cannot change ${kind} while a position is open — close position first.`;
         reportError(msg);
         if (selectElement) selectElement.value = kind === 'symbol' ? appState.symbol : appState.timeframe;
@@ -39,7 +41,7 @@ export function createDatasetChangeService({
       }
       if (kind === 'symbol') appState.symbol = newValue;
       else appState.timeframe = newValue;
-      try { tradingEngine?.clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE'); } catch (error) { console.warn('[DatasetChange] clear pending orders failed', error); }
+      try { clearPendingOrders?.(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE'); } catch (error) { console.warn('[DatasetChange] clear pending orders failed', error); }
       invalidateLoad();
       try { replayEngine.stop(); } catch (error) { console.warn('[DatasetChange] stop during dataset change failed', error); }
       candleStore.clear();
@@ -55,5 +57,5 @@ export function createDatasetChangeService({
       appState.transitionLoading(LoadingState.IDLE);
       return reload();
     },
-  };
+  });
 }
