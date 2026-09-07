@@ -94,7 +94,7 @@ for (const layer of LAYERS) {
     const source = await fs.readFile(path.join(ROOT, relative), 'utf8');
     const code = stripCommentsAndStrings(source);
 
-    for (const imported of importedLayers(code, relative)) {
+    for (const imported of importedLayers(source, relative)) {
       if (imported === layer) continue;
       graph.get(layer).add(imported);
       if (!ALLOWED[layer].has(imported)) {
