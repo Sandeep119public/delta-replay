@@ -10,7 +10,8 @@ const MAX_RETRIES = 3;
  *
  * Owns async load-session identity, cancellation, retry policy, data
  * hydration, and load-related presentation callbacks. Trading access is
- * capability-based rather than a raw engine dependency.
+ * capability-based rather than a raw engine dependency. Status UI receives
+ * the canonical immutable status projection.
  */
 export function createReplayLoadService({
   dataManager,
@@ -19,6 +20,7 @@ export function createReplayLoadService({
   replayEngine,
   hasOpenPosition,
   notifyMarketCandle,
+  statusView,
   timeline,
   controls,
   modeBanner,
@@ -36,13 +38,14 @@ export function createReplayLoadService({
   updatePreviewWindow,
 }) {
   const required = {
-    dataManager, candleStore, appState, replayEngine, timeline, controls, modeBanner,
+    dataManager, candleStore, appState, replayEngine, statusView, timeline, controls, modeBanner,
   };
   for (const [name, value] of Object.entries(required)) {
     if (!value) throw new TypeError(`createReplayLoadService requires ${name}`);
   }
   if (typeof hasOpenPosition !== 'function') throw new TypeError('createReplayLoadService requires hasOpenPosition() capability');
   if (typeof notifyMarketCandle !== 'function') throw new TypeError('createReplayLoadService requires notifyMarketCandle() capability');
+  if (typeof statusView.snapshot !== 'function') throw new TypeError('createReplayLoadService requires statusView.snapshot()');
   if (typeof updatePreviewWindow !== 'function') throw new TypeError('createReplayLoadService requires updatePreviewWindow callback');
 
   let loadToken = 0;
@@ -65,6 +68,10 @@ export function createReplayLoadService({
 
   function showTradingError(msg) {
     tradingErrorView?.show(msg);
+  }
+
+  function reportStatus() {
+    modeBanner?.update(statusView.snapshot());
   }
 
   function clearProgressSubscription() {
@@ -127,7 +134,7 @@ export function createReplayLoadService({
     if (dataStatusEl) dataStatusEl.textContent = `Loading ${symbol} ${timeframe}...`;
     errorPanel?.hide();
     updateLoadButton();
-    modeBanner?.update({ replayState: replayEngine.getState(), appState, candleStore });
+    reportStatus();
 
     const onProgress = ({ completed, totalChunks, pct, loaded }) => {
       if (token !== loadToken || destroyed) return;
@@ -164,7 +171,7 @@ export function createReplayLoadService({
       if (dataStatusEl) dataStatusEl.textContent = `Ready: ${symbol} ${timeframe} (${candles.length.toLocaleString()} candles)${cachedTag}`;
       timeline?.setEnabled(true);
       appState.transitionLoading(LoadingState.SUCCESS);
-      modeBanner?.update({ replayState: replayEngine.getState(), appState, candleStore });
+      reportStatus();
       if (autoStart) replayEngine.start(replayIdx);
     } catch (err) {
       clearProgressSubscription();
@@ -226,7 +233,7 @@ export function createReplayLoadService({
         if (!retryScheduled) appState.setLoading(false);
         if (currentAbort === abortController) currentAbort = null;
         if (!retryScheduled) updateLoadButton();
-        modeBanner?.update({ replayState: replayEngine.getState(), appState, candleStore });
+        reportStatus();
       }
     }
   }
