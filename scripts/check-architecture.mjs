@@ -4,25 +4,29 @@ import path from 'node:path';
 const ROOT = process.cwd();
 const LAYERS = [
   'core', 'data', 'indicators', 'replay', 'trading', 'strategy',
-  'state', 'app', 'chart', 'ui', 'router', 'personality',
+  'state', 'app', 'chart', 'ui', 'pages', 'router', 'utils', 'personality',
 ];
 
 const ALLOWED = {
   core: new Set(),
-  data: new Set(['core']),
-  indicators: new Set(),
-  replay: new Set(['core', 'data']),
-  trading: new Set(['core', 'replay', 'data']),
-  strategy: new Set(['trading']),
-  state: new Set(['core', 'data']),
-  app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'router', 'personality']),
-  chart: new Set(['trading', 'replay']),
-  ui: new Set(['trading', 'replay', 'data', 'chart', 'app', 'state', 'strategy', 'personality', 'core']),
-  router: new Set(['app', 'ui']),
-  personality: new Set(),
+  data: new Set(['core', 'utils']),
+  indicators: new Set(['utils']),
+  replay: new Set(['core', 'data', 'utils']),
+  trading: new Set(['core', 'replay', 'data', 'utils']),
+  strategy: new Set(['trading', 'utils']),
+  state: new Set(['core', 'data', 'utils']),
+  app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'personality']),
+  chart: new Set(['trading', 'replay', 'utils']),
+  ui: new Set(['trading', 'replay', 'data', 'chart', 'app', 'state', 'strategy', 'pages', 'personality', 'core', 'utils']),
+  pages: new Set(['trading', 'replay', 'data', 'state', 'chart', 'utils']),
+  router: new Set(['app', 'ui', 'pages', 'utils']),
+  utils: new Set(['data']),
+  personality: new Set(['utils']),
 };
 
+const INTEGRATION_LAYERS = new Set(['ui', 'pages', 'chart', 'app', 'router']);
 const BROWSER_GLOBALS = /\b(document|window|navigator|localStorage|sessionStorage)\b/;
+const IMPORT_PATTERN = /(?:\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\)|\bexport\s+(?:\*|\{[^}]*\})\s*from\s*['"]([^'"]+)['"])/g;
 
 async function collectFiles(dir) {
   const absolute = path.join(ROOT, dir);
@@ -51,15 +55,15 @@ function resolveLayerFromSpecifier(file, specifier) {
   const srcRoot = path.join(ROOT, 'src') + path.sep;
   if (!target.startsWith(srcRoot)) return null;
   const relative = path.relative(path.join(ROOT, 'src'), target).replaceAll(path.sep, '/');
-  const layer = relative.split('/')[0];
+  const [layer] = relative.split('/');
   return LAYERS.includes(layer) ? layer : null;
 }
 
 function importedLayers(source, file) {
   const layers = new Set();
-  const pattern = /(?:from\s*['"]|import\s*\(\s*['"])([^'"]+)['"]/g;
-  for (const match of source.matchAll(pattern)) {
-    const layer = resolveLayerFromSpecifier(file, match[1]);
+  for (const match of source.matchAll(IMPORT_PATTERN)) {
+    const specifier = match[1] || match[2] || match[3];
+    const layer = resolveLayerFromSpecifier(file, specifier);
     if (layer) layers.add(layer);
   }
   return [...layers];
@@ -97,12 +101,10 @@ for (const layer of LAYERS) {
     for (const imported of importedLayers(source, relative)) {
       if (imported === layer) continue;
       graph.get(layer).add(imported);
-      if (!ALLOWED[layer].has(imported)) {
-        violations.push(`${relative}: ${layer} -> ${imported} is forbidden`);
-      }
+      if (!ALLOWED[layer].has(imported)) violations.push(`${relative}: ${layer} -> ${imported} is forbidden`);
     }
 
-    if (!['ui', 'chart', 'app', 'router'].includes(layer) && BROWSER_GLOBALS.test(code)) {
+    if (!INTEGRATION_LAYERS.has(layer) && BROWSER_GLOBALS.test(code)) {
       violations.push(`${relative}: browser global access is forbidden outside presentation/integration layers`);
     }
   }
