@@ -7,6 +7,7 @@ import { createPaperUI } from '../ui/PaperUI.js';
 import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
 import { bindTradingEvents } from '../ui/bindTradingEvents.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
+import { createApplicationActions } from './ApplicationActions.js';
 
 function registerActionGuard(engine, tradingEngine, coordinator) {
   engine.registerActionGuard((action) => {
@@ -19,10 +20,10 @@ function registerActionGuard(engine, tradingEngine, coordinator) {
   });
 }
 
-function bindDatasetSelectors(ui, coordinator) {
+function bindDatasetSelectors(ui, actions) {
   const unbinds = [
-    ui.symbolSelector.onChange((symbol) => coordinator.handleSymbolTimeframeChange('symbol', symbol, ui.el('symbol-select'))),
-    ui.timeframeSelector.onChange((timeframe) => coordinator.handleSymbolTimeframeChange('timeframe', timeframe, ui.el('timeframe-select'))),
+    ui.symbolSelector.onChange((symbol) => actions.changeDataset('symbol', symbol, ui.el('symbol-select'))),
+    ui.timeframeSelector.onChange((timeframe) => actions.changeDataset('timeframe', timeframe, ui.el('timeframe-select'))),
   ];
   return { destroy() { unbinds.forEach((unbind) => { try { unbind?.(); } catch {} }); } };
 }
@@ -49,11 +50,13 @@ export function createApplication() {
   });
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
+  const actions = createApplicationActions({ coordinator, commandController, appState, engine, candleStore, modeBanner: ui.modeBanner, timeline: ui.timeline, controls: ui.controls });
+
   const form = ui.getOrderFormPorts();
   const views = ui.createTerminalViews({ appState, candleStore, engine, tradingEngine, commandController, coordinator, timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, ...form });
 
-  const selectorBindings = bindDatasetSelectors(ui, coordinator);
-  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, controls: ui.controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner: ui.modeBanner });
+  const selectorBindings = bindDatasetSelectors(ui, actions);
+  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, tradingEngine, actions });
   const tradingBindings = bindTradingEvents({ tradingEngine, commandController, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
@@ -61,7 +64,7 @@ export function createApplication() {
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
 
   const loadBtn = coordinatorPorts.loadBtn;
-  const onLoadClick = () => coordinator.loadAndPrepareReplay({ autoStart: false });
+  const onLoadClick = () => actions.load();
   if (loadBtn) loadBtn.addEventListener('click', onLoadClick);
   const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
   const mobileDrawer = bindMobileDrawer();
