@@ -1,17 +1,28 @@
-import { ReplayEngine } from '../replay/ReplayEngine.js';
 import { BinanceCandleProvider } from '../data/BinanceCandleProvider.js';
 import { HistoricalDataManager } from '../data/HistoricalDataManager.js';
 import { CandleStore } from '../data/CandleStore.js';
 import { CandleCache } from '../data/CandleCache.js';
 import { AppState } from '../state/AppState.js';
-import { PaperTradingEngine, EXECUTION_TIMING } from '../trading/PaperTradingEngine.js';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+class BackendService {
+  constructor(path) { this.path = path; }
+  async request(endpoint = '', options = {}) {
+    const response = await fetch(`${API_BASE}/api/v1/${this.path}${endpoint}`, {
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options,
+    });
+    if (!response.ok) throw new Error(`${this.path} API failed: ${response.status}`);
+    return response.status === 204 ? null : response.json();
+  }
+}
 
 export function createCoreServices() {
   const appState = new AppState();
   const candleStore = new CandleStore();
   appState.setCandleStore(candleStore);
-  const engine = new ReplayEngine();
-  const candleCache = new CandleCache({ dbName: 'delta-replay-futures-v1' });
+  const candleCache = new CandleCache({ dbName: 'delta-replay-futures-v2' });
   const dataManager = new HistoricalDataManager({
     provider: new BinanceCandleProvider(),
     store: candleStore,
@@ -20,10 +31,13 @@ export function createCoreServices() {
     chunkSize: 1000,
     strictMode: true,
   });
-  const tradingEngine = new PaperTradingEngine({
-    startingBalance: 10000,
-    replayEngine: engine,
-    executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE,
-  });
-  return { appState, candleStore, engine, candleCache, dataManager, tradingEngine };
+  return {
+    appState,
+    candleStore,
+    candleCache,
+    dataManager,
+    replayApi: new BackendService('replay'),
+    tradingApi: new BackendService('trading'),
+    backtestApi: new BackendService('backtest'),
+  };
 }
