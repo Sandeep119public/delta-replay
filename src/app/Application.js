@@ -11,7 +11,6 @@ import { bindTradingEvents } from '../ui/bindTradingEvents.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createApplicationActions } from './ApplicationActions.js';
 import { createChartTradingActions } from './ChartTradingActions.js';
-import { createTradingUIEvents } from './TradingUIEvents.js';
 import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
 import { createReplayUIPort } from './ReplayUIPort.js';
@@ -39,8 +38,8 @@ function bindDatasetSelectors(ui, actions) {
 export function createApplication() {
   const services = createCoreServices();
   const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
-  const tradingEvents = createTradingUIEvents(tradingEngine);
   const trading = createTradingPresentation(tradingEngine);
+  const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
   const dataset = createDatasetView(appState);
   const candles = createCandleView(candleStore);
