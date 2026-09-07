@@ -38,15 +38,23 @@ export class TimelineSparkline {
     this._boundTouchStart = (e) => this._handleTouch(e, false);
     this._boundTouchMove = (e) => this._handleTouch(e, true);
     this._ro = null;
+    this._subscriptions = [];
+    this._attached = false;
     this._attach();
   }
 
   _attach() {
+    if (this._attached) return;
+    this._attached = true;
     try {
-      this.engine?.on?.('stateChanged', this._onState);
-      this.tradingEngine?.on?.(TradingEvents.TRADE_EXECUTED, this._onState);
-      this.tradingEngine?.on?.(TradingEvents.POSITION_CLOSED, this._onState);
-      this.tradingEngine?.on?.(TradingEvents.POSITION_OPENED, this._onState);
+      const subscribe = (owner, event, handler) => {
+        const unsubscribe = owner?.on?.(event, handler);
+        if (typeof unsubscribe === 'function') this._subscriptions.push(unsubscribe);
+      };
+      subscribe(this.engine, 'stateChanged', this._onState);
+      subscribe(this.tradingEngine, TradingEvents.TRADE_EXECUTED, this._onState);
+      subscribe(this.tradingEngine, TradingEvents.POSITION_CLOSED, this._onState);
+      subscribe(this.tradingEngine, TradingEvents.POSITION_OPENED, this._onState);
       if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
         window.addEventListener('resize', this._onResize);
       }
@@ -63,11 +71,11 @@ export class TimelineSparkline {
   }
 
   destroy() {
+    if (!this._attached) return;
+    this._attached = false;
     try {
-      this.engine?.off?.('stateChanged', this._onState);
-      this.tradingEngine?.off?.(TradingEvents.TRADE_EXECUTED, this._onState);
-      this.tradingEngine?.off?.(TradingEvents.POSITION_CLOSED, this._onState);
-      this.tradingEngine?.off?.(TradingEvents.POSITION_OPENED, this._onState);
+      this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch {} });
+      this._subscriptions = [];
       if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
         window.removeEventListener('resize', this._onResize);
       }
@@ -76,6 +84,8 @@ export class TimelineSparkline {
       this.canvas?.removeEventListener?.('touchstart', this._boundTouchStart);
       this.canvas?.removeEventListener?.('touchmove', this._boundTouchMove);
     } catch {}
+    this._ro = null;
+    this.onSeek = null;
   }
 
   _candles() {
