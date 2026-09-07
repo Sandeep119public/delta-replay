@@ -4,7 +4,7 @@ import path from 'node:path';
 const ROOT = process.cwd();
 const LAYERS = [
   'core', 'data', 'indicators', 'replay', 'trading', 'strategy',
-  'state', 'app', 'chart', 'ui', 'pages', 'router', 'utils', 'personality',
+  'state', 'app', 'chart', 'ui', 'pages', 'router', 'utils', 'ports', 'personality',
 ];
 
 const ALLOWED = {
@@ -15,12 +15,13 @@ const ALLOWED = {
   trading: new Set(['core', 'replay', 'data']),
   strategy: new Set(['core', 'trading']),
   state: new Set(['core', 'data']),
-  app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'personality']),
-  chart: new Set(['trading', 'replay', 'utils']),
-  ui: new Set(['trading', 'replay', 'data', 'chart', 'app', 'state', 'strategy', 'pages', 'personality', 'core', 'utils']),
-  pages: new Set(['trading', 'replay', 'data', 'state', 'chart', 'utils']),
+  app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'ports', 'personality']),
+  chart: new Set(['trading', 'replay', 'utils', 'ports']),
+  ui: new Set(['trading', 'replay', 'data', 'chart', 'app', 'state', 'strategy', 'pages', 'personality', 'core', 'utils', 'ports']),
+  pages: new Set(['trading', 'replay', 'data', 'state', 'chart', 'utils', 'ports']),
   router: new Set(['app', 'ui', 'pages', 'utils']),
   utils: new Set(['data']),
+  ports: new Set(),
   personality: new Set(),
 };
 
