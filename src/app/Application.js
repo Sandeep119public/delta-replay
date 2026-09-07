@@ -50,14 +50,14 @@ export function createApplication() {
   });
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
-  const actions = createApplicationActions({ coordinator, commandController, appState, engine, candleStore, modeBanner: ui.modeBanner, timeline: ui.timeline, controls: ui.controls });
+  const actions = createApplicationActions({ coordinator, commandController, appState, engine, candleStore, modeBanner: ui.modeBanner, timeline: ui.timeline, controls: ui.controls, errorPanel: ui.errorPanel });
 
   const form = ui.getOrderFormPorts();
   const views = ui.createTerminalViews({ appState, candleStore, engine, tradingEngine, commandController, coordinator, timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, ...form });
 
   const selectorBindings = bindDatasetSelectors(ui, actions);
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, tradingEngine, actions });
-  const tradingBindings = bindTradingEvents({ tradingEngine, commandController, errorPanel: ui.errorPanel });
+  const tradingBindings = bindTradingEvents({ tradingEngine, actions, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
   const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, coordinator, ...form });
