@@ -211,8 +211,8 @@ export class PaperTradingEngine extends EventEmitter {
     }
   }
   detach() {
-    this._unsubs.forEach(fn => fn?.()); this._unsubs = [];
-    this._lifecycleUnsubs.forEach(fn => fn?.()); this._lifecycleUnsubs = [];
+    this._unsubs.splice(0).forEach(fn => { try { fn?.(); } catch (error) { console.warn('[PaperTradingEngine] unsubscribe failed', error); } });
+    this._lifecycleUnsubs.splice(0).forEach(fn => { try { fn?.(); } catch (error) { console.warn('[PaperTradingEngine] lifecycle unsubscribe failed', error); } });
     this.clearMarketContext();
     this._replayEngine = null;
   }
@@ -252,6 +252,7 @@ export class PaperTradingEngine extends EventEmitter {
     }
     this._isProcessingCandle = true;
     this._accountNeedsUpdate = false;
+    try {
     this._totalBarsEvaluated++;
     this._processPendingMarketOrders(this._latestCandle, idx, symbol);
     this._processLiquidations(this._latestCandle, idx, symbol);
@@ -285,8 +286,11 @@ export class PaperTradingEngine extends EventEmitter {
         this._lastFundingTimestamp = timestamp;
       }
     }
-    this._isProcessingCandle = false;
+    } finally {
+      this._isProcessingCandle = false;
+    }
     this.emit(TradingEvents.ACCOUNT_UPDATED, this.getAccountSnapshot());
+    this._accountNeedsUpdate = false;
     this.emit(TradingEvents.BAR_CLOSE, { index: idx, timestamp, candle: Object.freeze({ ...this._latestCandle }), phase: 'BAR_CLOSE' });
   }
 
