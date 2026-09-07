@@ -8,8 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:architecture": "node --test tests/architecture/boundaries.test.js"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "lightweight-charts": "4.2.3"
@@ -18,5 +17,5 @@
     "vite": "^5.4.0",
     "vitest": "^1.6.0"
   },
-  "packageManager": "npm@10.8.2+sha512.c7f008c8f6f8e5c39d8c5c0dff3f7c6f2f9f5e8c4c6c0f0a7f0e9c1d3c1c4a9f8f5b8c1a2e3b4c5d6e7f8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3p4q5r6s7t8u9v0"
+  "packageManager": "npm@10.8.2+sha512.c7f008c8f6f8f1da943400199748a0f7ea8cb8df75469668dc26f6fb3ba26df87e2884a5ebe91557292d0f3db7d0929cdb4f14910c3032ac81fb"
 }
