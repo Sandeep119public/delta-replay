@@ -59,6 +59,8 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
   describe('1. ChartTradingController Separation', () => {
     let mockChartManager;
     let mockTradingEngine;
+    let mockTradingState;
+    let mockActions;
     let mockTradingPanel;
     let mockFloatingPosView;
     let mockToastView;
@@ -100,6 +102,17 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
         setStopPrice: vi.fn(),
       };
       mockCoordinator = { showTradingError: vi.fn() };
+      // Action boundary: click intents are resolved/executed through `actions`,
+      // positions/orders are read via the `tradingState` read model.
+      mockTradingState = {
+        activePosition: vi.fn(() => null),
+        snapshot: vi.fn(() => ({ pendingOrders: [] })),
+      };
+      mockActions = {
+        resolveClick: vi.fn(() => null),
+        execute: vi.fn(() => ({ success: true })),
+        reportError: vi.fn(),
+      };
       slInput = createMockElement();
       tpInput = createMockElement();
       limitPriceInput = createMockElement();
@@ -108,6 +121,8 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
       controller = new ChartTradingController({
         chartManager: mockChartManager,
         tradingEngine: mockTradingEngine,
+        tradingState: mockTradingState,
+        actions: mockActions,
         tradingPanel: mockTradingPanel,
         floatingPosView: mockFloatingPosView,
         toastView: mockToastView,
@@ -128,9 +143,16 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
     });
 
     it('resolves and sets Take Profit for active LONG position above entry', () => {
-      mockTradingEngine.getPositions.mockReturnValue([
+      mockTradingState.activePosition.mockReturnValue([
         { symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 },
       ]);
+      mockActions.resolveClick.mockReturnValue({
+        action: 'SET_TP',
+        price: 65000,
+        isTP: true,
+        symbol: 'BTCUSDT',
+      });
+      mockActions.execute.mockReturnValue({ success: true });
 
       const intent = controller.handleChartClick({ price: 65000 });
       expect(intent).toEqual({
@@ -139,16 +161,24 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
         isTP: true,
         symbol: 'BTCUSDT',
       });
-      expect(mockTradingEngine.setTakeProfit).toHaveBeenCalledWith('BTCUSDT', 65000);
+      expect(mockActions.resolveClick).toHaveBeenCalledWith(65000);
+      expect(mockActions.execute).toHaveBeenCalledWith(intent);
       expect(tpInput.value).toBe('65000.00');
       expect(mockToastView.show).toHaveBeenCalledWith(expect.stringContaining('Take Profit set to $65000.00'));
       expect(mockTradingPanel.render).toHaveBeenCalled();
     });
 
     it('resolves and sets Stop Loss for active LONG position below entry', () => {
-      mockTradingEngine.getPositions.mockReturnValue([
+      mockTradingState.activePosition.mockReturnValue([
         { symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 },
       ]);
+      mockActions.resolveClick.mockReturnValue({
+        action: 'SET_SL',
+        price: 58000,
+        isTP: false,
+        symbol: 'BTCUSDT',
+      });
+      mockActions.execute.mockReturnValue({ success: true });
 
       const intent = controller.handleChartClick({ price: 58000 });
       expect(intent).toEqual({
@@ -157,15 +187,17 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
         isTP: false,
         symbol: 'BTCUSDT',
       });
-      expect(mockTradingEngine.setStopLoss).toHaveBeenCalledWith('BTCUSDT', 58000);
+      expect(mockActions.resolveClick).toHaveBeenCalledWith(58000);
+      expect(mockActions.execute).toHaveBeenCalledWith(intent);
       expect(slInput.value).toBe('58000.00');
       expect(mockToastView.show).toHaveBeenCalledWith(expect.stringContaining('Stop Loss set to $58000.00'));
       expect(mockTradingPanel.render).toHaveBeenCalled();
     });
 
     it('sets Limit Price on orderFormView when no active position and LIMIT order type selected', () => {
-      mockTradingEngine.getPositions.mockReturnValue([]);
+      mockTradingState.activePosition.mockReturnValue([]);
       mockOrderFormView.getOrderType.mockReturnValue('LIMIT');
+      mockActions.resolveClick.mockReturnValue({ action: 'PRICE_SELECT', price: 62500 });
 
       const intent = controller.handleChartClick({ price: 62500 });
       expect(intent).toEqual({ action: 'PRICE_SELECT', price: 62500 });
@@ -174,8 +206,9 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
     });
 
     it('sets Stop Price on orderFormView when no active position and STOP_MARKET order type selected', () => {
-      mockTradingEngine.getPositions.mockReturnValue([]);
+      mockTradingState.activePosition.mockReturnValue([]);
       mockOrderFormView.getOrderType.mockReturnValue('STOP_MARKET');
+      mockActions.resolveClick.mockReturnValue({ action: 'PRICE_SELECT', price: 67000 });
 
       const intent = controller.handleChartClick({ price: 67000 });
       expect(intent).toEqual({ action: 'PRICE_SELECT', price: 67000 });
@@ -336,63 +369,57 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
     });
   });
 
-  describe('5. Multi-Screen CSS Responsive Audit', () => {
-    const paperCss = fs.readFileSync('src/paper-theme.css', 'utf-8');
-    const viewportCss = fs.readFileSync('src/viewport-fit.css', 'utf-8');
-    const polishCss = fs.readFileSync('src/ui-polish.css', 'utf-8');
-    const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
+  describe('5. Multi-Screen CSS Responsive Audit (Paper UI v1 single bundle)', () => {
+    const paperCss = fs.readFileSync('src/ui/index.css', 'utf-8');
+    const markup = fs.readFileSync('src/ui/paper/markup/Timeline.js', 'utf-8');
 
-    it('harmonizes desktop viewport fit at min-width 1025px across CSS files', () => {
-      expect(viewportCss).toMatch(/@media\s*\(\s*min-width:\s*1025px\s*\)/);
-      expect(polishCss).toMatch(/@media\s*\(\s*min-width:\s*1025px\s*\)/);
+    it('owns the viewport grid: header / status / workspace / timeline / controls', () => {
+      expect(paperCss).toMatch(/#page-replay\.active\s*\{[\s\S]*?display:\s*grid/);
+      expect(paperCss).toMatch(/"header"/);
+      expect(paperCss).toMatch(/"status"/);
+      expect(paperCss).toMatch(/"workspace"/);
+      expect(paperCss).toMatch(/"timeline"/);
+      expect(paperCss).toMatch(/"controls"/);
     });
 
-    it('contains fluid tablet layout for 701px-1024px in paper-theme.css', () => {
-      expect(paperCss).toMatch(/min-width:\s*701px/);
-      expect(paperCss).toMatch(/max-width:\s*1024px/);
-      expect(paperCss).toMatch(/flex-direction:\s*column/);
+    it('lays out chart + trading side-by-side on desktop', () => {
+      expect(paperCss).toMatch(/\.main-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)\s*var\(--sidebar\)/);
       expect(paperCss).toMatch(/\.trading-section/);
       expect(paperCss).toMatch(/\.pos-compact-grid/);
     });
 
-    it('preserves mobile replay playback controls in controls-section on <= 700px', () => {
-      expect(paperCss).toMatch(/@media\s*\(\s*max-width:\s*700px\s*\)/);
-      // The controls-section must NOT be display: none !important
-      const mobileBlockMatch = paperCss.match(/@media\s*\(\s*max-width:\s*700px\s*\)[\s\S]*$/);
-      expect(mobileBlockMatch).not.toBeNull();
-      const mobileCss = mobileBlockMatch[0];
-      expect(mobileCss).toMatch(/\.controls-section\s*\{[\s\S]*?display:\s*flex/);
-      expect(mobileCss).toMatch(/\.controls-row/);
-      expect(mobileCss).toMatch(/#speed-select/);
+    it('collapses to a single column with a bottom-sheet trading drawer at <= 1024px', () => {
+      const tabletBlock = paperCss.match(/@media\s*\(\s*max-width:\s*1024px\s*\)[\s\S]*$/);
+      expect(tabletBlock).not.toBeNull();
+      expect(tabletBlock[0]).toMatch(/\.main-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/);
+      expect(tabletBlock[0]).toMatch(/\.trading-section\s*\{[\s\S]*?position:\s*fixed/);
+      expect(tabletBlock[0]).toMatch(/transform:\s*translateY/);
+      expect(paperCss).toMatch(/drawer-open/);
     });
 
-    it('preserves mobile CLOSE POSITION button accessibility on <= 700px', () => {
-      const mobileBlockMatch = paperCss.match(/@media\s*\(\s*max-width:\s*700px\s*\)[\s\S]*$/);
-      const mobileCss = mobileBlockMatch[0];
-      expect(mobileCss).toMatch(/\.order-secondary-grid\s*\{[\s\S]*?display:\s*block/);
-      expect(mobileCss).toMatch(/\.btn-close-pos/);
+    it('keeps replay playback controls mounted and reachable on small screens', () => {
+      // controls-section stays a flex bar (never display:none) …
+      expect(paperCss).toMatch(/\.controls-section\s*\{[\s\S]*?display:\s*flex/);
+      expect(paperCss).not.toMatch(/\.controls-section\s*\{[^}]*display:\s*none/);
+      // … and the playback controls exist in the timeline markup
+      expect(markup).toMatch(/controls-row/);
+      expect(markup).toMatch(/speed-select/);
+      expect(markup).toMatch(/btn-play/);
+      expect(markup).toMatch(/timeline-slider/);
     });
 
-    it('provides small mobile optimizations for <= 360px', () => {
-      expect(paperCss).toMatch(/@media\s*\(\s*max-width:\s*360px\s*\)/);
-      expect(baseCss).toMatch(/@media\s*\(\s*max-width:\s*320px\s*\)/);
+    it('provides small-screen rules at <= 640px', () => {
+      expect(paperCss).toMatch(/@media\s*\(\s*max-width:\s*640px\s*\)/);
     });
 
-    it('guarantees touch targets min-height 44px for coarse pointer', () => {
-      expect(baseCss).toMatch(/pointer:\s*coarse/);
-      expect(baseCss).toMatch(/min-height:\s*44px/);
+    it('guarantees 44px touch targets on the primary trade buttons', () => {
+      expect(paperCss).toMatch(/\.btn-buy-main\s*\{[\s\S]*?min-height:\s*44px/);
+      expect(paperCss).toMatch(/\.btn-sell-main\s*\{[\s\S]*?min-height:\s*44px/);
     });
 
-    it('forbids raw width 100vw across all stylesheets to avoid horizontal scroll', () => {
-      for (const [name, css] of [
-        ['styles.css', baseCss],
-        ['paper-theme.css', paperCss],
-        ['ui-polish.css', polishCss],
-        ['viewport-fit.css', viewportCss],
-      ]) {
-        const raw100vw = css.split('\n').some(l => l.trim().startsWith('width:') && l.includes('100vw'));
-        expect(raw100vw, `Raw width: 100vw found in ${name}`).toBe(false);
-      }
+    it('forbids raw width 100vw in the bundle to avoid horizontal scroll', () => {
+      const raw100vw = paperCss.split('\n').some(l => l.trim().startsWith('width:') && l.includes('100vw'));
+      expect(raw100vw, 'Raw width: 100vw found in src/ui/index.css').toBe(false);
     });
   });
 });

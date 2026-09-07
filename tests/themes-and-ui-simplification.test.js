@@ -3,6 +3,12 @@ import fs from 'fs';
 import { ThemeManager, THEMES, THEME_NAMES } from '../src/ui/ThemeManager.js';
 import { ChartManager, CHART_THEMES } from '../src/chart/ChartManager.js';
 import { Timeline } from '../src/ui/Timeline.js';
+import { paperMarkup } from '../src/ui/paperMarkup.js';
+
+// Paper UI v1: one stylesheet, one theme. Legacy per-theme stylesheets
+// (src/themes.css, src/styles.css, src/paper-theme.css, …) were consolidated
+// into src/ui/index.css.
+const CSS_PATH = 'src/ui/index.css';
 
 function createMockElement(initial = {}) {
   const listeners = {};
@@ -25,17 +31,7 @@ function createMockElement(initial = {}) {
 }
 
 describe('ThemeManager & UI Simplification', () => {
-  let mockStorage;
-
   beforeEach(() => {
-    mockStorage = {};
-    global.localStorage = {
-      getItem: vi.fn((key) => mockStorage[key] ?? null),
-      setItem: vi.fn((key, val) => { mockStorage[key] = String(val); }),
-      removeItem: vi.fn((key) => { delete mockStorage[key]; }),
-      clear: vi.fn(() => { mockStorage = {}; }),
-    };
-
     global.document = {
       documentElement: createMockElement(),
       body: createMockElement(),
@@ -43,105 +39,41 @@ describe('ThemeManager & UI Simplification', () => {
     };
   });
 
-  describe('1. ThemeManager Core Functionality', () => {
-    it('defaults to dark theme when no saved theme exists', () => {
-      const manager = new ThemeManager();
-      expect(manager.getTheme()).toBe(THEMES.DARK);
-      expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-      expect(document.body.getAttribute('data-theme')).toBe('dark');
+  describe('1. ThemeManager Single-Theme Boundary', () => {
+    it('exposes only the paper theme', () => {
+      expect(THEMES.PAPER).toBe('paper');
+      expect(Object.keys(THEMES)).toEqual(['PAPER']);
+      expect(THEME_NAMES[THEMES.PAPER]).toBe('Paper');
     });
 
-    it('loads saved theme from localStorage', () => {
-      mockStorage['delta_replay_theme'] = THEMES.MIDNIGHT;
+    it('defaults to the paper theme', () => {
       const manager = new ThemeManager();
-      expect(manager.getTheme()).toBe(THEMES.MIDNIGHT);
-      expect(document.documentElement.getAttribute('data-theme')).toBe('midnight');
-    });
-
-    it('applies and persists new theme', () => {
-      const manager = new ThemeManager();
-      manager.applyTheme(THEMES.PAPER);
       expect(manager.getTheme()).toBe(THEMES.PAPER);
-      expect(mockStorage['delta_replay_theme']).toBe('paper');
       expect(document.documentElement.getAttribute('data-theme')).toBe('paper');
-
-      manager.applyTheme(THEMES.LIGHT);
-      expect(manager.getTheme()).toBe(THEMES.LIGHT);
-      expect(mockStorage['delta_replay_theme']).toBe('light');
+      expect(document.body.getAttribute('data-theme')).toBe('paper');
     });
 
-    it('notifies onThemeChange callback', () => {
+    it('pins any requested theme back to paper', () => {
+      const manager = new ThemeManager();
+      manager.applyTheme('dark');
+      expect(manager.getTheme()).toBe('paper');
+      manager.applyTheme('midnight');
+      expect(manager.getTheme()).toBe('paper');
+      expect(document.documentElement.getAttribute('data-theme')).toBe('paper');
+    });
+
+    it('notifies onThemeChange with paper', () => {
       const onThemeChange = vi.fn();
       const manager = new ThemeManager({ onThemeChange });
-      manager.applyTheme(THEMES.MIDNIGHT);
-      expect(onThemeChange).toHaveBeenCalledWith('midnight');
-    });
-
-    it('synchronizes with select element change event', () => {
-      const selectEl = createMockElement({ value: 'dark' });
-      const onThemeChange = vi.fn();
-      const manager = new ThemeManager({ selectEl, onThemeChange });
-
-      selectEl.value = 'light';
-      selectEl.dispatchEvent({ type: 'change' });
-      expect(manager.getTheme()).toBe('light');
-      expect(onThemeChange).toHaveBeenCalledWith('light');
-    });
-
-    it('falls back to default when unknown theme is passed', () => {
-      const manager = new ThemeManager({ defaultTheme: 'dark' });
-      manager.applyTheme('invalid-theme');
-      expect(manager.getTheme()).toBe('dark');
-    });
-
-    it('theme pills support arrow-key navigation with roving tabindex', () => {
-      const handlers = {};
-      const mkPill = (theme) => ({
-        dataset: { theme },
-        getAttribute: (n) => (n === 'data-theme' ? theme : null),
-        setAttribute: vi.fn(),
-        classList: { toggle: vi.fn() },
-        focus: vi.fn(),
-        addEventListener: vi.fn((ev, fn) => { handlers[`${theme}:${ev}`] = fn; }),
-      });
-      const pills = [mkPill('dark'), mkPill('paper'), mkPill('light')];
-      global.document.querySelectorAll = vi.fn(() => pills);
-      const selectEl = createMockElement({ value: 'dark' });
-      const onThemeChange = vi.fn();
-      const manager = new ThemeManager({ selectEl, onThemeChange });
-      expect(manager.getTheme()).toBe('dark');
-      // Roving tabindex: only the active pill is tabbable
-      expect(pills[0].setAttribute).toHaveBeenCalledWith('tabindex', '0');
-      expect(pills[1].setAttribute).toHaveBeenCalledWith('tabindex', '-1');
-      // ArrowRight moves focus forward and applies the next theme
-      handlers['dark:keydown']({ key: 'ArrowRight', preventDefault: vi.fn() });
-      expect(pills[1].focus).toHaveBeenCalled();
-      expect(manager.getTheme()).toBe('paper');
       expect(onThemeChange).toHaveBeenCalledWith('paper');
+      manager.applyTheme('light');
+      expect(onThemeChange).toHaveBeenLastCalledWith('paper');
     });
 
-    it('injects paper font stylesheet on demand and only once', () => {
-      const appended = [];
-      const injected = {};
-      global.document.querySelector = vi.fn((sel) => injected[sel] || null);
-      global.document.createElement = vi.fn(() => ({
-        setAttribute: vi.fn(function (n, v) { this[n] = v; }),
-      }));
-      global.document.head = { appendChild: vi.fn((el) => appended.push(el)) };
-      const selectEl = createMockElement({ value: 'dark' });
-      const manager = new ThemeManager({ selectEl });
-      // Non-paper themes need no extra fonts
-      expect(global.document.createElement).not.toHaveBeenCalled();
-      manager.applyTheme('paper');
-      expect(global.document.createElement).toHaveBeenCalledWith('link');
-      expect(appended.length).toBe(1);
-      expect(appended[0].href).toMatch(/Cinzel/);
-      expect(appended[0].href).toMatch(/Shippori/);
-      // Second switch reuses the existing link instead of duplicating it
-      injected['link[data-theme-fonts="paper"]'] = appended[0];
-      manager.applyTheme('light');
-      manager.applyTheme('paper');
-      expect(appended.length).toBe(1);
+    it('destroy clears the change callback', () => {
+      const manager = new ThemeManager({ onThemeChange: vi.fn() });
+      manager.destroy();
+      expect(manager.onThemeChange).toBeNull();
     });
   });
 
@@ -212,119 +144,80 @@ describe('ThemeManager & UI Simplification', () => {
   });
 
   describe('3. UI Simplification Stylesheet Audit', () => {
-    const themesCss = fs.readFileSync('src/themes.css', 'utf-8');
+    const paperCss = fs.readFileSync(CSS_PATH, 'utf-8');
     const html = fs.readFileSync('index.html', 'utf-8');
+    const markup = paperMarkup();
 
-    it('declutters by removing dead DOM nodes instead of CSS hiding hacks', () => {
-      // Permanently hidden elements were deleted from index.html …
+    it('shell mounts a single #app node with one stylesheet and no legacy theme links', () => {
+      expect(html).toMatch(/<div id="app"><\/div>/);
+      expect(html).toMatch(/href="\/src\/ui\/index\.css"/);
+      expect(html).toMatch(/name="viewport"/);
+      // Legacy per-theme stylesheets are gone from the shell …
+      expect(html).not.toMatch(/themes\.css/);
+      expect(html).not.toMatch(/paper-theme\.css/);
+      expect(html).not.toMatch(/src\/styles\.css/);
+      expect(html).not.toMatch(/ui-polish\.css/);
+      // … and permanently removed nodes were not reintroduced into the shell
       expect(html).not.toMatch(/phase-badge/);
       expect(html).not.toMatch(/cache-badge/);
       expect(html).not.toMatch(/id="replay-time"/);
       expect(html).not.toMatch(/id="mode-indicator"/);
       expect(html).not.toMatch(/id="replay-status"/);
       expect(html).not.toMatch(/shortcuts-hint/);
-      // … so no `display: none` masking hack for them may remain in themes.css
-      // (bounded `[^}]*` keeps each check inside a single rule block)
-      expect(themesCss).not.toMatch(/\.phase-badge[^{]*\{[^}]*display:\s*none/);
-      expect(themesCss).not.toMatch(/#cache-badge[^{]*\{[^}]*display:\s*none/);
-      expect(themesCss).not.toMatch(/\.shortcuts-hint[^{]*\{[^}]*display:\s*none/);
-      expect(themesCss).not.toMatch(/\.replay-status[^{]*\{[^}]*display:\s*none/);
-      expect(themesCss).not.toMatch(/#mode-banner[^{]*\{[^}]*display:\s*none/);
-      expect(themesCss).not.toMatch(/\.position-panel\.is-empty\s*\{[^}]*display:\s*none/);
-      expect(themesCss).not.toMatch(/#replay-time[^{]*\{[^}]*display:\s*none/);
+    });
+
+    it('is a single-theme app: paper tokens, no data-theme switching surface', () => {
+      expect(paperCss).toMatch(/--paper:/);
+      expect(paperCss).toMatch(/--paper-panel:/);
+      expect(paperCss).toMatch(/--paper-ink:/);
+      expect(paperCss).not.toMatch(/html\[data-theme="/);
+      expect(html).not.toMatch(/id="theme-select"/);
+      expect(html).not.toMatch(/theme-pills/);
+      expect(markup).not.toMatch(/theme-pills/);
     });
 
     it('keeps a slim mode-banner status bar instead of hiding progress', () => {
       // Banner stays visible as a slim ticker
-      expect(themesCss).toMatch(/#mode-banner\s*\{[\s\S]*?display:\s*flex\s*!important/);
-      // Progress panel is styled as a mini status bar
-      expect(themesCss).toMatch(/\.progress-panel:not\(\.hidden\)\s*\{[\s\S]*?display:\s*flex\s*!important/);
-      // Banner keeps its progress + market-time nodes in the DOM
-      expect(html).toMatch(/id="mode-banner"/);
-      expect(html).toMatch(/id="progress-panel"/);
-      expect(html).toMatch(/id="market-time-full"/);
+      expect(paperCss).toMatch(/\.mode-banner\s*\{[\s\S]*?display:\s*flex/);
+      // Progress panel is a flex row inside the banner
+      expect(paperCss).toMatch(/\.progress-panel\s*\{[\s\S]*?display:\s*flex/);
+      // Banner keeps its progress + market-time nodes in the markup
+      expect(markup).toMatch(/id="mode-banner"/);
+      expect(markup).toMatch(/id="progress-panel"/);
+      expect(markup).toMatch(/id="market-time-full"/);
     });
 
-    it('shows a graceful empty position state instead of hiding the card', () => {
-      // Card stays mounted; only the metrics grid is hidden and inputs dimmed
-      expect(themesCss).toMatch(/\.position-panel\.is-empty\s+\.pos-compact-grid\s*\{[\s\S]*?display:\s*none\s*!important/);
-      expect(themesCss).toMatch(/\.position-panel\.is-empty\s+\.risk-inputs-row input\s*\{[\s\S]*?opacity:\s*0\.5/);
-      // The old aggressive whole-card hide must be gone
-      expect(themesCss).not.toMatch(/\.position-panel\.is-empty\s*\{[\s\S]*?display:\s*none\s*!important/);
+    it('keeps the trading sidebar mounted with compact grids (no whole-card hiding hacks)', () => {
+      expect(paperCss).toMatch(/\.trading-section/);
+      expect(paperCss).toMatch(/\.pos-compact-grid/);
+      expect(paperCss).toMatch(/\.order-secondary-grid/);
+      // No aggressive whole-card hide for the position panel
+      expect(paperCss).not.toMatch(/\.position-panel\.is-empty\s*\{[^}]*display:\s*none/);
+      expect(markup).toMatch(/id="trading-panel"/);
     });
 
-    it('ships a streamlined DOM: only 1D/7D/Live presets and 3 capital tiers', () => {
-      // Surplus options were deleted from the DOM (no CSS masking needed)
-      expect(html).not.toMatch(/data-preset="3d"/);
-      expect(html).not.toMatch(/data-preset="30d"/);
-      expect(html).toMatch(/data-preset="1d"/);
-      expect(html).toMatch(/data-preset="7d"/);
-      expect(html).toMatch(/data-preset="now"/);
-
-      expect(html).not.toMatch(/data-qty="0\.05"/);
-
-      expect(html).not.toMatch(/data-balance="1000"/);
-      expect(html).not.toMatch(/data-balance="25000"/);
-      expect(html).not.toMatch(/data-balance="100000"/);
-      expect(html).toMatch(/data-balance="5000"/);
-      expect(html).toMatch(/data-balance="10000"/);
-      expect(html).toMatch(/data-balance="50000"/);
-
-      // … and no attribute-hiding hacks remain in the theme engine
-      expect(themesCss).not.toMatch(/\[data-preset=/);
-      expect(themesCss).not.toMatch(/\[data-qty=/);
-      expect(themesCss).not.toMatch(/\[data-balance=/);
+    it('ships the replay DOM from markup modules: header, workspace, timeline, drawer', () => {
+      expect(markup).toMatch(/id="symbol-select"/);
+      expect(markup).toMatch(/id="timeframe-select"/);
+      expect(markup).toMatch(/id="header-start-replay-btn"/);
+      expect(markup).toMatch(/id="chart-container"/);
+      expect(markup).toMatch(/id="timeline-sparkline"/);
+      expect(markup).toMatch(/id="timeline-slider"/);
+      expect(markup).toMatch(/id="speed-select"/);
+      expect(markup).toMatch(/id="btn-buy"/);
+      expect(markup).toMatch(/id="btn-sell"/);
+      expect(markup).toMatch(/id="btn-close"/);
+      expect(markup).toMatch(/id="btn-trading-drawer"/);
+      expect(markup).toMatch(/id="drawer-scrim"/);
+      expect(markup).toMatch(/id="error-panel"/);
     });
 
-    it('contains CSS definitions for all four themes', () => {
-      expect(themesCss).toMatch(/html\[data-theme="dark"\]/);
-      expect(themesCss).toMatch(/html\[data-theme="paper"\]/);
-      expect(themesCss).toMatch(/html\[data-theme="light"\]/);
-      expect(themesCss).toMatch(/html\[data-theme="midnight"\]/);
-    });
-
-    it('index.html contains theme selector and themes.css stylesheet link', () => {
-      expect(html).toMatch(/id="theme-select"/);
-      expect(html).toMatch(/href="\/src\/themes\.css"/);
-      expect(html).toMatch(/value="dark"/);
-      expect(html).toMatch(/value="paper"/);
-      expect(html).toMatch(/value="light"/);
-      expect(html).toMatch(/value="midnight"/);
-    });
-
-    it('index.html exposes a segmented theme pill switcher', () => {
-      expect(html).toMatch(/class="theme-pills"/);
-      expect(html).toMatch(/class="theme-pill/);
-      expect(html).toMatch(/data-theme="dark"/);
-      expect(html).toMatch(/data-theme="paper"/);
-      expect(html).toMatch(/data-theme="light"/);
-      expect(html).toMatch(/data-theme="midnight"/);
-    });
-
-    it('theme pills use cross-platform SVG icons instead of emoji', () => {
-      const pillsBlock = html.match(/class="theme-pills"[\s\S]*?<\/div>/);
-      expect(pillsBlock).not.toBeNull();
-      expect(pillsBlock[0]).toMatch(/<svg/);
-      expect(pillsBlock[0]).not.toMatch(/🌙|📜|☀️|🌌/);
-    });
-
-    it('timeline slider has a visual progress fill driven by --timeline-progress', () => {
-      const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
-      expect(baseCss).toMatch(/--timeline-progress/);
-      expect(baseCss).toMatch(/::-webkit-slider-runnable-track/);
-      expect(baseCss).toMatch(/::-moz-range-track/);
-    });
-
-    it('close button shows high-contrast red outline while a position is open', () => {
-      const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
-      expect(baseCss).toMatch(/\.btn-close-pos:not\(:disabled\)/);
-      expect(themesCss).toMatch(/\.btn-close-pos:not\(:disabled\)/);
-    });
-
-    it('empty states stay legible: centered trade hints and position message', () => {
-      const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
-      expect(baseCss).toMatch(/\.trades-list\s+\.empty-hint\s*\{[\s\S]*?text-align:\s*center/);
-      expect(baseCss).toMatch(/\.position-panel\.is-empty::after\s*\{[\s\S]*?content:/);
+    it('drawer is a transform-based bottom sheet on small screens, not display:none', () => {
+      const mobileBlock = paperCss.match(/@media\s*\(\s*max-width:\s*1024px\s*\)[\s\S]*$/);
+      expect(mobileBlock).not.toBeNull();
+      expect(mobileBlock[0]).toMatch(/\.trading-section\s*\{[\s\S]*?transform:\s*translateY/);
+      expect(paperCss).toMatch(/drawer-open/);
+      expect(paperCss).not.toMatch(/\.trading-section\s*\{[^}]*display:\s*none/);
     });
 
     it('Timeline publishes replay progress to --timeline-progress', () => {
@@ -346,29 +239,6 @@ describe('ThemeManager & UI Simplification', () => {
       const calls = sliderEl.style.setProperty.mock.calls.filter(([k]) => k === '--timeline-progress');
       expect(calls.length).toBeGreaterThan(0);
       expect(calls[calls.length - 1][1]).toMatch(/%/);
-    });
-
-    it('ships audit-driven DOM: sparkline, drawer FAB, sr ticker, advanced toggle', () => {
-      expect(html).toMatch(/id="timeline-sparkline"/);
-      expect(html).toMatch(/id="btn-trading-drawer"/);
-      expect(html).toMatch(/id="drawer-scrim"/);
-      expect(html).toMatch(/id="sr-ticker"/);
-      expect(html).toMatch(/id="btn-advanced-order"/);
-      expect(html).toMatch(/value="colorblind"/);
-      expect(html).toMatch(/data-theme="colorblind"/);
-    });
-
-    it('ships audit-driven CSS: fog, velocity, clamp sidebar, drawer, sr-only', () => {
-      const baseCss = fs.readFileSync('src/styles.css', 'utf-8');
-      expect(baseCss).toMatch(/\.chart-container::after/);
-      expect(baseCss).toMatch(/velocity-boost/);
-      expect(baseCss).toMatch(/clamp\(280px, 25vw, 420px\)/);
-      expect(baseCss).toMatch(/max-width:\s*1200px/);
-      expect(baseCss).toMatch(/\.sr-only/);
-      expect(baseCss).toMatch(/\.timeline-sparkline/);
-      expect(themesCss).toMatch(/\.fab-trading/);
-      expect(themesCss).toMatch(/drawer-open/);
-      expect(themesCss).toMatch(/html\[data-theme="colorblind"\]/);
     });
 
     it('ModeBanner throttles screen-reader announcements', async () => {
