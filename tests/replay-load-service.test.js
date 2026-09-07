@@ -33,6 +33,8 @@ function createHarness() {
   };
   const controls = { setStartIndex: vi.fn() };
   const modeBanner = { update: vi.fn() };
+  const hasOpenPosition = vi.fn(() => false);
+  const notifyMarketCandle = vi.fn();
   const updatePreviewWindow = vi.fn();
 
   return {
@@ -43,6 +45,8 @@ function createHarness() {
     timeline,
     controls,
     modeBanner,
+    hasOpenPosition,
+    notifyMarketCandle,
     updatePreviewWindow,
     resolveLoad(candles = [{ time: 1000, open: 100, high: 102, low: 99, close: 101 }]) {
       resolveLoad({ candles, metadata: { cached: false } });
@@ -79,6 +83,7 @@ describe('ReplayLoadService', () => {
     expect(h.appState.setCandles).toHaveBeenCalledTimes(1);
     expect(h.replayEngine.load).toHaveBeenCalledTimes(1);
     expect(h.updatePreviewWindow).toHaveBeenCalledTimes(1);
+    expect(h.notifyMarketCandle).toHaveBeenCalledTimes(1);
     expect(h.timeline.setEnabled).toHaveBeenCalledWith(true);
   });
 });
