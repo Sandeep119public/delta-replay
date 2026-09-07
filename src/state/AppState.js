@@ -34,7 +34,7 @@ export class AppState extends EventEmitter {
   }
 
   get candles() {
-    return this._store?.getAll?.() || [];
+    return freezeValue(this._store?.getAll?.() || []);
   }
 
   set candles(val) {
@@ -46,11 +46,11 @@ export class AppState extends EventEmitter {
   }
 
   getCandle(index) {
-    return this._store?.get?.(index) ?? null;
+    return freezeValue(this._store?.get?.(index) ?? null);
   }
 
   sliceWindow(start, end) {
-    return this._store?.sliceWindow?.(start, end) || [];
+    return freezeValue(this._store?.sliceWindow?.(start, end) || []);
   }
 
   setCandleStore(store) {
@@ -113,7 +113,7 @@ export class AppState extends EventEmitter {
 
   setReplayState(rs) {
     this.replayState = rs;
-    this.emit('replayState', rs);
+    this.emit('replayState', freezeValue(rs));
     this.emit('change', this.snapshot());
   }
 
