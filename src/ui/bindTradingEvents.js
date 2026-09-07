@@ -1,15 +1,20 @@
-import { TradingEvents } from '../trading/TradingEvents.js';
+import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
 
-export function bindTradingEvents({ tradingEngine, actions, errorPanel }) {
+export function bindTradingEvents({ tradingEvents = null, tradingEngine = null, actions, errorPanel }) {
+  const eventPort = tradingEvents || (tradingEngine ? {
+    events: TRADING_PRESENTATION_EVENTS,
+    on: (event, handler) => tradingEngine.on?.(event, handler),
+  } : null);
+  if (!eventPort?.on) throw new TypeError('tradingEvents presentation port is required');
+
   const subscriptions = [];
   const subscribe = (event, handler) => {
-    const unsubscribe = tradingEngine?.on?.(event, handler);
+    const unsubscribe = eventPort.on(event, handler);
     if (typeof unsubscribe === 'function') subscriptions.push(unsubscribe);
   };
 
-  subscribe(TradingEvents.POSITION_LIQUIDATED, (payload) => actions.handleLiquidation(payload));
-
-  subscribe(TradingEvents.ORDER_REJECTED, (err) => {
+  subscribe(eventPort.events.POSITION_LIQUIDATED, (payload) => actions.handleLiquidation(payload));
+  subscribe(eventPort.events.ORDER_REJECTED, (err) => {
     errorPanel.show(
       { category: 'ORDER', userMessage: err?.message || 'Order rejected', message: err?.message || 'Order rejected', code: err?.code || 'ORDER_REJECTED', context: {} },
       { severity: 'error', pauseReplay: false },
