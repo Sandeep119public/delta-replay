@@ -1,10 +1,14 @@
 /**
  * Minimal synchronous EventEmitter with safe async-handler handling.
- * No DOM dependency. Suitable for core/replay/trading modules.
+ * No DOM/BOM dependency. Suitable for core/replay/trading modules.
+ *
+ * Errors are reported through an injected reporter so the emitter stays
+ * environment-agnostic and reusable in browsers, Node, workers, and tests.
  */
 export class EventEmitter {
-  constructor() {
+  constructor({ errorReporter } = {}) {
     this._listeners = new Map();
+    this._errorReporter = typeof errorReporter === 'function' ? errorReporter : () => {};
   }
 
   on(event, handler) {
@@ -37,12 +41,10 @@ export class EventEmitter {
       try {
         const result = fn(payload);
         if (result && typeof result.then === 'function') {
-          result.catch(err => {
-            console.error(`[EventEmitter] async handler error for "${event}":`, err);
-          });
+          result.catch(err => this._reportError(event, err, 'async'));
         }
       } catch (err) {
-        console.error(`[EventEmitter] handler error for "${event}":`, err);
+        this._reportError(event, err, 'sync');
       }
     }
   }
@@ -54,5 +56,13 @@ export class EventEmitter {
 
   listenerCount(event) {
     return this._listeners.get(event)?.size ?? 0;
+  }
+
+  _reportError(event, err, phase) {
+    try {
+      this._errorReporter(err, { event, phase });
+    } catch {
+      // Error reporters must never destabilize event delivery.
+    }
   }
 }
