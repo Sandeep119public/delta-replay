@@ -1,19 +1,13 @@
 import { TradingEvents } from '../trading/TradingEvents.js';
 
-export function bindTradingEvents({ tradingEngine, commandController, errorPanel }) {
+export function bindTradingEvents({ tradingEngine, actions, errorPanel }) {
   const subscriptions = [];
   const subscribe = (event, handler) => {
     const unsubscribe = tradingEngine?.on?.(event, handler);
     if (typeof unsubscribe === 'function') subscriptions.push(unsubscribe);
   };
 
-  subscribe(TradingEvents.POSITION_LIQUIDATED, (payload) => {
-    try { commandController.pause(); } catch (error) { console.warn('[Replay] liquidation pause failed', error); }
-    errorPanel.show(
-      { category: 'LIQUIDATION', userMessage: `Position liquidated: ${payload?.symbol || ''} @ ${payload?.liquidationPrice ?? '—'}`, message: 'Position liquidated', code: 'LIQUIDATION', context: {} },
-      { severity: 'critical', onPause: () => { try { commandController.pause(); } catch (error) { console.warn('[Replay] liquidation pause failed', error); } } },
-    );
-  });
+  subscribe(TradingEvents.POSITION_LIQUIDATED, (payload) => actions.handleLiquidation(payload));
 
   subscribe(TradingEvents.ORDER_REJECTED, (err) => {
     errorPanel.show(
