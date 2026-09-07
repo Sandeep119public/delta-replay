@@ -18,10 +18,11 @@ export class ChartManager {
     this._panResetTimer = null;
     this._onVisibleRangeChange = null;
     this._onChartLibraryClick = null;
+    this._destroyed = false;
   }
 
   init(initialTheme = null) {
-    if (this.chart) return;
+    if (this._destroyed || this.chart) return;
     const currentThemeName = initialTheme || (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark';
     const config = CHART_THEMES[currentThemeName] || CHART_THEMES.dark;
     this.chart = createChart(this.container, {
@@ -83,9 +84,13 @@ export class ChartManager {
   clear() { this.clearTradingLines(); if (this.series) this.series.setData([]); }
   applyTheme(themeName) { const config = CHART_THEMES[themeName] || CHART_THEMES.dark; if (this.chart) { try { this.chart.applyOptions({ layout: config.layout, grid: config.grid, crosshair: { mode: 1, ...config.crosshair }, timeScale: { borderColor: config.timeScale.borderColor }, rightPriceScale: { borderColor: config.rightPriceScale.borderColor } }); } catch (err) { console.warn('[ChartManager] applyTheme chart options error:', err); } } if (this.series) { try { this.series.applyOptions(config.series); } catch (err) { console.warn('[ChartManager] applyTheme series options error:', err); } } return config; }
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
     clearTimeout(this._panResetTimer);
     this._panResetTimer = null;
     this.clearTradingLines();
+    this._tradingOverlay?.destroy?.();
+    this._tradingOverlay = null;
     window.removeEventListener('resize', this._onWindowResize);
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;
