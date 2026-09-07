@@ -1,23 +1,14 @@
 /**
  * ReplayCommandController centralizes all replay execution commands
- * (start, play, pause, step, reset, seek) across user interfaces
- * (header button, replay bar, timeline slider, and keyboard shortcuts).
- *
- * Eliminates duplicate state machine checks and enforces unified execution guards.
+ * (start, play, pause, step, reset, seek) across user interfaces.
+ * Application code owns effects; presentation code calls this controller or
+ * the narrow replay presentation port.
  */
 
-/** Playback speeds offered by the speed selector, slowest to fastest. */
 export const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 5, 10];
+
 export class ReplayCommandController {
-  constructor({
-    engine,
-    appState,
-    candleStore,
-    tradingEngine = null,
-    coordinator = null,
-    headerBtn = null,
-    onError = null,
-  }) {
+  constructor({ engine, appState, candleStore, tradingEngine = null, coordinator = null, headerBtn = null, onError = null }) {
     this.engine = engine;
     this.appState = appState;
     this.candleStore = candleStore;
@@ -36,16 +27,9 @@ export class ReplayCommandController {
     return (this.candleStore?.getCount?.() || this.appState?.candles?.length || 0) > 0;
   }
 
-  /**
-   * Toggle between Play and Pause based on current engine state.
-   * If not started yet, starts replay from pendingStartIndex.
-   * If data is not yet loaded, delegates to coordinator to load and auto-start.
-   */
   togglePlayPause() {
     if (!this.hasData()) {
-      if (this.coordinator) {
-        this.coordinator.loadAndPrepareReplay({ autoStart: true });
-      }
+      this.coordinator?.loadAndPrepareReplay({ autoStart: true });
       return;
     }
 
@@ -63,8 +47,8 @@ export class ReplayCommandController {
       this.engine.reset();
       this.engine.start(startIndex);
       this.engine.play();
-    } else if (this.coordinator) {
-      this.coordinator.loadAndPrepareReplay({ autoStart: true });
+    } else {
+      this.coordinator?.loadAndPrepareReplay({ autoStart: true });
     }
   }
 
@@ -96,11 +80,6 @@ export class ReplayCommandController {
     }
   }
 
-  /**
-   * Step one candle backwards. The engine auto-pauses when seeking from
-   * playing state; the open-position guard in trySeek prevents corrupting
-   * an active backtest.
-   */
   stepBackward() {
     if (!this.hasData()) return false;
     const idx = this.engine.getState().currentIndex - 1;
@@ -108,7 +87,6 @@ export class ReplayCommandController {
     return this.trySeek(idx);
   }
 
-  /** Jump a relative number of candles (e.g. ±10), clamped to data bounds. */
   jumpBy(delta) {
     if (!this.hasData()) return false;
     const st = this.engine.getState();
@@ -119,7 +97,6 @@ export class ReplayCommandController {
     return this.trySeek(idx);
   }
 
-  /** Move one notch through PLAYBACK_SPEEDS. direction: +1 faster, -1 slower. */
   cycleSpeed(direction = 1) {
     try {
       const cur = Number(this.engine.getState().speed ?? 1);
@@ -151,14 +128,28 @@ export class ReplayCommandController {
     if (!this.hasData()) return;
     this.engine.reset();
     const st = this.engine.getState();
-    const startIndex = this.appState?.pendingStartIndex ?? 0;
+    const startIndex = this.appState?.pendingStartIndex ?? st.startIndex;
 
     if (st.status === 'ready') {
-      if (this.coordinator) {
-        this.coordinator.updatePreviewWindow(startIndex);
-      }
+      this.coordinator?.updatePreviewWindow(startIndex);
       this.renderHeaderBtn();
+      return;
     }
+
+    // Replay reset is navigation-only. Re-establish the trading market mark
+    // explicitly at the session start without routing it through replay's
+    // MARKET_CANDLE execution stream.
+    if (this.tradingEngine && Number.isInteger(startIndex) && startIndex >= 0) {
+      const candle = this.candleStore?.get?.(startIndex);
+      if (candle) {
+        try {
+          this.tradingEngine.onMarketCandle({ candle, index: startIndex, symbol: candle.symbol, timestamp: candle.time });
+        } catch (e) {
+          this._notifyError(e?.message || 'Unable to restore replay market context');
+        }
+      }
+    }
+    this.renderHeaderBtn();
   }
 
   trySeek(idx) {
@@ -177,11 +168,8 @@ export class ReplayCommandController {
   }
 
   _notifyError(msg) {
-    if (typeof this.onError === 'function') {
-      this.onError(msg);
-    } else if (this.coordinator?.showTradingError) {
-      this.coordinator.showTradingError(msg);
-    }
+    if (typeof this.onError === 'function') this.onError(msg);
+    else this.coordinator?.showTradingError?.(msg);
   }
 
   _bindEngineEvents() {
@@ -197,7 +185,9 @@ export class ReplayCommandController {
 
   destroy() {
     this.headerBtn?.removeEventListener?.('click', this._onHeaderClick);
-    this._subscriptions.splice(0).forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[ReplayCommandController] unsubscribe failed', error); } });
+    this._subscriptions.splice(0).forEach((unsubscribe) => {
+      try { unsubscribe?.(); } catch (error) { console.warn('[ReplayCommandController] unsubscribe failed', error); }
+    });
     this._onHeaderClick = null;
     this.onError = null;
   }
@@ -205,63 +195,28 @@ export class ReplayCommandController {
   renderHeaderBtn() {
     if (!this.headerBtn) return;
     const s = this.engine.getState();
-
-    if (s.status === 'ready') {
-      this.headerBtn.innerHTML = '<span class="icon">▶</span> START REPLAY';
-    } else if (s.status === 'playing') {
-      this.headerBtn.innerHTML = '<span class="icon">⏸</span> PAUSE';
-    } else if (s.status === 'paused') {
-      this.headerBtn.innerHTML = '<span class="icon">▶</span> RESUME';
-    } else if (s.status === 'ended') {
-      this.headerBtn.innerHTML = '<span class="icon">↺</span> REPLAY AGAIN';
-    }
+    if (s.status === 'ready') this.headerBtn.innerHTML = '<span class="icon">▶</span> START REPLAY';
+    else if (s.status === 'playing') this.headerBtn.innerHTML = '<span class="icon">⏸</span> PAUSE';
+    else if (s.status === 'paused') this.headerBtn.innerHTML = '<span class="icon">▶</span> RESUME';
+    else if (s.status === 'ended') this.headerBtn.innerHTML = '<span class="icon">↺</span> REPLAY AGAIN';
   }
 
-  /**
-   * Bind global keyboard shortcuts (Space, ArrowRight/ArrowLeft, Shift+arrows,
-   * KeyZ/KeyX speed, KeyR, Escape)
-   */
   bindKeyboardShortcuts(target = document) {
     if (!target) return () => {};
-
     const handler = (e) => {
       const tag = e.target?.tagName?.toUpperCase?.() || '';
-      if (
-        tag === 'INPUT' ||
-        tag === 'SELECT' ||
-        tag === 'TEXTAREA' ||
-        (typeof HTMLInputElement !== 'undefined' && e.target instanceof HTMLInputElement) ||
-        (typeof HTMLSelectElement !== 'undefined' && e.target instanceof HTMLSelectElement) ||
-        (typeof HTMLTextAreaElement !== 'undefined' && e.target instanceof HTMLTextAreaElement)
-      ) {
-        return;
-      }
-
-      if (e.code === 'Space') {
-        e.preventDefault();
-        this.togglePlayPause();
-      } else if (e.code === 'ArrowRight') {
-        e.preventDefault();
-        if (e.shiftKey) this.jumpBy(10);
-        else this.stepForward();
-      } else if (e.code === 'ArrowLeft') {
-        e.preventDefault();
-        if (e.shiftKey) this.jumpBy(-10);
-        else this.stepBackward();
-      } else if (e.code === 'KeyZ') {
-        e.preventDefault();
-        this.cycleSpeed(-1);
-      } else if (e.code === 'KeyX') {
-        e.preventDefault();
-        this.cycleSpeed(1);
-      } else if (e.code === 'KeyR') {
-        e.preventDefault();
-        this.reset();
-      } else if (e.code === 'Escape') {
-        this.pause();
-      }
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
+          (typeof HTMLInputElement !== 'undefined' && e.target instanceof HTMLInputElement) ||
+          (typeof HTMLSelectElement !== 'undefined' && e.target instanceof HTMLSelectElement) ||
+          (typeof HTMLTextAreaElement !== 'undefined' && e.target instanceof HTMLTextAreaElement)) return;
+      if (e.code === 'Space') { e.preventDefault(); this.togglePlayPause(); }
+      else if (e.code === 'ArrowRight') { e.preventDefault(); if (e.shiftKey) this.jumpBy(10); else this.stepForward(); }
+      else if (e.code === 'ArrowLeft') { e.preventDefault(); if (e.shiftKey) this.jumpBy(-10); else this.stepBackward(); }
+      else if (e.code === 'KeyZ') { e.preventDefault(); this.cycleSpeed(-1); }
+      else if (e.code === 'KeyX') { e.preventDefault(); this.cycleSpeed(1); }
+      else if (e.code === 'KeyR') { e.preventDefault(); this.reset(); }
+      else if (e.code === 'Escape') { this.pause(); }
     };
-
     target.addEventListener('keydown', handler);
     return () => target.removeEventListener('keydown', handler);
   }
