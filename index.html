@@ -10,14 +10,7 @@
        Shippori Mincho) are injected on demand by ThemeManager (see THEME_FONT_URLS). -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/src/styles.css" />
-  <link rel="stylesheet" href="/src/ui-polish.css" />
-  <link rel="stylesheet" href="/src/viewport-fit.css" />
-  <link rel="stylesheet" href="/src/paper-theme.css" />
-  <link rel="stylesheet" href="/src/themes.css" />
-  <link rel="stylesheet" href="/src/terminal.css" />
-  <link rel="stylesheet" href="/src/animations.css" />
-  <link rel="stylesheet" href="/src/pages.css" />
+  <!-- One UI, one stylesheet, one paper theme. -->
   <link rel="stylesheet" href="/src/ui/index.css" />
 </head>
 <body>
@@ -81,32 +74,7 @@
       </nav>
 
       <div class="topbar-right">
-        <div class="theme-selector-group">
-          <div class="theme-pills" role="radiogroup" aria-label="Visual Theme">
-            <button type="button" class="theme-pill active" data-theme="dark" role="radio" aria-checked="true" tabindex="0" title="Dark Pro" aria-label="Dark Pro">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-            </button>
-            <button type="button" class="theme-pill" data-theme="paper" role="radio" aria-checked="false" tabindex="-1" title="Paper" aria-label="Paper">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-            </button>
-            <button type="button" class="theme-pill" data-theme="light" role="radio" aria-checked="false" tabindex="-1" title="Clean Light" aria-label="Clean Light">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>
-            </button>
-            <button type="button" class="theme-pill" data-theme="midnight" role="radio" aria-checked="false" tabindex="-1" title="Midnight" aria-label="Midnight">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"></path></svg>
-            </button>
-            <button type="button" class="theme-pill" data-theme="colorblind" role="radio" aria-checked="false" tabindex="-1" title="Colorblind Safe" aria-label="Colorblind Safe">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"></path></svg>
-            </button>
-          </div>
-          <select id="theme-select" class="theme-select-legacy" aria-label="Visual Theme">
-            <option value="dark" selected>Dark Pro</option>
-            <option value="paper">Paper</option>
-            <option value="light">Clean Light</option>
-            <option value="midnight">Midnight</option>
-            <option value="colorblind">Colorblind Safe</option>
-          </select>
-        </div>
+        <span class="paper-badge" aria-label="Paper interface">PAPER</span>
         <span id="data-status" class="data-status" role="status" aria-live="polite">Ready to replay</span>
       </div>
     </header>
@@ -504,18 +472,6 @@
         <div class="settings-sections">
           <section class="settings-group">
             <h2 class="settings-group-title">Appearance</h2>
-            <div class="setting-row">
-              <div class="setting-info">
-                <span class="setting-label">Theme</span>
-                <span class="setting-desc">Choose your visual style</span>
-              </div>
-              <div class="theme-pills">
-                <button type="button" class="theme-pill active" data-theme="dark">Dark Pro</button>
-                <button type="button" class="theme-pill" data-theme="light">Light</button>
-                <button type="button" class="theme-pill" data-theme="paper">Paper</button>
-                <button type="button" class="theme-pill" data-theme="midnight">Midnight</button>
-              </div>
-            </div>
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-label">Compact Mode</span>
