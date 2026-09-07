@@ -14,7 +14,8 @@ import { ToastNotificationView } from './ToastNotificationView.js';
 import { FloatingPositionView } from './FloatingPositionView.js';
 import { ReplayDateSelector } from './ReplayDateSelector.js';
 import { TradingPanel } from './TradingPanel.js';
-import { paperMarkup } from './paperMarkup.js';
+import { renderPaperLayout } from './paper/PaperLayout.js';
+import { createPaperPorts } from './paper/PaperPorts.js';
 
 /**
  * PaperUI is the only composition root for DOM-backed views.
@@ -23,8 +24,9 @@ import { paperMarkup } from './paperMarkup.js';
 export function createPaperUI({ engine, candleStore, appState, coordinatorRef }) {
   const mount = document.getElementById('app');
   if (!mount) throw new Error('Paper UI mount #app is missing');
-  mount.innerHTML = paperMarkup();
+  renderPaperLayout(mount);
   const el = (id) => document.getElementById(id);
+  const ports = createPaperPorts(el);
   const chartManager = new ChartManager(el('chart-container'));
   const themeManager = new ThemeManager({
     onThemeChange: (theme) => chartManager.applyTheme(theme),
@@ -78,30 +80,9 @@ export function createPaperUI({ engine, candleStore, appState, coordinatorRef })
     el, chartManager, adapter, symbolSelector, timeframeSelector, timeline, controls,
     errorPanel, themeManager, modeBanner, tradingErrorView,
 
-    getCoordinatorPorts() {
-      return {
-        dataStatusEl: el('data-status'),
-        cacheBadgeEl: el('cache-badge'),
-        startReplayBtn: el('start-replay-btn'),
-        headerStartReplayBtn: el('header-start-replay-btn'),
-        loadBtn: el('load-btn'),
-        fromDateEl: el('from-date'),
-        fromTimeEl: el('from-time'),
-        toDateEl: el('to-date'),
-        toTimeEl: el('to-time'),
-      };
-    },
+    getCoordinatorPorts: ports.coordinator,
 
-    getOrderFormPorts() {
-      return {
-        timeframeSelect: el('timeframe-select'),
-        orderTypeSelect: el('order-type'),
-        limitPriceInput: el('limit-price'),
-        stopPriceInput: el('stop-price'),
-        slInput: el('sl-price'),
-        tpInput: el('tp-price'),
-      };
-    },
+    getOrderFormPorts: ports.orderForm,
 
     createTerminalViews(ctx) {
       return createPaperTerminalViews({ ...ctx, el });
