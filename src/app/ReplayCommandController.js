@@ -16,76 +16,39 @@ export class ReplayCommandController {
     this.coordinator = coordinator;
     this.headerBtn = headerBtn;
     this.onError = onError;
-
     this._subscriptions = [];
     this._bindEngineEvents();
     this._bindHeaderBtn();
     this.renderHeaderBtn();
   }
-
-  hasData() {
-    return (this.candleStore?.getCount?.() || this.appState?.candles?.length || 0) > 0;
-  }
-
+  hasData() { return (this.candleStore?.getCount?.() || this.appState?.candles?.length || 0) > 0; }
   togglePlayPause() {
-    if (!this.hasData()) {
-      this.coordinator?.loadAndPrepareReplay({ autoStart: true });
-      return;
-    }
-
+    if (!this.hasData()) return this.coordinator?.loadAndPrepareReplay({ autoStart: true });
     const st = this.engine.getState();
     const startIndex = this.appState?.pendingStartIndex ?? 0;
-    if (st.status === 'ready') {
-      this.engine.start(startIndex);
-      this.engine.play();
-    } else if (st.status === 'paused') {
-      this.engine.play();
-    } else if (st.status === 'playing') {
-      this.engine.pause();
-    } else if (st.status === 'ended') {
-      this.engine.reset();
-      this.engine.start(startIndex);
-      this.engine.play();
-    } else {
-      this.coordinator?.loadAndPrepareReplay({ autoStart: true });
-    }
+    if (st.status === 'ready') { this.engine.start(startIndex); this.engine.play(); }
+    else if (st.status === 'paused') this.engine.play();
+    else if (st.status === 'playing') this.engine.pause();
+    else if (st.status === 'ended') { this.engine.reset(); this.engine.start(startIndex); this.engine.play(); }
+    else this.coordinator?.loadAndPrepareReplay({ autoStart: true });
   }
-
   startAt(idx) {
     if (!this.hasData()) return false;
     const n = Number(idx);
     if (!Number.isFinite(n) || n < 0) return false;
-    if (this.tradingEngine?.hasOpenPosition?.()) {
-      this._notifyError('Cannot start replay while a position is open — close position first.');
-      return false;
-    }
-    try {
-      this.engine.start(n);
-      return true;
-    } catch (e) {
-      this._notifyError(e?.message || 'Cannot start replay here');
-      return false;
-    }
+    if (this.tradingEngine?.hasOpenPosition?.()) { this._notifyError('Cannot start replay while a position is open — close position first.'); return false; }
+    try { this.engine.start(n); return true; } catch (e) { this._notifyError(e?.message || 'Cannot start replay here'); return false; }
   }
-
   stepForward() {
     if (!this.hasData()) return false;
-    try {
-      this.engine.stepForward();
-      return true;
-    } catch (e) {
-      this._notifyError(e.message);
-      return false;
-    }
+    try { this.engine.stepForward(); return true; } catch (e) { this._notifyError(e.message); return false; }
   }
-
   stepBackward() {
     if (!this.hasData()) return false;
     const idx = this.engine.getState().currentIndex - 1;
     if (idx < 0) return false;
     return this.trySeek(idx);
   }
-
   jumpBy(delta) {
     if (!this.hasData()) return false;
     const st = this.engine.getState();
@@ -95,7 +58,6 @@ export class ReplayCommandController {
     if (idx === st.currentIndex) return false;
     return this.trySeek(idx);
   }
-
   cycleSpeed(direction = 1) {
     try {
       const cur = Number(this.engine.getState().speed ?? 1);
@@ -104,78 +66,43 @@ export class ReplayCommandController {
       const next = PLAYBACK_SPEEDS[Math.min(Math.max(0, i + direction), PLAYBACK_SPEEDS.length - 1)];
       this.engine.setSpeed(next);
       return next;
-    } catch (e) {
-      this._notifyError(e.message);
-      return null;
-    }
+    } catch (e) { this._notifyError(e.message); return null; }
   }
-
   pause() {
     const s = this.engine.getState();
     if (s.status !== 'playing') return false;
-    try {
-      this.engine.pause();
-      return true;
-    } catch (e) {
-      this._notifyError(e?.message || 'Unable to pause replay');
-      return false;
-    }
+    try { this.engine.pause(); return true; } catch (e) { this._notifyError(e?.message || 'Unable to pause replay'); return false; }
   }
-
   reset() {
     if (!this.hasData()) return;
     this.engine.reset();
     const st = this.engine.getState();
-    const startIndex = Number.isInteger(st.startIndex) && st.startIndex >= 0
-      ? st.startIndex
-      : (this.appState?.pendingStartIndex ?? -1);
-
-    if (st.status === 'ready') {
-      this.coordinator?.updatePreviewWindow(startIndex);
-    }
+    if (st.status === 'ready') this.coordinator?.updatePreviewWindow?.(st.startIndex ?? -1);
     this.renderHeaderBtn();
   }
-
   trySeek(idx) {
     if (this.tradingEngine?.hasOpenPosition?.()) {
-      const msg = 'Cannot seek while a position is open — close position first.';
-      this._notifyError(msg);
+      this._notifyError('Cannot seek while a position is open — close position first.');
       return false;
     }
-    try {
-      this.engine.seek(idx);
-      return true;
-    } catch (e) {
-      this._notifyError(e.message);
-      return false;
-    }
+    try { this.engine.seek(idx); return true; } catch (e) { this._notifyError(e.message); return false; }
   }
-
-  _notifyError(msg) {
-    if (typeof this.onError === 'function') this.onError(msg);
-    else this.coordinator?.showTradingError?.(msg);
-  }
-
+  _notifyError(msg) { if (typeof this.onError === 'function') this.onError(msg); else this.coordinator?.showTradingError?.(msg); }
   _bindEngineEvents() {
     this._subscriptions.push(this.engine.on('stateChanged', () => this.renderHeaderBtn()));
     this._subscriptions.push(this.engine.on('reset', () => this.renderHeaderBtn()));
   }
-
   _bindHeaderBtn() {
     if (!this.headerBtn) return;
     this._onHeaderClick = () => this.togglePlayPause();
     this.headerBtn.addEventListener('click', this._onHeaderClick);
   }
-
   destroy() {
     this.headerBtn?.removeEventListener?.('click', this._onHeaderClick);
-    this._subscriptions.splice(0).forEach((unsubscribe) => {
-      try { unsubscribe?.(); } catch (error) { console.warn('[ReplayCommandController] unsubscribe failed', error); }
-    });
+    this._subscriptions.splice(0).forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[ReplayCommandController] unsubscribe failed', error); } });
     this._onHeaderClick = null;
     this.onError = null;
   }
-
   renderHeaderBtn() {
     if (!this.headerBtn) return;
     const s = this.engine.getState();
@@ -184,7 +111,6 @@ export class ReplayCommandController {
     else if (s.status === 'paused') this.headerBtn.innerHTML = '<span class="icon">▶</span> RESUME';
     else if (s.status === 'ended') this.headerBtn.innerHTML = '<span class="icon">↺</span> REPLAY AGAIN';
   }
-
   bindKeyboardShortcuts(target = document) {
     if (!target) return () => {};
     const handler = (e) => {
@@ -199,7 +125,7 @@ export class ReplayCommandController {
       else if (e.code === 'KeyZ') { e.preventDefault(); this.cycleSpeed(-1); }
       else if (e.code === 'KeyX') { e.preventDefault(); this.cycleSpeed(1); }
       else if (e.code === 'KeyR') { e.preventDefault(); this.reset(); }
-      else if (e.code === 'Escape') { this.pause(); }
+      else if (e.code === 'Escape') this.pause();
     };
     target.addEventListener('keydown', handler);
     return () => target.removeEventListener('keydown', handler);
