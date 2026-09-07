@@ -56,6 +56,13 @@ const BANNED_PRESENTATION_TOKENS = [
   /\bclearTakeProfit\b/,
 ];
 
+// Deprecated compatibility modules must stay gone once the hard boundary is
+// established. This catches accidental restoration during future refactors.
+const FORBIDDEN_LEGACY_FILES = [
+  'src/app/TradingUIPort.js',
+  'src/app/TradingUIState.js',
+];
+
 const INTEGRATION_LAYERS = new Set(['ui', 'pages', 'chart', 'app', 'router']);
 const BROWSER_GLOBALS = /\b(document|window|navigator|localStorage|sessionStorage)\b/;
 const IMPORT_PATTERN = /(?:\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\)|\bimport\s*['"]([^'"]+)['"]|\bexport\s+(?:\*|\{[^}]*\})\s*from\s*['"]([^'"]+)['"])/g;
@@ -104,6 +111,15 @@ function assertAcyclic(graph) {
 
 const violations = [];
 const graph = new Map(LAYERS.map(layer => [layer, new Set()]));
+
+for (const forbiddenFile of FORBIDDEN_LEGACY_FILES) {
+  try {
+    await fs.access(path.join(ROOT, forbiddenFile));
+    violations.push(`${forbiddenFile}: deprecated compatibility module must remain deleted`);
+  } catch {
+    // Expected: forbidden compatibility files do not exist.
+  }
+}
 
 for (const layer of LAYERS) {
   for (const relative of await collectFiles(`src/${layer}`)) {
