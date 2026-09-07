@@ -10,10 +10,10 @@ const LAYERS = [
 const ALLOWED = {
   core: new Set(),
   data: new Set(['core']),
-  indicators: new Set(),
+  indicators: new Set(['core']),
   replay: new Set(['core', 'data']),
   trading: new Set(['core', 'replay', 'data']),
-  strategy: new Set(['trading']),
+  strategy: new Set(['core', 'trading']),
   state: new Set(['core', 'data']),
   app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'personality']),
   chart: new Set(['trading', 'replay', 'utils']),
