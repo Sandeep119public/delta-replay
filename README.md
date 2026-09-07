@@ -1,11 +1,53 @@
 # Delta Replay
 
-Historical market replay application with paper trading and strategy backtesting.
+Historical market replay, paper trading, and strategy backtesting workspace.
 
-## What it is
+## V2 architecture
 
-Delta Replay is a browser-based historical replay and paper-trading workspace with replay controls, chart interaction, and strategy backtesting.
+Delta Replay 2.0 introduces a Python FastAPI engine behind a React/Vite research terminal.
 
-## Architecture
+- `backend/` contains the Python API, replay domain, CSV ingestion, paper trading, and backtest services.
+- `frontend/` contains the responsive trading terminal and candlestick chart.
+- `src/` remains the characterization reference during the migration so behavior can be ported safely.
 
-The application enforces explicit application, presentation, state, data, replay, trading, strategy, and utility boundaries with a CI architecture gate.
+## Run V2 locally
+
+Backend:
+
+```bash
+cd backend
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000
+```
+
+Frontend, in a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite development server proxies `/api` to `http://localhost:8000`.
+
+## Container runtime
+
+```bash
+docker compose -f docker-compose.v2.yml up --build
+```
+
+Then open `http://localhost:4173`.
+
+## V2 API
+
+Replay: `/api/v1/replay/state`, `/load`, `/start/{index}`, `/step`, `/seek/{index}`, `/reset`.
+
+Trading: `/api/v1/trading/state`, `/order`, `/close`, `/reset`.
+
+Data: `/api/v1/data/csv`.
+
+Backtest: `/api/v1/backtest/run`.
+
+The V2 workflow verifies both Python tests and the production React build on every branch push and pull request.
