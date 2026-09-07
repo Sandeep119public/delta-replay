@@ -1,13 +1,15 @@
-import { DEFAULT_TIMEFRAMES } from '../ports/DatasetPresentationPort.js';
-import { normalizeDatasetSource } from './presentationCompat.js';
+import { DEFAULT_TIMEFRAMES, snapshotDataset } from '../ports/DatasetPresentationPort.js';
 
 export class TimeframeSelector {
   constructor(selectEl, dataset = null, timeframes = null) {
     if (!selectEl) throw new Error('TimeframeSelector requires select element');
     this.el = selectEl;
-    // dataset is a narrow view model ({ timeframe }); legacy AppState is
-    // normalized through presentationCompat so the UI never imports state.
-    this.dataset = dataset;
+    // The dataset snapshot is copied once at construction; no store is retained.
+    try {
+      this.snapshot = snapshotDataset(dataset);
+    } catch {
+      this.snapshot = null;
+    }
     this.timeframes = timeframes ?? [...DEFAULT_TIMEFRAMES];
     this._onChange = null;
     this._handleChange = () => this._onChange?.(this.el.value);
@@ -16,7 +18,7 @@ export class TimeframeSelector {
   }
 
   get _selectedTimeframe() {
-    return normalizeDatasetSource(this.dataset, 'timeframe');
+    return this.snapshot?.timeframe ?? null;
   }
 
   _render() {

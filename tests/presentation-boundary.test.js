@@ -86,7 +86,12 @@ describe('Presentation boundary', () => {
     appState.setCandleStore(store);
     const dataset = createDatasetView(appState);
     expect(Object.isFrozen(dataset)).toBe(true);
-    expect(dataset.symbol).toBe('BTCUSDT');
+    const datasetSnap = dataset.snapshot();
+    expect(Object.isFrozen(datasetSnap)).toBe(true);
+    expect(datasetSnap.symbol).toBe('BTCUSDT');
+    appState.symbol = 'ETHUSDT';
+    expect(dataset.snapshot().symbol).toBe('ETHUSDT');
+    expect(datasetSnap.symbol).toBe('BTCUSDT');
     const candles = createCandleView(store);
     expect(candles.getCount()).toBe(1);
     const replay = new ReplayEngine();
@@ -96,6 +101,17 @@ describe('Presentation boundary', () => {
     expect(status.total).toBe(1);
     expect(typeof status.candleAt).toBe('function');
     replay.destroy();
+  });
+
+  it('UI constructors reject engine-shaped objects (no compat escape hatch)', () => {
+    const engineShaped = {
+      getAccountSnapshot: () => null,
+      getPositions: () => [],
+      placeOrder: () => ({ success: true }),
+      on: () => {},
+    };
+    expect(() => new TradingPanel({ trading: engineShaped })).toThrow(TypeError);
+    expect(() => new OrderFormView({ trading: engineShaped })).toThrow(TypeError);
   });
 
   it('TradingPanel is written against the narrow contract, not engine-shaped APIs', () => {
@@ -137,7 +153,7 @@ describe('Presentation boundary', () => {
           account: null, positions: [], pendingOrders: [], orders: [], trades: [],
           stats: {}, hasMarket: true, markPrice: 50000,
         }),
-        actions: Object.freeze({ ...actions, flattenPosition: vi.fn(), updateRisk: vi.fn(), clearRisk: vi.fn(), cancelOrder: vi.fn(), resetAccount: vi.fn(), setCapital: vi.fn(), setFeeRate: vi.fn(), hasOpenPosition: () => false }),
+        actions: Object.freeze({ ...actions, flattenPosition: vi.fn(), updateRisk: vi.fn(), setStopLoss: vi.fn(), setTakeProfit: vi.fn(), clearRisk: vi.fn(), cancelOrder: vi.fn(), resetAccount: vi.fn(), setCapital: vi.fn(), setFeeRate: vi.fn(), hasOpenPosition: () => false }),
         events: {}, on: vi.fn(),
       });
       const view = new OrderFormView({

@@ -1,10 +1,7 @@
 import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
 
-export function bindTradingEvents({ tradingEvents = null, tradingEngine = null, actions, errorPanel }) {
-  const eventPort = tradingEvents || (tradingEngine ? {
-    events: TRADING_PRESENTATION_EVENTS,
-    on: (event, handler) => tradingEngine.on?.(event, handler),
-  } : null);
+export function bindTradingEvents({ tradingEvents = null, actions, errorPanel }) {
+  const eventPort = tradingEvents;
   if (!eventPort?.on) throw new TypeError('tradingEvents presentation port is required');
 
   const subscriptions = [];

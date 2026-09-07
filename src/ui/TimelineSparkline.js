@@ -1,5 +1,5 @@
-import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
-import { normalizeCandleSource, normalizeTradingSource } from './presentationCompat.js';
+import { TRADING_PRESENTATION_EVENTS, assertTradingPresentation } from '../ports/TradingPresentationPort.js';
+import { normalizeCandleSource } from './presentationCompat.js';
 
 /**
  * TimelineSparkline renders a contextual mini price scrubber above the
@@ -9,9 +9,8 @@ import { normalizeCandleSource, normalizeTradingSource } from './presentationCom
  *
  * Read capabilities arrive as narrow views: `candles`
  * ({ getCount, get, getAll, findIndexByTime }), `replay` (replay port),
- * `trading` (presentation contract). Engine-shaped predecessors are normalized
- * through presentationCompat, so callers may still pass objects exposing the
- * legacy candle/trading getters.
+ * `trading` (narrow presentation contract, asserted). Engine-shaped trading
+ * objects are rejected.
  */
 export class TimelineSparkline {
   constructor({
@@ -28,7 +27,7 @@ export class TimelineSparkline {
     this.canvas = canvasEl;
     this.candles = candles ? normalizeCandleSource(candles) : null;
     this.replayPort = replay ?? replayPort;
-    this.trading = trading ? normalizeTradingSource(trading) : null;
+    this.trading = trading ? assertTradingPresentation(trading) : null;
     this.tradingEvents = tradingEvents;
     this.onSeek = onSeek;
     this.height = height;

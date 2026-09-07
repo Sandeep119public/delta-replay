@@ -1,6 +1,7 @@
 import { unixToDateTimeInput, toUnixSeconds } from '../utils/time.js';
 import { resolvePresetTarget, resolveReplayTargetUnixSeconds } from '../utils/replayRange.js';
-import { normalizeCandleSource, normalizeDatasetSource } from './presentationCompat.js';
+import { snapshotDataset } from '../ports/DatasetPresentationPort.js';
+import { normalizeCandleSource } from './presentationCompat.js';
 
 /**
  * ReplayDateSelector encapsulates replay date/time inputs, preset chips,
@@ -85,7 +86,7 @@ export class ReplayDateSelector {
       else chip.classList.remove('active');
     });
 
-    const currentTimeframe = normalizeDatasetSource(this.dataset, 'timeframe');
+    const currentTimeframe = snapshotDataset(this.dataset).timeframe;
     const { targetSec, recommendedTimeframe } = resolvePresetTarget(presetKey, currentTimeframe);
     if (recommendedTimeframe !== currentTimeframe) {
       if (typeof this.onTimeframeChange === 'function') this.onTimeframeChange(recommendedTimeframe);

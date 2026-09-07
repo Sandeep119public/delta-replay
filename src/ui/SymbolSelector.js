@@ -1,5 +1,4 @@
-import { DEFAULT_SYMBOLS } from '../ports/DatasetPresentationPort.js';
-import { normalizeDatasetSource } from './presentationCompat.js';
+import { DEFAULT_SYMBOLS, snapshotDataset } from '../ports/DatasetPresentationPort.js';
 
 export { DEFAULT_SYMBOLS };
 
@@ -7,9 +6,12 @@ export class SymbolSelector {
   constructor(selectEl, dataset = null, symbols = null) {
     if (!selectEl) throw new Error('SymbolSelector requires select element');
     this.el = selectEl;
-    // dataset is a narrow view model ({ symbol }); legacy AppState is
-    // normalized through presentationCompat so the UI never imports state.
-    this.dataset = dataset;
+    // The dataset snapshot is copied once at construction; no store is retained.
+    try {
+      this.snapshot = snapshotDataset(dataset);
+    } catch {
+      this.snapshot = null;
+    }
     this.symbols = symbols ?? [...DEFAULT_SYMBOLS];
     this._onChange = null;
     this._handleChange = () => this._onChange?.(this.el.value);
@@ -18,7 +20,7 @@ export class SymbolSelector {
   }
 
   get _selectedSymbol() {
-    return normalizeDatasetSource(this.dataset, 'symbol');
+    return this.snapshot?.symbol ?? null;
   }
 
   _render() {

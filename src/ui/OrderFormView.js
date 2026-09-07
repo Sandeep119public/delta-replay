@@ -1,17 +1,15 @@
-import { normalizeTradingSource } from './presentationCompat.js';
+import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
 /**
  * OrderFormView manages order entry inputs (order types, quantities,
  * limit and stop trigger prices) and dispatching buy/sell order submissions.
  *
- * Trading capabilities arrive as the narrow presentation contract
- * ({ snapshot, actions }); the deprecated `engine` alias is normalized
- * through presentationCompat and must not be used by new callers.
+ * Trading capabilities arrive only as the narrow presentation contract
+ * ({ snapshot, actions, events, on }); engine-shaped objects are rejected.
  */
 export class OrderFormView {
   constructor({
-    trading,
-    engine = null,
+    trading = null,
     qtyInput,
     buyBtn,
     sellBtn,
@@ -26,8 +24,7 @@ export class OrderFormView {
     onSuccess = null,
     onRender = null,
   } = {}) {
-    const tradingSource = trading ?? engine;
-    this.trading = tradingSource ? normalizeTradingSource(tradingSource) : null;
+    this.trading = trading ? assertTradingPresentation(trading) : null;
     this.qtyInput = qtyInput;
     this.buyBtn = buyBtn;
     this.sellBtn = sellBtn;

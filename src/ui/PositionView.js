@@ -1,18 +1,16 @@
-import { normalizeTradingSource } from './presentationCompat.js';
+import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
 /**
  * PositionView manages the active position card (symbol, side, size,
  * entry/current price, live unrealized PnL), risk stop/take profit inputs,
  * and position close triggers.
  *
- * Trading capabilities arrive as the narrow presentation contract
- * ({ snapshot, actions }); the deprecated `engine` alias is normalized
- * through presentationCompat.
+ * Trading capabilities arrive only as the narrow presentation contract
+ * ({ snapshot, actions, events, on }); engine-shaped objects are rejected.
  */
 export class PositionView {
   constructor({
-    trading,
-    engine = null,
+    trading = null,
     posSymbolEl,
     posSideEl,
     posQtyEl,
@@ -32,8 +30,7 @@ export class PositionView {
     onSuccess = null,
     onRender = null,
   } = {}) {
-    const tradingSource = trading ?? engine;
-    this.trading = tradingSource ? normalizeTradingSource(tradingSource) : null;
+    this.trading = trading ? assertTradingPresentation(trading) : null;
     this.posSymbolEl = posSymbolEl;
     this.posSideEl = posSideEl;
     this.posQtyEl = posQtyEl;

@@ -21,8 +21,7 @@ import { createPaperPorts } from './paper/PaperPorts.js';
  *   replayPort    - narrow replay capability (required)
  *   trading       - narrow trading presentation { snapshot, actions, events, on }
  *   tradingEvents - presentation event port
- *   tradingState  - legacy snapshot provider (optional, forwarded to terminal views)
- *   dataset       - frozen dataset view { symbol, timeframe } (required)
+ *   dataset       - dataset view ({ snapshot() } provider or frozen snapshot)
  *   candles       - narrow candle view { getCount, get, getAll, findIndexByTime }
  *   chart         - chart handles injected by the composition root
  *                   { chartManager, adapter } (required)
@@ -38,7 +37,6 @@ export function createPaperUI({
   replayPort,
   trading = null,
   tradingEvents = null,
-  tradingState = null,
   dataset = null,
   candles = null,
   chart = null,
@@ -112,7 +110,7 @@ export function createPaperUI({
     getOrderFormPorts: ports.orderForm,
     createTerminalViews(ctx) {
       return createPaperTerminalViews({
-        ...ctx, replayPort, trading, tradingEvents, tradingState, dataset, candles, el,
+        ...ctx, replayPort, trading, tradingEvents, dataset, candles, el,
       });
     },
     createChartTradingController(ctx) {
@@ -129,12 +127,10 @@ function createPaperTerminalViews(ctx) {
     replayPort,
     trading,
     tradingEvents,
-    tradingState,
     onLoadReplay = null,
     onPreviewWindow = null,
     onSeek = null,
     onTimeframeChange = null,
-    commandController = null,
     timeframeSelect,
     orderTypeSelect,
     limitPriceInput,
@@ -157,7 +153,6 @@ function createPaperTerminalViews(ctx) {
     dataset,
     candles,
     replay: replayPort,
-    commandController,
     timeframeSelect,
     onLoadReplay,
     onPreviewWindow,
@@ -198,5 +193,5 @@ function createPaperTerminalViews(ctx) {
     clearRiskBtn: el('btn-clear-risk'),
   });
 
-  return { sparkline, toastView, floatingPosView, dateSelector, tradingPanel, tradingState };
+  return { sparkline, toastView, floatingPosView, dateSelector, tradingPanel };
 }

@@ -111,8 +111,19 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
       };
       mockCoordinator = { showTradingError: vi.fn() };
       mockTradingState = {
-        activePosition: vi.fn(() => null),
-        snapshot: vi.fn(() => ({ pendingOrders: [] })),
+        snapshot: vi.fn(() => ({
+          account: null, positions: [], pendingOrders: [], orders: [],
+          trades: [], stats: {}, hasMarket: false, markPrice: null,
+        })),
+        actions: Object.freeze({
+          submitMarketOrder: vi.fn(), submitLimitOrder: vi.fn(), submitStopOrder: vi.fn(),
+          flattenPosition: vi.fn(), updateRisk: vi.fn(), setStopLoss: vi.fn(),
+          setTakeProfit: vi.fn(), clearRisk: vi.fn(), cancelOrder: vi.fn(),
+          resetAccount: vi.fn(), setCapital: vi.fn(), setFeeRate: vi.fn(),
+          hasOpenPosition: vi.fn(() => false),
+        }),
+        events: TradingEvents,
+        on: vi.fn(),
       };
       mockActions = {
         resolveClick: vi.fn(() => null),
@@ -126,8 +137,8 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
 
       controller = new ChartTradingController({
         chartManager: mockChartManager,
+        trading: mockTradingState,
         tradingEvents: mockTradingEvents,
-        tradingState: mockTradingState,
         actions: mockActions,
         tradingPanel: mockTradingPanel,
         floatingPosView: mockFloatingPosView,
@@ -149,9 +160,11 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
     });
 
     it('resolves and sets Take Profit for active LONG position above entry', () => {
-      mockTradingState.activePosition.mockReturnValue([
-        { symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 },
-      ]);
+      mockTradingState.snapshot.mockReturnValue({
+        account: null,
+        positions: [{ symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 }],
+        pendingOrders: [], orders: [], trades: [], stats: {}, hasMarket: false, markPrice: null,
+      });
       mockActions.resolveClick.mockReturnValue({
         action: 'SET_TP',
         price: 65000,
@@ -175,9 +188,11 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
     });
 
     it('resolves and sets Stop Loss for active LONG position below entry', () => {
-      mockTradingState.activePosition.mockReturnValue([
-        { symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 },
-      ]);
+      mockTradingState.snapshot.mockReturnValue({
+        account: null,
+        positions: [{ symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 }],
+        pendingOrders: [], orders: [], trades: [], stats: {}, hasMarket: false, markPrice: null,
+      });
       mockActions.resolveClick.mockReturnValue({
         action: 'SET_SL',
         price: 58000,
@@ -201,7 +216,10 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
     });
 
     it('sets Limit Price on orderFormView when no active position and LIMIT order type selected', () => {
-      mockTradingState.activePosition.mockReturnValue([]);
+      mockTradingState.snapshot.mockReturnValue({
+        account: null, positions: [], pendingOrders: [], orders: [],
+        trades: [], stats: {}, hasMarket: false, markPrice: null,
+      });
       mockOrderFormView.getOrderType.mockReturnValue('LIMIT');
       mockActions.resolveClick.mockReturnValue({ action: 'PRICE_SELECT', price: 62500 });
 
@@ -212,7 +230,10 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
     });
 
     it('sets Stop Price on orderFormView when no active position and STOP_MARKET order type selected', () => {
-      mockTradingState.activePosition.mockReturnValue([]);
+      mockTradingState.snapshot.mockReturnValue({
+        account: null, positions: [], pendingOrders: [], orders: [],
+        trades: [], stats: {}, hasMarket: false, markPrice: null,
+      });
       mockOrderFormView.getOrderType.mockReturnValue('STOP_MARKET');
       mockActions.resolveClick.mockReturnValue({ action: 'PRICE_SELECT', price: 67000 });
 

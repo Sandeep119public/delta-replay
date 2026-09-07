@@ -1,20 +1,18 @@
-import { normalizeTradingSource } from './presentationCompat.js';
+import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
 /**
- * Account summary presentation view. Trading capabilities arrive through the
- * narrow presentation contract ({ snapshot, actions }), never through the
- * trading domain module. The deprecated `engine` alias is normalized through
- * presentationCompat.
+ * Account summary presentation view. Trading capabilities arrive only through
+ * the narrow presentation contract ({ snapshot, actions, events, on }), never
+ * through the trading domain module; engine-shaped objects are rejected.
  */
 export class AccountSummaryView {
-  constructor({ trading, engine = null, balanceEl, equityEl, realizedEl, unrealizedEl, feesEl, resetBtn,
+  constructor({ trading = null, balanceEl, equityEl, realizedEl, unrealizedEl, feesEl, resetBtn,
     statWinEl = typeof document !== 'undefined' ? document.getElementById('stat-winrate') : null,
     statPfEl = typeof document !== 'undefined' ? document.getElementById('stat-pf') : null,
     statTrEl = typeof document !== 'undefined' ? document.getElementById('stat-trades') : null,
     statRetEl = typeof document !== 'undefined' ? document.getElementById('stat-return') : null,
     onError = null, onRender = null } = {}) {
-    const tradingSource = trading ?? engine;
-    this.trading = tradingSource ? normalizeTradingSource(tradingSource) : null; this.balanceEl = balanceEl; this.equityEl = equityEl; this.realizedEl = realizedEl; this.unrealizedEl = unrealizedEl; this.feesEl = feesEl;
+    this.trading = trading ? assertTradingPresentation(trading) : null; this.balanceEl = balanceEl; this.equityEl = equityEl; this.realizedEl = realizedEl; this.unrealizedEl = unrealizedEl; this.feesEl = feesEl;
     this.resetBtn = resetBtn; this.statWinEl = statWinEl; this.statPfEl = statPfEl; this.statTrEl = statTrEl; this.statRetEl = statRetEl; this.onError = onError; this.onRender = onRender; this._listeners = [];
     this._bindControls();
   }

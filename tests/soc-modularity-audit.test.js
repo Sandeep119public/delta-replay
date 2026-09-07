@@ -7,6 +7,7 @@ import { ReplayCommandController } from '../src/app/ReplayCommandController.js';
 import { ToastNotificationView } from '../src/ui/ToastNotificationView.js';
 import { FloatingPositionView } from '../src/ui/FloatingPositionView.js';
 import { ReplayDateSelector } from '../src/ui/ReplayDateSelector.js';
+import { createTradingPresentation } from '../src/app/TradingPresentationAdapter.js';
 import { AppState } from '../src/state/AppState.js';
 import { Order, ORDER_STATUSES } from '../src/trading/Order.js';
 import { FundingManager } from '../src/trading/FundingManager.js';
@@ -158,7 +159,7 @@ describe('SoC and Modularity Deep Audit Verification', () => {
       const container = createMockElement({ classes: ['hidden'] });
       const badgeEl = createMockElement(); const entryEl = createMockElement(); const pnlEl = createMockElement(); const closeBtn = createMockElement();
       const mockTrading = { closePosition: vi.fn(), getPositions: vi.fn(() => [{ symbol: 'BTCUSDT' }]) };
-      const view = new FloatingPositionView({ tradingEngine: mockTrading, container, badgeEl, entryEl, pnlEl, closeBtn });
+      const view = new FloatingPositionView({ trading: createTradingPresentation(mockTrading), container, badgeEl, entryEl, pnlEl, closeBtn });
       view.render({ symbol: 'BTCUSDT', side: 'LONG', quantity: 0.5, entryPrice: 65000, unrealizedPnL: 150.25 });
       expect(container.classList.contains('hidden')).toBe(false);
       expect(badgeEl.textContent).toBe('LONG 0.5');

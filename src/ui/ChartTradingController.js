@@ -1,29 +1,16 @@
-import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
-
-function createLegacyTradingEventPort(tradingEngine) {
-  if (!tradingEngine?.on) return null;
-  return Object.freeze({
-    events: TRADING_PRESENTATION_EVENTS,
-    on: (event, handler) => tradingEngine.on(event, handler),
-    onAll(handler) {
-      const unsubs = Object.values(TRADING_PRESENTATION_EVENTS)
-        .map((event) => tradingEngine.on(event, handler))
-        .filter((unsubscribe) => typeof unsubscribe === 'function');
-      return () => unsubs.forEach((unsubscribe) => { try { unsubscribe(); } catch {} });
-    },
-  });
-}
+import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
 /**
  * Presentation controller for chart-click trading interactions and visual state.
- * Trading domain events arrive through an application-provided presentation port.
+ * Trading state arrives only through the narrow presentation contract
+ * ({ snapshot, actions, events, on }); engine-shaped objects are rejected.
+ * Domain events arrive through the application-provided event port.
  */
 export class ChartTradingController {
   constructor({
     chartManager,
+    trading = null,
     tradingEvents = null,
-    tradingEngine = null,
-    tradingState = null,
     actions = null,
     tradingPanel = null,
     floatingPosView = null,
@@ -36,8 +23,8 @@ export class ChartTradingController {
     orderTypeSelect = null,
   }) {
     this.chartManager = chartManager;
-    this.tradingEvents = tradingEvents || createLegacyTradingEventPort(tradingEngine);
-    this.tradingState = tradingState;
+    this.tradingEvents = tradingEvents;
+    this.trading = trading ? assertTradingPresentation(trading) : null;
     this.actions = actions;
     this.tradingPanel = tradingPanel;
     this.floatingPosView = floatingPosView;
@@ -123,10 +110,10 @@ export class ChartTradingController {
   }
 
   syncChartTradingLines() {
-    const activePos = this.tradingState?.activePosition?.() || null;
+    const snapshot = this.trading?.snapshot() || { positions: [], pendingOrders: [] };
+    const activePos = snapshot.positions[0] || null;
     this.chartManager?.updatePositionLines?.(activePos);
-    const pendingOrders = this.tradingState?.snapshot?.().pendingOrders || [];
-    this.chartManager?.updateOrderLines?.(pendingOrders);
+    this.chartManager?.updateOrderLines?.(snapshot.pendingOrders || []);
     this.floatingPosView?.render?.(activePos);
   }
 

@@ -2,13 +2,11 @@ import { AccountSummaryView } from './AccountSummaryView.js';
 import { OrderFormView } from './OrderFormView.js';
 import { PositionView } from './PositionView.js';
 import { TradeLogView } from './TradeLogView.js';
-import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
-import { normalizeTradingSource } from './presentationCompat.js';
+import { TRADING_PRESENTATION_EVENTS, assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
 export class TradingPanel {
   constructor({
-    trading = null,
-    tradingEngine = null,
+    trading,
     tradingEvents = null,
     balanceEl, equityEl, realizedEl, unrealizedEl, feesEl,
     posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
@@ -17,7 +15,7 @@ export class TradingPanel {
     orderTypeSelect, limitPriceInput, stopPriceInput, pendingListEl,
     posSlEl, posTpEl, slInput, tpInput, setRiskBtn, clearRiskBtn
   }) {
-    this.trading = normalizeTradingSource(trading ?? tradingEngine);
+    this.trading = assertTradingPresentation(trading);
     this.tradingEvents = tradingEvents;
     const getEl = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
     this.errorEl = errorEl || getEl('trading-error');

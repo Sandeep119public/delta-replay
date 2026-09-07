@@ -3,6 +3,7 @@ import { OrderFormView } from '../src/ui/OrderFormView.js';
 import { Timeline } from '../src/ui/Timeline.js';
 import { ErrorPanel } from '../src/ui/ErrorPanel.js';
 import { ModeBanner } from '../src/ui/ModeBanner.js';
+import { createTradingPresentation } from '../src/app/TradingPresentationAdapter.js';
 
 function mockEl(extra = {}) {
   const listeners = {};
@@ -29,7 +30,7 @@ describe('terminal overhaul smoke', () => {
       getLatestCandle: () => ({ close: 50000 }),
       getAccountSnapshot: () => ({ equity: 10000 }),
     };
-    const view = new OrderFormView({ engine, qtyInput, getSymbol: () => 'BTCUSDT' });
+    const view = new OrderFormView({ trading: createTradingPresentation(engine), qtyInput, getSymbol: () => 'BTCUSDT' });
     view.applyEquityPct(50);
     expect(Number(qtyInput.value)).toBeCloseTo(0.1, 4);
   });

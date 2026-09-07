@@ -1098,8 +1098,9 @@ describe('Phase8.5 — UI TradingPanel', () => {
     const engine = new PaperTradingEngine({ feeRate: 0 });
     send(engine, mc(1000, 100), 0);
     const mkEl = (txt='') => ({ textContent: txt, className:'', disabled:false, innerHTML:'', value:'', addEventListener(){}, classList:{add(){},remove(){},contains(){return false}}, querySelectorAll(){return []} });
+    const { createTradingPresentation } = await import('../src/app/TradingPresentationAdapter.js');
     const panel = new TradingPanel({
-      tradingEngine: engine,
+      trading: createTradingPresentation(engine),
       balanceEl: mkEl(), equityEl: mkEl(), realizedEl: mkEl(), unrealizedEl: mkEl(), feesEl: mkEl(),
       posSymbolEl: mkEl(), posSideEl: mkEl(), posQtyEl: mkEl(), posEntryEl: mkEl(), posCurrentEl: mkEl(), posPnlEl: mkEl(),
       qtyInput: { value:'1' }, buyBtn: mkEl(), sellBtn: mkEl(), closeBtn: mkEl(), resetBtn: mkEl(),
@@ -1127,8 +1128,9 @@ describe('Phase8.5 — UI TradingPanel', () => {
     send(engine, mc(1000, 100), 0);
     const mkEl = (txt='') => ({ textContent: txt, className:'', disabled:false, innerHTML:'', value:'', addEventListener(){}, classList:{add(){},remove(){},contains(){return false}}, querySelectorAll(){return []} });
     const setBtn = mkEl(); const clearBtn = mkEl(); const closeBtn = mkEl();
+    const { createTradingPresentation } = await import('../src/app/TradingPresentationAdapter.js');
     const panel = new TradingPanel({
-      tradingEngine: engine,
+      trading: createTradingPresentation(engine),
       balanceEl: mkEl(), equityEl: mkEl(), realizedEl: mkEl(), unrealizedEl: mkEl(), feesEl: mkEl(),
       posSymbolEl: mkEl(), posSideEl: mkEl(), posQtyEl: mkEl(), posEntryEl: mkEl(), posCurrentEl: mkEl(), posPnlEl: mkEl(),
       qtyInput: { value:'1' }, buyBtn: mkEl(), sellBtn: mkEl(), closeBtn, resetBtn: mkEl(),

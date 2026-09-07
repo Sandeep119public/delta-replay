@@ -1,16 +1,15 @@
-import { normalizeTradingSource } from './presentationCompat.js';
+import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
 /**
  * FloatingPositionView manages the professional "Live Position Capsule"
  * overlaid directly on the chart viewport.
  *
- * Trading capabilities arrive as the narrow presentation contract; the
- * deprecated `tradingEngine` alias is normalized through presentationCompat.
+ * Trading capabilities arrive only as the narrow presentation contract
+ * ({ snapshot, actions, events, on }); engine-shaped objects are rejected.
  */
 export class FloatingPositionView {
   constructor({
     trading = null,
-    tradingEngine = null,
     container = (typeof document !== 'undefined' ? document.getElementById('chart-floating-bar') : null),
     symbolEl = (typeof document !== 'undefined' ? document.getElementById('chart-pos-symbol') : null),
     sideTextEl = (typeof document !== 'undefined' ? document.getElementById('chart-pos-side-text') : null),
@@ -23,8 +22,7 @@ export class FloatingPositionView {
     // Legacy badge element (pre-capsule layout) — kept for backwards compatibility.
     badgeEl = (typeof document !== 'undefined' ? document.getElementById('chart-pos-badge') : null),
   } = {}) {
-    const tradingSource = trading ?? tradingEngine;
-    this.trading = tradingSource ? normalizeTradingSource(tradingSource) : null;
+    this.trading = trading ? assertTradingPresentation(trading) : null;
     this.container = container;
     this.symbolEl = symbolEl;
     this.sideTextEl = sideTextEl;

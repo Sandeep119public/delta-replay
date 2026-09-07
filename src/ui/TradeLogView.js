@@ -1,27 +1,24 @@
 import { formatTime } from '../utils/time.js';
 
-import { normalizeTradingSource } from './presentationCompat.js';
+import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
 /**
  * TradeLogView manages trade execution history tables, pending order lists,
  * order cancellation triggers, and the sidebar activity badge.
  *
- * Trading capabilities arrive as the narrow presentation contract
- * ({ snapshot, actions }); the deprecated `engine` alias is normalized
- * through presentationCompat.
+ * Trading capabilities arrive only as the narrow presentation contract
+ * ({ snapshot, actions, events, on }); engine-shaped objects are rejected.
  */
 export class TradeLogView {
   constructor({
-    trading,
-    engine = null,
+    trading = null,
     tradesListEl,
     pendingListEl = typeof document !== 'undefined' ? document.getElementById('pending-orders-list') : null,
     activityBadge = typeof document !== 'undefined' ? document.getElementById('activity-badge') : null,
     onError = null,
     onRender = null,
   } = {}) {
-    const tradingSource = trading ?? engine;
-    this.trading = tradingSource ? normalizeTradingSource(tradingSource) : null;
+    this.trading = trading ? assertTradingPresentation(trading) : null;
     this.tradesListEl = tradesListEl;
     this.pendingListEl = pendingListEl;
     this.activityBadge = activityBadge;

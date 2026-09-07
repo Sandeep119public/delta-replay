@@ -11,9 +11,7 @@ import { bindTradingEvents } from '../ui/bindTradingEvents.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createApplicationActions } from './ApplicationActions.js';
 import { createChartTradingActions } from './ChartTradingActions.js';
-import { createTradingUIState } from './TradingUIState.js';
 import { createTradingUIEvents } from './TradingUIEvents.js';
-import { createTradingUIPort } from './TradingUIPort.js';
 import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
 import { createReplayUIPort } from './ReplayUIPort.js';
@@ -41,12 +39,10 @@ function bindDatasetSelectors(ui, actions) {
 export function createApplication() {
   const services = createCoreServices();
   const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
-  const tradingState = createTradingUIState(tradingEngine);
   const tradingEvents = createTradingUIEvents(tradingEngine);
-  // Narrow intent-shaped trading contract for presentation. The legacy
-  // engine-shaped facade is retained only for backward compatibility.
+  // Narrow intent-shaped trading contract for presentation. This is the only
+  // trading capability that crosses into UI code.
   const trading = createTradingPresentation(tradingEngine);
-  const tradingPort = createTradingUIPort(tradingEngine);
   const replayPort = createReplayUIPort(engine);
   // Frozen presentation views: the UI receives these instead of stores.
   const dataset = createDatasetView(appState);
@@ -89,7 +85,6 @@ export function createApplication() {
     replayPort,
     trading,
     tradingEvents,
-    tradingState,
     dataset,
     candles,
     chart: { chartManager, adapter: chartAdapter },
@@ -140,7 +135,6 @@ export function createApplication() {
 
   const form = ui.getOrderFormPorts();
   const views = ui.createTerminalViews({
-    commandController,
     timeline: ui.timeline,
     controls: ui.controls,
     modeBanner: ui.modeBanner,
@@ -152,14 +146,14 @@ export function createApplication() {
   });
 
   const selectorBindings = bindDatasetSelectors(ui, actions);
-  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, tradingState, actions });
+  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, actions });
   const tradingBindings = bindTradingEvents({ tradingEvents, actions, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
   const chartTradingActions = createChartTradingActions({ tradingEngine, coordinator });
   const chartTradingController = ui.createChartTradingController({
     chartManager: ui.chartManager,
+    trading,
     tradingEvents,
-    tradingState,
     tradingPanel: views.tradingPanel,
     floatingPosView: views.floatingPosView,
     toastView: views.toastView,
@@ -167,7 +161,7 @@ export function createApplication() {
     actions: chartTradingActions,
     ...form,
   });
-  const tradingStateBridge = bindTradingState({ tradingEvents, tradingState, onChange: () => chartTradingController.syncChartTradingLines() });
+  const tradingStateBridge = bindTradingState({ tradingEvents, trading, onChange: () => chartTradingController.syncChartTradingLines() });
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, statusView, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
   const actionGuardUnsub = registerActionGuard(engine, tradingEngine, coordinator);
   const loadBtn = coordinatorPorts.loadBtn;

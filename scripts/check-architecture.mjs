@@ -24,8 +24,9 @@ const ALLOWED = {
 };
 
 // Quality-of-ports enforcement: these capability tokens must never appear in
-// presentation code. The single deprecated mapping layer
-// (src/ui/presentationCompat.js) is the only exception.
+// presentation code. UI constructors take only asserted narrow contracts, so
+// there is no compatibility parameter left to name. The candle-view
+// projection helper (src/ui/presentationCompat.js) is the only exception.
 const PRESENTATION_COMPAT_FILE = 'src/ui/presentationCompat.js';
 const BANNED_PRESENTATION_TOKENS = [
   /\w*[Cc]oordinator\w*/,
@@ -33,6 +34,10 @@ const BANNED_PRESENTATION_TOKENS = [
   /\bcandleStore\b/,
   /\b[Aa]ppState\b/,
   /\bPaperTradingEngine\b/,
+  /\btradingEngine\b/,
+  /\btradingState\b/,
+  /\bcommandController\b/,
+  /\bengine\b/,
   /\bloadAndPrepareReplay\b/,
   /\bapplyWindowedChart\b/,
   /\bupdatePreviewWindow\b/,

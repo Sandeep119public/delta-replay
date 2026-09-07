@@ -4,6 +4,7 @@ import { OrderFormView } from '../src/ui/OrderFormView.js';
 import { PositionView } from '../src/ui/PositionView.js';
 import { TradeLogView } from '../src/ui/TradeLogView.js';
 import { TradingPanel } from '../src/ui/TradingPanel.js';
+import { createTradingPresentation } from '../src/app/TradingPresentationAdapter.js';
 
 function createMockElement(initial = {}) {
   const listeners = {};
@@ -50,6 +51,7 @@ function createMockElement(initial = {}) {
 
 describe('Modular Trading Panel Sub-views & Coordinator', () => {
   let mockEngine;
+  let asTrading;
 
   beforeEach(() => {
     global.document = {
@@ -126,6 +128,8 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
       cancelOrder: vi.fn(() => ({ success: true })),
       on: vi.fn(),
     };
+
+    asTrading = () => createTradingPresentation(mockEngine);
   });
 
   afterEach(() => {
@@ -142,7 +146,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
       const resetBtn = createMockElement();
 
       const view = new AccountSummaryView({
-        engine: mockEngine,
+        trading: asTrading(),
         balanceEl,
         equityEl,
         realizedEl,
@@ -163,7 +167,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
 
     it('triggers resetAccount on reset button click', () => {
       const resetBtn = createMockElement();
-      new AccountSummaryView({ engine: mockEngine, resetBtn });
+      new AccountSummaryView({ trading: asTrading(), resetBtn });
 
       resetBtn.click();
       expect(mockEngine.resetAccount).toHaveBeenCalledTimes(1);
@@ -179,7 +183,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
       const stopPriceRow = createMockElement();
 
       const view = new OrderFormView({
-        engine: mockEngine,
+        trading: asTrading(),
         buyBtn,
         sellBtn,
         orderTypeSelect,
@@ -214,7 +218,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
       const orderTypeSelect = createMockElement({ value: 'MARKET' });
 
       const view = new OrderFormView({
-        engine: mockEngine,
+        trading: asTrading(),
         qtyInput,
         buyBtn,
         orderTypeSelect,
@@ -236,7 +240,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
       const orderTypeSelect = createMockElement({ value: 'LIMIT' });
 
       const view = new OrderFormView({
-        engine: mockEngine,
+        trading: asTrading(),
         qtyInput,
         limitPriceInput,
         orderTypeSelect,
@@ -261,7 +265,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
       const setRiskBtn = createMockElement();
 
       const view = new PositionView({
-        engine: mockEngine,
+        trading: asTrading(),
         posSymbolEl,
         closeBtn,
         setRiskBtn,
@@ -283,7 +287,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
       const setRiskBtn = createMockElement();
 
       const view = new PositionView({
-        engine: mockEngine,
+        trading: asTrading(),
         posSymbolEl,
         posSideEl,
         posQtyEl,
@@ -306,7 +310,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
     it('invokes closePosition on the engine', () => {
       const closeBtn = createMockElement();
       const view = new PositionView({
-        engine: mockEngine,
+        trading: asTrading(),
         closeBtn,
       });
 
@@ -322,7 +326,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
       const activityBadge = createMockElement();
 
       const view = new TradeLogView({
-        engine: mockEngine,
+        trading: asTrading(),
         tradesListEl,
         pendingListEl,
         activityBadge,
@@ -341,7 +345,7 @@ describe('Modular Trading Panel Sub-views & Coordinator', () => {
     it('instantiates all four sub-views and routes render calls', () => {
       const mkEl = () => createMockElement();
       const panel = new TradingPanel({
-        tradingEngine: mockEngine,
+        trading: asTrading(),
         balanceEl: mkEl(),
         equityEl: mkEl(),
         realizedEl: mkEl(),
