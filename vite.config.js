@@ -18,7 +18,7 @@ export default defineConfig({
     // tests/architecture uses the built-in node:test runner (via `npm run test:architecture`),
     // not vitest. Without this, `vitest run` fails with "No test suite found".
     exclude: ['**/node_modules/**', '**/dist/**', 'tests/architecture/**'],
-    setupFiles: ['./tests/setup.js'],
+
     globals: false
   }
 });
