@@ -10,8 +10,6 @@ const LAYERS = [
 const ALLOWED = {
   core: new Set(), data: new Set(['core']), indicators: new Set(['core']), replay: new Set(['core', 'data']),
   trading: new Set(['core', 'replay', 'data']), strategy: new Set(['core', 'trading']), state: new Set(['core', 'data']),
-  // app is the composition root: the only layer allowed to wire domain,
-  // stores, chart, and presentation objects together.
   app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'ports', 'personality']),
   chart: new Set(['replay', 'utils', 'ports']),
   ui: new Set(['utils', 'ports']),
@@ -41,15 +39,15 @@ const BANNED_PRESENTATION_TOKENS = [
   /\bgetOrders\b/,
   /\bgetPendingOrders\b/,
   /\bgetLatestCandle\b/,
-  /\bplaceOrder\b/,
-  /\bplaceLimitOrder\b/,
-  /\bplaceStopOrder\b/,
-  /\bsetRisk\b/,
+  /\.\s*placeOrder\s*\(/,
+  /\.\s*placeLimitOrder\s*\(/,
+  /\.\s*placeStopOrder\s*\(/,
+  /\.\s*setRisk\s*\(/,
   /\bsetStartingBalance\b/,
   /\bclearStopLoss\b/,
   /\bclearTakeProfit\b/,
-  /\bonMarketCandle\b/,
-  /\bclearPendingOrders\b/,
+  /\.\s*onMarketCandle\s*\(/,
+  /\.\s*clearPendingOrders\s*\(/,
 ];
 
 const FORBIDDEN_LEGACY_FILES = [
