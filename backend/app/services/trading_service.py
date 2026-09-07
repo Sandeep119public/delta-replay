@@ -1,5 +1,6 @@
 from ..models import OrderRequest
 from ..domain.margin import MarginEngine
+from ..domain.risk import evaluate_risk
 
 TAKER_FEE_RATE = 0.0005
 DEFAULT_MARGIN_RATE = 1.0
@@ -18,6 +19,7 @@ class TradingService:
         self.margin_engine = MarginEngine(self.margin_rate, self.maintenance_rate)
         self.position = None
         self.total_fees = 0.0
+        self.positions = {}
 
     def _fee(self, price: float, quantity: float) -> float:
         return abs(price * quantity) * self.fee_rate
@@ -52,7 +54,8 @@ class TradingService:
         if self.balance < required: raise ValueError('insufficient margin')
         self.balance -= fee
         self.total_fees += fee
-        self.position = {'side': 'long' if order.side == 'buy' else 'short', 'quantity': order.quantity, 'entry_price': price}
+        self.position = {'side': 'long' if order.side == 'buy' else 'short', 'quantity': order.quantity, 'entry_price': price, 'current_price': price, 'stop_loss': None, 'take_profit': None}
+        self.positions['DEFAULT'] = self.position
         return self.snapshot(price)
 
     def open_order(self, order, price: float):
@@ -68,8 +71,23 @@ class TradingService:
             fee = self._fee(price, qty)
             self.balance += pnl - fee
             self.total_fees += fee
+            self.positions.pop('DEFAULT',None)
             self.position = None
         return self.snapshot(price)
+
+    def set_risk(self, stop_loss=None, take_profit=None):
+        if not self.position: raise ValueError('no open position')
+        if stop_loss is not None: self.position['stop_loss']=float(stop_loss)
+        if take_profit is not None: self.position['take_profit']=float(take_profit)
+        return self.snapshot(self.position['current_price'])
+
+    def process_candle(self,candle,policy='conservative'):
+        if not self.position: return {'event':None,**self.snapshot(candle.get('close'))}
+        self.position['current_price']=float(candle['close'])
+        reason,price,ambiguous=evaluate_risk(self.position,candle,policy)
+        if reason:
+            result=self.close(float(price));return {'event':reason,'ambiguous':ambiguous,**result}
+        return {'event':None,**self.snapshot(float(candle['close']))}
 
     def reset(self):
         self.balance = self.starting_balance
