@@ -3,6 +3,7 @@ import { TradingIntentResolver } from '../src/trading/TradingIntentResolver.js';
 import { ChartTradingOverlay } from '../src/chart/ChartTradingOverlay.js';
 import { PaperTradingEngine } from '../src/trading/PaperTradingEngine.js';
 import { TradingEvents } from '../src/trading/TradingEvents.js';
+import { TRADING_PRESENTATION_EVENTS } from '../src/ports/TradingPresentationPort.js';
 import { ReplayCommandController } from '../src/app/ReplayCommandController.js';
 import { ToastNotificationView } from '../src/ui/ToastNotificationView.js';
 import { FloatingPositionView } from '../src/ui/FloatingPositionView.js';
@@ -82,10 +83,14 @@ describe('SoC and Modularity Deep Audit Verification', () => {
       const { createChartTradingActions } = await import('../src/app/ChartTradingActions.js');
       const overlay = new ChartTradingOverlay();
       expect(overlay.resolveClickIntent).toBeUndefined();
-      const actions = createChartTradingActions({
-        tradingEngine: { getPositions: () => [{ symbol: 'ETHUSDT', side: 'LONG', entryPrice: 3000 }] },
-        coordinator: null,
-      });
+      const trading = {
+        snapshot: () => Object.freeze({
+          account: null,
+          positions: [Object.freeze({ symbol: 'ETHUSDT', side: 'LONG', entryPrice: 3000 })],
+          pendingOrders: [], orders: [], trades: [], stats: {}, hasMarket: true, markPrice: 3000,
+        }),
+      };
+      const actions = createChartTradingActions({ trading, executeTrade: vi.fn(), reportError: vi.fn() });
       const res = actions.resolveClick(3200);
       expect(res.action).toBe('SET_TP');
       expect(res.isTP).toBe(true);
@@ -108,7 +113,7 @@ describe('SoC and Modularity Deep Audit Verification', () => {
   });
 
   describe('3. ReplayCommandController', () => {
-    let mockEngine, mockAppState, mockCandleStore, mockTradingEngine, mockCoordinator, headerBtn, controller;
+    let mockEngine, mockAppState, mockCandleStore, mockPositionOpen, mockError, headerBtn, controller;
     beforeEach(() => {
       mockEngine = {
         _state: { status: 'ready', currentIndex: 0 },
@@ -121,21 +126,30 @@ describe('SoC and Modularity Deep Audit Verification', () => {
       };
       mockAppState = { pendingStartIndex: 10, candles: [{ time: 1000 }] };
       mockCandleStore = { getCount: vi.fn(() => 100) };
-      mockTradingEngine = { hasOpenPosition: vi.fn(() => false) };
-      mockCoordinator = { loadAndPrepareReplay: vi.fn(), updatePreviewWindow: vi.fn(), showTradingError: vi.fn() };
+      mockPositionOpen = false;
+      mockError = vi.fn();
       headerBtn = createMockElement();
-      controller = new ReplayCommandController({ engine: mockEngine, appState: mockAppState, candleStore: mockCandleStore, tradingEngine: mockTradingEngine, coordinator: mockCoordinator, headerBtn });
+      controller = new ReplayCommandController({
+        engine: mockEngine,
+        appState: mockAppState,
+        candleStore: mockCandleStore,
+        headerBtn,
+        canExecute: vi.fn((action) => mockPositionOpen
+          ? { allowed: false, reason: `Cannot ${action} while a position is open` }
+          : { allowed: true }),
+        onError: mockError,
+      });
     });
     it('renders initial header button text based on engine status', () => expect(headerBtn.innerHTML).toContain('START REPLAY'));
     it('togglePlayPause starts engine from pendingStartIndex when status is ready', () => { controller.togglePlayPause(); expect(mockEngine.start).toHaveBeenCalledWith(10); expect(mockEngine.play).toHaveBeenCalledTimes(1); });
     it('togglePlayPause pauses engine when status is playing', () => { mockEngine._state.status = 'playing'; controller.togglePlayPause(); expect(mockEngine.pause).toHaveBeenCalledTimes(1); });
     it('togglePlayPause plays engine when status is paused', () => { mockEngine._state.status = 'paused'; controller.togglePlayPause(); expect(mockEngine.play).toHaveBeenCalledTimes(1); });
-    it('trySeek blocks seek and emits error when position is open', () => { mockTradingEngine.hasOpenPosition.mockReturnValue(true); expect(controller.trySeek(25)).toBe(false); expect(mockEngine.seek).not.toHaveBeenCalled(); expect(mockCoordinator.showTradingError).toHaveBeenCalledWith(expect.stringContaining('Cannot seek while a position is open')); });
+    it('trySeek blocks seek and emits error when position is open', () => { mockPositionOpen = true; expect(controller.trySeek(25)).toBe(false); expect(mockEngine.seek).not.toHaveBeenCalled(); expect(mockError).toHaveBeenCalledWith(expect.stringContaining('Cannot seek while a position is open')); });
     it('trySeek executes seek when no position is open', () => { expect(controller.trySeek(25)).toBe(true); expect(mockEngine.seek).toHaveBeenCalledWith(25); });
     it('binds keyboard shortcuts (Space, ArrowRight, KeyR, Escape)', () => { const mockDoc = createMockElement(); const unbind = controller.bindKeyboardShortcuts(mockDoc); const spaceEvent = { type: 'keydown', code: 'Space', preventDefault: vi.fn(), target: {} }; mockDoc.dispatchEvent(spaceEvent); expect(spaceEvent.preventDefault).toHaveBeenCalled(); expect(mockEngine.start).toHaveBeenCalled(); const stepEvent = { type: 'keydown', code: 'ArrowRight', preventDefault: vi.fn(), target: {} }; mockDoc.dispatchEvent(stepEvent); expect(mockEngine.stepForward).toHaveBeenCalled(); unbind(); });
     it('ArrowLeft steps one candle back via guarded seek', () => { mockEngine._state.status = 'paused'; mockEngine._state.currentIndex = 5; const mockDoc = createMockElement(); const unbind = controller.bindKeyboardShortcuts(mockDoc); mockDoc.dispatchEvent({ type: 'keydown', code: 'ArrowLeft', preventDefault: vi.fn(), target: {} }); expect(mockEngine.seek).toHaveBeenCalledWith(4); unbind(); });
     it('Shift+arrows jump ±10 candles clamped to bounds', () => { mockEngine._state.status = 'paused'; mockEngine._state.currentIndex = 50; mockEngine.getTotalCandles = vi.fn(() => 100); const mockDoc = createMockElement(); const unbind = controller.bindKeyboardShortcuts(mockDoc); mockDoc.dispatchEvent({ type: 'keydown', code: 'ArrowRight', shiftKey: true, preventDefault: vi.fn(), target: {} }); expect(mockEngine.seek).toHaveBeenCalledWith(60); mockEngine._state.currentIndex = 3; mockDoc.dispatchEvent({ type: 'keydown', code: 'ArrowLeft', shiftKey: true, preventDefault: vi.fn(), target: {} }); expect(mockEngine.seek).toHaveBeenCalledWith(0); unbind(); });
-    it('stepBackward is blocked while a position is open', () => { mockEngine._state.status = 'paused'; mockEngine._state.currentIndex = 5; mockTradingEngine.hasOpenPosition.mockReturnValue(true); expect(controller.stepBackward()).toBe(false); expect(mockEngine.seek).not.toHaveBeenCalled(); });
+    it('stepBackward is blocked while a position is open', () => { mockEngine._state.status = 'paused'; mockEngine._state.currentIndex = 5; mockPositionOpen = true; expect(controller.stepBackward()).toBe(false); expect(mockEngine.seek).not.toHaveBeenCalled(); });
     it('KeyX/KeyZ cycle playback speed through notches', () => { mockEngine._state.speed = 1; mockEngine.setSpeed = vi.fn(function(s) { this._state.speed = s; }); const mockDoc = createMockElement(); const unbind = controller.bindKeyboardShortcuts(mockDoc); mockDoc.dispatchEvent({ type: 'keydown', code: 'KeyX', preventDefault: vi.fn(), target: {} }); expect(mockEngine.setSpeed).toHaveBeenCalledWith(2); mockDoc.dispatchEvent({ type: 'keydown', code: 'KeyZ', preventDefault: vi.fn(), target: {} }); expect(mockEngine.setSpeed).toHaveBeenCalledWith(1); unbind(); });
   });
 
