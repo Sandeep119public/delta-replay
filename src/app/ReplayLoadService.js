@@ -82,6 +82,11 @@ export function createReplayLoadService({
     }
   }
 
+  function invalidateCurrentLoad() {
+    loadToken++;
+    clearCurrentLoad();
+  }
+
   function resetRetryState() {
     retryCount = 0;
     appState.setRetryCount(0);
@@ -227,6 +232,7 @@ export function createReplayLoadService({
     loadAndPrepareReplay,
     updateLoadButton,
     clearCurrentLoad,
+    invalidateCurrentLoad,
     destroy() {
       if (destroyed) return;
       destroyed = true;
