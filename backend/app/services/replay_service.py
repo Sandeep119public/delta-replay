@@ -1,10 +1,21 @@
+from ..domain.replay import ReplayEngine
+from ..models import CandleBatch
+
 class ReplayService:
-    def __init__(self): self.candles=[]; self.index=-1
-    def load(self,candles):
-        if not candles: return {'loaded':0,'index':-1}
-        self.candles=candles; self.index=0; return self.state()
-    def step(self):
-        if not self.candles: return self.state()
-        self.index=min(self.index+1,len(self.candles)-1); return self.state()
-    def reset(self): self.index=0 if self.candles else -1; return self.state()
-    def state(self): return {'index':self.index,'total':len(self.candles),'candle':self.candles[self.index] if self.index>=0 else None}
+    def __init__(self) -> None:
+        self.engine = ReplayEngine()
+
+    def load(self, batch: CandleBatch) -> dict:
+        self.engine.load([c.model_dump() for c in batch.candles])
+        return self.engine.snapshot()
+
+    def step(self) -> dict:
+        self.engine.step()
+        return self.engine.snapshot()
+
+    def reset(self) -> dict:
+        self.engine.reset()
+        return self.engine.snapshot()
+
+    def state(self) -> dict:
+        return self.engine.snapshot()
