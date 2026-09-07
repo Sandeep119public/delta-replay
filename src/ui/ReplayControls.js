@@ -4,14 +4,10 @@ export class ReplayControls {
   constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, replayPort, followBtn = null, onFollowClick = null }) {
     this.playBtn=playBtn;this.pauseBtn=pauseBtn;this.stepBtn=stepBtn;this.resetBtn=resetBtn;this.startReplayBtn=startReplayBtn;this.speedSelect=speedSelect;this.statusEl=statusEl;this.replayPort=replayPort;this.followBtn=followBtn;this.onFollowClick=onFollowClick;this._listeners=[];this._subscriptions=[];
     this._listen=(el,type,handler)=>{el?.addEventListener?.(type,handler);this._listeners.push([el,type,handler]);};
-    this._listen(playBtn,'click',()=>this._safeAction(()=>this.replayPort.play()));
-    this._listen(pauseBtn,'click',()=>this._safeAction(()=>this.replayPort.pause()));
-    this._listen(stepBtn,'click',()=>this._safeAction(()=>this.replayPort.stepForward()));
-    this._listen(resetBtn,'click',()=>this._safeAction(()=>this.replayPort.reset()));
-    this._listen(startReplayBtn,'click',()=>this._safeAction(()=>this.replayPort.start(Number(this.startReplayBtn.dataset.startIndex??'0'))));
-    this._listen(speedSelect,'change',()=>this._safeAction(()=>this.replayPort.setSpeed(this.speedSelect.value),()=>{this.speedSelect.value=String(this.replayPort.getState().speed);}));
+    for (const [el,type,fn] of [[playBtn,'click',()=>this._safeAction(()=>this.replayPort.play())],[pauseBtn,'click',()=>this._safeAction(()=>this.replayPort.pause())],[stepBtn,'click',()=>this._safeAction(()=>this.replayPort.stepForward())],[resetBtn,'click',()=>this._safeAction(()=>this.replayPort.reset())],[startReplayBtn,'click',()=>this._safeAction(()=>this.replayPort.start(Number(this.startReplayBtn.dataset.startIndex??'0')))],[speedSelect,'change',()=>this._safeAction(()=>this.replayPort.setSpeed(this.speedSelect.value),()=>{this.speedSelect.value=String(this.replayPort.getState().speed);})]]) this._listen(el,type,fn);
     if(followBtn)this._listen(followBtn,'click',()=>{this.onFollowClick?.();this.followBtn.classList.add('hidden');});
-    this._subscriptions.push(this.replayPort.on(ReplayEvents.STATE_CHANGED,state=>this.render(state)),this.replayPort.on(ReplayEvents.SPEED_CHANGED,({speed})=>{this.speedSelect.value=String(speed);}));this.render(this.replayPort.getState());
+    this._subscriptions.push(this.replayPort.on(ReplayEvents.STATE_CHANGED,state=>this.render(state)),this.replayPort.on(ReplayEvents.SPEED_CHANGED,({speed})=>{this.speedSelect.value=String(speed);}));
+    this.render(this.replayPort.getState());
   }
   destroy(){this._listeners.forEach(([el,t,h])=>el?.removeEventListener?.(t,h));this._subscriptions.forEach(u=>{try{u?.();}catch{}});this._listeners=[];this._subscriptions=[];try{document?.body?.classList?.remove('velocity-boost');}catch{}}
   _safeAction(action,onError=null){try{return action();}catch(error){console.warn('[ReplayControls]',error?.message||error);onError?.(error);return this.replayPort.getState();}}
