@@ -1,5 +1,6 @@
 import { resolveVenueSymbol, VENUES } from './InstrumentConfig.js';
 import { TIMEFRAME_SECONDS } from './CandleGrid.js';
+import { CandleValidator } from './CandleValidator.js';
 
 export const BINANCE_FUTURES_BASE = 'https://fapi.binance.com';
 export const BINANCE_SPOT_BASE = 'https://api.binance.com';
@@ -102,6 +103,17 @@ export class BinanceClient {
           }
           return item;
         });
+
+        let previousTime = null;
+        for (let i = 0; i < page.length; i += 1) {
+          const result = CandleValidator.validate(page[i], previousTime);
+          if (!result.valid) {
+            const err = new Error(`Invalid candle at provider boundary index ${i}: ${result.reason}`);
+            err.code = 'INVALID_CANDLE';
+            throw err;
+          }
+          previousTime = page[i].time;
+        }
       } catch (err) {
         if (timedOut) {
           const timeoutErr = new Error(`Binance request timed out after ${this.timeoutMs}ms`);
