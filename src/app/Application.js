@@ -46,7 +46,6 @@ export function createApplication() {
     toDateEl: ui.el('to-date'), toTimeEl: ui.el('to-time'),
   });
   coordinatorRef.current = coordinator;
-  registerActionGuard(engine, tradingEngine, coordinator);
 
   const commandController = new ReplayCommandController({
     engine, appState, candleStore, tradingEngine, coordinator,
@@ -82,5 +81,23 @@ export function createApplication() {
     extraCleanup: [unbindAutoFollow],
   });
 
-  return { start() { ui.modeBanner.update({ replayState: engine.getState(), appState, candleStore }); coordinator.loadAndPrepareReplay({ autoStart: false }); }, destroy, services, ui, coordinator };
+  let started = false;
+  let destroyed = false;
+  const guardedDestroy = () => {
+    if (destroyed) return;
+    destroyed = true;
+    destroy();
+  };
+  return {
+    start() {
+      if (destroyed || started) return;
+      started = true;
+      ui.modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+      Promise.resolve(coordinator.loadAndPrepareReplay({ autoStart: false })).catch((error) => {
+        if (!destroyed) coordinator.showTradingError?.(error?.message || 'Failed to load replay');
+      });
+    },
+    destroy: guardedDestroy,
+    services, ui, coordinator,
+  };
 }
