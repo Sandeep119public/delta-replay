@@ -1,12 +1,10 @@
 /* ==========================================================================
    DELTA REPLAY — UI ENTRY POINT (canonical cascade owner)
    Load order is architecture: tokens → base → shell → components →
-   themes/skins → responsive → motion. This single link must be the LAST
-   stylesheet in index.html so the canonical layer wins by order, never
-   by !important. Legacy files (styles, ui-polish, viewport-fit,
-   paper-theme, themes, terminal, animations, pages) remain linked for
-   test compatibility and are being retired component by component —
-   see docs/UI_CLEANUP_REPORT.md.
+   themes/skins → responsive → motion → final layout guard. This single link
+   must be the LAST stylesheet in index.html so the canonical layer wins by
+   source order, never by !important. Legacy files remain linked for test
+   compatibility and are being retired component by component.
    ========================================================================== */
 @import url('./tokens.css');
 @import url('./base.css');
@@ -21,3 +19,4 @@
 @import url('./paper.css');
 @import url('./responsive.css');
 @import url('./motion.css');
+@import url('./final-layout.css');
