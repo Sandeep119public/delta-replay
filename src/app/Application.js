@@ -147,7 +147,6 @@ export function createApplication() {
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, actions });
   const tradingBindings = bindTradingEvents({ tradingEvents, actions, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
-
   const chartTradingActions = createChartTradingActions({
     trading,
     executeTrade: (intent) => {
