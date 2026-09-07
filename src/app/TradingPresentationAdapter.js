@@ -47,7 +47,7 @@ export function createTradingPresentation(tradingEngine) {
     } catch {
       // Snapshot must never throw; presentation renders the last-known state.
     }
-    const hasMarket = latestMarkPrice(tradingEngine) != null;
+    const markPrice = latestMarkPrice(tradingEngine);
     return freezeValue({
       account,
       positions,
@@ -55,8 +55,8 @@ export function createTradingPresentation(tradingEngine) {
       orders,
       trades,
       stats,
-      hasMarket,
-      markPrice: latestMarkPrice(tradingEngine),
+      hasMarket: markPrice != null,
+      markPrice,
     });
   };
 
@@ -85,6 +85,6 @@ export function createTradingPresentation(tradingEngine) {
     snapshot,
     actions,
     events: TRADING_PRESENTATION_EVENTS,
-    on: (event, handler) => tradingEngine?.on?.(event, handler),
+    on: (event, handler) => tradingEngine.on?.(event, handler),
   });
 }
