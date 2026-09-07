@@ -128,7 +128,9 @@ export class ReplayCommandController {
     if (!this.hasData()) return;
     this.engine.reset();
     const st = this.engine.getState();
-    const startIndex = this.appState?.pendingStartIndex ?? st.startIndex;
+    const startIndex = Number.isInteger(st.startIndex) && st.startIndex >= 0
+      ? st.startIndex
+      : (this.appState?.pendingStartIndex ?? -1);
 
     if (st.status === 'ready') {
       this.coordinator?.updatePreviewWindow(startIndex);
