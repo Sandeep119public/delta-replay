@@ -1,4 +1,5 @@
 from ..models import OrderRequest
+from ..domain.margin import MarginEngine
 
 TAKER_FEE_RATE = 0.0005
 DEFAULT_MARGIN_RATE = 1.0
@@ -14,6 +15,7 @@ class TradingService:
         self.fee_rate = float(fee_rate)
         self.margin_rate = float(margin_rate)
         self.maintenance_rate = float(maintenance_rate)
+        self.margin_engine = MarginEngine(self.margin_rate, self.maintenance_rate)
         self.position = None
         self.total_fees = 0.0
 
@@ -46,12 +48,16 @@ class TradingService:
         if price <= 0: raise ValueError('price must be positive')
         if self.position is not None: raise ValueError('position already open')
         fee = self._fee(price, order.quantity)
-        required = price * order.quantity * self.margin_rate + fee
+        required = self.margin_engine.required_entry_cash(price, order.quantity, fee)
         if self.balance < required: raise ValueError('insufficient margin')
         self.balance -= fee
         self.total_fees += fee
         self.position = {'side': 'long' if order.side == 'buy' else 'short', 'quantity': order.quantity, 'entry_price': price}
         return self.snapshot(price)
+
+    def open_order(self, order, price: float):
+        request = OrderRequest(side=order.side, quantity=order.quantity)
+        return self.open(request, price)
 
     def close(self, price: float):
         if price <= 0: raise ValueError('price must be positive')
