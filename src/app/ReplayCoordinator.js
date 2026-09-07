@@ -13,7 +13,7 @@ export { VISIBLE_WINDOW };
  */
 export class ReplayCoordinator {
   constructor({
-    dataManager, candleStore, appState, replayEngine, tradingCapabilities, chartManager,
+    dataManager, candleStore, appState, replayEngine, tradingCapabilities, statusView, chartManager,
     chartAdapter, timeline, controls, errorPanel, modeBanner, tradingErrorView = null,
     dataStatusEl = null, cacheBadgeEl = null, startReplayBtn = null,
     headerStartReplayBtn = null, loadBtn = null, fromDateEl = null, fromTimeEl = null,
@@ -31,13 +31,12 @@ export class ReplayCoordinator {
     if (typeof tradingCapabilities.clearPendingOrders !== 'function') {
       throw new TypeError('ReplayCoordinator requires tradingCapabilities.clearPendingOrders()');
     }
+    if (!statusView || typeof statusView.snapshot !== 'function') {
+      throw new TypeError('ReplayCoordinator requires statusView.snapshot()');
+    }
     this.tradingErrorView = tradingErrorView;
 
-    const previewService = createReplayPreviewService({
-      candleStore,
-      chartManager,
-      chartAdapter,
-    });
+    const previewService = createReplayPreviewService({ candleStore, chartManager, chartAdapter });
     this.previewService = previewService;
 
     this.loadService = createReplayLoadService({
@@ -47,6 +46,7 @@ export class ReplayCoordinator {
       replayEngine,
       hasOpenPosition: tradingCapabilities.hasOpenPosition,
       notifyMarketCandle: tradingCapabilities.notifyMarketCandle,
+      statusView,
       timeline,
       controls,
       modeBanner,
