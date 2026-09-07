@@ -14,7 +14,6 @@ export class ChartTradingController {
     floatingPosView = null,
     toastView = null,
     orderFormView = null,
-    coordinator = null,
     slInput = null,
     tpInput = null,
     limitPriceInput = null,
@@ -29,7 +28,6 @@ export class ChartTradingController {
     this.floatingPosView = floatingPosView;
     this.toastView = toastView;
     this.orderFormView = orderFormView;
-    this.coordinator = coordinator;
     this.slInput = slInput;
     this.tpInput = tpInput;
     this.limitPriceInput = limitPriceInput;
@@ -132,7 +130,7 @@ export class ChartTradingController {
       if (res.success) {
         if (this.slInput) this.slInput.value = intent.price.toFixed(2);
         this.toastView?.show?.(`Stop Loss set to $${intent.price.toFixed(2)}`);
-      } else this.coordinator?.showTradingError?.(res.message);
+      } else this.actions?.reportError?.(res.message);
     } else {
       const type = this.orderFormView?.getOrderType ? this.orderFormView.getOrderType() : (this.orderTypeSelect?.value || 'MARKET');
       if (type === 'LIMIT') {
