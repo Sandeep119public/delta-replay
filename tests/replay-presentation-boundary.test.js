@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { ReplayEngine } from '../src/replay/ReplayEngine.js';
-import { ReplayEvents } from '../src/replay/ReplayEvents.js';
 import { createReplayUIPort } from '../src/app/ReplayUIPort.js';
 
 const candles = [
@@ -16,6 +15,8 @@ describe('Replay presentation boundary', () => {
     expect(Object.isFrozen(port)).toBe(true);
     expect(port).not.toHaveProperty('_candles');
     expect(port).not.toHaveProperty('registerActionGuard');
+    expect(port).not.toHaveProperty('on');
+    expect(typeof port.getVisibleCandles).toBe('function');
     engine.destroy();
   });
 
@@ -24,13 +25,27 @@ describe('Replay presentation boundary', () => {
     const port = createReplayUIPort(engine);
     const execution = [];
     const navigation = [];
-    port.on(ReplayEvents.MARKET_CANDLE, ({ index }) => execution.push(index));
-    port.on(ReplayEvents.SEEKED, ({ index }) => navigation.push(index));
+    engine.on('marketCandle', ({ index }) => execution.push(index));
+    port.onSeeked(({ index }) => navigation.push(index));
     engine.load(candles);
     engine.start(0);
     port.seek(2);
     expect(execution).toEqual([0]);
     expect(navigation).toEqual([2]);
+    engine.destroy();
+  });
+
+  it('reset is navigation-only and preserves the execution stream', () => {
+    const engine = new ReplayEngine();
+    const port = createReplayUIPort(engine);
+    const execution = [];
+    engine.on('marketCandle', ({ index }) => execution.push(index));
+    engine.load(candles);
+    engine.start(0);
+    port.seek(1);
+    port.reset();
+    expect(execution).toEqual([0]);
+    expect(port.getState().currentIndex).toBe(0);
     engine.destroy();
   });
 });
