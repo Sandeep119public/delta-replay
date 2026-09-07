@@ -45,6 +45,11 @@ export function createApplication() {
   const dataset = createDatasetView(appState);
   const candles = createCandleView(candleStore);
   const statusView = createReplayStatusView({ engine, appState, candleStore });
+  const replayTradingCapabilities = Object.freeze({
+    hasOpenPosition: () => tradingEngine.hasOpenPosition(),
+    notifyMarketCandle: (payload) => tradingEngine.onMarketCandle(payload),
+    clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
+  });
 
   const chartManager = new ChartManager(document.getElementById('chart-container'));
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
@@ -92,7 +97,7 @@ export function createApplication() {
     candleStore,
     appState,
     replayEngine: engine,
-    tradingEngine,
+    tradingCapabilities: replayTradingCapabilities,
     chartManager: ui.chartManager,
     chartAdapter: ui.adapter,
     timeline: ui.timeline,
