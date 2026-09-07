@@ -1,13 +1,16 @@
 import { EventEmitter } from '../core/EventEmitter.js';
 import { LoadingState } from '../data/DataError.js';
+import { CandleStore } from '../data/CandleStore.js';
 
 export class AppState extends EventEmitter {
-  constructor() {
+  constructor({ candleStore = null } = {}) {
     super();
     this.symbol = 'BTCUSDT';
     this.timeframe = '1m';
-    this._candles = []; // legacy direct storage (used when no store)
-    this._store = null; // CandleStore reference if available
+    // Legacy compatibility slot only. Canonical candle data lives exclusively
+    // in CandleStore and this array must remain empty.
+    this._candles = [];
+    this._store = candleStore;
     this.loading = false;
     this.loadingState = LoadingState.IDLE;
     this.error = null;
@@ -17,47 +20,45 @@ export class AppState extends EventEmitter {
     this.replayState = null;
   }
 
-  // Single source: if store attached, candles getter proxies to store
-  get candles() {
-    if (this._store) return this._store.getAll();
-    return this._candles;
+  _ensureStore() {
+    if (!this._store) this._store = new CandleStore();
+    return this._store;
   }
-  set candles(val) { this._candles = val; }
+
+  get candles() {
+    return this._store?.getAll?.() || [];
+  }
+
+  set candles(val) {
+    this.setCandles(val);
+  }
 
   get totalCandles() {
-    if (this._store && typeof this._store.getCount === 'function') {
-      return this._store.getCount();
-    }
-    return this._candles ? this._candles.length : 0;
+    return this._store?.getCount?.() || 0;
   }
 
   getCandle(index) {
-    if (this._store && typeof this._store.get === 'function') {
-      return this._store.get(index);
-    }
-    return this._candles?.[index] ?? null;
+    return this._store?.get?.(index) ?? null;
   }
 
   sliceWindow(start, end) {
-    if (this._store && typeof this._store.sliceWindow === 'function') {
-      return this._store.sliceWindow(start, end);
-    }
-    return this._candles ? this._candles.slice(start, end + 1) : [];
+    return this._store?.sliceWindow?.(start, end) || [];
   }
 
   setCandleStore(store) {
+    if (!store || typeof store.getCount !== 'function' || typeof store.getAll !== 'function') {
+      throw new TypeError('AppState.setCandleStore requires a CandleStore-compatible object');
+    }
     this._store = store;
+    this._candles = [];
     this.emit('candles', this.candles);
     this.emit('change', this.snapshot());
   }
 
   setLoading(v) {
     this.loading = v;
-    if (v) {
-      this.loadingState = LoadingState.LOADING;
-    } else if (this.loadingState === LoadingState.LOADING) {
-      this.loadingState = LoadingState.SUCCESS;
-    }
+    if (v) this.loadingState = LoadingState.LOADING;
+    else if (this.loadingState === LoadingState.LOADING) this.loadingState = LoadingState.SUCCESS;
     this.emit('change', this.snapshot());
   }
 
@@ -94,13 +95,11 @@ export class AppState extends EventEmitter {
   }
 
   setCandles(candles) {
-    if (this._store) {
-      // Single source is CandleStore; avoid duplicating full array in AppState
-      this._candles = [];
-    } else {
-      this._candles = candles;
-    }
-    this.emit('candles', candles || []);
+    const store = this._ensureStore();
+    if (!candles?.length) store.clear();
+    else store.load(candles);
+    this._candles = [];
+    this.emit('candles', this.candles);
     this.emit('change', this.snapshot());
   }
 
@@ -121,8 +120,7 @@ export class AppState extends EventEmitter {
       dataError: this.dataError,
       pendingStartIndex: this.pendingStartIndex,
       retryCount: this.retryCount,
-      replayState: this.replayState
+      replayState: this.replayState,
     };
   }
 }
-

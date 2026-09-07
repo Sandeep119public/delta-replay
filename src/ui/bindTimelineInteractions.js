@@ -1,12 +1,19 @@
-import { TradingEvents } from '../trading/TradingEvents.js';
+import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
 
-export function bindTimelineInteractions({ timeline, tradingEngine, actions }) {
+export function bindTimelineInteractions({ timeline, tradingEngine = null, tradingEvents = null, tradingState = null, candleStore, actions }) {
   timeline.onChange((idx) => actions.previewTimeline(idx));
   timeline.onCommit((idx) => actions.commitTimeline(idx));
   timeline.onStartHere((idx) => actions.startAt(idx));
+  if (!candleStore) throw new TypeError('candleStore is required');
+
+  const eventPort = tradingEvents || (tradingEngine ? {
+    events: TRADING_PRESENTATION_EVENTS,
+    on: (event, handler) => tradingEngine.on?.(event, handler),
+  } : null);
+
   const refreshMarkers = () => {
     try {
-      const trades = tradingEngine.getTrades?.() || [];
+      const trades = tradingState?.snapshot?.().trades || tradingEngine?.getTrades?.() || [];
       if (!trades.length || !candleStore.getCount()) return timeline.setMarkers([]);
       const all = candleStore.getAll?.() || [];
       const markers = [];
@@ -26,12 +33,23 @@ export function bindTimelineInteractions({ timeline, tradingEngine, actions }) {
       timeline.setMarkers(markers);
     } catch (error) { console.warn('[Timeline] marker refresh failed', error); }
   };
-  const subscriptions = [
-    tradingEngine.on(TradingEvents.TRADE_EXECUTED, refreshMarkers),
-    tradingEngine.on(TradingEvents.POSITION_CLOSED, refreshMarkers),
-  ];
+
+  const subscriptions = [];
+  if (eventPort?.on) {
+    const events = eventPort.events || TRADING_PRESENTATION_EVENTS;
+    [events.TRADE_EXECUTED, events.POSITION_CLOSED].forEach((event) => {
+      const unsubscribe = eventPort.on(event, refreshMarkers);
+      if (typeof unsubscribe === 'function') subscriptions.push(unsubscribe);
+    });
+  }
+  refreshMarkers();
+
   return {
     refreshMarkers,
-    destroy() { subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[Timeline] unsubscribe failed', error); } }); },
+    destroy() {
+      subscriptions.splice(0).forEach((unsubscribe) => {
+        try { unsubscribe?.(); } catch (error) { console.warn('[Timeline] unsubscribe failed', error); }
+      });
+    },
   };
 }

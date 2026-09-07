@@ -57,8 +57,9 @@ function createMockElement(initial = {}) {
 
 describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
   describe('1. ChartTradingController Separation', () => {
-    let mockChartManager;
     let mockTradingEngine;
+    let mockTradingEvents;
+    let mockChartManager;
     let mockTradingState;
     let mockActions;
     let mockTradingPanel;
@@ -74,12 +75,6 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
 
     beforeEach(() => {
       const engineListeners = {};
-      mockChartManager = {
-        onChartClick: vi.fn(),
-        updatePositionLines: vi.fn(),
-        updateOrderLines: vi.fn(),
-        clearTradingLines: vi.fn(),
-      };
       mockTradingEngine = {
         getPositions: vi.fn(() => []),
         getPendingOrders: vi.fn(() => []),
@@ -88,10 +83,23 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
         on: vi.fn((event, handler) => {
           if (!engineListeners[event]) engineListeners[event] = [];
           engineListeners[event].push(handler);
+          return () => {
+            engineListeners[event] = (engineListeners[event] || []).filter(fn => fn !== handler);
+          };
         }),
         emit: (event, payload) => {
           (engineListeners[event] || []).forEach(fn => fn(payload));
         },
+      };
+      mockTradingEvents = {
+        events: TradingEvents,
+        on: (...args) => mockTradingEngine.on(...args),
+      };
+      mockChartManager = {
+        onChartClick: vi.fn(),
+        updatePositionLines: vi.fn(),
+        updateOrderLines: vi.fn(),
+        clearTradingLines: vi.fn(),
       };
       mockTradingPanel = { render: vi.fn() };
       mockFloatingPosView = { render: vi.fn() };
@@ -102,8 +110,6 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
         setStopPrice: vi.fn(),
       };
       mockCoordinator = { showTradingError: vi.fn() };
-      // Action boundary: click intents are resolved/executed through `actions`,
-      // positions/orders are read via the `tradingState` read model.
       mockTradingState = {
         activePosition: vi.fn(() => null),
         snapshot: vi.fn(() => ({ pendingOrders: [] })),
@@ -120,7 +126,7 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
 
       controller = new ChartTradingController({
         chartManager: mockChartManager,
-        tradingEngine: mockTradingEngine,
+        tradingEvents: mockTradingEvents,
         tradingState: mockTradingState,
         actions: mockActions,
         tradingPanel: mockTradingPanel,
@@ -282,16 +288,13 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
       });
 
       expect(view.advanced).toBe(false);
-      // LIMIT selected but advanced off -> row stays hidden
       orderTypeSelect.value = 'LIMIT';
       view.updateOrderTypeUI();
       expect(limitRow.classList.contains('hidden')).toBe(true);
-      // Toggle reveals it and flips accessibility state
       toggle.click();
       expect(view.advanced).toBe(true);
       expect(toggle.getAttribute('aria-expanded')).toBe('true');
       expect(limitRow.classList.contains('hidden')).toBe(false);
-      // STOP type swaps the visible row
       orderTypeSelect.value = 'STOP_MARKET';
       view.updateOrderTypeUI();
       expect(stopRow.classList.contains('hidden')).toBe(false);
@@ -398,10 +401,8 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
     });
 
     it('keeps replay playback controls mounted and reachable on small screens', () => {
-      // controls-section stays a flex bar (never display:none) …
       expect(paperCss).toMatch(/\.controls-section\s*\{[\s\S]*?display:\s*flex/);
       expect(paperCss).not.toMatch(/\.controls-section\s*\{[^}]*display:\s*none/);
-      // … and the playback controls exist in the timeline markup
       expect(markup).toMatch(/controls-row/);
       expect(markup).toMatch(/speed-select/);
       expect(markup).toMatch(/btn-play/);

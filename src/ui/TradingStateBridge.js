@@ -1,9 +1,14 @@
-import { TradingEvents } from '../trading/TradingEvents.js';
-
-/** Subscribes UI renderers to a read-only trading state adapter. */
-export function bindTradingState({ tradingEngine, tradingState, onChange }) {
-  const events = Object.values(TradingEvents);
-  const unsubs = events.map((event) => tradingEngine.on?.(event, () => onChange(tradingState.snapshot())));
+/**
+ * Bridges a read-only trading presentation event port into UI state updates.
+ * The UI never needs the trading domain engine itself.
+ */
+export function bindTradingState({ tradingEvents, tradingState, onChange }) {
+  if (!tradingEvents?.onAll) throw new TypeError('tradingEvents.onAll is required');
+  const unsubscribe = tradingEvents.onAll(() => onChange(tradingState.snapshot()));
   onChange(tradingState.snapshot());
-  return { destroy() { unsubs.forEach((unsubscribe) => { try { unsubscribe?.(); } catch {} }); } };
+  return {
+    destroy() {
+      try { unsubscribe?.(); } catch {}
+    },
+  };
 }

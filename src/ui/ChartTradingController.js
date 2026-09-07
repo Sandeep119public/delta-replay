@@ -1,12 +1,27 @@
-import { TradingEvents } from '../trading/TradingEvents.js';
+import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
+
+function createLegacyTradingEventPort(tradingEngine) {
+  if (!tradingEngine?.on) return null;
+  return Object.freeze({
+    events: TRADING_PRESENTATION_EVENTS,
+    on: (event, handler) => tradingEngine.on(event, handler),
+    onAll(handler) {
+      const unsubs = Object.values(TRADING_PRESENTATION_EVENTS)
+        .map((event) => tradingEngine.on(event, handler))
+        .filter((unsubscribe) => typeof unsubscribe === 'function');
+      return () => unsubs.forEach((unsubscribe) => { try { unsubscribe(); } catch {} });
+    },
+  });
+}
 
 /**
- * ChartTradingController coordinates chart-click trading interactions,
- * visual order/position price overlays, and trading toast notifications.
+ * Presentation controller for chart-click trading interactions and visual state.
+ * Trading domain events arrive through an application-provided presentation port.
  */
 export class ChartTradingController {
   constructor({
     chartManager,
+    tradingEvents = null,
     tradingEngine = null,
     tradingState = null,
     actions = null,
@@ -21,7 +36,7 @@ export class ChartTradingController {
     orderTypeSelect = null,
   }) {
     this.chartManager = chartManager;
-    this.tradingEngine = tradingEngine;
+    this.tradingEvents = tradingEvents || createLegacyTradingEventPort(tradingEngine);
     this.tradingState = tradingState;
     this.actions = actions;
     this.tradingPanel = tradingPanel;
@@ -47,29 +62,30 @@ export class ChartTradingController {
   }
 
   _bindTradingEvents() {
-    if (!this.tradingEngine?.on) return;
+    if (!this.tradingEvents?.on || !this.tradingEvents?.events) return;
+    const { events } = this.tradingEvents;
     const sync = () => this.syncChartTradingLines();
 
     const subscribe = (event, handler) => {
-      const unsubscribe = this.tradingEngine.on(event, handler);
+      const unsubscribe = this.tradingEvents.on(event, handler);
       if (typeof unsubscribe === 'function') this._subscriptions.push(unsubscribe);
     };
 
-    subscribe(TradingEvents.POSITION_OPENED, sync);
-    subscribe(TradingEvents.POSITION_UPDATED, sync);
-    subscribe(TradingEvents.POSITION_CLOSED, () => {
+    subscribe(events.POSITION_OPENED, sync);
+    subscribe(events.POSITION_UPDATED, sync);
+    subscribe(events.POSITION_CLOSED, () => {
       this.chartManager?.updatePositionLines?.(null);
       this.floatingPosView?.render?.(null);
       this.syncChartTradingLines();
     });
-    subscribe(TradingEvents.ACCOUNT_RESET, () => {
+    subscribe(events.ACCOUNT_RESET, () => {
       this.chartManager?.clearTradingLines?.();
       this.floatingPosView?.render?.(null);
     });
-    subscribe(TradingEvents.ORDER_PLACED, sync);
-    subscribe(TradingEvents.ORDER_TRIGGERED, sync);
-    subscribe(TradingEvents.ORDER_CANCELLED, sync);
-    subscribe(TradingEvents.ORDER_FILLED, (payload) => {
+    subscribe(events.ORDER_PLACED, sync);
+    subscribe(events.ORDER_TRIGGERED, sync);
+    subscribe(events.ORDER_CANCELLED, sync);
+    subscribe(events.ORDER_FILLED, (payload) => {
       this.syncChartTradingLines();
       const order = payload?.order ?? payload;
       if (order?.type && order.type !== 'MARKET') {
@@ -78,17 +94,17 @@ export class ChartTradingController {
         this.toastView?.show?.(`✓ ${typeLabel} ${order.side} Filled${priceStr}`);
       }
     });
-    subscribe(TradingEvents.STOP_LOSS_TRIGGERED, (payload) => {
+    subscribe(events.STOP_LOSS_TRIGGERED, (payload) => {
       this.syncChartTradingLines();
       const priceStr = payload?.price != null ? ` @ $${Number(payload.price).toFixed(2)}` : '';
       this.toastView?.show?.(`🛑 Stop Loss Triggered${priceStr}`);
     });
-    subscribe(TradingEvents.TAKE_PROFIT_TRIGGERED, (payload) => {
+    subscribe(events.TAKE_PROFIT_TRIGGERED, (payload) => {
       this.syncChartTradingLines();
       const priceStr = payload?.price != null ? ` @ $${Number(payload.price).toFixed(2)}` : '';
       this.toastView?.show?.(`🎯 Take Profit Triggered${priceStr}`);
     });
-    subscribe(TradingEvents.POSITION_LIQUIDATED, (payload) => {
+    subscribe(events.POSITION_LIQUIDATED, (payload) => {
       this.syncChartTradingLines();
       const priceStr = payload?.liquidationPrice != null ? ` @ $${Number(payload.liquidationPrice).toFixed(2)}` : '';
       this.toastView?.show?.(`⚠️ Position Liquidated${priceStr}`);
