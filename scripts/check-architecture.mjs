@@ -9,24 +9,24 @@ const LAYERS = [
 
 const ALLOWED = {
   core: new Set(),
-  data: new Set(['core', 'utils']),
-  indicators: new Set(['utils']),
-  replay: new Set(['core', 'data', 'utils']),
-  trading: new Set(['core', 'replay', 'data', 'utils']),
-  strategy: new Set(['trading', 'utils']),
-  state: new Set(['core', 'data', 'utils']),
+  data: new Set(['core']),
+  indicators: new Set(),
+  replay: new Set(['core', 'data']),
+  trading: new Set(['core', 'replay', 'data']),
+  strategy: new Set(['trading']),
+  state: new Set(['core', 'data']),
   app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'personality']),
   chart: new Set(['trading', 'replay', 'utils']),
   ui: new Set(['trading', 'replay', 'data', 'chart', 'app', 'state', 'strategy', 'pages', 'personality', 'core', 'utils']),
   pages: new Set(['trading', 'replay', 'data', 'state', 'chart', 'utils']),
   router: new Set(['app', 'ui', 'pages', 'utils']),
   utils: new Set(['data']),
-  personality: new Set(['utils']),
+  personality: new Set(),
 };
 
 const INTEGRATION_LAYERS = new Set(['ui', 'pages', 'chart', 'app', 'router']);
 const BROWSER_GLOBALS = /\b(document|window|navigator|localStorage|sessionStorage)\b/;
-const IMPORT_PATTERN = /(?:\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\)|\bexport\s+(?:\*|\{[^}]*\})\s*from\s*['"]([^'"]+)['"])/g;
+const IMPORT_PATTERN = /(?:\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\)|\bimport\s*['"]([^'"]+)['"]|\bexport\s+(?:\*|\{[^}]*\})\s*from\s*['"]([^'"]+)['"])/g;
 
 async function collectFiles(dir) {
   const absolute = path.join(ROOT, dir);
@@ -62,7 +62,7 @@ function resolveLayerFromSpecifier(file, specifier) {
 function importedLayers(source, file) {
   const layers = new Set();
   for (const match of source.matchAll(IMPORT_PATTERN)) {
-    const specifier = match[1] || match[2] || match[3];
+    const specifier = match[1] || match[2] || match[3] || match[4];
     const layer = resolveLayerFromSpecifier(file, specifier);
     if (layer) layers.add(layer);
   }
