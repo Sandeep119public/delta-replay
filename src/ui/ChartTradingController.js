@@ -1,4 +1,3 @@
-import { TradingIntentResolver } from '../trading/TradingIntentResolver.js';
 import { TradingEvents } from '../trading/TradingEvents.js';
 
 /**
@@ -9,6 +8,7 @@ export class ChartTradingController {
   constructor({
     chartManager,
     tradingEngine,
+    actions = null,
     tradingPanel = null,
     floatingPosView = null,
     toastView = null,
@@ -22,6 +22,7 @@ export class ChartTradingController {
   }) {
     this.chartManager = chartManager;
     this.tradingEngine = tradingEngine;
+    this.actions = actions;
     this.tradingPanel = tradingPanel;
     this.floatingPosView = floatingPosView;
     this.toastView = toastView;
@@ -116,19 +117,17 @@ export class ChartTradingController {
 
   handleChartClick({ price }) {
     if (!Number.isFinite(price) || price <= 0) return null;
-    const positions = this.tradingEngine?.getPositions?.() || [];
-    const activePos = positions.length > 0 ? positions[0] : null;
-    const intent = TradingIntentResolver.resolveClickIntent(price, activePos);
+    const intent = this.actions?.resolveClick?.(price);
     if (!intent) return null;
 
     if (intent.action === 'SET_TP') {
-      const res = this.tradingEngine.setTakeProfit(intent.symbol, intent.price);
+      const res = this.actions?.execute?.(intent) || { success: false };
       if (res.success) {
         if (this.tpInput) this.tpInput.value = intent.price.toFixed(2);
         this.toastView?.show?.(`Take Profit set to $${intent.price.toFixed(2)}`);
-      } else this.coordinator?.showTradingError?.(res.message);
+      } else this.actions?.reportError?.(res.message);
     } else if (intent.action === 'SET_SL') {
-      const res = this.tradingEngine.setStopLoss(intent.symbol, intent.price);
+      const res = this.actions?.execute?.(intent) || { success: false };
       if (res.success) {
         if (this.slInput) this.slInput.value = intent.price.toFixed(2);
         this.toastView?.show?.(`Stop Loss set to $${intent.price.toFixed(2)}`);
