@@ -55,46 +55,76 @@ function stripCommentsAndStrings(source) {
     .replace(/`(?:\\.|[^`\\])*`/g, '``');
 }
 
-function importsForLayer(source, currentLayer) {
-  const imports = [];
+function resolveLayerFromSpecifier(file, specifier) {
+  if (!specifier.startsWith('.')) return null;
+  const target = path.normalize(path.join(path.dirname(file), specifier));
+  const srcPrefix = path.join(ROOT, 'src') + path.sep;
+  if (!target.startsWith(srcPrefix)) return null;
+  const relative = path.relative(path.join(ROOT, 'src'), target).replaceAll(path.sep, '/');
+  const first = relative.split('/')[0];
+  return LAYERS.includes(first) ? first : null;
+}
+
+function importedLayers(source, file) {
+  const layers = new Set();
   const pattern = /(?:from\s*['"]|import\s*\(\s*['"])([^'"]+)['"]/g;
   for (const match of source.matchAll(pattern)) {
-    const specifier = match[1];
-    if (!specifier.startsWith('.')) continue;
-    const parts = specifier.split('/');
-    const currentDepth = currentLayer.split('/').length;
-    const base = currentLayer.split('/').slice(0, -1);
-    let cursor = base;
-    for (const part of parts) {
-      if (part === '.') continue;
-      if (part === '..') cursor = cursor.slice(0, -1);
-      else if (part !== '') cursor = [...cursor, part];
-    }
-    const layer = cursor[0];
-    if (LAYERS.includes(layer) && layer !== currentLayer) imports.push(layer);
+    const layer = resolveLayerFromSpecifier(file, match[1]);
+    if (layer) layers.add(layer);
   }
-  return imports;
+  return [...layers];
+}
+
+function assertAcyclic(graph) {
+  const visiting = new Set();
+  const visited = new Set();
+  const stack = [];
+
+  function visit(node) {
+    if (visiting.has(node)) {
+      const start = stack.indexOf(node);
+      const cycle = [...stack.slice(start), node].join(' -> ');
+      throw new Error(`Architecture cycle detected: ${cycle}`);
+    }
+    if (visited.has(node)) return;
+    visiting.add(node);
+    stack.push(node);
+    for (const next of graph.get(node) || []) visit(next);
+    stack.pop();
+    visiting.delete(node);
+    visited.add(node);
+  }
+
+  for (const layer of LAYERS) visit(layer);
 }
 
 const violations = [];
+const graph = new Map(LAYERS.map(layer => [layer, new Set()]));
 
 for (const layer of LAYERS) {
   const files = await collectFiles(`src/${layer}`);
   for (const relative of files) {
     const source = await fs.readFile(path.join(ROOT, relative), 'utf8');
     const code = stripCommentsAndStrings(source);
-    const layerName = layer;
 
-    for (const imported of importsForLayer(code, layerName)) {
-      if (!ALLOWED[layerName].has(imported)) {
-        violations.push(`${relative}: ${layerName} -> ${imported} is forbidden`);
+    for (const imported of importedLayers(code, relative)) {
+      if (imported === layer) continue;
+      graph.get(layer).add(imported);
+      if (!ALLOWED[layer].has(imported)) {
+        violations.push(`${relative}: ${layer} -> ${imported} is forbidden`);
       }
     }
 
-    if (layerName !== 'ui' && layerName !== 'chart' && layerName !== 'app' && BROWSER_GLOBALS.test(code)) {
+    if (!['ui', 'chart', 'app', 'router'].includes(layer) && BROWSER_GLOBALS.test(code)) {
       violations.push(`${relative}: browser global access is forbidden outside application/presentation layers`);
     }
   }
+}
+
+try {
+  assertAcyclic(graph);
+} catch (error) {
+  violations.push(error.message);
 }
 
 if (violations.length) {
