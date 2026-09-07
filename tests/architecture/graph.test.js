@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const execFileAsync = promisify(execFile);
 
-describe('Architectural Boundaries', () => {
-  it('complete dependency graph stays within declared layer boundaries', async () => {
+describe('Architecture graph', () => {
+  it('passes the complete declared dependency matrix', async () => {
     const { stdout } = await execFileAsync(process.execPath, ['scripts/check-architecture.mjs']);
     expect(stdout).toContain('Architecture dependency graph: PASS');
   });
