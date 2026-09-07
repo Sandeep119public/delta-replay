@@ -7,7 +7,8 @@ import { TradingEvents } from '../trading/TradingEvents.js';
 export class ChartTradingController {
   constructor({
     chartManager,
-    tradingEngine,
+    tradingEngine = null,
+    tradingState = null,
     actions = null,
     tradingPanel = null,
     floatingPosView = null,
@@ -22,6 +23,7 @@ export class ChartTradingController {
   }) {
     this.chartManager = chartManager;
     this.tradingEngine = tradingEngine;
+    this.tradingState = tradingState;
     this.actions = actions;
     this.tradingPanel = tradingPanel;
     this.floatingPosView = floatingPosView;
@@ -107,10 +109,9 @@ export class ChartTradingController {
   }
 
   syncChartTradingLines() {
-    const positions = this.tradingEngine?.getPositions?.() || [];
-    const activePos = positions.length > 0 ? positions[0] : null;
+    const activePos = this.tradingState?.activePosition?.() || null;
     this.chartManager?.updatePositionLines?.(activePos);
-    const pendingOrders = this.tradingEngine?.getPendingOrders ? this.tradingEngine.getPendingOrders() : [];
+    const pendingOrders = this.tradingState?.snapshot?.().pendingOrders || [];
     this.chartManager?.updateOrderLines?.(pendingOrders);
     this.floatingPosView?.render?.(activePos);
   }
