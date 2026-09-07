@@ -22,6 +22,21 @@ describe('ChartTradingOverlay — Isolated Component', () => {
     };
   }
 
+  function createTradingView(positions = []) {
+    return {
+      snapshot: () => Object.freeze({
+        account: null,
+        positions: positions.map((position) => Object.freeze({ ...position })),
+        pendingOrders: [],
+        orders: [],
+        trades: [],
+        stats: {},
+        hasMarket: true,
+        markPrice: 60000,
+      }),
+    };
+  }
+
   it('renders position line on Long position with entry price', () => {
     const mockSeries = createMockSeries();
     const overlay = new ChartTradingOverlay({ series: mockSeries });
@@ -66,8 +81,9 @@ describe('ChartTradingOverlay — Isolated Component', () => {
 
   it('resolves click intent for Long position in the application layer', () => {
     const actions = createChartTradingActions({
-      tradingEngine: { getPositions: () => [{ symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 }] },
-      coordinator: null,
+      trading: createTradingView([{ symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 }]),
+      executeTrade: vi.fn(),
+      reportError: vi.fn(),
     });
     const longPos = { symbol: 'BTCUSDT', side: 'LONG', entryPrice: 60000 };
 
@@ -82,8 +98,9 @@ describe('ChartTradingOverlay — Isolated Component', () => {
 
   it('resolves click intent for Short position in the application layer', () => {
     const actions = createChartTradingActions({
-      tradingEngine: { getPositions: () => [{ symbol: 'BTCUSDT', side: 'SHORT', entryPrice: 60000 }] },
-      coordinator: null,
+      trading: createTradingView([{ symbol: 'BTCUSDT', side: 'SHORT', entryPrice: 60000 }]),
+      executeTrade: vi.fn(),
+      reportError: vi.fn(),
     });
 
     const tpIntent = actions.resolveClick(55000);
@@ -96,7 +113,11 @@ describe('ChartTradingOverlay — Isolated Component', () => {
   });
 
   it('resolves click intent to PRICE_SELECT when no position is open', () => {
-    const actions = createChartTradingActions({ tradingEngine: { getPositions: () => [] }, coordinator: null });
+    const actions = createChartTradingActions({
+      trading: createTradingView([]),
+      executeTrade: vi.fn(),
+      reportError: vi.fn(),
+    });
     const intent = actions.resolveClick(60500);
     expect(intent.action).toBe('PRICE_SELECT');
     expect(intent.price).toBe(60500);
