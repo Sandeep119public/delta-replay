@@ -168,6 +168,7 @@ export class ReplayCoordinator {
     };
     this._progressUnsubscribe = this.dataManager.on(DataEvents.PROGRESS, onProgress);
 
+    let retryScheduled = false;
     try {
       const { candles, metadata } = await this.dataManager.load({ symbol, timeframe, from, to, signal, strict: true, halfOpen: true });
       this._clearProgressSubscription();
@@ -244,6 +245,7 @@ export class ReplayCoordinator {
         const backoff = Math.min(5000, Math.pow(2, this._retryCount - 1) * 1000);
         if (this.dataStatusEl) this.dataStatusEl.textContent = `Retrying… ${this._retryCount}/${MAX_RETRIES}`;
         this.appState.transitionLoading(LoadingState.LOADING);
+        retryScheduled = true;
         this._retryTimer = setTimeout(() => {
           this._retryTimer = null;
           if (token === this._loadToken && !this._destroyed) this.loadAndPrepareReplay({ targetSec: resolvedTarget, autoStart });
@@ -254,9 +256,9 @@ export class ReplayCoordinator {
       this.appState.setRetryCount(0);
     } finally {
       if (token === this._loadToken) {
-        this.appState.setLoading(false);
+        if (!retryScheduled) this.appState.setLoading(false);
         if (this._currentAbort === abortController) this._currentAbort = null;
-        this.updateLoadButton();
+        if (!retryScheduled) this.updateLoadButton();
         this.modeBanner?.update({ replayState: this.replayEngine.getState(), appState: this.appState, candleStore: this.candleStore });
       }
     }
