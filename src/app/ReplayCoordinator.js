@@ -61,7 +61,7 @@ export class ReplayCoordinator {
       startReplayBtn,
       headerStartReplayBtn,
       reportError: (msg) => this.showTradingError(msg),
-      invalidateLoad: () => this.loadService.clearCurrentLoad(),
+      invalidateLoad: () => this.loadService.invalidateCurrentLoad(),
       reload: () => this.loadAndPrepareReplay({ autoStart: false }),
     });
   }
