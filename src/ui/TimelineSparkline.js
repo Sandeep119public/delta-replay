@@ -10,6 +10,7 @@ export class TimelineSparkline {
   constructor({
     canvasEl = null,
     candleStore = null,
+    replayPort = null,
     engine = null,
     tradingEngine = null,
     tradingEvents = null,
@@ -19,7 +20,7 @@ export class TimelineSparkline {
   } = {}) {
     this.canvas = canvasEl;
     this.candleStore = candleStore;
-    this.engine = engine;
+    this.replayPort = replayPort || engine;
     this.tradingEngine = tradingEngine;
     this.tradingEvents = tradingEvents;
     this.onSeek = onSeek;
@@ -43,15 +44,17 @@ export class TimelineSparkline {
     if (this._attached) return;
     this._attached = true;
     try {
-      const subscribe = (owner, event, handler) => {
-        const unsubscribe = owner?.on?.(event, handler);
+      const subscribe = (owner, eventName, typedSubscribe, handler) => {
+        const unsubscribe = typeof typedSubscribe === 'function'
+          ? typedSubscribe(handler)
+          : owner?.on?.(eventName, handler);
         if (typeof unsubscribe === 'function') this._subscriptions.push(unsubscribe);
       };
-      subscribe(this.engine, 'stateChanged', this._onState);
+      subscribe(this.replayPort, 'stateChanged', this.replayPort?.onStateChanged, this._onState);
       const events = this.tradingEvents?.events || TRADING_PRESENTATION_EVENTS;
-      subscribe(this.tradingEvents || this.tradingEngine, events.TRADE_EXECUTED, this._onState);
-      subscribe(this.tradingEvents || this.tradingEngine, events.POSITION_CLOSED, this._onState);
-      subscribe(this.tradingEvents || this.tradingEngine, events.POSITION_OPENED, this._onState);
+      subscribe(this.tradingEvents || this.tradingEngine, events.TRADE_EXECUTED, null, this._onState);
+      subscribe(this.tradingEvents || this.tradingEngine, events.POSITION_CLOSED, null, this._onState);
+      subscribe(this.tradingEvents || this.tradingEngine, events.POSITION_OPENED, null, this._onState);
       if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('resize', this._onResize);
       if (typeof ResizeObserver !== 'undefined' && this.canvas?.parentElement) {
         this._ro = new ResizeObserver(this._onResize);
@@ -77,17 +80,21 @@ export class TimelineSparkline {
     } catch {}
     this._ro = null;
     this.onSeek = null;
+    this.replayPort = null;
   }
 
   _candles() {
     try { return this.candleStore?.getAll?.() || []; } catch { return []; }
   }
+
   _trades() {
     try { return this.tradingEngine?.getTrades?.() || []; } catch { return []; }
   }
+
   _cursor() {
-    try { return this.engine?.getState?.().currentIndex ?? -1; } catch { return -1; }
+    try { return this.replayPort?.getState?.().currentIndex ?? -1; } catch { return -1; }
   }
+
   _indexForTime(t, times) {
     if (!times.length || !Number.isFinite(t)) return -1;
     let lo = 0, hi = times.length - 1, ans = -1;
