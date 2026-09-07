@@ -69,4 +69,21 @@ describe('AppState — Unification & Central Reactivity', () => {
     expect(state.dataError.context.status).toBe(503);
     expect(state.replayState.currentIndex).toBe(7);
   });
+
+  it('candle compatibility reads return frozen copies', () => {
+    const state = new AppState();
+    state.setCandles([{ time: 1000, open: 100, high: 105, low: 95, close: 102 }]);
+
+    const candles = state.candles;
+    const candle = state.getCandle(0);
+    const window = state.sliceWindow(0, 1);
+
+    expect(Object.isFrozen(candles)).toBe(true);
+    expect(Object.isFrozen(candles[0])).toBe(true);
+    expect(Object.isFrozen(candle)).toBe(true);
+    expect(Object.isFrozen(window)).toBe(true);
+    expect(Object.isFrozen(window[0])).toBe(true);
+    expect(() => { candle.close = 999; }).toThrow();
+    expect(state.getCandle(0).close).toBe(102);
+  });
 });
