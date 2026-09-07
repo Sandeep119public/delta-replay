@@ -1,10 +1,13 @@
 /**
  * Narrow, immutable replay capability exposed to presentation code.
- * The UI can drive replay and observe presentation events, but cannot receive
- * execution-only market events or reach replay internals.
+ * Presentation can drive replay, query visible state, and subscribe only to
+ * presentation lifecycle events. Execution-only market events are unreachable.
  */
 export function createReplayUIPort(engine) {
-  const required = ['play', 'pause', 'stepForward', 'reset', 'start', 'setSpeed', 'seek', 'getState', 'getTotalCandles', 'getVisibleCandles', 'on'];
+  const required = [
+    'play', 'pause', 'stepForward', 'reset', 'start', 'setSpeed', 'seek',
+    'getState', 'getTotalCandles', 'getVisibleCandles', 'on',
+  ];
   if (!engine || required.some((name) => typeof engine[name] !== 'function')) {
     throw new TypeError(`createReplayUIPort requires replay capabilities: ${required.join(', ')}`);
   }
