@@ -1,7 +1,6 @@
-import { ReplayEvents } from '../replay/ReplayEvents.js';
-
 export class ReplayControls {
-  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, replayPort, engine = null, followBtn = null, onFollowClick = null }) {
+  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, replayPort, followBtn = null, onFollowClick = null }) {
+    if (!replayPort) throw new TypeError('ReplayControls requires replayPort');
     this.playBtn = playBtn;
     this.pauseBtn = pauseBtn;
     this.stepBtn = stepBtn;
@@ -9,11 +8,9 @@ export class ReplayControls {
     this.startReplayBtn = startReplayBtn;
     this.speedSelect = speedSelect;
     this.statusEl = statusEl;
-    this.replayPort = replayPort || engine;
+    this.replayPort = replayPort;
     this.followBtn = followBtn;
     this.onFollowClick = onFollowClick;
-
-    if (!this.replayPort) throw new TypeError('ReplayControls requires replayPort');
 
     this._listeners = [];
     this._subscriptions = [];
@@ -38,16 +35,13 @@ export class ReplayControls {
 
     if (this.followBtn) {
       this._listen(this.followBtn, 'click', () => {
-        if (this.onFollowClick) this.onFollowClick();
+        this.onFollowClick?.();
         this.followBtn.classList.add('hidden');
       });
     }
 
-    const onState = this.replayPort.onStateChanged || ((handler) => this.replayPort.on(ReplayEvents.STATE_CHANGED, handler));
-    const onSpeed = this.replayPort.onSpeedChanged || ((handler) => this.replayPort.on(ReplayEvents.SPEED_CHANGED, handler));
-    this._subscriptions.push(onState((state) => this.render(state)));
-    this._subscriptions.push(onSpeed(({ speed }) => { this.speedSelect.value = String(speed); }));
-
+    this._subscriptions.push(this.replayPort.onStateChanged((state) => this.render(state)));
+    this._subscriptions.push(this.replayPort.onSpeedChanged(({ speed }) => { this.speedSelect.value = String(speed); }));
     this.render(this.replayPort.getState());
   }
 
@@ -56,7 +50,7 @@ export class ReplayControls {
     this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch {} });
     this._listeners = [];
     this._subscriptions = [];
-    try { document?.body?.classList?.remove('velocity-boost'); } catch {}
+    this.onFollowClick = null;
   }
 
   _safeAction(action, onError = null) {
@@ -79,11 +73,11 @@ export class ReplayControls {
       delete this.startReplayBtn.dataset.startIndex;
       this.startReplayBtn.disabled = true;
     }
+    return valid;
   }
 
   render(state) {
     if (!state) return;
-
     const isIdle = state.status === 'idle';
     const isReady = state.status === 'ready';
     const isPlaying = state.status === 'playing';
@@ -95,7 +89,6 @@ export class ReplayControls {
       this.statusEl.textContent = state.status.toUpperCase();
       this.statusEl.className = `replay-status ${state.status}`;
     }
-
     try {
       if (typeof document !== 'undefined' && document.body?.classList) {
         document.body.classList.toggle('velocity-boost', Number(state.speed) >= 5);
