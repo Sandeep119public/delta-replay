@@ -133,5 +133,7 @@ export class ErrorPanel {
     this._listeners = [];
     this.onRetry = null;
     this.hide();
+    this.container = this.titleEl = this.messageEl = this.contextEl = null;
+    this.dismissBtn = this.retryBtn = this.detailsBtn = null;
   }
 }
