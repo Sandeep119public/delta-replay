@@ -64,7 +64,7 @@ export function createApplication() {
   const views = ui.createTerminalViews({ appState, candleStore, engine, tradingPort, tradingEvents, tradingState, commandController, coordinator, timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, ...form });
 
   const selectorBindings = bindDatasetSelectors(ui, actions);
-  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, tradingEngine, actions });
+  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candleStore, tradingEvents, actions });
   const tradingBindings = bindTradingEvents({ tradingEvents, actions, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
