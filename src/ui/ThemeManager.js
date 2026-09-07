@@ -125,7 +125,7 @@ export class ThemeManager {
     });
   }
 
-  destroy() { this._listeners.forEach(([el, type, handler]) => el?.removeEventListener?.(type, handler)); this._listeners = []; this.onThemeChange = null; }
+  destroy() { this._listeners.forEach(([el, type, handler]) => el?.removeEventListener?.(type, handler)); this._listeners = []; this._onSelectChange = null; this.onThemeChange = null; }
 
   _syncPills(theme) {
     const pills = this._getPills();
