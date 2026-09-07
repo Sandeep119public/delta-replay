@@ -5,7 +5,6 @@ import { OrderFormView } from '../src/ui/OrderFormView.js';
 import { Timeline } from '../src/ui/Timeline.js';
 import { ReplayControls } from '../src/ui/ReplayControls.js';
 import { TradingEvents } from '../src/trading/TradingEvents.js';
-import { TRADING_PRESENTATION_EVENTS } from '../src/ports/TradingPresentationPort.js';
 
 function createMockElement(initial = {}) {
   const classes = new Set(initial.classes || []);
@@ -123,7 +122,7 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
           resetAccount: vi.fn(), setCapital: vi.fn(), setFeeRate: vi.fn(),
           hasOpenPosition: vi.fn(() => false),
         }),
-        events: TRADING_PRESENTATION_EVENTS,
+        events: TradingEvents,
         on: vi.fn(),
       };
       mockActions = {
