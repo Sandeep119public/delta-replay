@@ -1,7 +1,7 @@
 /**
  * Application event bridge. UI modules dispatch intent; application code owns effects.
  */
-export function createApplicationActions({ coordinator, commandController, appState, engine, candleStore, modeBanner, timeline, controls }) {
+export function createApplicationActions({ coordinator, commandController, appState, engine, candleStore, modeBanner, timeline, controls, errorPanel }) {
   return {
     changeDataset(kind, value, sourceEl) {
       return coordinator.handleSymbolTimeframeChange(kind, value, sourceEl);
@@ -33,6 +33,10 @@ export function createApplicationActions({ coordinator, commandController, appSt
       commandController.startAt(Number(index));
     },
     pause() { commandController.pause(); },
+    handleLiquidation(payload) {
+      try { commandController.pause(); } catch (error) { console.warn('[Replay] liquidation pause failed', error); }
+      errorPanel.show({ category: 'LIQUIDATION', userMessage: `Position liquidated: ${payload?.symbol || ''} @ ${payload?.liquidationPrice ?? '—'}`, message: 'Position liquidated', code: 'LIQUIDATION', context: {} }, { severity: 'critical', onPause: () => commandController.pause() });
+    },
     load() { return coordinator.loadAndPrepareReplay({ autoStart: false }); },
   };
 }
