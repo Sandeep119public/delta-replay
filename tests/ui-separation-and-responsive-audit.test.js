@@ -342,10 +342,17 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
       const statusEl = createMockElement();
       const followBtn = createMockElement({ classes: ['hidden'] });
       const onFollowClick = vi.fn();
-      const mockEngine = {
+      const mockReplayPort = {
+        play: vi.fn(),
+        pause: vi.fn(),
+        stepForward: vi.fn(),
+        reset: vi.fn(),
+        start: vi.fn(),
+        setSpeed: vi.fn(),
         getState: vi.fn(() => ({ status: 'ready', totalCandles: 100, speed: 1 })),
         getTotalCandles: vi.fn(() => 100),
-        on: vi.fn(),
+        onStateChanged: vi.fn(() => () => {}),
+        onSpeedChanged: vi.fn(() => () => {}),
       };
 
       const controls = new ReplayControls({
@@ -356,7 +363,7 @@ describe('Deep UI Separation & Multi-Screen Responsive Audit', () => {
         startReplayBtn,
         speedSelect,
         statusEl,
-        engine: mockEngine,
+        replayPort: mockReplayPort,
         followBtn,
         onFollowClick,
       });
