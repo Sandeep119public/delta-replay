@@ -21,11 +21,12 @@ export class ReplayCoordinator {
   }) {
     this.tradingErrorView = tradingErrorView;
 
-    this.previewService = createReplayPreviewService({
+    const previewService = createReplayPreviewService({
       candleStore,
       chartManager,
       chartAdapter,
     });
+    this.previewService = previewService;
 
     this.loadService = createReplayLoadService({
       dataManager,
@@ -47,7 +48,7 @@ export class ReplayCoordinator {
       fromTimeEl,
       toDateEl,
       toTimeEl,
-      updatePreviewWindow: (idx) => this.updatePreviewWindow(idx),
+      updatePreviewWindow: previewService.updatePreviewWindow,
     });
 
     this.datasetChangeService = createDatasetChangeService({
