@@ -133,8 +133,8 @@ export function createApplication() {
   const actions = createApplicationActions({
     replay: replayCapabilities,
     commandController,
+    replayPort,
     appState,
-    engine,
     statusView,
     modeBanner: ui.modeBanner,
     timeline: ui.timeline,
