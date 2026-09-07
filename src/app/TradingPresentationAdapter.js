@@ -27,6 +27,14 @@ function assertPresentationEvent(event) {
   return event;
 }
 
+function subscribeAll(tradingEngine, handler) {
+  if (typeof handler !== 'function') throw new TypeError('trading event handler must be a function');
+  const unsubs = [...PRESENTATION_EVENT_NAMES]
+    .map((event) => tradingEngine.on?.(event, handler))
+    .filter((unsubscribe) => typeof unsubscribe === 'function');
+  return () => unsubs.forEach((unsubscribe) => { try { unsubscribe(); } catch {} });
+}
+
 /**
  * Application-owned narrow trading presentation contract.
  * The UI receives intent-shaped actions plus one frozen snapshot() instead of
@@ -95,5 +103,6 @@ export function createTradingPresentation(tradingEngine) {
     actions,
     events: TRADING_PRESENTATION_EVENTS,
     on: (event, handler) => tradingEngine.on?.(assertPresentationEvent(event), handler),
+    onAll: (handler) => subscribeAll(tradingEngine, handler),
   });
 }
