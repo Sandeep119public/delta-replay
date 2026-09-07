@@ -224,6 +224,11 @@ export class ChartTradingOverlay {
     this._orderLines.clear();
   }
 
+  destroy() {
+    this.clearTradingLines();
+    this._ctx = null;
+  }
+
   /**
    * Determine intent for a clicked chart price based on active position context.
    * Delegates to TradingIntentResolver for pure Separation of Concerns.
