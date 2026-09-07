@@ -3,8 +3,6 @@
  * Presentation can drive replay, query visible state, and subscribe only to
  * presentation lifecycle events. Execution-only market events are unreachable.
  */
-import { ReplayEvents } from '../replay/ReplayEvents.js';
-
 function freezeValue(value) {
   if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
   if (Array.isArray(value)) return Object.freeze(value.map(freezeValue));
@@ -34,11 +32,11 @@ export function createReplayUIPort(engine) {
     getState: () => freezeValue(engine.getState()),
     getTotalCandles: () => engine.getTotalCandles(),
     getVisibleCandles: () => freezeValue(engine.getVisibleCandles()),
-    onStateChanged: (listener) => subscribe(ReplayEvents.STATE_CHANGED, listener),
-    onSpeedChanged: (listener) => subscribe(ReplayEvents.SPEED_CHANGED, listener),
-    onStarted: (listener) => subscribe(ReplayEvents.STARTED, listener),
-    onSeeked: (listener) => subscribe(ReplayEvents.SEEKED, listener),
-    onReset: (listener) => subscribe(ReplayEvents.RESET, listener),
-    onStepped: (listener) => subscribe(ReplayEvents.STEPPED, listener),
+    onStateChanged: (listener) => subscribe('stateChanged', listener),
+    onSpeedChanged: (listener) => subscribe('speedChanged', listener),
+    onStarted: (listener) => subscribe('started', listener),
+    onSeeked: (listener) => subscribe('seeked', listener),
+    onReset: (listener) => subscribe('reset', listener),
+    onStepped: (listener) => subscribe('stepped', listener),
   });
 }
