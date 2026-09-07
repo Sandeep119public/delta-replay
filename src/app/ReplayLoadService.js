@@ -9,15 +9,16 @@ const MAX_RETRIES = 3;
  * Application-owned replay load capability.
  *
  * Owns async load-session identity, cancellation, retry policy, data
- * hydration, and load-related presentation callbacks. ReplayCoordinator
- * remains a stable facade/orchestrator above this service.
+ * hydration, and load-related presentation callbacks. Trading access is
+ * capability-based rather than a raw engine dependency.
  */
 export function createReplayLoadService({
   dataManager,
   candleStore,
   appState,
   replayEngine,
-  tradingEngine,
+  hasOpenPosition,
+  notifyMarketCandle,
   timeline,
   controls,
   modeBanner,
@@ -34,13 +35,15 @@ export function createReplayLoadService({
   toTimeEl = null,
   updatePreviewWindow,
 }) {
-  const required = { dataManager, candleStore, appState, replayEngine, timeline, controls, modeBanner };
+  const required = {
+    dataManager, candleStore, appState, replayEngine, timeline, controls, modeBanner,
+  };
   for (const [name, value] of Object.entries(required)) {
     if (!value) throw new TypeError(`createReplayLoadService requires ${name}`);
   }
-  if (typeof updatePreviewWindow !== 'function') {
-    throw new TypeError('createReplayLoadService requires updatePreviewWindow callback');
-  }
+  if (typeof hasOpenPosition !== 'function') throw new TypeError('createReplayLoadService requires hasOpenPosition() capability');
+  if (typeof notifyMarketCandle !== 'function') throw new TypeError('createReplayLoadService requires notifyMarketCandle() capability');
+  if (typeof updatePreviewWindow !== 'function') throw new TypeError('createReplayLoadService requires updatePreviewWindow callback');
 
   let loadToken = 0;
   let currentAbort = null;
@@ -94,7 +97,7 @@ export function createReplayLoadService({
 
   async function loadAndPrepareReplay({ targetSec = null, autoStart = false } = {}) {
     if (destroyed) return;
-    if (tradingEngine && tradingEngine.hasOpenPosition()) {
+    if (hasOpenPosition()) {
       showTradingError('Cannot change replay date while a position is open — close position or reset account first.');
       return;
     }
@@ -153,7 +156,7 @@ export function createReplayLoadService({
       updatePreviewWindow(replayIdx);
 
       const startCandle = candleStore.get(replayIdx);
-      if (startCandle && tradingEngine) tradingEngine.onMarketCandle({ candle: startCandle, index: replayIdx });
+      if (startCandle) notifyMarketCandle({ candle: startCandle, index: replayIdx });
       if (startReplayBtn) startReplayBtn.disabled = false;
       if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
       if (cacheBadgeEl) cacheBadgeEl.classList.toggle('hidden', !metadata?.cached);
