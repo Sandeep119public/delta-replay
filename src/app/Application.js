@@ -68,7 +68,7 @@ export function createApplication() {
 
   const chartTradingActions = createChartTradingActions({ tradingEngine, coordinator });
   const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingEvents, tradingState, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, actions: chartTradingActions, ...form });
-  const tradingStateBridge = bindTradingState({ tradingEngine, tradingState, onChange: () => chartTradingController.syncChartTradingLines() });
+  const tradingStateBridge = bindTradingState({ tradingEvents, tradingState, onChange: () => chartTradingController.syncChartTradingLines() });
 
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
 
