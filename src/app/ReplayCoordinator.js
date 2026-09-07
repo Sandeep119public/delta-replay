@@ -8,8 +8,8 @@ export { VISIBLE_WINDOW };
  * ReplayCoordinator is the stable application-level facade for replay
  * lifecycle capabilities. Async loading/session state, chart preview, and
  * dataset switching are owned by focused services and delegated here.
- * DOM elements are injected by the composition root. It does not query
- * document IDs.
+ * DOM elements are injected by the composition root. Trading access is
+ * expressed to child services through narrow capabilities.
  */
 export class ReplayCoordinator {
   constructor({
@@ -20,6 +20,10 @@ export class ReplayCoordinator {
     toDateEl = null, toTimeEl = null,
   }) {
     this.tradingErrorView = tradingErrorView;
+
+    const hasOpenPosition = () => tradingEngine?.hasOpenPosition?.() === true;
+    const notifyMarketCandle = (payload) => tradingEngine?.onMarketCandle?.(payload);
+    const clearPendingOrders = (reason) => tradingEngine?.clearPendingOrders?.(reason);
 
     const previewService = createReplayPreviewService({
       candleStore,
@@ -33,7 +37,8 @@ export class ReplayCoordinator {
       candleStore,
       appState,
       replayEngine,
-      tradingEngine,
+      hasOpenPosition,
+      notifyMarketCandle,
       timeline,
       controls,
       modeBanner,
@@ -52,7 +57,8 @@ export class ReplayCoordinator {
     });
 
     this.datasetChangeService = createDatasetChangeService({
-      tradingEngine,
+      hasOpenPosition,
+      clearPendingOrders,
       appState,
       candleStore,
       replayEngine,
