@@ -19,38 +19,12 @@ export class ReplayCoordinator {
     headerStartReplayBtn = null, loadBtn = null, fromDateEl = null, fromTimeEl = null,
     toDateEl = null, toTimeEl = null,
   }) {
-    this.dataManager = dataManager;
-    this.candleStore = candleStore;
-    this.appState = appState;
-    this.replayEngine = replayEngine;
-    this.tradingEngine = tradingEngine;
-    this.chartManager = chartManager;
-    this.chartAdapter = chartAdapter;
-    this.timeline = timeline;
-    this.controls = controls;
-    this.errorPanel = errorPanel;
-    this.modeBanner = modeBanner;
     this.tradingErrorView = tradingErrorView;
 
     this.previewService = createReplayPreviewService({
       candleStore,
       chartManager,
       chartAdapter,
-    });
-
-    this.datasetChangeService = createDatasetChangeService({
-      tradingEngine,
-      appState,
-      candleStore,
-      replayEngine,
-      chartManager,
-      timeline,
-      controls,
-      startReplayBtn,
-      headerStartReplayBtn,
-      reportError: (msg) => this.showTradingError(msg),
-      invalidateLoad: () => this.loadService.clearCurrentLoad(),
-      reload: () => this.loadAndPrepareReplay({ autoStart: false }),
     });
 
     this.loadService = createReplayLoadService({
@@ -75,10 +49,25 @@ export class ReplayCoordinator {
       toTimeEl,
       updatePreviewWindow: (idx) => this.updatePreviewWindow(idx),
     });
+
+    this.datasetChangeService = createDatasetChangeService({
+      tradingEngine,
+      appState,
+      candleStore,
+      replayEngine,
+      chartManager,
+      timeline,
+      controls,
+      startReplayBtn,
+      headerStartReplayBtn,
+      reportError: (msg) => this.showTradingError(msg),
+      invalidateLoad: () => this.loadService.clearCurrentLoad(),
+      reload: () => this.loadAndPrepareReplay({ autoStart: false }),
+    });
   }
 
   updateLoadButton() {
-    return this.loadService.loadAndPrepareReplay ? undefined : undefined;
+    return this.loadService.updateLoadButton();
   }
 
   updatePreviewWindow(idx) {
