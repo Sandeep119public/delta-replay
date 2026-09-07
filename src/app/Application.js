@@ -17,9 +17,9 @@ import { createDatasetView, createCandleView, createReplayStatusView } from './D
 import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
 
-function registerActionGuard(engine, tradingEngine, reportError) {
+function registerActionGuard(engine, canTrade, reportError) {
   return engine.registerActionGuard((action) => {
-    if (!tradingEngine.hasOpenPosition()) return { allowed: true };
+    if (!canTrade()) return { allowed: true };
     const msg = action === 'load'
       ? 'Cannot load new data while a position is open — close position or reset account first.'
       : `Cannot ${action} while a position is open — close position first.`;
@@ -36,51 +36,30 @@ function bindDatasetSelectors(ui, actions) {
   return { destroy() { unbinds.forEach((unbind) => { try { unbind?.(); } catch {} }); } };
 }
 
-function createReplayCommandController({ engine, appState, candleStore, tradingEngine, coordinator, headerBtn }) {
-  return new ReplayCommandController({
-    engine,
-    appState,
-    candleStore,
-    headerBtn,
-    onLoad: ({ autoStart }) => coordinator.loadAndPrepareReplay({ autoStart }),
-    onPreview: (index) => coordinator.updatePreviewWindow(index),
-    canExecute: (action) => {
-      if (!tradingEngine.hasOpenPosition()) return { allowed: true };
-      const reason = action === 'start'
-        ? 'Cannot start replay while a position is open — close position first.'
-        : action === 'seek'
-          ? 'Cannot seek while a position is open — close position first.'
-          : `Cannot ${action} while a position is open — close position first.`;
-      return { allowed: false, reason };
-    },
-    onError: (msg) => coordinator.showTradingError(msg),
-  });
-}
-
 export function createApplication() {
   const services = createCoreServices();
   const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
   const tradingEvents = createTradingUIEvents(tradingEngine);
-  // Narrow intent-shaped trading contract for presentation. This is the only
-  // trading capability that crosses into UI code.
   const trading = createTradingPresentation(tradingEngine);
   const replayPort = createReplayUIPort(engine);
-  // Frozen presentation views: the UI receives these instead of stores.
   const dataset = createDatasetView(appState);
   const candles = createCandleView(candleStore);
   const statusView = createReplayStatusView({ engine, appState, candleStore });
 
-  // Chart construction lives in the composition root; PaperUI receives
-  // ready handles and never imports the chart layer.
   const chartManager = new ChartManager(document.getElementById('chart-container'));
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
 
-  // Capability callbacks: the UI invokes these instead of reaching back
-  // into the coordinator or command controller.
   const coordinatorRef = { current: null };
   const commandControllerRef = { current: null };
+  const replayCapabilities = Object.freeze({
+    load: () => coordinatorRef.current?.loadAndPrepareReplay({ autoStart: false }),
+    loadWithOptions: (options) => coordinatorRef.current?.loadAndPrepareReplay(options),
+    preview: (idx) => coordinatorRef.current?.updatePreviewWindow?.(idx),
+    changeDataset: (kind, value, sourceEl) => coordinatorRef.current?.handleSymbolTimeframeChange(kind, value, sourceEl),
+  });
+
   const callbacks = {
-    onRetry: () => coordinatorRef.current?.loadAndPrepareReplay({ autoStart: false }),
+    onRetry: () => replayCapabilities.load(),
     onFollow: () => {
       const idx = replayPort.getState().currentIndex;
       chartManager.setAutoFollow(true);
@@ -93,13 +72,10 @@ export function createApplication() {
         }
       }
     },
-    onLoadReplay: ({ targetSec } = {}) =>
-      coordinatorRef.current?.loadAndPrepareReplay({ targetSec, autoStart: false }),
-    onPreviewWindow: (idx) => coordinatorRef.current?.updatePreviewWindow?.(idx),
+    onLoadReplay: ({ targetSec } = {}) => replayCapabilities.loadWithOptions({ targetSec, autoStart: false }),
+    onPreviewWindow: (idx) => replayCapabilities.preview(idx),
     onSeek: (idx) => commandControllerRef.current?.trySeek(idx),
-    onTimeframeChange: (timeframe) => {
-      appState.timeframe = timeframe;
-    },
+    onTimeframeChange: (timeframe) => { appState.timeframe = timeframe; },
   };
 
   const ui = createPaperUI({
@@ -130,22 +106,24 @@ export function createApplication() {
   coordinatorRef.current = coordinator;
 
   const coordinatorPorts = ui.getReplayPorts();
-  const commandController = createReplayCommandController({
+  const commandController = new ReplayCommandController({
     engine,
     appState,
     candleStore,
-    tradingEngine,
-    coordinator,
     headerBtn: coordinatorPorts.headerStartReplayBtn,
+    onLoad: ({ autoStart }) => coordinator.loadAndPrepareReplay({ autoStart }),
+    onPreview: (index) => coordinator.updatePreviewWindow(index),
+    canExecute: () => trading.actions.hasOpenPosition(),
+    onError: (msg) => coordinator.showTradingError(msg),
   });
   commandControllerRef.current = commandController;
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
+
   const actions = createApplicationActions({
-    coordinator,
+    replay: replayCapabilities,
     commandController,
     appState,
     engine,
-    candleStore,
     statusView,
     modeBanner: ui.modeBanner,
     timeline: ui.timeline,
@@ -169,7 +147,16 @@ export function createApplication() {
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, actions });
   const tradingBindings = bindTradingEvents({ tradingEvents, actions, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
-  const chartTradingActions = createChartTradingActions({ tradingEngine, coordinator });
+
+  const chartTradingActions = createChartTradingActions({
+    trading,
+    executeTrade: (intent) => {
+      if (intent.action === 'SET_TP') return trading.actions.setTakeProfit(intent.symbol, intent.price);
+      if (intent.action === 'SET_SL') return trading.actions.setStopLoss(intent.symbol, intent.price);
+      return { success: true };
+    },
+    reportError: (message) => coordinator.showTradingError(message),
+  });
   const chartTradingController = ui.createChartTradingController({
     chartManager: ui.chartManager,
     trading,
@@ -183,7 +170,7 @@ export function createApplication() {
   });
   const tradingStateBridge = bindTradingState({ tradingEvents, trading, onChange: () => chartTradingController.syncChartTradingLines() });
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, statusView, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
-  const actionGuardUnsub = registerActionGuard(engine, tradingEngine, (msg) => coordinator.showTradingError(msg));
+  const actionGuardUnsub = registerActionGuard(engine, () => trading.actions.hasOpenPosition(), (msg) => coordinator.showTradingError(msg));
   const loadBtn = coordinatorPorts.loadBtn;
   const onLoadClick = () => actions.load();
   loadBtn?.addEventListener('click', onLoadClick);
