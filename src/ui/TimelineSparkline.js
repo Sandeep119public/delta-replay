@@ -1,27 +1,34 @@
 import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
+import { normalizeCandleSource, normalizeTradingSource } from './presentationCompat.js';
 
 /**
  * TimelineSparkline renders a contextual mini price scrubber above the
  * timeline slider: a close-price sparkline, a replay-cursor line, and trade
  * pips (entry triangle + exit dot) so users can scrub back to past setups.
  * Clicking the canvas seeks through the provided onSeek callback.
+ *
+ * Read capabilities arrive as narrow views: `candles`
+ * ({ getCount, get, getAll, findIndexByTime }), `replay` (replay port),
+ * `trading` (presentation contract). Engine-shaped predecessors are normalized
+ * through presentationCompat, so callers may still pass objects exposing the
+ * legacy candle/trading getters.
  */
 export class TimelineSparkline {
   constructor({
     canvasEl = null,
-    candleStore = null,
+    candles = null,
+    replay = null,
     replayPort = null,
-    engine = null,
-    tradingEngine = null,
+    trading = null,
     tradingEvents = null,
     onSeek = null,
     height = 36,
     palette = null,
   } = {}) {
     this.canvas = canvasEl;
-    this.candleStore = candleStore;
-    this.replayPort = replayPort || engine;
-    this.tradingEngine = tradingEngine;
+    this.candles = candles ? normalizeCandleSource(candles) : null;
+    this.replayPort = replay ?? replayPort;
+    this.trading = trading ? normalizeTradingSource(trading) : null;
     this.tradingEvents = tradingEvents;
     this.onSeek = onSeek;
     this.height = height;
@@ -51,10 +58,10 @@ export class TimelineSparkline {
         if (typeof unsubscribe === 'function') this._subscriptions.push(unsubscribe);
       };
       subscribe(this.replayPort, 'stateChanged', this.replayPort?.onStateChanged, this._onState);
-      const events = this.tradingEvents?.events || TRADING_PRESENTATION_EVENTS;
-      subscribe(this.tradingEvents || this.tradingEngine, events.TRADE_EXECUTED, null, this._onState);
-      subscribe(this.tradingEvents || this.tradingEngine, events.POSITION_CLOSED, null, this._onState);
-      subscribe(this.tradingEvents || this.tradingEngine, events.POSITION_OPENED, null, this._onState);
+      const events = this.tradingEvents?.events || this.trading?.events || TRADING_PRESENTATION_EVENTS;
+      subscribe(this.tradingEvents || this.trading, events.TRADE_EXECUTED, null, this._onState);
+      subscribe(this.tradingEvents || this.trading, events.POSITION_CLOSED, null, this._onState);
+      subscribe(this.tradingEvents || this.trading, events.POSITION_OPENED, null, this._onState);
       if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('resize', this._onResize);
       if (typeof ResizeObserver !== 'undefined' && this.canvas?.parentElement) {
         this._ro = new ResizeObserver(this._onResize);
@@ -84,11 +91,11 @@ export class TimelineSparkline {
   }
 
   _candles() {
-    try { return this.candleStore?.getAll?.() || []; } catch { return []; }
+    try { return this.candles?.getAll?.() || []; } catch { return []; }
   }
 
   _trades() {
-    try { return this.tradingEngine?.getTrades?.() || []; } catch { return []; }
+    try { return this.trading?.snapshot().trades || []; } catch { return []; }
   }
 
   _cursor() {

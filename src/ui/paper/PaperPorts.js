@@ -1,6 +1,6 @@
 export function createPaperPorts(el) {
   return {
-    coordinator: () => ({
+    replay: () => ({
       dataStatusEl: el('data-status'), cacheBadgeEl: el('cache-badge'),
       startReplayBtn: el('start-replay-btn'), headerStartReplayBtn: el('header-start-replay-btn'),
       loadBtn: el('load-btn'), fromDateEl: el('from-date'), fromTimeEl: el('from-time'),

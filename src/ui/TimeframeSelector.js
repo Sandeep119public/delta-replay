@@ -1,18 +1,26 @@
-import { TIMEFRAME_SECONDS } from '../data/DeltaCandleProvider.js';
+import { DEFAULT_TIMEFRAMES } from '../ports/DatasetPresentationPort.js';
+import { normalizeDatasetSource } from './presentationCompat.js';
 
 export class TimeframeSelector {
-  constructor(selectEl, appState, timeframes = null) {
+  constructor(selectEl, dataset = null, timeframes = null) {
     if (!selectEl) throw new Error('TimeframeSelector requires select element');
     this.el = selectEl;
-    this.appState = appState;
-    this.timeframes = timeframes ?? Object.keys(TIMEFRAME_SECONDS).filter(tf => tf !== '1w');
+    // dataset is a narrow view model ({ timeframe }); legacy AppState is
+    // normalized through presentationCompat so the UI never imports state.
+    this.dataset = dataset;
+    this.timeframes = timeframes ?? [...DEFAULT_TIMEFRAMES];
     this._onChange = null;
     this._handleChange = () => this._onChange?.(this.el.value);
     this._render();
     if (typeof this.el.addEventListener === 'function') this.el.addEventListener('change', this._handleChange);
   }
 
+  get _selectedTimeframe() {
+    return normalizeDatasetSource(this.dataset, 'timeframe');
+  }
+
   _render() {
+    const selected = this._selectedTimeframe;
     if (typeof this.el.replaceChildren === 'function' && typeof document !== 'undefined') {
       this.el.replaceChildren();
       const fragment = document.createDocumentFragment();
@@ -20,14 +28,14 @@ export class TimeframeSelector {
         const option = document.createElement('option');
         option.value = timeframe;
         option.textContent = timeframe;
-        option.selected = timeframe === this.appState.timeframe;
+        option.selected = timeframe === selected;
         fragment.appendChild(option);
       }
       this.el.appendChild(fragment);
       return;
     }
     this.el.innerHTML = this.timeframes
-      .map(timeframe => `<option value="${String(timeframe).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;') }"${timeframe === this.appState.timeframe ? ' selected' : ''}>${String(timeframe).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`)
+      .map(timeframe => `<option value="${String(timeframe).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;') }"${timeframe === selected ? ' selected' : ''}>${String(timeframe).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`)
       .join('');
   }
 

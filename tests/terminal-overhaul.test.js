@@ -76,7 +76,7 @@ describe('terminal overhaul smoke', () => {
       marketTimeEl: mkEl(), marketTimeFull: mkEl(), srTicker: mkEl(),
       overlay: mkEl(), overlayText: mkEl(),
     });
-    banner.update({ replayState: { status: 'paused', currentIndex: 1481 }, appState: { candles: [], pendingStartIndex: 0 }, candleStore: { getCount: () => 8640, get: () => ({ time: 1717685100 }) } });
+    banner.update({ total: 8640, status: 'paused', loadingState: 'IDLE', pendingStartIndex: 0, currentIndex: 1481, candleAt: () => ({ time: 1717685100 }) });
     expect(progressText.textContent).toMatch(/BAR 1,482 \/ 8,640/);
     expect(progressPct.textContent).toMatch(/%/);
   });

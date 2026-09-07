@@ -1,17 +1,29 @@
+import { createTradingPresentation } from './TradingPresentationAdapter.js';
+
 /**
  * Application-owned facade for trading capabilities exposed to presentation code.
  * The UI receives this port instead of the PaperTradingEngine instance.
+ *
+ * @deprecated Prefer createTradingPresentation() (see TradingPresentationAdapter.js),
+ * which exposes the narrow intent-shaped contract (snapshot/actions/events).
+ * This engine-shaped facade is retained only for backward compatibility and is
+ * implemented on top of the narrow presentation so both stay consistent.
  */
 export function createTradingUIPort(tradingEngine) {
+  const narrow = createTradingPresentation(tradingEngine);
+  const snapshot = () => narrow.snapshot();
   const call = (method) => (...args) => tradingEngine?.[method]?.(...args);
   return Object.freeze({
-    getAccountSnapshot: call('getAccountSnapshot'),
-    getPerformanceStats: call('getPerformanceStats'),
-    getPositions: call('getPositions'),
-    getTrades: call('getTrades'),
-    getPendingOrders: call('getPendingOrders'),
-    getOrders: call('getOrders'),
-    getLatestCandle: call('getLatestCandle'),
+    getAccountSnapshot: () => snapshot().account,
+    getPerformanceStats: () => snapshot().stats,
+    getPositions: () => snapshot().positions,
+    getTrades: () => snapshot().trades,
+    getPendingOrders: () => snapshot().pendingOrders,
+    getOrders: () => snapshot().orders,
+    getLatestCandle: () => {
+      const markPrice = snapshot().markPrice;
+      return markPrice == null ? null : { close: markPrice, price: markPrice };
+    },
     hasOpenPosition: call('hasOpenPosition'),
     resetAccount: call('resetAccount'),
     setStartingBalance: call('setStartingBalance'),

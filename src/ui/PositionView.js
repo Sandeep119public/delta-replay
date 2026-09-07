@@ -1,11 +1,18 @@
+import { normalizeTradingSource } from './presentationCompat.js';
+
 /**
  * PositionView manages the active position card (symbol, side, size,
  * entry/current price, live unrealized PnL), risk stop/take profit inputs,
  * and position close triggers.
+ *
+ * Trading capabilities arrive as the narrow presentation contract
+ * ({ snapshot, actions }); the deprecated `engine` alias is normalized
+ * through presentationCompat.
  */
 export class PositionView {
   constructor({
-    engine,
+    trading,
+    engine = null,
     posSymbolEl,
     posSideEl,
     posQtyEl,
@@ -25,7 +32,8 @@ export class PositionView {
     onSuccess = null,
     onRender = null,
   } = {}) {
-    this.engine = engine;
+    const tradingSource = trading ?? engine;
+    this.trading = tradingSource ? normalizeTradingSource(tradingSource) : null;
     this.posSymbolEl = posSymbolEl;
     this.posSideEl = posSideEl;
     this.posQtyEl = posQtyEl;
@@ -65,13 +73,14 @@ export class PositionView {
   }
 
   closePosition() {
-    const positions = this.engine.getPositions();
+    if (!this.trading) throw new Error('PositionView requires a trading presentation to close positions');
+    const positions = this.trading.snapshot().positions;
     if (!positions.length) {
       this.onError?.('No open position to close');
       return;
     }
     const symbol = positions[0].symbol;
-    const res = this.engine.closePosition(symbol);
+    const res = this.trading.actions.flattenPosition(symbol);
     if (!res.success) this.onError?.(res.message);
     else this.onSuccess?.();
     this.onRender?.();
@@ -79,7 +88,8 @@ export class PositionView {
   }
 
   setRisk() {
-    const positions = this.engine.getPositions();
+    if (!this.trading) throw new Error('PositionView requires a trading presentation to set risk');
+    const positions = this.trading.snapshot().positions;
     if (!positions.length) {
       this.onError?.('No open position for SL/TP');
       return;
@@ -87,14 +97,15 @@ export class PositionView {
     const symbol = positions[0].symbol;
     const slVal = this.slInput?.value?.trim?.();
     const tpVal = this.tpInput?.value?.trim?.();
+    const { actions } = this.trading;
 
     let res;
     if (slVal && tpVal) {
-      res = this.engine.setRisk({ symbol, stopLoss: parseFloat(slVal), takeProfit: parseFloat(tpVal) });
+      res = actions.updateRisk({ symbol, stopLoss: parseFloat(slVal), takeProfit: parseFloat(tpVal) });
     } else if (slVal) {
-      res = this.engine.setStopLoss(symbol, parseFloat(slVal));
+      res = actions.setStopLoss(symbol, parseFloat(slVal));
     } else if (tpVal) {
-      res = this.engine.setTakeProfit(symbol, parseFloat(tpVal));
+      res = actions.setTakeProfit(symbol, parseFloat(tpVal));
     } else {
       this.onError?.('Enter SL or TP price');
       return;
@@ -107,7 +118,8 @@ export class PositionView {
   }
 
   clearRisk() {
-    const positions = this.engine.getPositions();
+    if (!this.trading) throw new Error('PositionView requires a trading presentation to clear risk');
+    const positions = this.trading.snapshot().positions;
     if (!positions.length) {
       this.onError?.('No open position to clear');
       return;
@@ -115,8 +127,7 @@ export class PositionView {
     const symbol = positions[0].symbol;
     if (this.slInput) this.slInput.value = '';
     if (this.tpInput) this.tpInput.value = '';
-    this.engine.clearStopLoss(symbol);
-    this.engine.clearTakeProfit(symbol);
+    this.trading.actions.clearRisk(symbol);
     this.onRender?.();
   }
 

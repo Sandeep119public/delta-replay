@@ -3,10 +3,12 @@ import { OrderFormView } from './OrderFormView.js';
 import { PositionView } from './PositionView.js';
 import { TradeLogView } from './TradeLogView.js';
 import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
+import { normalizeTradingSource } from './presentationCompat.js';
 
 export class TradingPanel {
   constructor({
-    tradingEngine,
+    trading = null,
+    tradingEngine = null,
     tradingEvents = null,
     balanceEl, equityEl, realizedEl, unrealizedEl, feesEl,
     posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
@@ -15,7 +17,7 @@ export class TradingPanel {
     orderTypeSelect, limitPriceInput, stopPriceInput, pendingListEl,
     posSlEl, posTpEl, slInput, tpInput, setRiskBtn, clearRiskBtn
   }) {
-    this.engine = tradingEngine;
+    this.trading = normalizeTradingSource(trading ?? tradingEngine);
     this.tradingEvents = tradingEvents;
     const getEl = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
     this.errorEl = errorEl || getEl('trading-error');
@@ -30,11 +32,11 @@ export class TradingPanel {
     this.pendingListEl = pendingListEl || getEl('pending-orders-list'); this.posSlEl = posSlEl || getEl('pos-sl'); this.posTpEl = posTpEl || getEl('pos-tp');
     this.slInput = slInput || getEl('sl-price'); this.tpInput = tpInput || getEl('tp-price'); this.setRiskBtn = setRiskBtn || getEl('btn-set-risk'); this.clearRiskBtn = clearRiskBtn || getEl('btn-clear-risk');
 
-    const common = { engine: this.engine, tradingState: null, tradingActions: this.engine };
+    const common = { trading: this.trading };
     this.accountSummaryView = new AccountSummaryView({ ...common, balanceEl: this.balanceEl, equityEl: this.equityEl, realizedEl: this.realizedEl, unrealizedEl: this.unrealizedEl, feesEl: this.feesEl, resetBtn: this.resetBtn, onError: (msg) => this.showError(msg), onRender: () => this.render() });
     this.orderFormView = new OrderFormView({ ...common, qtyInput: this.qtyInput, buyBtn: this.buyBtn, sellBtn: this.sellBtn, orderTypeSelect: this.orderTypeSelect, limitPriceInput: this.limitPriceInput, stopPriceInput: this.stopPriceInput, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
     this.positionView = new PositionView({ ...common, posSymbolEl: this.posSymbolEl, posSideEl: this.posSideEl, posQtyEl: this.posQtyEl, posEntryEl: this.posEntryEl, posCurrentEl: this.posCurrentEl, posPnlEl: this.posPnlEl, posSlEl: this.posSlEl, posTpEl: this.posTpEl, closeBtn: this.closeBtn, setRiskBtn: this.setRiskBtn, clearRiskBtn: this.clearRiskBtn, slInput: this.slInput, tpInput: this.tpInput, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
-    this.tradeLogView = new TradeLogView({ engine: this.engine, tradesListEl: this.tradesListEl, pendingListEl: this.pendingListEl, onError: (msg) => this.showError(msg), onRender: () => this.render() });
+    this.tradeLogView = new TradeLogView({ trading: this.trading, tradesListEl: this.tradesListEl, pendingListEl: this.pendingListEl, onError: (msg) => this.showError(msg), onRender: () => this.render() });
 
     this._bindSidebarTabs();
     this._bindEngineEvents();
@@ -57,7 +59,8 @@ export class TradingPanel {
   }
 
   _bindEngineEvents() {
-    const on = this.tradingEvents?.on || this.engine?.on?.bind(this.engine);
+    const trading = this.trading;
+    const on = this.tradingEvents?.on || trading?.on?.bind(trading);
     if (!on) return;
     const events = this.tradingEvents?.events || TRADING_PRESENTATION_EVENTS;
     const rerender = () => this.render();
@@ -88,12 +91,16 @@ export class TradingPanel {
   _setRisk() { return this.positionView.setRisk(); }
   _clearRisk() { return this.positionView.clearRisk(); }
   _cancelOrder(orderId) { return this.tradeLogView.cancelOrder(orderId); }
-  _renderPending() { this.tradeLogView.renderPending(this.engine.getPendingOrders?.() || [], this.engine.getOrders?.() || []); }
+  _renderPending() {
+    const snap = this.trading.snapshot();
+    this.tradeLogView.renderPending(snap.pendingOrders || [], snap.orders || []);
+  }
 
   render() {
-    const acct = this.engine.getAccountSnapshot();
-    const trades = this.engine.getTrades();
-    const positions = this.engine.getPositions();
+    const snap = this.trading.snapshot();
+    const acct = snap.account;
+    const trades = snap.trades;
+    const positions = snap.positions;
     this.accountSummaryView.render(acct, trades);
     this.orderFormView.render();
     this.positionView.render(positions);

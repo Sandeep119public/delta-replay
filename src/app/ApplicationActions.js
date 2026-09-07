@@ -1,7 +1,11 @@
 /**
  * Application event bridge. UI modules dispatch intent; application code owns effects.
  */
-export function createApplicationActions({ coordinator, commandController, appState, engine, candleStore, modeBanner, timeline, controls, errorPanel }) {
+export function createApplicationActions({ coordinator, commandController, appState, engine, candleStore, statusView = null, modeBanner, timeline, controls, errorPanel }) {
+  const reportStatus = () => {
+    if (statusView) modeBanner.update(statusView.snapshot());
+    else modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+  };
   return {
     changeDataset(kind, value, sourceEl) {
       return coordinator.handleSymbolTimeframeChange(kind, value, sourceEl);
@@ -9,7 +13,7 @@ export function createApplicationActions({ coordinator, commandController, appSt
     previewTimeline(index) {
       appState.setPendingStartIndex(index);
       controls.setStartIndex(index);
-      modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+      reportStatus();
       const state = engine.getState();
       if (state.status === 'ready' || state.status === 'idle') coordinator.updatePreviewWindow(index);
     },
@@ -23,7 +27,7 @@ export function createApplicationActions({ coordinator, commandController, appSt
       }
       appState.setPendingStartIndex(index);
       controls.setStartIndex(index);
-      modeBanner.update({ replayState: state, appState, candleStore });
+      reportStatus();
       coordinator.updatePreviewWindow(index);
     },
     startAt(index) {

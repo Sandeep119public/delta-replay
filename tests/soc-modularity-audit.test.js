@@ -172,19 +172,19 @@ describe('SoC and Modularity Deep Audit Verification', () => {
   });
 
   describe('6. ReplayDateSelector', () => {
-    it('sets preset and triggers coordinator load', () => {
+    it('sets preset and triggers the load capability (no coordinator reference)', () => {
       const chip1d = createMockElement({ dataset: { preset: '1d' } });
       const chip3d = createMockElement({ dataset: { preset: '3d' } });
-      const mockApp = { timeframe: '1m' };
-      const mockCoord = { loadAndPrepareReplay: vi.fn() };
+      const onLoadReplay = vi.fn();
       const replayDateEl = createMockElement();
       const replayTimeEl = createMockElement();
       const replayPort = { getState: vi.fn(() => ({ currentIndex: 0, totalCandles: 0 })), getTotalCandles: vi.fn(() => 0) };
-      const selector = new ReplayDateSelector({ appState: mockApp, coordinator: mockCoord, replayPort, presetChips: [chip1d, chip3d], replayDateEl, replayTimeEl });
+      const selector = new ReplayDateSelector({ dataset: { symbol: 'BTCUSDT', timeframe: '1m' }, candles: { getCount: () => 0, get: () => null, getAll: () => [], findIndexByTime: () => -1 }, replay: replayPort, onLoadReplay, presetChips: [chip1d, chip3d], replayDateEl, replayTimeEl });
       selector.selectPreset('3d');
       expect(chip3d.classList.contains('active')).toBe(true);
       expect(chip1d.classList.contains('active')).toBe(false);
-      expect(mockCoord.loadAndPrepareReplay).toHaveBeenCalledWith(expect.objectContaining({ autoStart: false }));
+      expect(onLoadReplay).toHaveBeenCalledWith(expect.objectContaining({ autoStart: false }));
+      expect(selector).not.toHaveProperty('coordinator');
     });
   });
 

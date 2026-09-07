@@ -62,17 +62,17 @@ describe('TimelineSparkline', () => {
   });
 
   it('returns false without a canvas and true when empty', () => {
-    const empty = new TimelineSparkline({ canvasEl: null, candleStore, engine, tradingEngine });
+    const empty = new TimelineSparkline({ canvasEl: null, candles: candleStore, replay: engine, trading: tradingEngine });
     expect(empty.render()).toBe(false);
 
     candleStore.getAll.mockReturnValue([]);
-    const view = new TimelineSparkline({ canvasEl: canvas, candleStore, engine, tradingEngine });
+    const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: tradingEngine });
     expect(view.render()).toBe(true);
     expect(ctx.clearRect).toHaveBeenCalled();
   });
 
   it('draws the close-price sparkline and replay cursor', () => {
-    const view = new TimelineSparkline({ canvasEl: canvas, candleStore, engine, tradingEngine });
+    const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: tradingEngine });
     expect(view.render()).toBe(true);
     // sparkline path + cursor line both stroke
     expect(ctx.stroke.mock.calls.length).toBeGreaterThanOrEqual(2);
@@ -85,7 +85,7 @@ describe('TimelineSparkline', () => {
       { side: 'LONG', entryPrice: 105, exitPrice: 110, openedAt: 1000 + 5 * 60, closedAt: 1000 + 10 * 60, netPnL: 5 },
       { side: 'SHORT', entryPrice: 115, exitPrice: 112, openedAt: 1000 + 12 * 60, closedAt: 1000 + 15 * 60, netPnL: -3 },
     ]);
-    const view = new TimelineSparkline({ canvasEl: canvas, candleStore, engine, tradingEngine });
+    const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: tradingEngine });
     view.render();
     // 2 entries (triangles via fill) + 2 exits (arcs)
     expect(ctx.arc.mock.calls.length).toBe(2);
@@ -94,7 +94,7 @@ describe('TimelineSparkline', () => {
 
   it('clicking the canvas seeks to the nearest candle index', () => {
     const onSeek = vi.fn();
-    const view = new TimelineSparkline({ canvasEl: canvas, candleStore, engine, tradingEngine, onSeek });
+    const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: tradingEngine, onSeek });
     view._handleClick({ offsetX: 150 });
     expect(onSeek).toHaveBeenCalledTimes(1);
     const idx = onSeek.mock.calls[0][0];
@@ -105,7 +105,7 @@ describe('TimelineSparkline', () => {
 
   it('touch tap and drag scrub to the nearest candle index', () => {
     const onSeek = vi.fn();
-    const view = new TimelineSparkline({ canvasEl: canvas, candleStore, engine, tradingEngine, onSeek });
+    const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: tradingEngine, onSeek });
     view._handleTouch({ touches: [{ clientX: 30 }] }, false);
     expect(onSeek).toHaveBeenCalledTimes(1);
     // 30/300 * 19 ≈ 1.9 -> index 2
@@ -118,7 +118,7 @@ describe('TimelineSparkline', () => {
   });
 
   it('subscribes to engine and trade events, and cleans up on destroy', () => {
-    const view = new TimelineSparkline({ canvasEl: canvas, candleStore, engine, tradingEngine });
+    const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: tradingEngine });
     expect(engine.on).toHaveBeenCalledWith('stateChanged', expect.any(Function));
     expect(tradingEngine.on).toHaveBeenCalledWith('tradeExecuted', expect.any(Function));
     view.destroy();

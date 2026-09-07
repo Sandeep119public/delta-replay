@@ -1,26 +1,31 @@
+import { normalizeTradingSource } from './presentationCompat.js';
+
 /**
  * Account summary presentation view. Trading capabilities arrive through the
- * application-provided facade, never through the trading domain module.
+ * narrow presentation contract ({ snapshot, actions }), never through the
+ * trading domain module. The deprecated `engine` alias is normalized through
+ * presentationCompat.
  */
 export class AccountSummaryView {
-  constructor({ engine, balanceEl, equityEl, realizedEl, unrealizedEl, feesEl, resetBtn,
+  constructor({ trading, engine = null, balanceEl, equityEl, realizedEl, unrealizedEl, feesEl, resetBtn,
     statWinEl = typeof document !== 'undefined' ? document.getElementById('stat-winrate') : null,
     statPfEl = typeof document !== 'undefined' ? document.getElementById('stat-pf') : null,
     statTrEl = typeof document !== 'undefined' ? document.getElementById('stat-trades') : null,
     statRetEl = typeof document !== 'undefined' ? document.getElementById('stat-return') : null,
     onError = null, onRender = null } = {}) {
-    this.engine = engine; this.balanceEl = balanceEl; this.equityEl = equityEl; this.realizedEl = realizedEl; this.unrealizedEl = unrealizedEl; this.feesEl = feesEl;
+    const tradingSource = trading ?? engine;
+    this.trading = tradingSource ? normalizeTradingSource(tradingSource) : null; this.balanceEl = balanceEl; this.equityEl = equityEl; this.realizedEl = realizedEl; this.unrealizedEl = unrealizedEl; this.feesEl = feesEl;
     this.resetBtn = resetBtn; this.statWinEl = statWinEl; this.statPfEl = statPfEl; this.statTrEl = statTrEl; this.statRetEl = statRetEl; this.onError = onError; this.onRender = onRender; this._listeners = [];
     this._bindControls();
   }
 
   _bindControls() {
-    if (this.resetBtn) { const handler = () => this.engine.resetAccount(); this.resetBtn.addEventListener('click', handler); this._listeners.push([this.resetBtn, 'click', handler]); }
+    if (this.resetBtn) { const handler = () => this.trading?.actions.resetAccount(); this.resetBtn.addEventListener('click', handler); this._listeners.push([this.resetBtn, 'click', handler]); }
     try {
       const chips = document.querySelectorAll('.capital-chip');
       const setBalance = (balance) => {
-        if (this.engine.hasOpenPosition?.()) { this.onError?.('Close position before changing starting balance'); return; }
-        const res = this.engine.setStartingBalance?.(balance);
+        if (this.trading?.actions.hasOpenPosition?.()) { this.onError?.('Close position before changing starting balance'); return; }
+        const res = this.trading?.actions.setCapital?.(balance);
         if (res?.success === false) this.onError?.(res.message);
         else this.onRender?.();
       };
@@ -35,13 +40,13 @@ export class AccountSummaryView {
       if (setCapitalBtn && customInput) setCapitalBtn.addEventListener('click', () => {
         const val = parseFloat(customInput.value);
         if (!Number.isFinite(val) || val <= 0) { this.onError?.('Enter a valid capital amount (> 0)'); return; }
-        if (this.engine.hasOpenPosition?.()) { this.onError?.('Close position before changing starting balance'); return; }
-        const res = this.engine.setStartingBalance?.(val);
+        if (this.trading?.actions.hasOpenPosition?.()) { this.onError?.('Close position before changing starting balance'); return; }
+        const res = this.trading?.actions.setCapital?.(val);
         if (res?.success === false) { this.onError?.(res.message); return; }
         chips.forEach(c => c.classList.remove('active')); customInput.value = ''; this.onRender?.();
       });
       const feeSelect = document.getElementById('fee-tier-select');
-      if (feeSelect) feeSelect.addEventListener('change', () => this.engine.setFeeRate?.(parseFloat(feeSelect.value)));
+      if (feeSelect) feeSelect.addEventListener('change', () => this.trading?.actions.setFeeRate?.(parseFloat(feeSelect.value)));
     } catch {}
   }
 
@@ -56,7 +61,7 @@ export class AccountSummaryView {
     if (this.unrealizedEl) { this.unrealizedEl.textContent = this._fmtMoney(acct.unrealizedPnL); this.unrealizedEl.className = acct.unrealizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg'; }
     if (this.feesEl) this.feesEl.textContent = this._fmtMoney(acct.totalFees);
     try {
-      const stats = this.engine.getPerformanceStats?.() || { totalTrades: trades.length, winRate: 0, profitFactor: 1, netReturn: 0 };
+      const stats = this.trading?.snapshot().stats || { totalTrades: trades.length, winRate: 0, profitFactor: 1, netReturn: 0 };
       const winEl = this.statWinEl || document.getElementById('stat-winrate'); const pfEl = this.statPfEl || document.getElementById('stat-pf');
       const trEl = this.statTrEl || document.getElementById('stat-trades'); const retEl = this.statRetEl || document.getElementById('stat-return');
       if (winEl) winEl.textContent = `${stats.winRate.toFixed(1)}%`;

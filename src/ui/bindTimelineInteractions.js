@@ -1,21 +1,24 @@
 import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
+import { normalizeCandleSource, normalizeTradingSource } from './presentationCompat.js';
 
-export function bindTimelineInteractions({ timeline, tradingEngine = null, tradingEvents = null, tradingState = null, candleStore, actions }) {
+export function bindTimelineInteractions({ timeline, candles = null, trading = null, tradingEvents = null, tradingState = null, actions }) {
   timeline.onChange((idx) => actions.previewTimeline(idx));
   timeline.onCommit((idx) => actions.commitTimeline(idx));
   timeline.onStartHere((idx) => actions.startAt(idx));
-  if (!candleStore) throw new TypeError('candleStore is required');
+  if (!candles) throw new TypeError('candle view is required');
+  const candleView = normalizeCandleSource(candles);
+  const tradingView = trading ? normalizeTradingSource(trading) : null;
 
-  const eventPort = tradingEvents || (tradingEngine ? {
-    events: TRADING_PRESENTATION_EVENTS,
-    on: (event, handler) => tradingEngine.on?.(event, handler),
+  const eventPort = tradingEvents || (tradingView ? {
+    events: tradingView.events || TRADING_PRESENTATION_EVENTS,
+    on: (event, handler) => tradingView.on?.(event, handler),
   } : null);
 
   const refreshMarkers = () => {
     try {
-      const trades = tradingState?.snapshot?.().trades || tradingEngine?.getTrades?.() || [];
-      if (!trades.length || !candleStore.getCount()) return timeline.setMarkers([]);
-      const all = candleStore.getAll?.() || [];
+      const trades = tradingState?.snapshot?.().trades || tradingView?.snapshot().trades || [];
+      if (!trades.length || !candleView.getCount()) return timeline.setMarkers([]);
+      const all = candleView.getAll?.() || [];
       const markers = [];
       for (const t of trades) {
         const ts = t.openedAt ?? t.entryTime ?? t.time;

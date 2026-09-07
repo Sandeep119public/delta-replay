@@ -1,4 +1,16 @@
-import { ErrorCategory, LoadingState, DataError } from '../data/DataError.js';
+import { PRESENTATION_ERROR_CATEGORIES as ErrorCategory, isRetryableCategory } from '../ports/ErrorPresentationPort.js';
+
+/** Minimal presentation-side error shape (the data-layer DataError is mapped to this by the application layer). */
+class DataError extends Error {
+  constructor({ category, technicalMessage, userMessage, context = {} } = {}) {
+    super(technicalMessage || userMessage || 'An error occurred');
+    this.name = 'DataError';
+    this.category = category || ErrorCategory.UNKNOWN;
+    this.technicalMessage = technicalMessage || this.message;
+    this.userMessage = userMessage || this.message;
+    this.context = context;
+  }
+}
 
 /**
  * ErrorPanel manages user-facing error notices, diagnostic technical details,
@@ -56,7 +68,7 @@ export class ErrorPanel {
   }
 
   static isRetryableCategory(category) {
-    return category === ErrorCategory.NETWORK || category === ErrorCategory.TIMEOUT || category === ErrorCategory.CORS;
+    return isRetryableCategory(category);
   }
 
   show(dataError, { severity = null, inline = false, pauseReplay = false, onPause = null } = {}) {

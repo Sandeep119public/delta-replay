@@ -1,10 +1,17 @@
+import { normalizeTradingSource } from './presentationCompat.js';
+
 /**
  * OrderFormView manages order entry inputs (order types, quantities,
  * limit and stop trigger prices) and dispatching buy/sell order submissions.
+ *
+ * Trading capabilities arrive as the narrow presentation contract
+ * ({ snapshot, actions }); the deprecated `engine` alias is normalized
+ * through presentationCompat and must not be used by new callers.
  */
 export class OrderFormView {
   constructor({
-    engine,
+    trading,
+    engine = null,
     qtyInput,
     buyBtn,
     sellBtn,
@@ -19,7 +26,8 @@ export class OrderFormView {
     onSuccess = null,
     onRender = null,
   } = {}) {
-    this.engine = engine;
+    const tradingSource = trading ?? engine;
+    this.trading = tradingSource ? normalizeTradingSource(tradingSource) : null;
     this.qtyInput = qtyInput;
     this.buyBtn = buyBtn;
     this.sellBtn = sellBtn;
@@ -91,15 +99,13 @@ export class OrderFormView {
   /** Current mark price for sizing math (latest candle close). */
   _markPrice() {
     try {
-      const c = this.engine?.getLatestCandle?.();
-      const p = Number(c?.close ?? c?.price);
-      return Number.isFinite(p) && p > 0 ? p : null;
+      return this.trading?.snapshot().markPrice ?? null;
     } catch { return null; }
   }
 
   _equity() {
     try {
-      const snap = this.engine?.getAccountSnapshot?.();
+      const snap = this.trading?.snapshot().account;
       const eq = Number(snap?.equity);
       return Number.isFinite(eq) && eq > 0 ? eq : null;
     } catch { return null; }
@@ -255,15 +261,17 @@ export class OrderFormView {
     const qty = parseFloat(this.qtyInput?.value || '0');
     const orderType = this.getOrderType();
 
+    if (!this.trading) throw new Error('OrderFormView requires a trading presentation to place orders');
+    const { actions } = this.trading;
     let res;
     if (orderType === 'LIMIT') {
       const lp = parseFloat(this.limitPriceInput?.value || '0');
-      res = this.engine.placeLimitOrder({ symbol, side, quantity: qty, limitPrice: lp });
+      res = actions.submitLimitOrder({ symbol, side, quantity: qty, limitPrice: lp });
     } else if (orderType === 'STOP_MARKET') {
       const sp = parseFloat(this.stopPriceInput?.value || '0');
-      res = this.engine.placeStopOrder({ symbol, side, quantity: qty, stopPrice: sp });
+      res = actions.submitStopOrder({ symbol, side, quantity: qty, stopPrice: sp });
     } else {
-      res = this.engine.placeOrder({ symbol, side, quantity: qty });
+      res = actions.submitMarketOrder({ symbol, side, quantity: qty });
     }
 
     if (!res.success) {
@@ -276,7 +284,10 @@ export class OrderFormView {
   }
 
   render() {
-    const hasMarket = !!this.engine.getLatestCandle?.();
+    let hasMarket = false;
+    try {
+      hasMarket = this.trading?.snapshot().hasMarket === true;
+    } catch { hasMarket = false; }
     if (this.buyBtn) this.buyBtn.disabled = !hasMarket;
     if (this.sellBtn) this.sellBtn.disabled = !hasMarket;
     this.updateNotional();

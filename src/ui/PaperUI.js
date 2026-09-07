@@ -1,5 +1,3 @@
-import { ChartManager } from '../chart/ChartManager.js';
-import { ChartAdapter } from '../chart/ChartAdapter.js';
 import { ChartTradingController } from './ChartTradingController.js';
 import { SymbolSelector } from './SymbolSelector.js';
 import { TimeframeSelector } from './TimeframeSelector.js';
@@ -17,24 +15,57 @@ import { TradingPanel } from './TradingPanel.js';
 import { renderPaperLayout } from './paper/PaperLayout.js';
 import { createPaperPorts } from './paper/PaperPorts.js';
 
-export function createPaperUI({ replayPort, candleStore, appState, coordinatorRef, tradingPort = null, tradingEvents = null, tradingState = null }) {
+/**
+ * PaperUI assembles presentation components from narrow view models and
+ * capability callbacks. It receives:
+ *   replayPort    - narrow replay capability (required)
+ *   trading       - narrow trading presentation { snapshot, actions, events, on }
+ *   tradingEvents - presentation event port
+ *   tradingState  - legacy snapshot provider (optional, forwarded to terminal views)
+ *   dataset       - frozen dataset view { symbol, timeframe } (required)
+ *   candles       - narrow candle view { getCount, get, getAll, findIndexByTime }
+ *   chart         - chart handles injected by the composition root
+ *                   { chartManager, adapter } (required)
+ *   callbacks     - capability functions owned by the application layer:
+ *                   { onRetry, onFollow, onLoadReplay, onPreviewWindow,
+ *                     onSeek, onTimeframeChange }
+ *
+ * The UI never receives a ReplayCoordinator, CandleStore, AppState, or
+ * engine-shaped trading object. Chart construction lives in the composition
+ * root (Application.js), which injects ready chart handles here.
+ */
+export function createPaperUI({
+  replayPort,
+  trading = null,
+  tradingEvents = null,
+  tradingState = null,
+  dataset = null,
+  candles = null,
+  chart = null,
+  callbacks = {},
+}) {
   if (!replayPort) throw new TypeError('createPaperUI requires replayPort');
+  if (!dataset) throw new TypeError('createPaperUI requires dataset view');
+  if (!chart?.chartManager || !chart?.adapter) {
+    throw new TypeError('createPaperUI requires chart handles { chartManager, adapter }');
+  }
+  const { onRetry = null, onFollow = null } = callbacks;
   const mount = document.getElementById('app');
   if (!mount) throw new Error('Paper UI mount #app is missing');
   renderPaperLayout(mount);
   const el = (id) => document.getElementById(id);
   const ports = createPaperPorts(el);
-  const chartManager = new ChartManager(el('chart-container'));
+  const chartManager = chart.chartManager;
+  const adapter = chart.adapter;
   const themeManager = new ThemeManager({ onThemeChange: (theme) => chartManager.applyTheme(theme) });
-  const symbolSelector = new SymbolSelector(el('symbol-select'), appState);
-  const timeframeSelector = new TimeframeSelector(el('timeframe-select'), appState);
+  const symbolSelector = new SymbolSelector(el('symbol-select'), dataset);
+  const timeframeSelector = new TimeframeSelector(el('timeframe-select'), dataset);
   try {
     chartManager.init(themeManager.getTheme());
   } catch (error) {
     console.error('Chart init failed:', error);
   }
 
-  const adapter = new ChartAdapter(replayPort, chartManager);
   adapter.attach();
 
   const timeline = new Timeline({
@@ -58,22 +89,10 @@ export function createPaperUI({ replayPort, candleStore, appState, coordinatorRe
     statusEl: el('replay-status'),
     replayPort,
     followBtn: el('btn-follow'),
-    onFollowClick: () => {
-      const coordinator = coordinatorRef.current;
-      const idx = replayPort.getState().currentIndex;
-      chartManager.setAutoFollow(true);
-      if (idx >= 0) {
-        const candle = candleStore.get(idx);
-        if (candle) {
-          chartManager.setRevealedMax(candle.time);
-          coordinator?.applyWindowedChart(idx);
-          chartManager.followCurrent();
-        }
-      }
-    },
+    onFollowClick: onFollow,
   });
 
-  const errorPanel = new ErrorPanel({ onRetry: () => coordinatorRef.current?.loadAndPrepareReplay({ autoStart: false }) });
+  const errorPanel = new ErrorPanel({ onRetry });
   const modeBanner = new ModeBanner();
   const tradingErrorView = new TradingErrorView({ element: el('trading-error') });
 
@@ -89,10 +108,12 @@ export function createPaperUI({ replayPort, candleStore, appState, coordinatorRe
     themeManager,
     modeBanner,
     tradingErrorView,
-    getCoordinatorPorts: ports.coordinator,
+    getReplayPorts: ports.replay,
     getOrderFormPorts: ports.orderForm,
     createTerminalViews(ctx) {
-      return createPaperTerminalViews({ ...ctx, replayPort, tradingPort, tradingEvents, tradingState, el });
+      return createPaperTerminalViews({
+        ...ctx, replayPort, trading, tradingEvents, tradingState, dataset, candles, el,
+      });
     },
     createChartTradingController(ctx) {
       return new ChartTradingController(ctx);
@@ -103,14 +124,17 @@ export function createPaperUI({ replayPort, candleStore, appState, coordinatorRe
 function createPaperTerminalViews(ctx) {
   const {
     el,
-    appState,
-    candleStore,
+    dataset,
+    candles,
     replayPort,
-    tradingPort,
+    trading,
     tradingEvents,
     tradingState,
-    commandController,
-    coordinator,
+    onLoadReplay = null,
+    onPreviewWindow = null,
+    onSeek = null,
+    onTimeframeChange = null,
+    commandController = null,
     timeframeSelect,
     orderTypeSelect,
     limitPriceInput,
@@ -121,25 +145,28 @@ function createPaperTerminalViews(ctx) {
 
   const sparkline = new TimelineSparkline({
     canvasEl: el('timeline-sparkline'),
-    candleStore,
-    replayPort,
-    tradingEngine: tradingPort,
+    candles,
+    replay: replayPort,
+    trading,
     tradingEvents,
-    onSeek: (idx) => commandController.trySeek(idx),
+    onSeek,
   });
   const toastView = new ToastNotificationView();
-  const floatingPosView = new FloatingPositionView({ tradingEngine: tradingPort });
+  const floatingPosView = new FloatingPositionView({ trading });
   const dateSelector = new ReplayDateSelector({
-    appState,
-    coordinator,
-    candleStore,
-    replayPort,
+    dataset,
+    candles,
+    replay: replayPort,
     commandController,
     timeframeSelect,
-    onJump: (idx) => commandController.trySeek(idx),
+    onLoadReplay,
+    onPreviewWindow,
+    onSeek,
+    onTimeframeChange,
+    onJump: onSeek,
   });
   const tradingPanel = new TradingPanel({
-    tradingEngine: tradingPort,
+    trading,
     tradingEvents,
     balanceEl: el('acct-balance'),
     equityEl: el('acct-equity'),

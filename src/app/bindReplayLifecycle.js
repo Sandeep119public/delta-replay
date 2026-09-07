@@ -1,25 +1,29 @@
 import { ReplayEvents } from '../replay/ReplayEvents.js';
 
-export function bindReplayLifecycle({ engine, appState, candleStore, timeline, modeBanner, coordinator, chartManager }) {
+export function bindReplayLifecycle({ engine, appState, candleStore, statusView = null, timeline, modeBanner, coordinator, chartManager }) {
   const reveal = (idx) => {
     const candle = candleStore.get(idx);
     if (candle) chartManager.setRevealedMax(candle.time);
+  };
+  const reportStatus = () => {
+    if (statusView) modeBanner.update(statusView.snapshot());
+    else modeBanner.update({ replayState: engine.getState(), appState, candleStore });
   };
   const subscriptions = [];
   subscriptions.push(engine.on(ReplayEvents.STATE_CHANGED, (state) => {
     appState.setReplayState(state);
     if (state.currentIndex >= 0) timeline.setPosition(state.currentIndex);
-    modeBanner.update({ replayState: state, appState, candleStore });
+    reportStatus();
   }));
   subscriptions.push(engine.on(ReplayEvents.STARTED, (payload) => {
     const idx = payload?.index ?? appState.pendingStartIndex;
     timeline.setPosition(idx);
     reveal(idx);
-    modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+    reportStatus();
   }));
   for (const event of [ReplayEvents.STEPPED, ReplayEvents.SEEKED]) {
     subscriptions.push(engine.on(event, (payload) => {
-      modeBanner.update({ replayState: engine.getState(), appState, candleStore });
+      reportStatus();
       if (payload?.index !== undefined) reveal(payload.index);
     }));
   }
@@ -29,7 +33,7 @@ export function bindReplayLifecycle({ engine, appState, candleStore, timeline, m
       reveal(appState.pendingStartIndex);
       timeline.setTotal(candleStore.getCount(), candleStore.getAll());
     } else if (state.index !== undefined) reveal(state.index);
-    modeBanner.update({ replayState: state, appState, candleStore });
+    reportStatus();
   }));
   return {
     reveal,

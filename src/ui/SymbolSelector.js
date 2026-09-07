@@ -1,14 +1,15 @@
-import { INSTRUMENTS } from '../data/InstrumentConfig.js';
+import { DEFAULT_SYMBOLS } from '../ports/DatasetPresentationPort.js';
+import { normalizeDatasetSource } from './presentationCompat.js';
 
-export const DEFAULT_SYMBOLS = Object.freeze([
-  'BTCUSDT', 'BTCUSD', 'ETHUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT'
-]);
+export { DEFAULT_SYMBOLS };
 
 export class SymbolSelector {
-  constructor(selectEl, appState, symbols = null) {
+  constructor(selectEl, dataset = null, symbols = null) {
     if (!selectEl) throw new Error('SymbolSelector requires select element');
     this.el = selectEl;
-    this.appState = appState;
+    // dataset is a narrow view model ({ symbol }); legacy AppState is
+    // normalized through presentationCompat so the UI never imports state.
+    this.dataset = dataset;
     this.symbols = symbols ?? [...DEFAULT_SYMBOLS];
     this._onChange = null;
     this._handleChange = () => this._onChange?.(this.el.value);
@@ -16,7 +17,12 @@ export class SymbolSelector {
     if (typeof this.el.addEventListener === 'function') this.el.addEventListener('change', this._handleChange);
   }
 
+  get _selectedSymbol() {
+    return normalizeDatasetSource(this.dataset, 'symbol');
+  }
+
   _render() {
+    const selected = this._selectedSymbol;
     if (typeof this.el.replaceChildren === 'function' && typeof document !== 'undefined') {
       this.el.replaceChildren();
       const fragment = document.createDocumentFragment();
@@ -24,14 +30,14 @@ export class SymbolSelector {
         const option = document.createElement('option');
         option.value = symbol;
         option.textContent = symbol;
-        option.selected = symbol === this.appState.symbol;
+        option.selected = symbol === selected;
         fragment.appendChild(option);
       }
       this.el.appendChild(fragment);
       return;
     }
     this.el.innerHTML = this.symbols
-      .map(symbol => `<option value="${String(symbol).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;') }"${symbol === this.appState.symbol ? ' selected' : ''}>${String(symbol).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`)
+      .map(symbol => `<option value="${String(symbol).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;') }"${symbol === selected ? ' selected' : ''}>${String(symbol).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`)
       .join('');
   }
 

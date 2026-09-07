@@ -1,18 +1,30 @@
 import { unixToDateTimeInput, toUnixSeconds } from '../utils/time.js';
 import { resolvePresetTarget, resolveReplayTargetUnixSeconds } from '../utils/replayRange.js';
+import { normalizeCandleSource, normalizeDatasetSource } from './presentationCompat.js';
 
 /**
  * ReplayDateSelector encapsulates replay date/time inputs, preset chips,
  * and the Jump-To-Candle dialog.
+ *
+ * Presentation contract: the selector receives narrow views and capability
+ * callbacks — `dataset` ({ symbol, timeframe }), `candles`
+ * ({ getCount, findIndexByTime }), `replay` (replay port), and
+ * `onLoadReplay({ targetSec })`, `onPreviewWindow(index)`, `onSeek(index)`,
+ * `onTimeframeChange(timeframe)` — never a coordinator, store, or command
+ * controller. Engine-shaped candle sources are normalized through
+ * presentationCompat.
  */
 export class ReplayDateSelector {
   constructor({
-    appState,
-    coordinator,
-    candleStore,
+    dataset = null,
+    candles = null,
+    replay = null,
     replayPort = null,
-    engine = null,
-    commandController = null,
+    onLoadReplay = null,
+    onPreviewWindow = null,
+    onSeek = null,
+    onJump = null,
+    onTimeframeChange = null,
     timeframeSelect = null,
     replayDateEl = (typeof document !== 'undefined' ? document.getElementById('replay-date') : null),
     replayTimeEl = (typeof document !== 'undefined' ? document.getElementById('replay-time') : null),
@@ -21,13 +33,15 @@ export class ReplayDateSelector {
     jumpBtn = (typeof document !== 'undefined' ? document.getElementById('jump-btn') : null),
     jumpErrorEl = (typeof document !== 'undefined' ? document.getElementById('jump-error') : null),
     presetChips = (typeof document !== 'undefined' ? document.querySelectorAll('.preset-chip') : []),
-    onJump = null,
   } = {}) {
-    this.appState = appState;
-    this.coordinator = coordinator;
-    this.candleStore = candleStore;
-    this.replayPort = replayPort || engine;
-    this.commandController = commandController;
+    this.dataset = dataset;
+    this.candles = candles ? normalizeCandleSource(candles) : null;
+    this.replayPort = replay ?? replayPort;
+    this.onLoadReplay = onLoadReplay;
+    this.onPreviewWindow = onPreviewWindow;
+    this.onSeek = onSeek ?? onJump;
+    this.onJump = this.onSeek;
+    this.onTimeframeChange = onTimeframeChange;
     this.timeframeSelect = timeframeSelect || (typeof document !== 'undefined' ? document.getElementById('timeframe-select') : null);
     this.replayDateEl = replayDateEl;
     this.replayTimeEl = replayTimeEl;
@@ -71,16 +85,17 @@ export class ReplayDateSelector {
       else chip.classList.remove('active');
     });
 
-    const { targetSec, recommendedTimeframe } = resolvePresetTarget(presetKey, this.appState.timeframe);
-    if (recommendedTimeframe !== this.appState.timeframe && this.timeframeSelect) {
-      this.timeframeSelect.value = recommendedTimeframe;
-      this.appState.timeframe = recommendedTimeframe;
+    const currentTimeframe = normalizeDatasetSource(this.dataset, 'timeframe');
+    const { targetSec, recommendedTimeframe } = resolvePresetTarget(presetKey, currentTimeframe);
+    if (recommendedTimeframe !== currentTimeframe) {
+      if (typeof this.onTimeframeChange === 'function') this.onTimeframeChange(recommendedTimeframe);
+      if (this.timeframeSelect) this.timeframeSelect.value = recommendedTimeframe;
     }
 
     const dt = unixToDateTimeInput(targetSec);
     this.syncInputs(dt.date, dt.time);
 
-    this.coordinator.loadAndPrepareReplay({ targetSec, autoStart: false });
+    this.onLoadReplay?.({ targetSec, autoStart: false });
   }
 
   syncInputs(dateStr, timeStr) {
@@ -104,7 +119,7 @@ export class ReplayDateSelector {
       clearTimeout(this._debounceTimer);
       this._debounceTimer = setTimeout(() => {
         const targetSec = resolveReplayTargetUnixSeconds(this.replayDateEl?.value, this.replayTimeEl?.value);
-        this.coordinator.loadAndPrepareReplay({ targetSec, autoStart: false });
+        this.onLoadReplay?.({ targetSec, autoStart: false });
       }, 400);
     };
 
@@ -128,6 +143,11 @@ export class ReplayDateSelector {
     this._handlers.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler));
     this._handlers = [];
     this.replayPort = null;
+    this.onLoadReplay = null;
+    this.onPreviewWindow = null;
+    this.onSeek = null;
+    this.onJump = null;
+    this.onTimeframeChange = null;
   }
 
   handleJump() {
@@ -136,7 +156,7 @@ export class ReplayDateSelector {
       this.jumpErrorEl.textContent = '';
     }
 
-    const total = this.candleStore?.getCount?.() || this.appState?.candles?.length || 0;
+    const total = this.candles?.getCount?.() || 0;
     if (!total) {
       this._showJumpError('Load data first');
       return;
@@ -154,26 +174,23 @@ export class ReplayDateSelector {
       return;
     }
 
-    const idx = this.candleStore.findIndexByTime(target);
+    const idx = this.candles.findIndexByTime(target);
     if (idx < 0) {
       this._showJumpError('No candle found for that time');
       return;
     }
 
-    if (typeof this.onJump === 'function') {
-      this.onJump(idx);
+    if (typeof this.onSeek === 'function') {
+      this.onSeek(idx);
       return;
     }
 
+    // No seek capability: only idle/ready preview navigation is possible.
     const st = this.replayPort.getState();
     if (st.status === 'idle' || st.status === 'ready') {
-      this.appState.setPendingStartIndex(idx);
-      this.coordinator?.updatePreviewWindow?.(idx);
-    } else if (st.status === 'playing') {
-      this.commandController?.pause?.();
-      this.commandController?.trySeek?.(idx);
-    } else if (st.status === 'paused' || st.status === 'ended') {
-      this.commandController?.trySeek?.(idx);
+      this.onPreviewWindow?.(idx);
+    } else {
+      this._showJumpError('Seek is unavailable while replaying');
     }
   }
 

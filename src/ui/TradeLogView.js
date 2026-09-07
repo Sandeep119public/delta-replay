@@ -1,19 +1,27 @@
 import { formatTime } from '../utils/time.js';
 
+import { normalizeTradingSource } from './presentationCompat.js';
+
 /**
  * TradeLogView manages trade execution history tables, pending order lists,
  * order cancellation triggers, and the sidebar activity badge.
+ *
+ * Trading capabilities arrive as the narrow presentation contract
+ * ({ snapshot, actions }); the deprecated `engine` alias is normalized
+ * through presentationCompat.
  */
 export class TradeLogView {
   constructor({
-    engine,
+    trading,
+    engine = null,
     tradesListEl,
     pendingListEl = typeof document !== 'undefined' ? document.getElementById('pending-orders-list') : null,
     activityBadge = typeof document !== 'undefined' ? document.getElementById('activity-badge') : null,
     onError = null,
     onRender = null,
   } = {}) {
-    this.engine = engine;
+    const tradingSource = trading ?? engine;
+    this.trading = tradingSource ? normalizeTradingSource(tradingSource) : null;
     this.tradesListEl = tradesListEl;
     this.pendingListEl = pendingListEl;
     this.activityBadge = activityBadge;
@@ -37,7 +45,8 @@ export class TradeLogView {
   }
 
   cancelOrder(orderId) {
-    const res = this.engine.cancelOrder(orderId);
+    if (!this.trading) throw new Error('TradeLogView requires a trading presentation to cancel orders');
+    const res = this.trading.actions.cancelOrder(orderId);
     if (!res.success) this.onError?.(res.message);
     this.onRender?.();
     return res;
@@ -109,8 +118,9 @@ export class TradeLogView {
     }
 
     // Pending Orders
-    const pendingOrders = this.engine.getPendingOrders ? this.engine.getPendingOrders() : [];
-    const allOrders = this.engine.getOrders ? this.engine.getOrders() : [];
+    const snap = this.trading?.snapshot() || { pendingOrders: [], orders: [] };
+    const pendingOrders = snap.pendingOrders || [];
+    const allOrders = snap.orders || [];
     this.renderPending(pendingOrders, allOrders);
 
     // Activity Badge

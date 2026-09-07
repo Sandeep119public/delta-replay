@@ -1,9 +1,15 @@
-import { LoadingState } from '../data/DataError.js';
+import { PRESENTATION_LOADING_STATES } from '../ports/ErrorPresentationPort.js';
 import { formatTime } from '../utils/time.js';
+
+const LoadingState = PRESENTATION_LOADING_STATES;
 
 /**
  * ModeBanner manages the status bar, replay progress metrics,
  * and chart viewport overlay notices.
+ *
+ * update() receives a narrow replay status view
+ * ({ total, status, loadingState, pendingStartIndex, currentIndex, candleAt })
+ * instead of replay/app/candle stores.
  */
 export class ModeBanner {
   constructor({
@@ -34,13 +40,17 @@ export class ModeBanner {
     this._lastAnnouncedStatus = '';
   }
 
-  update({ replayState = null, appState = null, candleStore = null } = {}) {
-    const total = candleStore?.getCount?.() || appState?.candles?.length || 0;
+  update(view = {}) {
+    const {
+      total = 0,
+      status: st = 'idle',
+      loadingState = LoadingState.IDLE,
+      pendingStartIndex = 0,
+      currentIndex = -1,
+      candleAt = null,
+    } = view;
     const hasData = total > 0;
-    const st = replayState?.status ?? appState?.replayState?.status ?? 'idle';
-    const loadingState = appState?.loadingState ?? LoadingState.IDLE;
-    const pendingStartIndex = appState?.pendingStartIndex ?? 0;
-    const currentIndex = replayState?.currentIndex ?? -1;
+    const candleAtFn = candleAt ?? (() => null);
 
     // 1. Update Mode Banner Styling & Text
     // Note: #mode-indicator was removed from the DOM during decluttering;
@@ -94,7 +104,7 @@ export class ModeBanner {
       } else if (st === 'ready' || st === 'idle') {
         this.progressText.textContent = `BAR ${fmtCount(pendingStartIndex + 1)} / ${fmtCount(total)}`;
         this.progressPct.textContent = ((pendingStartIndex + 1) / total * 100).toFixed(1) + '%';
-        const c = candleStore?.get?.(pendingStartIndex) || appState?.candles?.[pendingStartIndex];
+        const c = candleAtFn(pendingStartIndex);
         const t = c ? formatTime(c.time) : '—';
         this.marketTimeEl.textContent = t;
         this.marketTimeFull.textContent = t;
@@ -102,7 +112,7 @@ export class ModeBanner {
         const pctVal = total > 0 && currentIndex >= 0 ? ((currentIndex + 1) / total * 100).toFixed(1) : '0.0';
         this.progressText.textContent = `BAR ${currentIndex >= 0 ? fmtCount(currentIndex + 1) : 0} / ${fmtCount(total)}`;
         this.progressPct.textContent = pctVal + '%';
-        const c = currentIndex >= 0 ? (candleStore?.get?.(currentIndex) || appState?.candles?.[currentIndex]) : null;
+        const c = currentIndex >= 0 ? candleAtFn(currentIndex) : null;
         const t = c ? formatTime(c.time) : '—';
         this.marketTimeEl.textContent = t;
         this.marketTimeFull.textContent = t;

@@ -1,7 +1,7 @@
 import { formatTime } from '../utils/time.js';
 
 export class Timeline {
-  constructor({ sliderEl, startLabelEl, currentLabelEl, endLabelEl, indexLabelEl, timeLabelEl, startIndexLabelEl, appState, engine, startTimeLabelEl = null }) {
+  constructor({ sliderEl, startLabelEl, currentLabelEl, endLabelEl, indexLabelEl, timeLabelEl, startIndexLabelEl, startTimeLabelEl = null }) {
     this.slider = sliderEl;
     this.startLabel = startLabelEl;
     this.currentLabel = currentLabelEl;
@@ -10,8 +10,6 @@ export class Timeline {
     this.timeLabel = timeLabelEl;
     this.startIndexLabel = startIndexLabelEl;
     this.startTimeLabelEl = startTimeLabelEl;
-    this.appState = appState;
-    this.engine = engine;
 
     this._total = 0;
     this._onChange = null;

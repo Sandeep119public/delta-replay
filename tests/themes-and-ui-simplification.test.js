@@ -257,15 +257,15 @@ describe('ThemeManager & UI Simplification', () => {
         overlay: mkEl(),
         overlayText: mkEl(),
       });
-      const candleStore = { getCount: () => 100, get: (i) => ({ time: 1000 + i * 60 }) };
-      banner.update({ replayState: { status: 'paused', currentIndex: 5 }, appState: { candles: [], pendingStartIndex: 0 }, candleStore });
+      const candleAt = (i) => ({ time: 1000 + i * 60 });
+      banner.update({ total: 100, status: 'paused', loadingState: 'IDLE', pendingStartIndex: 0, currentIndex: 5, candleAt });
       expect(srTicker.textContent).toMatch(/paused/i);
       const first = srTicker.textContent;
       // Same status in the same tick window -> no repeated announcement
-      banner.update({ replayState: { status: 'paused', currentIndex: 6 }, appState: { candles: [], pendingStartIndex: 0 }, candleStore });
+      banner.update({ total: 100, status: 'paused', loadingState: 'IDLE', pendingStartIndex: 0, currentIndex: 6, candleAt });
       expect(srTicker.textContent).toBe(first);
       // Status change always announces immediately
-      banner.update({ replayState: { status: 'playing', currentIndex: 7 }, appState: { candles: [], pendingStartIndex: 0 }, candleStore });
+      banner.update({ total: 100, status: 'playing', loadingState: 'IDLE', pendingStartIndex: 0, currentIndex: 7, candleAt });
       expect(srTicker.textContent).toMatch(/playing/i);
     });
   });

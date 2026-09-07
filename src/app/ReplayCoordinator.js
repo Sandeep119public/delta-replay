@@ -1,7 +1,7 @@
 import { DataEvents } from '../data/HistoricalDataManager.js';
 import { DataError, ErrorCategory, LoadingState } from '../data/DataError.js';
 import { calculateAutoRange, findClosestCandleIndex } from '../utils/replayRange.js';
-import { ErrorPanel } from '../ui/ErrorPanel.js';
+import { isRetryableCategory as isRetryableErrorCategory } from '../ports/ErrorPresentationPort.js';
 
 export const VISIBLE_WINDOW = 1000;
 const MAX_RETRIES = 3;
@@ -239,7 +239,7 @@ export class ReplayCoordinator {
         this.dataStatusEl.textContent = 'Error loading replay candles';
       }
 
-      if (ErrorPanel.isRetryableCategory(dataErr.category) && this._retryCount < MAX_RETRIES) {
+      if (isRetryableErrorCategory(dataErr.category) && this._retryCount < MAX_RETRIES) {
         this._retryCount++;
         this.appState.setRetryCount(this._retryCount);
         const backoff = Math.min(5000, Math.pow(2, this._retryCount - 1) * 1000);
