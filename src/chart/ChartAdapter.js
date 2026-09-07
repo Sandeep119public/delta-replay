@@ -10,18 +10,22 @@ export class ChartAdapter {
     this.chart = chartManager;
     this._unsubs = [];
     this._lastRenderedIndex = -1;
+    this._destroyed = false;
   }
 
   attach() {
+    if (this._destroyed || !this.engine || !this.chart) return;
     this.detach();
 
     const WINDOW = 1000;
     const visibleWindow = () => {
+      if (this._destroyed || !this.engine) return [];
       const visible = this.engine.getVisibleCandles();
       return visible.length > WINDOW ? visible.slice(-WINDOW) : visible;
     };
 
     const render = (index, { fit = false } = {}) => {
+      if (this._destroyed || !this.chart) return;
       const window = visibleWindow();
       if (!window.length) {
         this.chart.clear();
@@ -63,13 +67,15 @@ export class ChartAdapter {
   }
 
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
     this.detach();
     this.engine = null;
     this.chart = null;
   }
 
   showPreview(candlesOrStore, targetIndex = null, windowSize = 1000) {
-    if (!candlesOrStore) return;
+    if (this._destroyed || !this.chart || !candlesOrStore) return;
     let win;
     let revealedTime = null;
 
