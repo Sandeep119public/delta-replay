@@ -1,23 +1,380 @@
 /* ==========================================================================
-   DELTA REPLAY — UI ENTRY POINT (canonical cascade owner)
-   Load order is architecture: tokens → base → shell → components →
-   themes/skins → responsive → motion. Shell owns page geometry. This single link
-   must be the LAST stylesheet in index.html so the canonical layer wins by
-   source order, never by !important. Legacy files remain linked for component compatibility, while page geometry
-   is owned only by the canonical shell.
+   DELTA REPLAY / UI REBUILD
+   This file is the sole visual authority for the application shell.
+   Legacy styles remain in the repository for compatibility, but this final
+   stylesheet deliberately resets their layout assumptions and rebuilds the
+   workstation from first principles.
    ========================================================================== */
-@import url('./tokens.css');
-@import url('./base.css');
-@import url('./shell.css');
-@import url('./header.css');
-@import url('./status.css');
-@import url('./chart.css');
-@import url('./trading-panel.css');
-@import url('./timeline.css');
-@import url('./controls.css');
-@import url('./errors.css');
-@import url('./paper.css');
-@import url('./responsive.css');
-@import url('./motion.css');
 
-@import url('./geometry.css');
+:root {
+  --ui-bg: #0b0e13;
+  --ui-surface: #11161d;
+  --ui-surface-2: #171d26;
+  --ui-surface-3: #1c232e;
+  --ui-border: #28313d;
+  --ui-border-soft: rgba(255,255,255,.07);
+  --ui-text: #eef2f7;
+  --ui-text-2: #aeb8c6;
+  --ui-text-3: #748093;
+  --ui-accent: #4f8cff;
+  --ui-accent-2: #79a9ff;
+  --ui-green: #19c37d;
+  --ui-red: #ef5b67;
+  --ui-warning: #e9b949;
+  --ui-radius: 6px;
+  --ui-sidebar: 370px;
+  --ui-header: 66px;
+  --ui-status: 30px;
+  --ui-timeline: 96px;
+  --ui-controls: 54px;
+  --ui-pad: 12px;
+  --ui-gap: 10px;
+  --ui-touch: 42px;
+  --ui-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --ui-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+html[data-theme="light"], body[data-theme="light"] {
+  --ui-bg: #e9edf2; --ui-surface: #ffffff; --ui-surface-2: #f6f8fa; --ui-surface-3: #eef2f6;
+  --ui-border: #d5dce5; --ui-border-soft: rgba(20,30,45,.08); --ui-text: #182231;
+  --ui-text-2: #526175; --ui-text-3: #7a8797; --ui-accent: #2563eb; --ui-accent-2: #1d4ed8;
+}
+html[data-theme="paper"], body[data-theme="paper"] {
+  --ui-bg: #e9e1d0; --ui-surface: #f8f4ea; --ui-surface-2: #f3eddf; --ui-surface-3: #ebe3d3;
+  --ui-border: #d4c8b4; --ui-border-soft: rgba(70,55,35,.12); --ui-text: #2f2a23;
+  --ui-text-2: #645b4e; --ui-text-3: #8a7e6d; --ui-accent: #315f8c; --ui-accent-2: #274d72;
+}
+html[data-theme="midnight"], body[data-theme="midnight"] {
+  --ui-bg: #03060b; --ui-surface: #070b12; --ui-surface-2: #0b111b; --ui-surface-3: #101926;
+  --ui-border: #1e2a39; --ui-border-soft: rgba(255,255,255,.06); --ui-text: #ebf2fa;
+  --ui-text-2: #9aa8ba; --ui-text-3: #667588; --ui-accent: #10b7d2; --ui-accent-2: #58d7ea;
+}
+html[data-theme="colorblind"], body[data-theme="colorblind"] {
+  --ui-accent: #3b82f6; --ui-accent-2: #60a5fa; --ui-green: #60a5fa; --ui-red: #fb923c;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-family: var(--ui-sans);
+}
+*, *::before, *::after { box-sizing: border-box; }
+button, input, select { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+.hidden { display: none !important; }
+.sr-only { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }
+
+/* -------------------------- SHELL GEOMETRY ------------------------------ */
+#app {
+  display: block !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  background: var(--ui-bg) !important;
+}
+
+#page-replay.active {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: var(--ui-header) var(--ui-status) minmax(0,1fr) var(--ui-timeline) var(--ui-controls) !important;
+  grid-template-areas: "header" "status" "workspace" "timeline" "controls" !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: 100dvh !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  background: var(--ui-bg) !important;
+}
+
+#page-replay > .topbar { grid-area: header !important; }
+#page-replay > .mode-banner { grid-area: status !important; }
+#page-replay > .main-layout { grid-area: workspace !important; }
+#page-replay > .timeline-section { grid-area: timeline !important; }
+#page-replay > .controls-section { grid-area: controls !important; }
+
+/* Error is an overlay, never a layout participant. */
+#page-replay > .error-panel {
+  position: fixed !important;
+  left: auto !important;
+  right: 16px !important;
+  bottom: calc(var(--ui-controls) + 16px) !important;
+  z-index: 200 !important;
+  width: min(460px, calc(100vw - 32px)) !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* ------------------------------ HEADER --------------------------------- */
+.topbar {
+  height: var(--ui-header) !important;
+  min-height: var(--ui-header) !important;
+  padding: 8px 14px !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0,1fr) auto !important;
+  align-items: center !important;
+  gap: 18px !important;
+  background: var(--ui-surface) !important;
+  border-bottom: 1px solid var(--ui-border) !important;
+  overflow: hidden !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+.topbar-left, .topbar-center, .topbar-right {
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+}
+.topbar-center { justify-content: center !important; flex-wrap: nowrap !important; }
+.topbar-right { justify-content: flex-end !important; }
+.logo { margin: 0 !important; font-size: 15px !important; font-weight: 800 !important; letter-spacing: .12em !important; color: var(--ui-text) !important; white-space: nowrap !important; }
+.selector-group { min-width: 0 !important; width: auto !important; display: flex !important; flex-direction: column !important; gap: 2px !important; }
+.selector-group label, .preset-group label { font-size: 9px !important; line-height: 1 !important; letter-spacing: .12em !important; text-transform: uppercase !important; color: var(--ui-text-3) !important; font-weight: 700 !important; }
+.symbol-group { width: 110px !important; flex: 0 0 110px !important; }
+.tf-group { width: 76px !important; flex: 0 0 76px !important; }
+.replay-date-group { width: 138px !important; flex: 0 1 138px !important; min-width: 0 !important; }
+.preset-group { display:flex !important; flex-direction:column !important; gap:2px !important; flex:0 0 auto !important; }
+.preset-chips { display:flex !important; gap:4px !important; }
+.header-action-group { flex:0 0 auto !important; display:flex !important; align-items:center !important; }
+#header-start-replay-btn { height: 40px !important; min-height: 40px !important; padding: 0 15px !important; border-radius: 6px !important; font-weight: 800 !important; letter-spacing: .04em !important; }
+.topbar-right .data-status { display:none !important; }
+.theme-selector-group { flex:0 0 auto !important; }
+.theme-pills { display:flex !important; align-items:center !important; gap:2px !important; padding:3px !important; border-radius:7px !important; background:var(--ui-surface-2) !important; border:1px solid var(--ui-border) !important; }
+.theme-pill { width:30px !important; height:30px !important; min-height:30px !important; padding:0 !important; background:transparent !important; color:var(--ui-text-2) !important; border:0 !important; border-radius:5px !important; display:flex !important; align-items:center !important; justify-content:center !important; }
+.theme-pill.active { background:var(--ui-accent) !important; color:#fff !important; }
+.theme-select-legacy { position:absolute !important; width:1px !important; height:1px !important; opacity:0 !important; pointer-events:none !important; }
+
+/* ------------------------------ STATUS --------------------------------- */
+.mode-banner {
+  height: var(--ui-status) !important;
+  min-height: var(--ui-status) !important;
+  padding: 0 14px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:12px !important;
+  overflow:hidden !important;
+  background:var(--ui-bg) !important;
+  border-bottom:1px solid var(--ui-border) !important;
+  color:var(--ui-text-3) !important;
+}
+.progress-panel { display:flex !important; gap:14px !important; align-items:center !important; font:500 10px var(--ui-mono) !important; }
+.market-time, .market-time-full { font:600 10px var(--ui-mono) !important; color:var(--ui-text-2) !important; white-space:nowrap !important; }
+.market-time-full { margin-left:auto !important; }
+
+/* ---------------------------- WORKSPACE -------------------------------- */
+.main-layout {
+  width:100% !important;
+  height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  max-height:none !important;
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) var(--ui-sidebar) !important;
+  overflow:hidden !important;
+  background:var(--ui-bg) !important;
+}
+.main {
+  position:relative !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  width:auto !important;
+  height:100% !important;
+  max-height:none !important;
+  overflow:hidden !important;
+  display:block !important;
+  background:var(--ui-bg) !important;
+}
+.chart-container {
+  position:absolute !important;
+  inset:0 !important;
+  width:auto !important;
+  height:auto !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  background:transparent !important;
+}
+.chart-container::after { width:0 !important; display:none !important; }
+.trading-section {
+  grid-column:2 !important;
+  grid-row:1 !important;
+  width:var(--ui-sidebar) !important;
+  min-width:var(--ui-sidebar) !important;
+  max-width:var(--ui-sidebar) !important;
+  height:100% !important;
+  max-height:none !important;
+  min-height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  display:flex !important;
+  flex-direction:column !important;
+  background:var(--ui-surface) !important;
+  border-left:1px solid var(--ui-border) !important;
+  box-shadow:none !important;
+}
+
+/* ------------------------- CHART OVERLAYS ------------------------------- */
+.chart-floating-bar { top:12px !important; left:12px !important; z-index:20 !important; }
+.chart-toast { bottom:12px !important; z-index:30 !important; }
+.chart-overlay { z-index:50 !important; }
+
+/* ------------------------- TRADING PANEL ------------------------------- */
+.trading-top-summary {
+  flex:0 0 auto !important;
+  position:sticky !important;
+  top:0 !important;
+  z-index:5 !important;
+  padding:12px 14px !important;
+  background:var(--ui-surface) !important;
+  border:0 !important;
+  border-bottom:1px solid var(--ui-border) !important;
+}
+.trading-header { display:flex !important; align-items:center !important; gap:8px !important; }
+.trading-title { margin:0 !important; font-size:10px !important; letter-spacing:.13em !important; color:var(--ui-text-3) !important; }
+.pos-state-pill { margin-left:auto !important; font:700 10px var(--ui-mono) !important; padding:3px 8px !important; border-radius:4px !important; background:var(--ui-surface-3) !important; color:var(--ui-text-2) !important; }
+.pos-state-pill.is-long { background:color-mix(in srgb,var(--ui-green) 14%,transparent) !important; color:var(--ui-green) !important; }
+.pos-state-pill.is-short { background:color-mix(in srgb,var(--ui-red) 14%,transparent) !important; color:var(--ui-red) !important; }
+.equity-hero-bar { margin-top:8px !important; display:flex !important; align-items:flex-end !important; justify-content:space-between !important; gap:12px !important; }
+.equity-main { display:flex !important; flex-direction:column !important; gap:2px !important; }
+.equity-caption, .pnl-caption { font-size:9px !important; letter-spacing:.12em !important; color:var(--ui-text-3) !important; }
+.equity-highlight { font:700 24px var(--ui-mono) !important; line-height:1 !important; color:var(--ui-text) !important; }
+.pnl-hero-pill { display:flex !important; flex-direction:column !important; align-items:flex-end !important; gap:2px !important; padding:6px 8px !important; border-radius:5px !important; background:var(--ui-surface-2) !important; border:1px solid var(--ui-border) !important; }
+.pnl-val { font:600 12px var(--ui-mono) !important; color:var(--ui-text-2) !important; }
+
+.trading-tab-nav { flex:0 0 auto !important; display:grid !important; grid-template-columns:repeat(3,1fr) !important; gap:0 !important; padding:0 !important; background:var(--ui-surface-2) !important; border-bottom:1px solid var(--ui-border) !important; }
+.panel-tab-btn { height:38px !important; min-height:38px !important; padding:0 6px !important; border:0 !important; border-bottom:2px solid transparent !important; border-radius:0 !important; background:transparent !important; color:var(--ui-text-3) !important; font-size:10px !important; font-weight:800 !important; letter-spacing:.06em !important; }
+.panel-tab-btn.active { color:var(--ui-text) !important; border-bottom-color:var(--ui-accent) !important; background:var(--ui-surface) !important; }
+.tab-glyph { display:none !important; }
+.tab-badge { margin-left:3px !important; font:700 9px var(--ui-mono) !important; color:var(--ui-accent-2) !important; }
+
+.trading-tab-contents { flex:1 1 auto !important; min-height:0 !important; overflow:visible !important; }
+.tab-panel { min-height:0 !important; }
+.trading-section .compact-card,
+.trading-section .position-panel,
+.trading-section .order-panel,
+.trading-section .account-details-card,
+.trading-section .performance-card,
+.trading-section .acct-settings-card,
+.trading-section .activity-card {
+  margin:0 !important;
+  padding:12px 14px !important;
+  border:0 !important;
+  border-bottom:1px solid var(--ui-border) !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  background:transparent !important;
+}
+.card-header-row, .ticket-state-row { display:flex !important; align-items:center !important; justify-content:space-between !important; gap:8px !important; }
+.card-title { font-size:9px !important; font-weight:800 !important; letter-spacing:.14em !important; color:var(--ui-text-3) !important; }
+.ticket-hint { font:500 9px var(--ui-mono) !important; color:var(--ui-text-3) !important; }
+.pos-compact-grid { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:9px 14px !important; margin-top:10px !important; }
+.pos-metric { min-width:0 !important; display:flex !important; flex-direction:column !important; gap:2px !important; }
+.pos-metric .lbl, .lbl { font-size:9px !important; color:var(--ui-text-3) !important; text-transform:uppercase !important; letter-spacing:.08em !important; }
+.pos-metric .val { font:600 11px var(--ui-mono) !important; color:var(--ui-text-2) !important; overflow:hidden !important; text-overflow:ellipsis !important; }
+.risk-inputs-row { display:grid !important; grid-template-columns:minmax(0,1fr) minmax(0,1fr) 48px 36px !important; gap:5px !important; margin-top:10px !important; }
+
+.order-type-tabs { display:grid !important; grid-template-columns:repeat(3,1fr) !important; gap:3px !important; margin-top:10px !important; padding:3px !important; border-radius:5px !important; background:var(--ui-surface-2) !important; border:1px solid var(--ui-border) !important; }
+.order-tab { height:30px !important; min-height:30px !important; padding:0 4px !important; border:0 !important; border-radius:3px !important; background:transparent !important; color:var(--ui-text-3) !important; font-size:10px !important; text-transform:uppercase !important; font-weight:700 !important; }
+.order-tab.active { background:var(--ui-surface-3) !important; color:var(--ui-text) !important; }
+#btn-advanced-order { width:100% !important; margin-top:8px !important; }
+.order-form-compact { margin-top:9px !important; }
+.order-row-compact { display:grid !important; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) !important; gap:8px !important; align-items:end !important; }
+.qty-field-wrap { min-width:0 !important; display:grid !important; gap:4px !important; }
+.qty-field-wrap label { font-size:9px !important; color:var(--ui-text-3) !important; text-transform:uppercase !important; }
+.qty-presets-compact { display:grid !important; grid-template-columns:repeat(4,1fr) !important; gap:4px !important; }
+.qty-chip { min-height:32px !important; height:32px !important; padding:0 4px !important; border:1px solid var(--ui-border) !important; border-radius:4px !important; background:var(--ui-surface-2) !important; color:var(--ui-text-2) !important; font-size:9px !important; font-weight:700 !important; }
+.order-actions-grid { display:grid !important; grid-template-columns:repeat(2,1fr) !important; gap:7px !important; margin-top:9px !important; }
+.btn-buy-main, .btn-sell-main { min-height:46px !important; border-radius:5px !important; font-weight:800 !important; }
+.btn-buy-main { background:var(--ui-green) !important; border-color:var(--ui-green) !important; }
+.btn-sell-main { background:var(--ui-red) !important; border-color:var(--ui-red) !important; }
+.order-secondary-grid { margin-top:7px !important; }
+#order-ticket .btn-flatten { min-height:40px !important; }
+
+/* General controls */
+input, select { background:var(--ui-surface-2) !important; color:var(--ui-text) !important; border:1px solid var(--ui-border) !important; border-radius:5px !important; }
+input[type="date"], input[type="time"], select { height:34px !important; min-height:34px !important; padding:0 8px !important; font-size:11px !important; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline:2px solid var(--ui-accent) !important; outline-offset:1px !important; }
+.btn { height:36px !important; min-height:36px !important; padding:0 11px !important; border:1px solid var(--ui-border) !important; border-radius:5px !important; background:var(--ui-surface-2) !important; color:var(--ui-text) !important; font-size:11px !important; font-weight:700 !important; box-shadow:none !important; }
+.btn-primary, .btn-replay-accent { background:var(--ui-accent) !important; border-color:var(--ui-accent) !important; color:#fff !important; }
+.btn-secondary { background:var(--ui-surface-2) !important; }
+.btn-sm { height:30px !important; min-height:30px !important; font-size:10px !important; padding:0 8px !important; }
+
+/* ---------------------------- TIMELINE --------------------------------- */
+.timeline-section {
+  min-width:0 !important;
+  height:var(--ui-timeline) !important;
+  min-height:var(--ui-timeline) !important;
+  max-height:var(--ui-timeline) !important;
+  padding:8px 12px 6px !important;
+  background:var(--ui-surface) !important;
+  border-top:1px solid var(--ui-border) !important;
+  border-bottom:1px solid var(--ui-border) !important;
+  overflow:hidden !important;
+}
+.timeline-header { padding:0 !important; font:600 9px var(--ui-mono) !important; color:var(--ui-text-3) !important; }
+.timeline-track-wrap { padding:7px 0 2px !important; }
+#timeline-slider { display:block !important; width:100% !important; height:26px !important; min-height:26px !important; }
+.timeline-markers { left:0 !important; right:0 !important; top:0 !important; }
+.timeline-meta { font:500 9px var(--ui-mono) !important; color:var(--ui-text-3) !important; }
+.btn-timeline-start { margin:3px 0 0 !important; height:28px !important; min-height:28px !important; padding:0 10px !important; }
+.timeline-start-controls { margin-top:2px !important; display:flex !important; align-items:center !important; justify-content:space-between !important; gap:10px !important; }
+
+/* ---------------------------- CONTROLS --------------------------------- */
+.controls-section {
+  height:var(--ui-controls) !important;
+  min-height:var(--ui-controls) !important;
+  max-height:var(--ui-controls) !important;
+  padding:0 12px !important;
+  display:flex !important;
+  align-items:center !important;
+  background:var(--ui-surface-2) !important;
+  border-top:1px solid var(--ui-border) !important;
+  overflow:hidden !important;
+}
+.controls-section .controls-row { width:100% !important; min-height:var(--ui-controls) !important; padding:0 !important; display:flex !important; align-items:center !important; gap:7px !important; }
+.controls-section .btn { min-width:42px !important; }
+.speed-group { margin-left:auto !important; gap:5px !important; font-size:10px !important; color:var(--ui-text-3) !important; }
+
+/* --------------------------- MOBILE MODE ------------------------------- */
+@media (max-width: 1024px) {
+  html, body { overflow:auto; }
+  #app, #page-replay.active { height:auto !important; min-height:100dvh !important; max-height:none !important; overflow:visible !important; }
+  #page-replay.active { grid-template-rows:auto auto auto auto auto !important; }
+  .topbar { height:auto !important; min-height:var(--ui-header) !important; grid-template-columns:1fr auto !important; grid-template-areas:'left right' 'center center' !important; padding:10px !important; }
+  .topbar-left { grid-area:left !important; }
+  .topbar-center { grid-area:center !important; justify-content:flex-start !important; overflow-x:auto !important; padding-bottom:2px !important; }
+  .topbar-right { grid-area:right !important; }
+  .main-layout { height:min(68dvh,720px) !important; min-height:480px !important; grid-template-columns:1fr !important; display:flex !important; flex-direction:column !important; }
+  .main { flex:1 1 auto !important; min-height:0 !important; }
+  .trading-section { position:fixed !important; left:0 !important; right:0 !important; bottom:0 !important; top:auto !important; z-index:150 !important; width:100% !important; min-width:0 !important; max-width:none !important; height:auto !important; max-height:78dvh !important; transform:translateY(105%) !important; transition:transform 180ms ease !important; border-left:0 !important; border-top:1px solid var(--ui-border) !important; box-shadow:0 -18px 50px rgba(0,0,0,.25) !important; }
+  body.drawer-open .trading-section { transform:translateY(0) !important; }
+  .timeline-section { height:auto !important; min-height:82px !important; max-height:none !important; }
+  .controls-section { height:58px !important; min-height:58px !important; max-height:none !important; }
+  .data-status { display:none !important; }
+}
+
+@media (max-width: 640px) {
+  :root { --ui-pad:10px; }
+  .topbar-center .replay-date-group, .topbar-center .preset-group { display:none !important; }
+  .topbar { gap:10px !important; }
+  .symbol-group { width:100px !important; flex-basis:100px !important; }
+  .tf-group { width:70px !important; flex-basis:70px !important; }
+  #header-start-replay-btn { padding:0 11px !important; }
+  .main-layout { min-height:52dvh !important; height:58dvh !important; }
+  .controls-section .controls-row { overflow-x:auto !important; }
+  #btn-play { min-width:52px !important; }
+}
