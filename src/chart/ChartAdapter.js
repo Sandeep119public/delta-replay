@@ -1,5 +1,3 @@
-import { ReplayEvents } from '../replay/ReplayEvents.js';
-
 /**
  * ChartAdapter bridges replay presentation state to ChartManager.
  * It deliberately consumes only the narrow replay presentation port.
