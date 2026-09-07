@@ -1,3 +1,19 @@
+import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
+
+function createLegacyTradingEventPort(tradingEngine) {
+  if (!tradingEngine?.on) return null;
+  return Object.freeze({
+    events: TRADING_PRESENTATION_EVENTS,
+    on: (event, handler) => tradingEngine.on(event, handler),
+    onAll(handler) {
+      const unsubs = Object.values(TRADING_PRESENTATION_EVENTS)
+        .map((event) => tradingEngine.on(event, handler))
+        .filter((unsubscribe) => typeof unsubscribe === 'function');
+      return () => unsubs.forEach((unsubscribe) => { try { unsubscribe(); } catch {} });
+    },
+  });
+}
+
 /**
  * Presentation controller for chart-click trading interactions and visual state.
  * Trading domain events arrive through an application-provided presentation port.
@@ -6,6 +22,7 @@ export class ChartTradingController {
   constructor({
     chartManager,
     tradingEvents = null,
+    tradingEngine = null,
     tradingState = null,
     actions = null,
     tradingPanel = null,
@@ -19,7 +36,7 @@ export class ChartTradingController {
     orderTypeSelect = null,
   }) {
     this.chartManager = chartManager;
-    this.tradingEvents = tradingEvents;
+    this.tradingEvents = tradingEvents || createLegacyTradingEventPort(tradingEngine);
     this.tradingState = tradingState;
     this.actions = actions;
     this.tradingPanel = tradingPanel;
