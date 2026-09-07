@@ -1,33 +1,9 @@
 import { TradingEvents } from '../trading/TradingEvents.js';
 
-export function bindTimelineInteractions({ timeline, controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner }) {
-  timeline.onChange((idx) => {
-    appState.setPendingStartIndex(idx);
-    controls.setStartIndex(idx);
-    modeBanner.update({ replayState: engine.getState(), appState, candleStore });
-    const st = engine.getState();
-    if (st.status === 'ready' || st.status === 'idle') coordinator.updatePreviewWindow(idx);
-  });
-  timeline.onCommit((idx) => {
-    const st = engine.getState();
-    if (st.status === 'paused' || st.status === 'playing' || st.status === 'ended') {
-      if (st.status === 'playing') commandController.pause();
-      const ok = commandController.trySeek(idx);
-      if (!ok) timeline.setPosition(st.currentIndex);
-    } else {
-      appState.setPendingStartIndex(idx);
-      controls.setStartIndex(idx);
-      modeBanner.update({ replayState: st, appState, candleStore });
-      coordinator.updatePreviewWindow(idx);
-    }
-  });
-  timeline.onStartHere((idx) => {
-    const n = Number(idx);
-    if (!Number.isFinite(n) || n < 0) return;
-    appState.setPendingStartIndex(n);
-    controls.setStartIndex(n);
-    commandController.startAt(n);
-  });
+export function bindTimelineInteractions({ timeline, tradingEngine, actions }) {
+  timeline.onChange((idx) => actions.previewTimeline(idx));
+  timeline.onCommit((idx) => actions.commitTimeline(idx));
+  timeline.onStartHere((idx) => actions.startAt(idx));
   const refreshMarkers = () => {
     try {
       const trades = tradingEngine.getTrades?.() || [];
