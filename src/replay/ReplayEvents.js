@@ -1,7 +1,7 @@
 /**
  * Event name constants for ReplayEngine.
  */
-export const ReplayEvents = {
+export const ReplayEvents = Object.freeze({
   LOADED: 'loaded',
   STARTED: 'started',
   PLAYED: 'played',
@@ -15,4 +15,4 @@ export const ReplayEvents = {
   STOPPED: 'stopped',
   STATE_CHANGED: 'stateChanged',
   RESET: 'reset'
-};
+});
