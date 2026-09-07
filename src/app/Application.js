@@ -98,6 +98,7 @@ export function createApplication() {
     appState,
     replayEngine: engine,
     tradingCapabilities: replayTradingCapabilities,
+    statusView,
     chartManager: ui.chartManager,
     chartAdapter: ui.adapter,
     timeline: ui.timeline,
