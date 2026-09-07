@@ -122,6 +122,7 @@ export function createApplication() {
     },
     onError: (msg) => coordinator?.showTradingError(msg),
   });
+  const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
   const actions = createApplicationActions({
     replay: replayCapabilities,
@@ -190,7 +191,7 @@ export function createApplication() {
   const mobileDrawer = bindMobileDrawer();
 
   const destroy = bindApplicationLifecycle({
-    unbindKeyboardShortcuts: () => commandController?.bindKeyboardShortcuts?.(),
+    unbindKeyboardShortcuts,
     onDestroy: () => coordinator?.destroy?.(),
     engine,
     candleCache,
