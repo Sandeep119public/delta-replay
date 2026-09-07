@@ -59,7 +59,13 @@ const IMPORT_PATTERN = /(?:\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+
 
 async function collectFiles(dir) {
   const absolute = path.join(ROOT, dir);
-  const entries = await fs.readdir(absolute, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await fs.readdir(absolute, { withFileTypes: true });
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return [];
+    throw error;
+  }
   const result = [];
   for (const entry of entries) {
     const child = path.join(dir, entry.name);
