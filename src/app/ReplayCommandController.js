@@ -35,7 +35,6 @@ export class ReplayCommandController {
 
     const st = this.engine.getState();
     const startIndex = this.appState?.pendingStartIndex ?? 0;
-
     if (st.status === 'ready') {
       this.engine.start(startIndex);
       this.engine.play();
@@ -113,15 +112,14 @@ export class ReplayCommandController {
 
   pause() {
     const s = this.engine.getState();
-    if (s.status === 'playing') {
-      try {
-        this.engine.pause();
-        return true;
-      } catch (e) {
-        this._notifyError(e?.message || 'Unable to pause replay');
-      }
+    if (s.status !== 'playing') return false;
+    try {
+      this.engine.pause();
+      return true;
+    } catch (e) {
+      this._notifyError(e?.message || 'Unable to pause replay');
+      return false;
     }
-    return false;
   }
 
   reset() {
@@ -134,22 +132,6 @@ export class ReplayCommandController {
 
     if (st.status === 'ready') {
       this.coordinator?.updatePreviewWindow(startIndex);
-      this.renderHeaderBtn();
-      return;
-    }
-
-    // Replay reset is navigation-only. Re-establish the trading market mark
-    // explicitly at the session start without routing it through replay's
-    // MARKET_CANDLE execution stream.
-    if (this.tradingEngine && Number.isInteger(startIndex) && startIndex >= 0) {
-      const candle = this.candleStore?.get?.(startIndex);
-      if (candle) {
-        try {
-          this.tradingEngine.onMarketCandle({ candle, index: startIndex, symbol: candle.symbol, timestamp: candle.time });
-        } catch (e) {
-          this._notifyError(e?.message || 'Unable to restore replay market context');
-        }
-      }
     }
     this.renderHeaderBtn();
   }
