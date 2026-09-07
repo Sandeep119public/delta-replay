@@ -1,14 +1,12 @@
 import { ReplayCoordinator } from './ReplayCoordinator.js';
 import { ReplayCommandController } from './ReplayCommandController.js';
-import { ChartTradingController } from '../ui/ChartTradingController.js';
 import { createCoreServices } from './createCoreServices.js';
-import { createReplayUI } from './createReplayUI.js';
-import { createTerminalViews } from './createTerminalViews.js';
-import { bindTimelineInteractions } from './bindTimelineInteractions.js';
-import { bindTradingEvents } from './bindTradingEvents.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
-import { bindMobileDrawer } from './bindMobileDrawer.js';
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
+import { createPaperUI } from '../ui/PaperUI.js';
+import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
+import { bindTradingEvents } from '../ui/bindTradingEvents.js';
+import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 
 function registerActionGuard(engine, tradingEngine, coordinator) {
   engine.registerActionGuard((action) => {
@@ -33,7 +31,7 @@ export function createApplication() {
   const services = createCoreServices();
   const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
   const coordinatorRef = { current: null };
-  const ui = createReplayUI({ engine, candleStore, appState, coordinatorRef });
+  const ui = createPaperUI({ engine, candleStore, appState, coordinatorRef });
 
   const coordinator = new ReplayCoordinator({
     dataManager, candleStore, appState, replayEngine: engine, tradingEngine,
@@ -59,14 +57,14 @@ export function createApplication() {
     limitPriceInput: ui.el('limit-price'), stopPriceInput: ui.el('stop-price'),
     slInput: ui.el('sl-price'), tpInput: ui.el('tp-price'),
   };
-  const views = createTerminalViews({ appState, candleStore, engine, tradingEngine, commandController, coordinator, timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, ...form });
+  const views = ui.createTerminalViews({ appState, candleStore, engine, tradingEngine, commandController, coordinator, timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, ...form });
 
   const selectorBindings = bindDatasetSelectors(ui, coordinator);
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, controls: ui.controls, appState, engine, candleStore, tradingEngine, commandController, coordinator, modeBanner: ui.modeBanner });
   const tradingBindings = bindTradingEvents({ tradingEngine, commandController, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
-  const chartTradingController = new ChartTradingController({ chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, coordinator, ...form });
+  const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, coordinator, ...form });
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
 
   const loadBtn = ui.el('load-btn');
