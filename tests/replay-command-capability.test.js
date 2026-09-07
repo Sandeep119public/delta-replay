@@ -53,4 +53,30 @@ describe('ReplayCommandController capability boundary', () => {
     expect(engine.seek).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith('position is open');
   });
+
+  it('becomes inert after destroy and unsubscribes engine listeners exactly once', () => {
+    const engine = createEngine();
+    const onLoad = vi.fn();
+    const controller = new ReplayCommandController({
+      engine,
+      appState: { pendingStartIndex: 2 },
+      candleStore: { getCount: () => 10 },
+      onLoad,
+      onPreview: vi.fn(),
+      onError: vi.fn(),
+    });
+
+    controller.destroy();
+    controller.destroy();
+
+    expect(controller.togglePlayPause()).toBe(false);
+    expect(controller.startAt(2)).toBe(false);
+    expect(controller.stepForward()).toBe(false);
+    expect(controller.trySeek(2)).toBe(false);
+    expect(controller.cycleSpeed(1)).toBeNull();
+    expect(engine.start).not.toHaveBeenCalled();
+    expect(engine.play).not.toHaveBeenCalled();
+    expect(engine.seek).not.toHaveBeenCalled();
+    expect(engine.setSpeed).not.toHaveBeenCalled();
+  });
 });
