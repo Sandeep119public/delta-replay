@@ -7,24 +7,11 @@
 
 /* Very wide monitors: cap content, center, feed the chart. */
 @media (min-width: 1920px) {
-  #app {
-    max-width: 2400px;
-    margin-inline: auto;
-  }
+  #page-replay.active { max-width: 2400px; margin-inline: auto; }
 }
 
 /* Tablet / small desktop: stack workspace, keep ticker readable. */
 @media (max-width: 1024px) {
-  #app {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "header"
-      "mode"
-      "main"
-      "timeline"
-      "controls";
-  }
-
   .main-layout {
     flex-direction: column;
     overflow-y: auto;
