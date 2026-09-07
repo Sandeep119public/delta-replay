@@ -33,6 +33,9 @@ function createHarness() {
   };
   const controls = { setStartIndex: vi.fn() };
   const modeBanner = { update: vi.fn() };
+  const statusView = {
+    snapshot: vi.fn(() => Object.freeze({ total: 1, status: 'ready', loadingState: 'SUCCESS', pendingStartIndex: 0, currentIndex: 0, candleAt: () => null })),
+  };
   const hasOpenPosition = vi.fn(() => false);
   const notifyMarketCandle = vi.fn();
   const updatePreviewWindow = vi.fn();
@@ -45,6 +48,7 @@ function createHarness() {
     timeline,
     controls,
     modeBanner,
+    statusView,
     hasOpenPosition,
     notifyMarketCandle,
     updatePreviewWindow,
@@ -84,6 +88,8 @@ describe('ReplayLoadService', () => {
     expect(h.replayEngine.load).toHaveBeenCalledTimes(1);
     expect(h.updatePreviewWindow).toHaveBeenCalledTimes(1);
     expect(h.notifyMarketCandle).toHaveBeenCalledTimes(1);
+    expect(h.statusView.snapshot).toHaveBeenCalled();
+    expect(h.modeBanner.update).toHaveBeenCalledWith(h.statusView.snapshot.mock.results.at(-1).value);
     expect(h.timeline.setEnabled).toHaveBeenCalledWith(true);
   });
 });
