@@ -1,5 +1,7 @@
 import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
 
+const PRESENTATION_EVENT_NAMES = new Set(Object.values(TRADING_PRESENTATION_EVENTS));
+
 function freezeValue(value) {
   if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
   if (Array.isArray(value)) return Object.freeze(value.map(freezeValue));
@@ -16,6 +18,13 @@ function latestMarkPrice(tradingEngine) {
   } catch {
     return null;
   }
+}
+
+function assertPresentationEvent(event) {
+  if (!PRESENTATION_EVENT_NAMES.has(event)) {
+    throw new TypeError(`Unsupported trading presentation event: ${String(event)}`);
+  }
+  return event;
 }
 
 /**
@@ -85,6 +94,6 @@ export function createTradingPresentation(tradingEngine) {
     snapshot,
     actions,
     events: TRADING_PRESENTATION_EVENTS,
-    on: (event, handler) => tradingEngine.on?.(event, handler),
+    on: (event, handler) => tradingEngine.on?.(assertPresentationEvent(event), handler),
   });
 }
