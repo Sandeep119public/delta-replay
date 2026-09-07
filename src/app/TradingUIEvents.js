@@ -1,12 +1,9 @@
 import { TradingEvents } from '../trading/TradingEvents.js';
+import { TRADING_PRESENTATION_EVENTS } from '../ports/TradingPresentationPort.js';
 
-/**
- * Application adapter that converts the trading domain event source into the
- * neutral presentation port consumed by UI components.
- */
 export function createTradingUIEvents(tradingEngine) {
   return Object.freeze({
-    events: TradingEvents,
+    events: TRADING_PRESENTATION_EVENTS,
     on: (event, handler) => tradingEngine?.on?.(event, handler),
     onAll(handler) {
       const unsubs = Object.values(TradingEvents)
