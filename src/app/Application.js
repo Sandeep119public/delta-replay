@@ -9,6 +9,8 @@ import { bindTradingEvents } from '../ui/bindTradingEvents.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createApplicationActions } from './ApplicationActions.js';
 import { createChartTradingActions } from './ChartTradingActions.js';
+import { createTradingUIState } from './TradingUIState.js';
+import { bindTradingState } from '../ui/TradingStateBridge.js';
 
 function registerActionGuard(engine, tradingEngine, coordinator) {
   engine.registerActionGuard((action) => {
@@ -51,6 +53,8 @@ export function createApplication() {
   });
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
+  const tradingState = createTradingUIState(tradingEngine);
+
   const actions = createApplicationActions({ coordinator, commandController, appState, engine, candleStore, modeBanner: ui.modeBanner, timeline: ui.timeline, controls: ui.controls, errorPanel: ui.errorPanel });
 
   const form = ui.getOrderFormPorts();
@@ -62,7 +66,9 @@ export function createApplication() {
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
   const chartTradingActions = createChartTradingActions({ tradingEngine, coordinator });
-  const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, actions: chartTradingActions, ...form });
+  const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingState, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, actions: chartTradingActions, ...form });
+  const tradingStateBridge = bindTradingState({ tradingEngine, tradingState, onChange: () => chartTradingController.syncChartTradingLines() });
+
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
 
   const loadBtn = coordinatorPorts.loadBtn;
@@ -73,7 +79,7 @@ export function createApplication() {
 
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts, coordinator, engine, candleCache,
-    resources: [selectorBindings, timelineBindings, tradingBindings, replayLifecycle, commandController, mobileDrawer, loadBinding, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView, views.toastView],
+    resources: [selectorBindings, timelineBindings, tradingBindings, tradingStateBridge, replayLifecycle, commandController, mobileDrawer, loadBinding, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView, views.toastView],
     extraCleanup: [unbindAutoFollow],
   });
 
