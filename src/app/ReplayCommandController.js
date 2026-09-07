@@ -29,6 +29,7 @@ export class ReplayCommandController {
     this.onError = typeof onError === 'function' ? onError : null;
     this.headerBtn = headerBtn;
     this._subscriptions = [];
+    this._destroyed = false;
     this._bindEngineEvents();
     this._bindHeaderBtn();
     this.renderHeaderBtn();
@@ -39,14 +40,17 @@ export class ReplayCommandController {
   }
 
   _load(autoStart = false) {
+    if (this._destroyed) return false;
     return this.onLoad?.({ autoStart });
   }
 
   _preview(index) {
+    if (this._destroyed) return false;
     return this.onPreview?.(index);
   }
 
   _allowed(action) {
+    if (this._destroyed) return false;
     try {
       const result = this.canExecute(action);
       if (result === false) return false;
@@ -62,6 +66,7 @@ export class ReplayCommandController {
   }
 
   togglePlayPause() {
+    if (this._destroyed) return false;
     if (!this.hasData()) return this._load(true);
     const st = this.engine.getState();
     const startIndex = this.appState?.pendingStartIndex ?? 0;
@@ -86,7 +91,7 @@ export class ReplayCommandController {
   }
 
   startAt(idx) {
-    if (!this.hasData()) return false;
+    if (this._destroyed || !this.hasData()) return false;
     const n = Number(idx);
     if (!Number.isFinite(n) || n < 0) return false;
     if (!this._allowed('start')) return false;
@@ -100,7 +105,7 @@ export class ReplayCommandController {
   }
 
   stepForward() {
-    if (!this.hasData()) return false;
+    if (this._destroyed || !this.hasData()) return false;
     if (!this._allowed('stepForward')) return false;
     try {
       this.engine.stepForward();
@@ -112,14 +117,14 @@ export class ReplayCommandController {
   }
 
   stepBackward() {
-    if (!this.hasData()) return false;
+    if (this._destroyed || !this.hasData()) return false;
     const idx = this.engine.getState().currentIndex - 1;
     if (idx < 0) return false;
     return this.trySeek(idx);
   }
 
   jumpBy(delta) {
-    if (!this.hasData()) return false;
+    if (this._destroyed || !this.hasData()) return false;
     const st = this.engine.getState();
     const total = this.engine.getTotalCandles?.() ?? this.candleStore?.getCount?.() ?? 0;
     if (!Number.isFinite(total) || total <= 0) return false;
@@ -129,6 +134,7 @@ export class ReplayCommandController {
   }
 
   cycleSpeed(direction = 1) {
+    if (this._destroyed) return null;
     try {
       const cur = Number(this.engine.getState().speed ?? 1);
       let i = PLAYBACK_SPEEDS.indexOf(cur);
@@ -143,6 +149,7 @@ export class ReplayCommandController {
   }
 
   pause() {
+    if (this._destroyed) return false;
     const s = this.engine.getState();
     if (s.status !== 'playing') return false;
     try {
@@ -155,7 +162,7 @@ export class ReplayCommandController {
   }
 
   reset() {
-    if (!this.hasData()) return;
+    if (this._destroyed || !this.hasData()) return false;
     if (!this._allowed('reset')) return false;
     this.engine.reset();
     const st = this.engine.getState();
@@ -165,7 +172,7 @@ export class ReplayCommandController {
   }
 
   trySeek(idx) {
-    if (!this._allowed('seek')) return false;
+    if (this._destroyed || !this._allowed('seek')) return false;
     try {
       this.engine.seek(idx);
       return true;
@@ -176,12 +183,16 @@ export class ReplayCommandController {
   }
 
   _notifyError(msg) {
-    if (typeof this.onError === 'function') this.onError(msg);
+    if (!this._destroyed && typeof this.onError === 'function') this.onError(msg);
   }
 
   _bindEngineEvents() {
-    this._subscriptions.push(this.engine.on('stateChanged', () => this.renderHeaderBtn()));
-    this._subscriptions.push(this.engine.on('reset', () => this.renderHeaderBtn()));
+    const subscribe = this.engine?.on?.bind(this.engine);
+    if (typeof subscribe !== 'function') return;
+    const stateUnsubscribe = subscribe('stateChanged', () => this.renderHeaderBtn());
+    const resetUnsubscribe = subscribe('reset', () => this.renderHeaderBtn());
+    if (typeof stateUnsubscribe === 'function') this._subscriptions.push(stateUnsubscribe);
+    if (typeof resetUnsubscribe === 'function') this._subscriptions.push(resetUnsubscribe);
   }
 
   _bindHeaderBtn() {
@@ -191,6 +202,8 @@ export class ReplayCommandController {
   }
 
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
     this.headerBtn?.removeEventListener?.('click', this._onHeaderClick);
     this._subscriptions.splice(0).forEach((unsubscribe) => {
       try { unsubscribe?.(); } catch (error) { console.warn('[ReplayCommandController] unsubscribe failed', error); }
@@ -198,12 +211,12 @@ export class ReplayCommandController {
     this._onHeaderClick = null;
     this.onLoad = null;
     this.onPreview = null;
-    this.canExecute = () => true;
+    this.canExecute = () => false;
     this.onError = null;
   }
 
   renderHeaderBtn() {
-    if (!this.headerBtn) return;
+    if (this._destroyed || !this.headerBtn) return;
     const s = this.engine.getState();
     if (s.status === 'ready') this.headerBtn.innerHTML = '<span class="icon">▶</span> START REPLAY';
     else if (s.status === 'playing') this.headerBtn.innerHTML = '<span class="icon">⏸</span> PAUSE';
@@ -212,8 +225,9 @@ export class ReplayCommandController {
   }
 
   bindKeyboardShortcuts(target = globalThis.document) {
-    if (!target || typeof target.addEventListener !== 'function' || typeof target.removeEventListener !== 'function') return () => {};
+    if (!target || typeof target.addEventListener !== 'function' || typeof target.removeEventListener !== 'function' || this._destroyed) return () => {};
     const handler = (e) => {
+      if (this._destroyed) return;
       const tag = e.target?.tagName?.toUpperCase?.() || '';
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
           (typeof HTMLInputElement !== 'undefined' && e.target instanceof HTMLInputElement) ||
