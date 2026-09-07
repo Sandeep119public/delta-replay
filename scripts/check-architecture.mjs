@@ -14,21 +14,11 @@ const ALLOWED = {
   // stores, chart, and presentation objects together.
   app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'ports', 'personality']),
   chart: new Set(['replay', 'utils', 'ports']),
-  // ui is a hard presentation boundary: it may only use shared utilities and
-  // neutral port contracts (plus other ui modules). Stores, coordinators,
-  // chart internals, and domain layers must be projected into view models and
-  // capability callbacks by the composition root before crossing the boundary.
   ui: new Set(['utils', 'ports']),
-  // pages is presentation code under the same hard boundary as ui: it renders
-  // frozen view models and port callbacks, never domain/store/chart layers.
   pages: new Set(['utils', 'ports']),
   router: new Set(['app', 'ui', 'pages', 'utils']), utils: new Set(['data']), ports: new Set(), personality: new Set(),
 };
 
-// Quality-of-ports enforcement: these capability tokens must never appear in
-// presentation code. UI constructors take only asserted narrow contracts, so
-// there is no compatibility parameter left to name. The candle-view
-// projection helper (src/ui/presentationCompat.js) is the only exception.
 const PRESENTATION_COMPAT_FILE = 'src/ui/presentationCompat.js';
 const BANNED_PRESENTATION_TOKENS = [
   /\w*[Cc]oordinator\w*/,
@@ -51,15 +41,17 @@ const BANNED_PRESENTATION_TOKENS = [
   /\bgetOrders\b/,
   /\bgetPendingOrders\b/,
   /\bgetLatestCandle\b/,
+  /\bplaceOrder\b/,
   /\bplaceLimitOrder\b/,
   /\bplaceStopOrder\b/,
+  /\bsetRisk\b/,
   /\bsetStartingBalance\b/,
   /\bclearStopLoss\b/,
   /\bclearTakeProfit\b/,
+  /\bonMarketCandle\b/,
+  /\bclearPendingOrders\b/,
 ];
 
-// Deprecated compatibility modules must stay gone once the hard boundary is
-// established. This catches accidental restoration during future refactors.
 const FORBIDDEN_LEGACY_FILES = [
   'src/app/TradingUIPort.js',
   'src/app/TradingUIState.js',
