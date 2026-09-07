@@ -1,18 +1,21 @@
 import { TradingIntentResolver } from '../trading/TradingIntentResolver.js';
 
-export function createChartTradingActions({ tradingEngine, coordinator }) {
-  return {
+export function createChartTradingActions({ trading, executeTrade, reportError }) {
+  if (!trading || typeof trading !== 'object') throw new TypeError('createChartTradingActions requires trading presentation');
+  if (typeof executeTrade !== 'function') throw new TypeError('createChartTradingActions requires executeTrade');
+  if (typeof reportError !== 'function') throw new TypeError('createChartTradingActions requires reportError');
+
+  return Object.freeze({
     resolveClick(price) {
       if (!Number.isFinite(price) || price <= 0) return null;
-      const activePos = (tradingEngine.getPositions?.() || [])[0] || null;
+      const snapshot = trading.snapshot?.() || {};
+      const activePos = snapshot.positions?.[0] || null;
       return TradingIntentResolver.resolveClickIntent(price, activePos);
     },
     execute(intent) {
       if (!intent) return { success: false };
-      if (intent.action === 'SET_TP') return tradingEngine.setTakeProfit(intent.symbol, intent.price);
-      if (intent.action === 'SET_SL') return tradingEngine.setStopLoss(intent.symbol, intent.price);
-      return { success: true };
+      return executeTrade(intent);
     },
-    reportError(message) { coordinator?.showTradingError?.(message); },
-  };
+    reportError,
+  });
 }
