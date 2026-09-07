@@ -14,12 +14,16 @@ import { ToastNotificationView } from './ToastNotificationView.js';
 import { FloatingPositionView } from './FloatingPositionView.js';
 import { ReplayDateSelector } from './ReplayDateSelector.js';
 import { TradingPanel } from './TradingPanel.js';
+import { paperMarkup } from './paperMarkup.js';
 
 /**
  * PaperUI is the only composition root for DOM-backed views.
  * Application code receives this facade and never constructs UI classes itself.
  */
 export function createPaperUI({ engine, candleStore, appState, coordinatorRef }) {
+  const mount = document.getElementById('app');
+  if (!mount) throw new Error('Paper UI mount #app is missing');
+  mount.innerHTML = paperMarkup();
   const el = (id) => document.getElementById(id);
   const chartManager = new ChartManager(el('chart-container'));
   const themeManager = new ThemeManager({
