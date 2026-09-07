@@ -44,13 +44,13 @@ describe('replay/trading lifecycle hardening', () => {
     trading.destroy();
   });
 
-  it('resets the account through the application replay command and restores the session-start market mark', () => {
+  it('reset clears the trading session without replaying a market candle', () => {
     const replay = new ReplayEngine();
     const trading = new PaperTradingEngine({ replayEngine: replay, executionTiming: EXECUTION_TIMING.IMMEDIATE_CLOSE });
     const candles = [candle(100, 100), candle(200, 110)];
     const candleStore = { getCount: () => candles.length, get: (index) => candles[index] };
     const appState = { pendingStartIndex: 0 };
-    const controller = new ReplayCommandController({ replayEngine: replay, engine: replay, appState, candleStore, tradingEngine: trading });
+    const controller = new ReplayCommandController({ engine: replay, appState, candleStore, tradingEngine: trading });
 
     replay.load(candles);
     replay.start(0);
@@ -63,8 +63,8 @@ describe('replay/trading lifecycle hardening', () => {
     expect(trading.getTrades()).toHaveLength(0);
     expect(trading.getPositions()).toHaveLength(0);
     expect(trading.getAccountSnapshot().cashBalance).toBeCloseTo(10000, 10);
-    expect(trading.getLatestCandleIndex()).toBe(0);
-    expect(trading.getLatestCandle().time).toBe(100);
+    expect(trading.getLatestCandleIndex()).toBe(-1);
+    expect(trading.getLatestCandle()).toBeNull();
 
     controller.destroy();
     replay.destroy();
