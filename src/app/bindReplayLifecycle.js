@@ -4,27 +4,27 @@ export function bindReplayLifecycle({
   engine,
   appState,
   candleStore,
-  statusView = null,
+  statusView,
   timeline,
   modeBanner,
   preview,
   chartManager,
 }) {
-  if (!engine || !appState || !candleStore || !timeline || !modeBanner || !chartManager) {
-    throw new TypeError('bindReplayLifecycle requires replay state, timeline, mode banner, and chart dependencies');
+  if (!engine || !appState || !candleStore || !statusView || !timeline || !modeBanner || !chartManager) {
+    throw new TypeError('bindReplayLifecycle requires engine, appState, candleStore, statusView, timeline, mode banner, and chart dependencies');
   }
   if (typeof preview !== 'function') {
     throw new TypeError('bindReplayLifecycle requires preview(index) capability');
+  }
+  if (typeof statusView.snapshot !== 'function') {
+    throw new TypeError('bindReplayLifecycle requires statusView.snapshot()');
   }
 
   const reveal = (idx) => {
     const candle = candleStore.get(idx);
     if (candle) chartManager.setRevealedMax(candle.time);
   };
-  const reportStatus = () => {
-    if (statusView) modeBanner.update(statusView.snapshot());
-    else modeBanner.update({ replayState: engine.getState(), appState });
-  };
+  const reportStatus = () => modeBanner.update(statusView.snapshot());
   const subscriptions = [];
   subscriptions.push(engine.on(ReplayEvents.STATE_CHANGED, (state) => {
     appState.setReplayState(state);
