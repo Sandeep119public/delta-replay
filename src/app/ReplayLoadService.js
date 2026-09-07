@@ -225,6 +225,7 @@ export function createReplayLoadService({
 
   return Object.freeze({
     loadAndPrepareReplay,
+    updateLoadButton,
     clearCurrentLoad,
     destroy() {
       if (destroyed) return;
