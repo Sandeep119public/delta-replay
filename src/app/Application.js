@@ -8,6 +8,7 @@ import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
 import { bindTradingEvents } from '../ui/bindTradingEvents.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createApplicationActions } from './ApplicationActions.js';
+import { createChartTradingActions } from './ChartTradingActions.js';
 
 function registerActionGuard(engine, tradingEngine, coordinator) {
   engine.registerActionGuard((action) => {
@@ -60,7 +61,8 @@ export function createApplication() {
   const tradingBindings = bindTradingEvents({ tradingEngine, actions, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
-  const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, coordinator, ...form });
+  const chartTradingActions = createChartTradingActions({ tradingEngine, coordinator });
+  const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingEngine, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, actions: chartTradingActions, ...form });
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
 
   const loadBtn = coordinatorPorts.loadBtn;
