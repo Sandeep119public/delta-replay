@@ -51,4 +51,22 @@ describe('AppState — Unification & Central Reactivity', () => {
     expect(snap.retryCount).toBe(2);
     expect(snap.loadingState).toBe(LoadingState.SUCCESS);
   });
+
+  it('snapshot is deeply immutable and cannot mutate nested replay or error state', () => {
+    const state = new AppState();
+    const error = { userMessage: 'Failed network', context: { status: 503 } };
+    const replay = { status: 'paused', currentIndex: 7 };
+    state.transitionLoading(LoadingState.NETWORK_ERROR, error);
+    state.setReplayState(replay);
+
+    const snap = state.snapshot();
+    expect(Object.isFrozen(snap)).toBe(true);
+    expect(Object.isFrozen(snap.dataError)).toBe(true);
+    expect(Object.isFrozen(snap.dataError.context)).toBe(true);
+    expect(Object.isFrozen(snap.replayState)).toBe(true);
+    expect(() => { snap.dataError.context.status = 200; }).toThrow();
+    expect(() => { snap.replayState.currentIndex = 99; }).toThrow();
+    expect(state.dataError.context.status).toBe(503);
+    expect(state.replayState.currentIndex).toBe(7);
+  });
 });
