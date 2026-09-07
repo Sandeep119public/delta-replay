@@ -26,35 +26,42 @@ export function bindReplayLifecycle({
   };
   const reportStatus = () => modeBanner.update(statusView.snapshot());
   const subscriptions = [];
+
+  // stateChanged is the single status-render authority. Other lifecycle
+  // events update only the UI details that are unique to those events.
   subscriptions.push(engine.on(ReplayEvents.STATE_CHANGED, (state) => {
     appState.setReplayState(state);
     if (state.currentIndex >= 0) timeline.setPosition(state.currentIndex);
     reportStatus();
   }));
+
   subscriptions.push(engine.on(ReplayEvents.STARTED, (payload) => {
     const idx = payload?.index ?? appState.pendingStartIndex;
     timeline.setPosition(idx);
     reveal(idx);
-    reportStatus();
   }));
+
   for (const event of [ReplayEvents.STEPPED, ReplayEvents.SEEKED]) {
     subscriptions.push(engine.on(event, (payload) => {
-      reportStatus();
       if (payload?.index !== undefined) reveal(payload.index);
     }));
   }
+
   subscriptions.push(engine.on(ReplayEvents.RESET, (state) => {
     if (state.status === 'ready') {
       preview(appState.pendingStartIndex);
       reveal(appState.pendingStartIndex);
-      timeline.setTotal(candleStore.getCount(), candleStore.getAll());
-    } else if (state.index !== undefined) reveal(state.index);
-    reportStatus();
+    } else if (state.index !== undefined) {
+      reveal(state.index);
+    }
   }));
+
   return {
     reveal,
     destroy() {
-      subscriptions.splice(0).forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[ReplayLifecycle] unsubscribe failed', error); } });
+      subscriptions.splice(0).forEach((unsubscribe) => {
+        try { unsubscribe?.(); } catch (error) { console.warn('[ReplayLifecycle] unsubscribe failed', error); }
+      });
     },
   };
 }
