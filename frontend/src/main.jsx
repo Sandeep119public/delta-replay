@@ -13,7 +13,9 @@ const seed = [
 function App() {
   const [state, setState] = useState({ index: -1, total: 0, candle: null });
   const [connected, setConnected] = useState(false);
-  const [loading, setLoading] = useState(false);\n  const [account, setAccount] = useState({ balance: 10000, equity: 10000, position: null });\n  const [tradeError, setTradeError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [account, setAccount] = useState({ balance: 10000, equity: 10000, position: null });
+  const [tradeError, setTradeError] = useState('');
 
   useEffect(() => {
     fetch(`${API}/replay/state`)
@@ -36,7 +38,12 @@ function App() {
     if (r.ok) setState(await r.json());
   }
 
-  async function refreshAccount() { const r=await fetch(`${API}/trading/state`); if(r.ok) setAccount(await r.json()); }\n\n  async function trade(side) { setTradeError(''); try { const r=await fetch(`${API}/trading/order`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({side,quantity:0.1})}); if(!r.ok) throw new Error((await r.json()).detail||'Order failed'); setAccount(await r.json()); } catch(e){setTradeError(e.message);} }\n  async function closePosition(){ setTradeError(''); try { const r=await fetch(`${API}/trading/close`,{method:'POST'}); if(!r.ok) throw new Error((await r.json()).detail||'Close failed'); setAccount(await r.json()); } catch(e){setTradeError(e.message);} }\n\n  async function reset() {
+  async function refreshAccount() { const r=await fetch(`${API}/trading/state`); if(r.ok) setAccount(await r.json()); }
+
+  async function trade(side) { setTradeError(''); try { const r=await fetch(`${API}/trading/order`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({side,quantity:0.1})}); if(!r.ok) throw new Error((await r.json()).detail||'Order failed'); setAccount(await r.json()); } catch(e){setTradeError(e.message);} }
+  async function closePosition(){ setTradeError(''); try { const r=await fetch(`${API}/trading/close`,{method:'POST'}); if(!r.ok) throw new Error((await r.json()).detail||'Close failed'); setAccount(await r.json()); } catch(e){setTradeError(e.message);} }
+
+  async function reset() {
     const r = await fetch(`${API}/replay/reset`, { method: 'POST' });
     if (r.ok) setState(await r.json());
   }
