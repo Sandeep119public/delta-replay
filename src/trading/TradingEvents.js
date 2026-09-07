@@ -1,4 +1,4 @@
-export const TradingEvents = {
+export const TradingEvents = Object.freeze({
   ORDER_PLACED: 'orderPlaced',
   ORDER_TRIGGERED: 'orderTriggered',
   ORDER_FILLED: 'orderFilled',
@@ -15,4 +15,4 @@ export const TradingEvents = {
   BAR_CLOSE: 'barClose',
   POSITION_LIQUIDATED: 'positionLiquidated',
   FUNDING_PAYMENT: 'fundingPayment',
-};
+});
