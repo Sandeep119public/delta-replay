@@ -25,7 +25,7 @@ function makeCandles(count, startSec = 1700000000) {
     high: 101 + i,
     low: 99 + i,
     close: 100.5 + i,
-    volume: 1000,
+    volume: 1000
   }));
 }
 
@@ -33,7 +33,14 @@ describe('Chart and Replay Deep Audit Fixes', () => {
   describe('ChartManager flat candle spread calculation', () => {
     it('scales flat candle spread proportionally for low-priced coins ($0.50)', () => {
       const cm = Object.create(ChartManager.prototype);
-      const flatCandleLowPrice = [{ time: 1700000000, open: 0.50, high: 0.50, low: 0.50, close: 0.50, volume: 100 }];
+      const flatCandleLowPrice = [{
+        time: 1700000000,
+        open: 0.50,
+        high: 0.50,
+        low: 0.50,
+        close: 0.50,
+        volume: 100
+      }];
       const prepared = cm._prepareCandlesForChart(flatCandleLowPrice);
       expect(prepared).toHaveLength(1);
       const c = prepared[0];
@@ -46,7 +53,14 @@ describe('Chart and Replay Deep Audit Fixes', () => {
 
     it('scales flat candle spread for high-priced coins ($65,000 BTC)', () => {
       const cm = Object.create(ChartManager.prototype);
-      const flatCandleHighPrice = [{ time: 1700000000, open: 65000, high: 65000, low: 65000, close: 65000, volume: 100 }];
+      const flatCandleHighPrice = [{
+        time: 1700000000,
+        open: 65000,
+        high: 65000,
+        low: 65000,
+        close: 65000,
+        volume: 100
+      }];
       const prepared = cm._prepareCandlesForChart(flatCandleHighPrice);
       expect(prepared).toHaveLength(1);
       const c = prepared[0];
@@ -61,8 +75,8 @@ describe('Chart and Replay Deep Audit Fixes', () => {
     it('enables speed selection when data is loaded in READY state', () => {
       const dom = makeMockDOM();
       const engine = new ReplayEngine();
-      const port = createReplayUIPort(engine);
-      new ReplayControls({ ...dom, replayPort: port });
+      const replayPort = createReplayUIPort(engine);
+      new ReplayControls({ ...dom, replayPort });
       expect(dom.speedSelect.disabled).toBe(true);
       engine.load(makeCandles(10));
       expect(engine.getState().status).toBe(ReplayStatus.READY);
