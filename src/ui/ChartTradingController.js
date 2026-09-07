@@ -1,17 +1,11 @@
-import { createTradingUIEvents } from '../app/TradingUIEvents.js';
-
 /**
  * Presentation controller for chart-click trading interactions and visual state.
- * Trading domain events arrive through a presentation-facing event port.
- * `tradingEngine` is accepted only as a legacy compatibility input and is
- * immediately adapted to that port; application composition should pass
- * `tradingEvents` directly.
+ * Trading domain events arrive through an application-provided presentation port.
  */
 export class ChartTradingController {
   constructor({
     chartManager,
     tradingEvents = null,
-    tradingEngine = null,
     tradingState = null,
     actions = null,
     tradingPanel = null,
@@ -25,7 +19,7 @@ export class ChartTradingController {
     orderTypeSelect = null,
   }) {
     this.chartManager = chartManager;
-    this.tradingEvents = tradingEvents || (tradingEngine ? createTradingUIEvents(tradingEngine) : null);
+    this.tradingEvents = tradingEvents;
     this.tradingState = tradingState;
     this.actions = actions;
     this.tradingPanel = tradingPanel;
