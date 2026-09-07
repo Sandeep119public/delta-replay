@@ -195,7 +195,12 @@ export class ReplayCommandController {
     this.headerBtn.addEventListener('click', this._onHeaderClick);
   }
 
-  destroy() { this.headerBtn?.removeEventListener?.('click', this._onHeaderClick); this._subscriptions.forEach((unsubscribe) => unsubscribe?.()); this._subscriptions = []; }
+  destroy() {
+    this.headerBtn?.removeEventListener?.('click', this._onHeaderClick);
+    this._subscriptions.splice(0).forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[ReplayCommandController] unsubscribe failed', error); } });
+    this._onHeaderClick = null;
+    this.onError = null;
+  }
 
   renderHeaderBtn() {
     if (!this.headerBtn) return;
