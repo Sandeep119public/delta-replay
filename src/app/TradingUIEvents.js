@@ -6,7 +6,11 @@ import { TradingEvents } from '../trading/TradingEvents.js';
  */
 export function createTradingUIEvents(tradingEngine) {
   return Object.freeze({
-    on: (event, handler) => tradingEngine?.on?.(event, handler),
     events: TradingEvents,
+    on: (event, handler) => tradingEngine?.on?.(event, handler),
+    onAll(handler) {
+      const unsubs = Object.values(TradingEvents).map((event) => tradingEngine?.on?.(event, handler)).filter((unsubscribe) => typeof unsubscribe === 'function');
+      return () => unsubs.forEach((unsubscribe) => { try { unsubscribe(); } catch {} });
+    },
   });
 }
