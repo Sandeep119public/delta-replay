@@ -34,7 +34,7 @@ export function bindReplayLifecycle({ engine, appState, candleStore, timeline, m
   return {
     reveal,
     destroy() {
-      subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[ReplayLifecycle] unsubscribe failed', error); } });
+      subscriptions.splice(0).forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[ReplayLifecycle] unsubscribe failed', error); } });
     },
   };
 }
