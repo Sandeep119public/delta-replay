@@ -68,7 +68,7 @@ export function createPaperUI({ engine, candleStore, appState, coordinatorRef, t
 
 function createPaperTerminalViews(ctx) {
   const { el, appState, candleStore, engine, tradingPort, tradingEvents, tradingState, commandController, coordinator, timeframeSelect, orderTypeSelect, limitPriceInput, stopPriceInput, slInput, tpInput } = ctx;
-  const sparkline = new TimelineSparkline({ canvasEl: el('timeline-sparkline'), candleStore, engine, tradingEngine: tradingPort, onSeek: (idx) => commandController.trySeek(idx) });
+  const sparkline = new TimelineSparkline({ canvasEl: el('timeline-sparkline'), candleStore, engine, tradingEngine: tradingPort, tradingEvents, onSeek: (idx) => commandController.trySeek(idx) });
   const toastView = new ToastNotificationView();
   const floatingPosView = new FloatingPositionView({ tradingEngine: tradingPort });
   const dateSelector = new ReplayDateSelector({ appState, coordinator, candleStore, engine, commandController, timeframeSelect, onJump: (idx) => commandController.trySeek(idx) });
