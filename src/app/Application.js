@@ -17,13 +17,13 @@ import { createDatasetView, createCandleView, createReplayStatusView } from './D
 import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
 
-function registerActionGuard(engine, tradingEngine, coordinator) {
+function registerActionGuard(engine, tradingEngine, reportError) {
   return engine.registerActionGuard((action) => {
     if (!tradingEngine.hasOpenPosition()) return { allowed: true };
     const msg = action === 'load'
       ? 'Cannot load new data while a position is open — close position or reset account first.'
       : `Cannot ${action} while a position is open — close position first.`;
-    coordinator.showTradingError(msg);
+    reportError(msg);
     return { allowed: false, reason: msg };
   });
 }
@@ -34,6 +34,27 @@ function bindDatasetSelectors(ui, actions) {
     ui.timeframeSelector.onChange((timeframe) => actions.changeDataset('timeframe', timeframe, ui.el('timeframe-select'))),
   ];
   return { destroy() { unbinds.forEach((unbind) => { try { unbind?.(); } catch {} }); } };
+}
+
+function createReplayCommandController({ engine, appState, candleStore, tradingEngine, coordinator, headerBtn }) {
+  return new ReplayCommandController({
+    engine,
+    appState,
+    candleStore,
+    headerBtn,
+    onLoad: ({ autoStart }) => coordinator.loadAndPrepareReplay({ autoStart }),
+    onPreview: (index) => coordinator.updatePreviewWindow(index),
+    canExecute: (action) => {
+      if (!tradingEngine.hasOpenPosition()) return { allowed: true };
+      const reason = action === 'start'
+        ? 'Cannot start replay while a position is open — close position first.'
+        : action === 'seek'
+          ? 'Cannot seek while a position is open — close position first.'
+          : `Cannot ${action} while a position is open — close position first.`;
+      return { allowed: false, reason };
+    },
+    onError: (msg) => coordinator.showTradingError(msg),
+  });
 }
 
 export function createApplication() {
@@ -109,14 +130,13 @@ export function createApplication() {
   coordinatorRef.current = coordinator;
 
   const coordinatorPorts = ui.getReplayPorts();
-  const commandController = new ReplayCommandController({
+  const commandController = createReplayCommandController({
     engine,
     appState,
     candleStore,
     tradingEngine,
     coordinator,
     headerBtn: coordinatorPorts.headerStartReplayBtn,
-    onError: (msg) => coordinator.showTradingError(msg),
   });
   commandControllerRef.current = commandController;
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
@@ -163,7 +183,7 @@ export function createApplication() {
   });
   const tradingStateBridge = bindTradingState({ tradingEvents, trading, onChange: () => chartTradingController.syncChartTradingLines() });
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, statusView, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
-  const actionGuardUnsub = registerActionGuard(engine, tradingEngine, coordinator);
+  const actionGuardUnsub = registerActionGuard(engine, tradingEngine, (msg) => coordinator.showTradingError(msg));
   const loadBtn = coordinatorPorts.loadBtn;
   const onLoadClick = () => actions.load();
   loadBtn?.addEventListener('click', onLoadClick);
