@@ -7,8 +7,18 @@ export class TradingValidator {
   }
 
   static validateSymbol(symbol) {
-    if (!symbol || typeof symbol !== 'string' || symbol.trim() === '') {
+    if (typeof symbol !== 'string') {
       return { valid: false, code: 'INVALID_SYMBOL', message: 'Symbol required' };
+    }
+    const normalized = symbol.trim();
+    if (normalized === '') {
+      return { valid: false, code: 'INVALID_SYMBOL', message: 'Symbol required' };
+    }
+    if (normalized.length > 32) {
+      return { valid: false, code: 'INVALID_SYMBOL', message: 'Symbol must be 32 characters or fewer' };
+    }
+    if (!/^[A-Za-z0-9._:/-]+$/.test(normalized)) {
+      return { valid: false, code: 'INVALID_SYMBOL', message: 'Symbol contains unsupported characters' };
     }
     return { valid: true };
   }
