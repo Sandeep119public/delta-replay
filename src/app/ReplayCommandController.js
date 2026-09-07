@@ -211,8 +211,8 @@ export class ReplayCommandController {
     else if (s.status === 'ended') this.headerBtn.innerHTML = '<span class="icon">↺</span> REPLAY AGAIN';
   }
 
-  bindKeyboardShortcuts(target = document) {
-    if (!target) return () => {};
+  bindKeyboardShortcuts(target = globalThis.document) {
+    if (!target || typeof target.addEventListener !== 'function' || typeof target.removeEventListener !== 'function') return () => {};
     const handler = (e) => {
       const tag = e.target?.tagName?.toUpperCase?.() || '';
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
