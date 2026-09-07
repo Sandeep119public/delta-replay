@@ -1,5 +1,3 @@
-import { ReplayEvents } from '../replay/ReplayEvents.js';
-
 export function bindReplayLifecycle({
   engine,
   appState,
@@ -29,25 +27,25 @@ export function bindReplayLifecycle({
 
   // stateChanged is the single status-render authority. Other lifecycle
   // events update only the UI details that are unique to those events.
-  subscriptions.push(engine.on(ReplayEvents.STATE_CHANGED, (state) => {
+  subscriptions.push(engine.on('stateChanged', (state) => {
     appState.setReplayState(state);
     if (state.currentIndex >= 0) timeline.setPosition(state.currentIndex);
     reportStatus();
   }));
 
-  subscriptions.push(engine.on(ReplayEvents.STARTED, (payload) => {
+  subscriptions.push(engine.on('started', (payload) => {
     const idx = payload?.index ?? appState.pendingStartIndex;
     timeline.setPosition(idx);
     reveal(idx);
   }));
 
-  for (const event of [ReplayEvents.STEPPED, ReplayEvents.SEEKED]) {
+  for (const event of ['stepped', 'seeked']) {
     subscriptions.push(engine.on(event, (payload) => {
       if (payload?.index !== undefined) reveal(payload.index);
     }));
   }
 
-  subscriptions.push(engine.on(ReplayEvents.RESET, (state) => {
+  subscriptions.push(engine.on('reset', (state) => {
     if (state.status === 'ready') {
       preview(appState.pendingStartIndex);
       reveal(appState.pendingStartIndex);
