@@ -2,6 +2,14 @@ import { EventEmitter } from '../core/EventEmitter.js';
 import { LoadingState } from '../data/DataError.js';
 import { CandleStore } from '../data/CandleStore.js';
 
+function freezeValue(value) {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  if (Array.isArray(value)) return Object.freeze(value.map(freezeValue));
+  const copy = {};
+  for (const [key, child] of Object.entries(value)) copy[key] = freezeValue(child);
+  return Object.freeze(copy);
+}
+
 export class AppState extends EventEmitter {
   constructor({ candleStore = null } = {}) {
     super();
@@ -110,7 +118,7 @@ export class AppState extends EventEmitter {
   }
 
   snapshot() {
-    return {
+    return freezeValue({
       symbol: this.symbol,
       timeframe: this.timeframe,
       total: this.totalCandles,
@@ -121,6 +129,6 @@ export class AppState extends EventEmitter {
       pendingStartIndex: this.pendingStartIndex,
       retryCount: this.retryCount,
       replayState: this.replayState,
-    };
+    });
   }
 }
