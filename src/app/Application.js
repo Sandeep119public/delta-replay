@@ -49,17 +49,16 @@ export function createApplication() {
   const chartManager = new ChartManager(document.getElementById('chart-container'));
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
 
-  const coordinatorRef = { current: null };
-  const commandControllerRef = { current: null };
+  let coordinator = null;
+  let commandController = null;
   const replayCapabilities = Object.freeze({
-    load: () => coordinatorRef.current?.loadAndPrepareReplay({ autoStart: false }),
-    loadWithOptions: (options) => coordinatorRef.current?.loadAndPrepareReplay(options),
-    preview: (idx) => coordinatorRef.current?.updatePreviewWindow?.(idx),
-    changeDataset: (kind, value, sourceEl) => coordinatorRef.current?.handleSymbolTimeframeChange(kind, value, sourceEl),
+    load: (options = {}) => coordinator?.loadAndPrepareReplay(options),
+    preview: (idx) => coordinator?.updatePreviewWindow?.(idx),
+    changeDataset: (kind, value, sourceEl) => coordinator?.handleSymbolTimeframeChange(kind, value, sourceEl),
   });
 
   const callbacks = {
-    onRetry: () => replayCapabilities.load(),
+    onRetry: () => replayCapabilities.load({ autoStart: false }),
     onFollow: () => {
       const idx = replayPort.getState().currentIndex;
       chartManager.setAutoFollow(true);
@@ -67,14 +66,14 @@ export function createApplication() {
         const candle = candleStore.get(idx);
         if (candle) {
           chartManager.setRevealedMax(candle.time);
-          coordinatorRef.current?.applyWindowedChart(idx);
+          coordinator?.applyWindowedChart(idx);
           chartManager.followCurrent();
         }
       }
     },
-    onLoadReplay: ({ targetSec } = {}) => replayCapabilities.loadWithOptions({ targetSec, autoStart: false }),
+    onLoadReplay: ({ targetSec } = {}) => replayCapabilities.load({ targetSec, autoStart: false }),
     onPreviewWindow: (idx) => replayCapabilities.preview(idx),
-    onSeek: (idx) => commandControllerRef.current?.trySeek(idx),
+    onSeek: (idx) => commandController?.trySeek(idx),
     onTimeframeChange: (timeframe) => { appState.timeframe = timeframe; },
   };
 
@@ -88,7 +87,7 @@ export function createApplication() {
     callbacks,
   });
 
-  const coordinator = new ReplayCoordinator({
+  coordinator = new ReplayCoordinator({
     dataManager,
     candleStore,
     appState,
@@ -103,20 +102,18 @@ export function createApplication() {
     tradingErrorView: ui.tradingErrorView,
     ...ui.getReplayPorts(),
   });
-  coordinatorRef.current = coordinator;
 
   const coordinatorPorts = ui.getReplayPorts();
-  const commandController = new ReplayCommandController({
+  commandController = new ReplayCommandController({
     engine,
     appState,
     candleStore,
     headerBtn: coordinatorPorts.headerStartReplayBtn,
-    onLoad: ({ autoStart }) => coordinator.loadAndPrepareReplay({ autoStart }),
-    onPreview: (index) => coordinator.updatePreviewWindow(index),
+    onLoad: ({ autoStart }) => coordinator?.loadAndPrepareReplay({ autoStart }),
+    onPreview: (index) => coordinator?.updatePreviewWindow(index),
     canExecute: () => trading.actions.hasOpenPosition(),
-    onError: (msg) => coordinator.showTradingError(msg),
+    onError: (msg) => coordinator?.showTradingError(msg),
   });
-  commandControllerRef.current = commandController;
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
   const actions = createApplicationActions({
@@ -154,7 +151,7 @@ export function createApplication() {
       if (intent.action === 'SET_SL') return trading.actions.setStopLoss(intent.symbol, intent.price);
       return { success: true };
     },
-    reportError: (message) => coordinator.showTradingError(message),
+    reportError: (message) => coordinator?.showTradingError(message),
   });
   const chartTradingController = ui.createChartTradingController({
     chartManager: ui.chartManager,
@@ -169,7 +166,7 @@ export function createApplication() {
   });
   const tradingStateBridge = bindTradingState({ tradingEvents, trading, onChange: () => chartTradingController.syncChartTradingLines() });
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, statusView, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
-  const actionGuardUnsub = registerActionGuard(engine, () => trading.actions.hasOpenPosition(), (msg) => coordinator.showTradingError(msg));
+  const actionGuardUnsub = registerActionGuard(engine, () => trading.actions.hasOpenPosition(), (msg) => coordinator?.showTradingError(msg));
   const loadBtn = coordinatorPorts.loadBtn;
   const onLoadClick = () => actions.load();
   loadBtn?.addEventListener('click', onLoadClick);
@@ -221,8 +218,8 @@ export function createApplication() {
       if (destroyed || started) return;
       started = true;
       ui.modeBanner.update(statusView.snapshot());
-      Promise.resolve(coordinator.loadAndPrepareReplay({ autoStart: false })).catch((error) => {
-        if (!destroyed) coordinator.showTradingError?.(error?.message || 'Failed to load replay');
+      Promise.resolve(replayCapabilities.load({ autoStart: false })).catch((error) => {
+        if (!destroyed) coordinator?.showTradingError?.(error?.message || 'Failed to load replay');
       });
     },
     destroy: guardedDestroy,
