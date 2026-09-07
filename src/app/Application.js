@@ -10,6 +10,7 @@ import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createApplicationActions } from './ApplicationActions.js';
 import { createChartTradingActions } from './ChartTradingActions.js';
 import { createTradingUIState } from './TradingUIState.js';
+import { createTradingUIEvents } from './TradingUIEvents.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
 
 function registerActionGuard(engine, tradingEngine, coordinator) {
@@ -36,6 +37,8 @@ export function createApplication() {
   const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
   const coordinatorRef = { current: null };
   const ui = createPaperUI({ engine, candleStore, appState, coordinatorRef });
+  const tradingState = createTradingUIState(tradingEngine);
+  const tradingEvents = createTradingUIEvents(tradingEngine);
 
   const coordinator = new ReplayCoordinator({
     dataManager, candleStore, appState, replayEngine: engine, tradingEngine,
@@ -53,8 +56,6 @@ export function createApplication() {
   });
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
 
-  const tradingState = createTradingUIState(tradingEngine);
-
   const actions = createApplicationActions({ coordinator, commandController, appState, engine, candleStore, modeBanner: ui.modeBanner, timeline: ui.timeline, controls: ui.controls, errorPanel: ui.errorPanel });
 
   const form = ui.getOrderFormPorts();
@@ -66,7 +67,7 @@ export function createApplication() {
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
 
   const chartTradingActions = createChartTradingActions({ tradingEngine, coordinator });
-  const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingState, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, actions: chartTradingActions, ...form });
+  const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, tradingEvents, tradingState, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, actions: chartTradingActions, ...form });
   const tradingStateBridge = bindTradingState({ tradingEngine, tradingState, onChange: () => chartTradingController.syncChartTradingLines() });
 
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, timeline: ui.timeline, modeBanner: ui.modeBanner, coordinator, chartManager: ui.chartManager });
