@@ -1,80 +1,131 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ReplayChart } from './components/ReplayChart';
 import './styles.css';
 
 const API = import.meta.env.VITE_API_URL ?? '/api/v1';
-
 const seed = [
-  { time: 1, open: 100, high: 103, low: 99, close: 102, volume: 12 },
-  { time: 2, open: 102, high: 105, low: 101, close: 104, volume: 15 },
-  { time: 3, open: 104, high: 106, low: 102, close: 103, volume: 11 },
+  { time: 1710000000, open: 62000, high: 62400, low: 61800, close: 62200, volume: 120 },
+  { time: 1710000900, open: 62200, high: 62900, low: 62100, close: 62700, volume: 155 },
+  { time: 1710001800, open: 62700, high: 63050, low: 62400, close: 62500, volume: 111 },
+  { time: 1710002700, open: 62500, high: 63200, low: 62300, close: 63150, volume: 188 },
+  { time: 1710003600, open: 63150, high: 63500, low: 62800, close: 63350, volume: 142 },
+  { time: 1710004500, open: 63350, high: 63800, low: 63000, close: 63600, volume: 204 },
 ];
 
+const initialReplay = { status: 'idle', index: -1, startIndex: -1, total: 0, speed: 1, candle: null, visibleCandles: [] };
+const initialAccount = { balance: 10000, equity: 10000, position: null };
+
 function App() {
-  const [state, setState] = useState({ index: -1, total: 0, candle: null });
+  const [state, setState] = useState(initialReplay);
+  const [account, setAccount] = useState(initialAccount);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [account, setAccount] = useState({ balance: 10000, equity: 10000, position: null });
+  const [playing, setPlaying] = useState(false);
+  const [quantity, setQuantity] = useState('0.10');
   const [tradeError, setTradeError] = useState('');
 
+  const request = async (path, options) => {
+    const response = await fetch(`${API}${path}`, options);
+    if (!response.ok) {
+      let message = 'Request failed';
+      try { message = (await response.json()).detail || message; } catch {}
+      throw new Error(message);
+    }
+    return response.json();
+  };
+
+  const syncAccount = async () => {
+    try {
+      const data = await request('/trading/state');
+      setAccount(data);
+    } catch {}
+  };
+
   useEffect(() => {
-    fetch(`${API}/replay/state`)
-      .then((r) => { if (!r.ok) throw new Error('API unavailable'); return r.json(); })
-      .then((d) => { setState(d); setConnected(true); })
-      .catch(() => setConnected(false));
+    request('/replay/state').then((data) => { setState(data); setConnected(true); }).catch(() => setConnected(false));
   }, []);
 
-  async function load() {
-    setLoading(true);
+  const load = async () => {
+    setLoading(true); setTradeError('');
     try {
-      const r = await fetch(`${API}/replay/load`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ candles: seed }) });
-      if (!r.ok) throw new Error('Load failed');
-      setState(await r.json()); setConnected(true);
-    } finally { setLoading(false); }
-  }
+      await request('/replay/load', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ candles: seed }) });
+      const started = await request('/replay/start/0', { method: 'POST' });
+      setState(started); setConnected(true); await syncAccount();
+    } catch (error) { setTradeError(error.message); }
+    finally { setLoading(false); }
+  };
 
-  async function step() {
-    const r = await fetch(`${API}/replay/step`, { method: 'POST' });
-    if (r.ok) setState(await r.json());
-  }
+  const step = async () => { try { const data = await request('/replay/step', { method: 'POST' }); setState(data); setPlaying(false); await syncAccount(); } catch (error) { setTradeError(error.message); } };
+  const reset = async () => { try { const data = await request('/replay/reset', { method: 'POST' }); setState(data); setPlaying(false); await request('/trading/reset', { method: 'POST' }); await syncAccount(); } catch (error) { setTradeError(error.message); } };
+  const seek = async (index) => { try { const data = await request(`/replay/seek/${index}`, { method: 'POST' }); setState(data); setPlaying(false); await syncAccount(); } catch (error) { setTradeError(error.message); } };
 
-  async function refreshAccount() { const r=await fetch(`${API}/trading/state`); if(r.ok) setAccount(await r.json()); }
+  useEffect(() => {
+    if (!playing || state.index < 0 || state.index >= state.total - 1) return undefined;
+    const timer = window.setTimeout(step, 1000 / Math.max(state.speed || 1, 0.25));
+    return () => window.clearTimeout(timer);
+  }, [playing, state.index, state.total, state.speed]);
 
-  async function trade(side) { setTradeError(''); try { const r=await fetch(`${API}/trading/order`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({side,quantity:0.1})}); if(!r.ok) throw new Error((await r.json()).detail||'Order failed'); setAccount(await r.json()); } catch(e){setTradeError(e.message);} }
-  async function closePosition(){ setTradeError(''); try { const r=await fetch(`${API}/trading/close`,{method:'POST'}); if(!r.ok) throw new Error((await r.json()).detail||'Close failed'); setAccount(await r.json()); } catch(e){setTradeError(e.message);} }
+  const togglePlay = () => {
+    if (state.index < 0 || state.total === 0) return;
+    if (state.index >= state.total - 1) { setPlaying(false); return; }
+    setPlaying((value) => !value);
+  };
 
-  async function reset() {
-    const r = await fetch(`${API}/replay/reset`, { method: 'POST' });
-    if (r.ok) setState(await r.json());
-  }
+  const trade = async (side) => {
+    setTradeError('');
+    try {
+      const data = await request('/trading/order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ side, quantity: Number(quantity) }) });
+      setAccount(data);
+    } catch (error) { setTradeError(error.message); }
+  };
+
+  const closePosition = async () => {
+    setTradeError('');
+    try { setAccount(await request('/trading/close', { method: 'POST' })); }
+    catch (error) { setTradeError(error.message); }
+  };
+
+  const progress = state.total ? ((state.index + 1) / state.total) * 100 : 0;
+  const price = state.candle?.close ?? 0;
+  const pnl = account.position ? account.equity - account.balance : 0;
 
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div><div className="brand">DELTA REPLAY</div><div className="subbrand">RESEARCH TERMINAL 2.0</div></div>
+        <div><div className="brand">DELTA REPLAY</div><div className="subbrand">PYTHON RESEARCH TERMINAL 2.0</div></div>
         <div className="status"><span className={`dot ${connected ? 'on' : ''}`} />{connected ? 'ENGINE ONLINE' : 'CONNECTING'}</div>
       </header>
       <section className="toolbar">
-        <div><span className="label">MARKET</span><strong>BTCUSDT</strong></div>
-        <div><span className="label">TIMEFRAME</span><strong>15m</strong></div>
-        <div className="toolbar-actions"><button onClick={load} disabled={loading}>{loading ? 'LOADING…' : 'LOAD DATA'}</button><button onClick={reset}>RESET</button><button className="primary" onClick={step}>STEP ▶</button></div>
+        <div className="market-chip"><span className="label">MARKET</span><strong>BTCUSDT</strong></div>
+        <div className="market-chip"><span className="label">TIMEFRAME</span><strong>15m</strong></div>
+        <div className="market-chip"><span className="label">LAST</span><strong>{price ? `$${price.toLocaleString()}` : '—'}</strong></div>
+        <div className="toolbar-actions">
+          <button onClick={load} disabled={loading}>{loading ? 'LOADING…' : 'LOAD SAMPLE'}</button>
+          <button onClick={reset}>RESET</button>
+          <button className="primary" onClick={togglePlay}>{playing ? 'PAUSE' : 'PLAY'} ▶</button>
+          <button className="primary" onClick={step}>STEP ▷</button>
+        </div>
       </section>
       <main className="workspace">
         <section className="chart-panel">
-          <div className="panel-head"><div><span className="eyebrow">REPLAY</span><h1>Market Replay</h1></div><div className="bar-count">BAR {state.total ? state.index + 1 : 0} / {state.total}</div></div>
-          <div className="chart-stage">
-            {state.candle ? <div className="candle-card"><span>O {state.candle.open}</span><span>H {state.candle.high}</span><span>L {state.candle.low}</span><span>C {state.candle.close}</span><span>V {state.candle.volume}</span></div> : <div className="empty-state"><div className="empty-icon">◫</div><h2>Ready to replay</h2><p>Load a candle dataset to begin.</p><button className="primary" onClick={load}>LOAD SAMPLE DATA</button></div>}
+          <div className="panel-head"><div><span className="eyebrow">MARKET REPLAY</span><h1>BTCUSDT · 15m</h1></div><div className="bar-count">BAR {state.total ? state.index + 1 : 0} / {state.total}</div></div>
+          <div className="chart-stage"><ReplayChart candles={state.visibleCandles} /></div>
+          <div className="timeline">
+            <input className="scrubber" type="range" min="0" max={Math.max(state.total - 1, 0)} value={Math.max(state.index, 0)} disabled={!state.total} onChange={(event) => seek(Number(event.target.value))} style={{ '--progress': `${progress}%` }} />
+            <div className="timeline-meta"><span>REPLAY</span><strong>{state.candle ? new Date(state.candle.time * 1000).toLocaleString() : 'LOAD DATA TO BEGIN'}</strong><span>{state.status.toUpperCase()}</span></div>
           </div>
-          <div className="timeline"><div className="track"><div className="fill" style={{ width: state.total ? `${((state.index + 1) / state.total) * 100}%` : '0%' }} /></div><div className="timeline-meta"><span>START</span><strong>{state.candle ? `CLOSE ${state.candle.close}` : 'NO DATA'}</strong><span>END</span></div></div>
         </section>
         <aside className="trade-panel">
           <div className="panel-head compact"><div><span className="eyebrow">PAPER ACCOUNT</span><h2>Trading</h2></div><span className="paper-pill">PAPER</span></div>
-          <div className="account-card"><span>Account equity</span><strong>${account.equity.toFixed(2)}</strong></div>
-          <div className="position-card"><div className="card-title">POSITION</div><div className="placeholder">{account.position ? `${account.position.side.toUpperCase()} · ${account.position.quantity}` : "No open position"}</div></div>
-          <div className="order-card"><div className="card-title">ORDER</div><label>Quantity<input value="0.10" readOnly /></label><div className="side-by-side"><button className="buy" onClick={()=>trade("buy")}>BUY / LONG</button><button className="sell" onClick={()=>trade("sell")}>SELL / SHORT</button></div><button className="close" onClick={closePosition}>CLOSE POSITION</button>{tradeError && <p className="trade-error">{tradeError}</p>}</div>
+          <div className="account-card"><span>Equity</span><strong>${account.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong><small>Balance ${account.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</small></div>
+          <div className="metrics"><div><span>MARK</span><strong>{price ? price.toLocaleString() : '—'}</strong></div><div><span>UNREALIZED</span><strong className={pnl >= 0 ? 'positive' : 'negative'}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</strong></div></div>
+          <div className="position-card"><div className="card-title">POSITION</div><div className="placeholder">{account.position ? `${account.position.side.toUpperCase()} · ${account.position.quantity} @ ${account.position.entry_price}` : 'No open position'}</div></div>
+          <div className="order-card"><div className="card-title">ORDER</div><label>Quantity<input inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label><div className="side-by-side"><button className="buy" onClick={() => trade('buy')}>BUY / LONG</button><button className="sell" onClick={() => trade('sell')}>SELL / SHORT</button></div><button className="close" onClick={closePosition}>CLOSE POSITION</button>{tradeError && <p className="trade-error">{tradeError}</p>}</div>
+          <div className="engine-note">Python FastAPI engine · deterministic replay boundary</div>
         </aside>
       </main>
-      <footer className="footer"><span>Python engine boundary active</span><span>Replay index: {state.index}</span></footer>
+      <footer className="footer"><span>{state.total ? `${state.total} candles loaded` : 'No dataset loaded'}</span><span>Replay {state.index + 1}/{state.total}</span></footer>
     </div>
   );
 }
