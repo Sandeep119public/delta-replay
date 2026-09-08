@@ -29,11 +29,11 @@ export const workspaceMarkup = () => `<div class="main-layout">
     </div>
 
     <div class="trading-tab-nav" role="tablist" aria-label="Trading views">
-      <button class="panel-tab-btn active" type="button" role="tab" aria-selected="true" aria-controls="tab-view-trade" data-tab="trade">Trade</button>
-      <button class="panel-tab-btn" type="button" role="tab" aria-selected="false" aria-controls="tab-view-account" data-tab="account">Account</button>
+      <button class="panel-tab-btn active" type="button" role="tab" id="trade-tab" aria-selected="true" aria-controls="tab-view-trade" data-tab="trade">Trade</button>
+      <button class="panel-tab-btn" type="button" role="tab" id="account-tab" aria-selected="false" aria-controls="tab-view-account" data-tab="account" tabindex="-1">Account</button>
     </div>
 
-    <div id="tab-view-trade" class="tab-panel active" role="tabpanel" aria-label="Trade">
+    <div id="tab-view-trade" class="tab-panel active" role="tabpanel" aria-labelledby="trade-tab" tabindex="0">
       <section id="order-ticket" class="order-ticket is-flat" aria-label="Order ticket">
         <div class="ticket-header"><div><span class="eyebrow">ORDER TICKET</span><p id="ticket-state-hint" class="ticket-state-hint">FLAT • Pick a size</p></div><span id="pos-state-pill" class="pos-state-pill is-flat">FLAT</span></div>
         <div class="ticket-quick-start"><span class="quick-start-label">Quick order</span><span class="quick-start-hint">Set size, then choose a side</span></div><div class="ticket-field-grid">
@@ -66,7 +66,7 @@ export const workspaceMarkup = () => `<div class="main-layout">
       </section>
     </div>
 
-    <div id="tab-view-account" class="tab-panel" role="tabpanel" aria-label="Account">
+    <div id="tab-view-account" class="tab-panel" role="tabpanel" aria-labelledby="account-tab" tabindex="0">
       <section class="account-card"><div class="account-stat"><span>Cash balance</span><strong id="acct-balance">—</strong></div><div class="account-stat"><span>Realized P&amp;L</span><strong id="acct-realized">—</strong></div><div class="account-stat"><span>Fees paid</span><strong id="acct-fees">—</strong></div></section>
       <button id="btn-reset-acct" class="btn btn-danger" type="button">Reset paper account</button>
     </div>
