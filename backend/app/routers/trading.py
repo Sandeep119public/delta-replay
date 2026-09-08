@@ -163,15 +163,18 @@ def risk(request: Request, command: RiskRequest):
 
 
 @router.post("/risk/clear")
-def clear_risk(request: Request, symbol: str):
+def clear_risk(request: Request, symbol: str, target: Literal["all", "stopLoss", "takeProfit"] = "all"):
+    def clear(session):
+        if target == "stopLoss":
+            position = session.trading.clear_stop_loss(symbol)
+        elif target == "takeProfit":
+            position = session.trading.clear_take_profit(symbol)
+        else:
+            position = session.trading.clear_risk(symbol)
+        return {"position": position, **snapshot(session.trading)}
+
     try:
-        return atomic_session(
-            request,
-            lambda session: {
-                "position": session.trading.clear_risk(symbol),
-                **snapshot(session.trading),
-            },
-        )
+        return atomic_session(request, clear)
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc))
 
