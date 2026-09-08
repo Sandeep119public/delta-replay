@@ -31,7 +31,6 @@ class SessionManager:
         database_url = os.getenv("DATABASE_URL", "").strip()
         if database_url:
             from .postgres_session_repository import PostgresSessionRepository
-
             return PostgresSessionRepository(database_url)
         return InMemorySessionRepository()
 
@@ -44,9 +43,10 @@ class SessionManager:
     def get(self, session_id: str) -> SessionState:
         self._validate_session_id(session_id)
         with self._lock:
-            session = self._sessions.get(session_id)
-            if session is not None:
-                return session
+            if not self.repository.durable:
+                session = self._sessions.get(session_id)
+                if session is not None:
+                    return session
 
             document = self.repository.get(session_id)
             if document is None:
@@ -54,6 +54,7 @@ class SessionManager:
                 self.repository.save(session_id, serialize_session(session.replay, session.trading))
             else:
                 session = self._restore(document)
+
             self._sessions[session_id] = session
             return session
 
@@ -77,6 +78,7 @@ class SessionManager:
         self._validate_session_id(session_id)
         with self._lock:
             self._ensure_exists(session_id)
+
             def mutate(document):
                 session = self._restore(document)
                 result = operation(session)
