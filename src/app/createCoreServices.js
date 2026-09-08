@@ -9,15 +9,40 @@ import { RemoteTradingEngine } from './RemoteTradingEngine.js';
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const SESSION_STORAGE_KEY = 'delta-replay.session-id';
 
+function fallbackUuid() {
+  const bytes = new Uint8Array(16);
+  try {
+    if (globalThis.crypto?.getRandomValues) {
+      globalThis.crypto.getRandomValues(bytes);
+    } else {
+      const now = Date.now();
+      for (let index = 0; index < bytes.length; index += 1) {
+        bytes[index] = (now + index * 31 + Math.floor(Math.random() * 256)) & 0xff;
+      }
+    }
+  } catch {
+    const now = Date.now();
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = (now + index * 31 + Math.floor(Math.random() * 256)) & 0xff;
+    }
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function getSessionId() {
   try {
     const existing = globalThis.sessionStorage?.getItem(SESSION_STORAGE_KEY);
-    if (existing) return existing;
-    const generated = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    if (existing && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(existing)) {
+      return existing;
+    }
+    const generated = globalThis.crypto?.randomUUID?.() || fallbackUuid();
     globalThis.sessionStorage?.setItem(SESSION_STORAGE_KEY, generated);
     return generated;
   } catch {
-    return `delta-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return fallbackUuid();
   }
 }
 
