@@ -1,0 +1,70 @@
+import os
+from uuid import uuid4
+
+import pytest
+
+from app.services.paper_engine import PaperTradingEngine
+from app.services.postgres_session_repository import PostgresSessionRepository
+from app.services.replay_service import ReplayService
+from app.services.session_manager import SessionManager
+from app.services.session_state import serialize_session
+
+
+pytestmark = pytest.mark.skipif(
+    not os.getenv("DATABASE_URL"),
+    reason="DATABASE_URL is not configured",
+)
+
+
+def candle(o, h, l, c, t=1):
+    return {"open": o, "high": h, "low": l, "close": c, "time": t}
+
+
+def test_postgres_round_trip_and_revisioning():
+    repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
+    session_id = str(uuid4())
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102)])
+    replay.start(0)
+    trading = PaperTradingEngine(starting_balance=25000)
+    document = serialize_session(replay, trading)
+
+    try:
+        repository.save(session_id, document)
+        first = repository.get(session_id)
+        assert first is not None
+        assert first["version"] == document["version"]
+        assert first["revision"] == 1
+
+        second = dict(document)
+        second["replay"] = dict(second["replay"])
+        second["replay"]["speed"] = 4
+        revision = repository.save_if_revision(session_id, second, 1)
+        assert revision == 2
+        assert repository.get(session_id)["replay"]["speed"] == 4
+
+        with pytest.raises(RuntimeError, match="revision conflict"):
+            repository.save_if_revision(session_id, document, 1)
+    finally:
+        repository.delete(session_id)
+
+
+def test_postgres_manager_rehydrates_after_cache_loss():
+    repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
+    first_manager = SessionManager(repository)
+    second_manager = SessionManager(repository)
+    session_id = str(uuid4())
+
+    try:
+        state = first_manager.get(session_id)
+        state.replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
+        state.replay.start(0)
+        state.trading.on_candle(state.replay.candles[0], 0, "BTCUSDT")
+        state.trading.submit("BTCUSDT", "buy", 1)
+        first_manager.save(session_id, state)
+
+        restored = second_manager.get(session_id)
+        assert restored.replay.state() == state.replay.state()
+        assert restored.trading.export_state() == state.trading.export_state()
+    finally:
+        repository.delete(session_id)
