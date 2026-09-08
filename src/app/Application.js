@@ -4,6 +4,7 @@ import { createCoreServices } from './createCoreServices.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
 import { createPaperUI } from '../ui/PaperUI.js';
+import { renderPaperLayout } from '../ui/paper/PaperLayout.js';
 import { ChartManager } from '../chart/ChartManager.js';
 import { ChartAdapter } from '../chart/ChartAdapter.js';
 import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
@@ -50,7 +51,12 @@ export function createApplication() {
     clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
   });
 
-  // PaperUI owns layout rendering. ChartManager is created after the layout exists.
+  // Render the shell once before constructing chart handles.
+  const mount = document.getElementById('app');
+  if (!mount) throw new Error('Application mount #app is missing');
+  renderPaperLayout(mount);
+  const chartManager = new ChartManager(document.getElementById('chart-container'));
+  const chartAdapter = new ChartAdapter(replayPort, chartManager);
 
   let coordinator = null;
   let commandController = null;
@@ -90,9 +96,7 @@ export function createApplication() {
     callbacks,
   });
 
-  const chartManager = ui.chartManager;
-  const chartAdapter = ui.adapter;
-
+  // PaperUI preserves the pre-rendered shell and owns the remaining UI bindings.
   coordinator = new ReplayCoordinator({
     dataManager,
     candleStore,
