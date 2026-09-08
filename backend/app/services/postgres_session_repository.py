@@ -5,7 +5,7 @@ from typing import Optional
 import psycopg
 from psycopg.rows import dict_row
 
-from .session_repository import SessionDocument, SessionRepository
+from .session_repository import SessionDocument, SessionMutation, SessionRepository
 
 
 class PostgresSessionRepository(SessionRepository):
@@ -45,6 +45,12 @@ class PostgresSessionRepository(SessionRepository):
                 """
             )
 
+    @staticmethod
+    def _encode(document: SessionDocument) -> str:
+        clean_document = dict(document)
+        clean_document.pop("revision", None)
+        return json.dumps(clean_document, separators=(",", ":"))
+
     def get(self, session_id: str) -> Optional[SessionDocument]:
         with self._connect() as connection:
             row = connection.execute(
@@ -58,9 +64,7 @@ class PostgresSessionRepository(SessionRepository):
         return document
 
     def save(self, session_id: str, document: SessionDocument) -> None:
-        clean_document = dict(document)
-        clean_document.pop("revision", None)
-        encoded = json.dumps(clean_document, separators=(",", ":"))
+        encoded = self._encode(document)
         with self._connect() as connection:
             connection.execute(
                 """
@@ -87,9 +91,7 @@ class PostgresSessionRepository(SessionRepository):
         document: SessionDocument,
         expected_revision: int,
     ) -> int:
-        clean_document = dict(document)
-        clean_document.pop("revision", None)
-        encoded = json.dumps(clean_document, separators=(",", ":"))
+        encoded = self._encode(document)
         with self._connect() as connection:
             row = connection.execute(
                 """
@@ -105,3 +107,28 @@ class PostgresSessionRepository(SessionRepository):
             if row is None:
                 raise RuntimeError("session revision conflict")
             return int(row["revision"])
+
+    def atomic_update(self, session_id: str, mutation: SessionMutation[T]) -> T:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT state, revision FROM replay_sessions WHERE session_id = %s FOR UPDATE",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"session {session_id} not found")
+
+            document = dict(row["state"])
+            document["revision"] = row["revision"]
+            updated, result = mutation(document)
+            encoded = self._encode(updated)
+            connection.execute(
+                """
+                UPDATE replay_sessions
+                SET state = %s::jsonb,
+                    revision = revision + 1,
+                    updated_at = NOW()
+                WHERE session_id = %s
+                """,
+                (encoded, session_id),
+            )
+            return result
