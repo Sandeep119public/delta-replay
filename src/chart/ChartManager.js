@@ -5,12 +5,13 @@ export const CHART_THEMES = {
   dark: { layout: { background: { type: ColorType.Solid, color: '#0b0f17' }, textColor: '#94a3b8' }, grid: { vertLines: { color: 'rgba(30, 41, 59, 0.5)' }, horzLines: { color: 'rgba(30, 41, 59, 0.5)' } }, crosshair: { vertLine: { color: '#475569', labelBackgroundColor: '#0284c7' }, horzLine: { color: '#475569', labelBackgroundColor: '#0284c7' } }, timeScale: { borderColor: '#1e293b' }, rightPriceScale: { borderColor: '#1e293b' }, series: { upColor: '#10b981', downColor: '#ef4444', borderUpColor: '#10b981', borderDownColor: '#ef4444', wickUpColor: '#10b981', wickDownColor: '#ef4444' } },
   paper: { layout: { background: { type: ColorType.Solid, color: '#fbf8f1' }, textColor: '#756d62' }, grid: { vertLines: { color: 'rgba(191, 179, 162, 0.28)' }, horzLines: { color: 'rgba(191, 179, 162, 0.28)' } }, crosshair: { vertLine: { color: '#9b9286', labelBackgroundColor: '#315f8c' }, horzLine: { color: '#9b9286', labelBackgroundColor: '#315f8c' } }, timeScale: { borderColor: '#d7cebf' }, rightPriceScale: { borderColor: '#d7cebf' }, series: { upColor: '#2f7d58', downColor: '#b44842', borderUpColor: '#2f7d58', borderDownColor: '#b44842', wickUpColor: '#2f7d58', wickDownColor: '#b44842' } },
   light: { layout: { background: { type: ColorType.Solid, color: '#ffffff' }, textColor: '#475569' }, grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } }, crosshair: { vertLine: { color: '#94a3b8', labelBackgroundColor: '#2563eb' }, horzLine: { color: '#94a3b8', labelBackgroundColor: '#2563eb' } }, timeScale: { borderColor: '#e2e8f0' }, rightPriceScale: { borderColor: '#e2e8f0' }, series: { upColor: '#16a34a', downColor: '#dc2626', borderUpColor: '#16a34a', borderDownColor: '#dc2626', wickUpColor: '#16a34a', wickDownColor: '#dc2626' } },
-  midnight: { layout: { background: { type: ColorType.Solid, color: '#030712' }, textColor: '#64748b' }, grid: { vertLines: { color: 'rgba(31, 41, 55, 0.4)' }, horzLines: { color: 'rgba(31, 41, 55, 0.4)' } }, crosshair: { vertLine: { color: '#374151', labelBackgroundColor: '#0ea5e9' }, horzLine: { color: '#374151', labelBackgroundColor: '#0ea5e9' } }, timeScale: { borderColor: '#1f2937' }, rightPriceScale: { borderColor: '#1f2937' }, series: { upColor: '#10b981', downColor: '#ef4444', borderUpColor: '#10b981', borderDownColor: '#ef4444', wickUpColor: '#10b981', wickDownColor: '#ef4444' } },
-  colorblind: { layout: { background: { type: ColorType.Solid, color: '#0b0d12' }, textColor: '#94a3b8' }, grid: { vertLines: { color: 'rgba(36, 41, 51, 0.6)' }, horzLines: { color: 'rgba(36, 41, 51, 0.6)' } }, crosshair: { vertLine: { color: '#475569', labelBackgroundColor: '#3b82f6' }, horzLine: { color: '#475569', labelBackgroundColor: '#3b82f6' } }, timeScale: { borderColor: '#242933' }, rightPriceScale: { borderColor: '#242933' }, series: { upColor: '#60a5fa', downColor: '#fb923c', borderUpColor: '#60a5fa', borderDownColor: '#60a5fa', wickUpColor: '#60a5fa', wickDownColor: '#fb923c' } },
+  midnight: { layout: { background: { type: ColorType.Solid, color: '#030712' }, textColor: '#64748b' }, grid: { vertLines: { color: 'rgba(31, 41, 55, 0.4)' }, horzLines: { color: 'rgba(31, 41, 55, 0.4)' } }, crosshair: { vertLine: { color: '#374151', labelBackgroundColor: '#0ea5e9' }, horzLine: { color: '#374151', labelBackgroundColor: '#0ea5e9' } }, timeScale: { borderColor: '#1f2937' }, rightPriceScale: { borderColor: '#1f2937' }, series: { upColor: '#10b981', downColor: '#ef4444', borderUpColor: '#10b981', borderDownColor: '#ef4444', wickUpColor: '#10b981', wickDownColor: '#10b981' } },
+  colorblind: { layout: { background: { type: ColorType.Solid, color: '#0b0d12' }, textColor: '#94a3b8' }, grid: { vertLines: { color: 'rgba(36, 41, 51, 0.6)' }, horzLines: { color: 'rgba(36, 41, 51, 0.6)' } }, crosshair: { vertLine: { color: '#475569', labelBackgroundColor: '#3b82f6' }, horzLine: { color: '#475569', labelBackgroundColor: '#3b82f6' } }, timeScale: { borderColor: '#242933' }, rightPriceScale: { borderColor: '#242933' }, series: { upColor: '#60a5fa', downColor: '#fb923c', borderUpColor: '#60a5fa', borderDownColor: '#fb923c', wickUpColor: '#60a5fa', wickDownColor: '#fb923c' } },
 };
 
 export class ChartManager {
-  constructor(container = null) {
+  constructor(container) {
+    if (!container) throw new Error('ChartManager requires container element');
     this.container = container;
     this.chart = null;
     this.series = null;
@@ -22,8 +23,13 @@ export class ChartManager {
 
   init(initialTheme = null) {
     if (this._destroyed || this.chart) return;
-    this.container ||= typeof document !== 'undefined' ? document.getElementById('chart-container') : null;
-    if (!this.container) throw new Error('ChartManager requires chart-container element');
+    // PaperUI rebuilds its mount tree during composition. Always bind the
+    // chart to the currently connected element rather than a detached node.
+    if (typeof document !== 'undefined') {
+      const liveContainer = document.getElementById('chart-container');
+      if (liveContainer) this.container = liveContainer;
+    }
+    if (!this.container || !this.container.isConnected) throw new Error('ChartManager requires connected chart-container element');
     const currentThemeName = initialTheme || (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark';
     const config = CHART_THEMES[currentThemeName] || CHART_THEMES.dark;
     this.chart = createChart(this.container, {
