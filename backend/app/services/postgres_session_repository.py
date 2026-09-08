@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import psycopg
 from psycopg.rows import dict_row
@@ -36,6 +36,12 @@ class PostgresSessionRepository(SessionRepository):
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS replay_sessions_updated_at_idx
+                    ON replay_sessions (updated_at)
                 """
             )
 
