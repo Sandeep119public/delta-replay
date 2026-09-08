@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..models import CandleBatch
 from ..services.paper_engine import PaperTradingEngine
-from ..services.session_manager import get_session
+from ..services.session_manager import get_session, persist_session
 
 router = APIRouter()
 
@@ -21,21 +21,29 @@ def load(request: Request, batch: CandleBatch):
     balance = session.trading.account.starting_balance
     fee_rate = session.trading.fee_rate
     session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate)
-    return session.replay.load([c.model_dump() for c in batch.candles])
+    result = session.replay.load([c.model_dump() for c in batch.candles])
+    persist_session(request, session)
+    return result
 
 
 @router.post("/start/{index}")
 def start(request: Request, index: int):
+    session = get_session(request)
     try:
-        return get_session(request).replay.start(index)
+        result = session.replay.start(index)
+        persist_session(request, session)
+        return result
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/step")
 def step(request: Request):
+    session = get_session(request)
     try:
-        return get_session(request).replay.step()
+        result = session.replay.step()
+        persist_session(request, session)
+        return result
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -46,11 +54,16 @@ def seek(request: Request, index: int):
     if session.trading.has_open_position() or session.trading.pending_orders():
         raise HTTPException(409, "Close positions and cancel pending orders before seeking")
     try:
-        return session.replay.seek(index)
+        result = session.replay.seek(index)
+        persist_session(request, session)
+        return result
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/reset")
 def reset(request: Request):
-    return get_session(request).replay.reset()
+    session = get_session(request)
+    result = session.replay.reset()
+    persist_session(request, session)
+    return result
