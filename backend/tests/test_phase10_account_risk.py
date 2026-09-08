@@ -29,25 +29,25 @@ def test_initial_margin_is_based_on_entry_not_mark_price():
 
 def test_available_margin_exposes_negative_free_margin():
     engine = PaperTradingEngine(fee_rate=0, margin_rate=0.1, maint_margin_rate=0.05)
-    open_position(engine, quantity=10, entry=1000)
+    open_position(engine, quantity=100, entry=1000)
 
     engine.mark("BTCUSDT", 900)
     account = engine.snapshot()["account"]
 
     assert account["equity"] == pytest.approx(0)
-    assert account["usedMargin"] == pytest.approx(1000)
-    assert account["availableMargin"] == pytest.approx(-1000)
+    assert account["usedMargin"] == pytest.approx(10000)
+    assert account["availableMargin"] == pytest.approx(-10000)
 
 
 def test_liquidation_uses_marked_maintenance_margin():
     engine = PaperTradingEngine(fee_rate=0, margin_rate=0.1, maint_margin_rate=0.05)
-    open_position(engine, quantity=10, entry=1000)
+    open_position(engine, quantity=100, entry=1000)
 
     events = engine.on_candle(candle(940, 940, 940, 940, 2), 2)
 
     assert "BTCUSDT" not in engine.positions
     assert any(event["type"] == "LIQUIDATION" for event in events)
-    assert engine.account.wallet_balance == pytest.approx(400)
+    assert engine.account.wallet_balance == pytest.approx(4000)
 
 
 def test_entry_fee_is_realized_immediately_and_account_identity_holds():
