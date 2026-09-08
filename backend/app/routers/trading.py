@@ -6,7 +6,7 @@ from typing import Literal
 
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
-from ..services.session_manager import get_session, persist_session
+from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
 
@@ -49,8 +49,8 @@ def snapshot(service: PaperTradingEngine):
     return service.snapshot()
 
 
-def replay_candle(request: Request, symbol: str):
-    candle = get_session(request).replay.state().get("candle")
+def replay_candle(session, symbol: str):
+    candle = session.replay.state().get("candle")
     if not candle:
         raise HTTPException(409, "Load data and start replay before trading")
     return candle
@@ -99,9 +99,8 @@ def trades(request: Request):
 
 @router.post("/order")
 def order(request: Request, command: EngineOrder):
-    session = get_session(request)
-    service = session.trading
-    try:
+    def submit(session):
+        service = session.trading
         created = service.submit(
             command.symbol,
             command.side,
@@ -110,17 +109,18 @@ def order(request: Request, command: EngineOrder):
             command.limitPrice,
             command.stopPrice,
         )
-        persist_session(request, session)
         return {"order": created, **snapshot(service)}
+
+    try:
+        return atomic_session(request, submit)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/close")
 def close(request: Request, command: CloseRequest):
-    session = get_session(request)
-    try:
-        candle = replay_candle(request, command.symbol)
+    def close_position(session):
+        candle = replay_candle(session, command.symbol)
         trade = session.trading.close(
             command.symbol,
             float(candle["close"]),
@@ -129,85 +129,89 @@ def close(request: Request, command: CloseRequest):
         )
         if not trade:
             raise HTTPException(422, "no open position")
-        persist_session(request, session)
         return {"trade": trade, **snapshot(session.trading)}
+
+    try:
+        return atomic_session(request, close_position)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/orders/{order_id}/cancel")
 def cancel(request: Request, order_id: int):
-    session = get_session(request)
     try:
-        order_result = session.trading.cancel(order_id)
-        persist_session(request, session)
-        return {"order": order_result, **snapshot(session.trading)}
+        return atomic_session(
+            request,
+            lambda session: {"order": session.trading.cancel(order_id), **snapshot(session.trading)},
+        )
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/risk")
 def risk(request: Request, command: RiskRequest):
-    session = get_session(request)
     try:
-        position = session.trading.set_risk(command.symbol, command.stopLoss, command.takeProfit)
-        persist_session(request, session)
-        return {"position": position, **snapshot(session.trading)}
+        return atomic_session(
+            request,
+            lambda session: {
+                "position": session.trading.set_risk(command.symbol, command.stopLoss, command.takeProfit),
+                **snapshot(session.trading),
+            },
+        )
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/risk/clear")
 def clear_risk(request: Request, symbol: str):
-    session = get_session(request)
     try:
-        position = session.trading.clear_risk(symbol)
-        persist_session(request, session)
-        return {"position": position, **snapshot(session.trading)}
+        return atomic_session(
+            request,
+            lambda session: {
+                "position": session.trading.clear_risk(symbol),
+                **snapshot(session.trading),
+            },
+        )
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/candle")
 def process(request: Request, command: MarketCandleRequest | None = None):
-    session = get_session(request)
     command = command or MarketCandleRequest()
-    raw = command.candle.model_dump() if command.candle is not None else replay_candle(request, command.symbol)
-    candle = normalize_candle(raw)
-    index = command.index if command.index is not None else session.replay.state()["index"]
-    events = session.trading.on_candle(candle, index, command.symbol)
-    persist_session(request, session)
-    return {"events": events, "candle": candle, **snapshot(session.trading)}
+
+    def process_candle(session):
+        raw = command.candle.model_dump() if command.candle is not None else replay_candle(session, command.symbol)
+        candle = normalize_candle(raw)
+        index = command.index if command.index is not None else session.replay.state()["index"]
+        events = session.trading.on_candle(candle, index, command.symbol)
+        return {"events": events, "candle": candle, **snapshot(session.trading)}
+
+    return atomic_session(request, process_candle)
 
 
 @router.post("/account/capital")
 def set_capital(request: Request, command: CapitalRequest):
-    session = get_session(request)
     try:
-        result = snapshot(session.trading.set_starting_balance(command.balance))
-        persist_session(request, session)
-        return result
+        return atomic_session(request, lambda session: snapshot(session.trading.set_starting_balance(command.balance)))
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/account/fee-rate")
 def set_fee_rate(request: Request, command: FeeRateRequest):
-    session = get_session(request)
     try:
-        result = snapshot(session.trading.set_fee_rate(command.rate))
-        persist_session(request, session)
-        return result
+        return atomic_session(request, lambda session: snapshot(session.trading.set_fee_rate(command.rate)))
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/reset")
 def reset(request: Request):
-    session = get_session(request)
-    balance = session.trading.account.starting_balance
-    fee_rate = session.trading.fee_rate
-    session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate)
-    result = snapshot(session.trading)
-    persist_session(request, session)
-    return result
+    def reset_engine(session):
+        balance = session.trading.account.starting_balance
+        fee_rate = session.trading.fee_rate
+        session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate)
+        return snapshot(session.trading)
+
+    return atomic_session(request, reset_engine)
