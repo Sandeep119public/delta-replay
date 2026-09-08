@@ -1,6 +1,6 @@
 class Events{constructor(){this.m=new Map()}on(e,h){const s=this.m.get(e)||new Set();s.add(h);this.m.set(e,s);return()=>s.delete(h)}emit(e,p){for(const h of this.m.get(e)||[])h(p)}}
 export class RemoteTradingEngine{
- constructor(api){this.api=api;this.events=new Events();this.data={account:{},positions:[],orders:[],trades:[]};this.latestCandle=null}
+ constructor(api){this.api=api;this.events=new Events();this.data={account:{},positions:[],orders:[],trades:[]};this.latestCandle=null;this.refresh().catch(()=>{})}
  async _request(path,options){const r=await this.api.request(path,options);this._sync(r);return r}
  _sync(r){if(r&&r.account)this.data={...this.data,...r};this.events.emit('stateChanged',this.getAccountSnapshot())}
  async refresh(){return this._request('/state')}
