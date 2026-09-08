@@ -17,24 +17,6 @@ import { createDatasetView, createCandleView, createReplayStatusView } from './D
 import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
 
-function createReplayCapabilities() {
-  let coordinator = null;
-  return Object.freeze({
-    capabilities: Object.freeze({
-      load: (options = {}) => coordinator?.loadAndPrepareReplay(options),
-      preview: (index) => coordinator?.updatePreviewWindow?.(index),
-      changeDataset: (kind, value, sourceEl) => coordinator?.handleSymbolTimeframeChange(kind, value, sourceEl),
-    }),
-    attach(nextCoordinator) { coordinator = nextCoordinator; },
-  });
-}
-
-function requireElement(id, root = document) {
-  const element = root.getElementById?.(id) || root.querySelector?.('#' + id);
-  if (!element) throw new Error(`Required element #${id} is missing`);
-  return element;
-}
-
 function registerActionGuard(engine, canTrade, reportError) {
   return engine.registerActionGuard((action) => {
     if (!canTrade()) return { allowed: true };
@@ -52,6 +34,26 @@ function bindDatasetSelectors(ui, actions) {
     ui.timeframeSelector.onChange((timeframe) => actions.changeDataset('timeframe', timeframe, ui.el('timeframe-select'))),
   ];
   return { destroy() { unbinds.forEach((unbind) => { try { unbind?.(); } catch {} }); } };
+}
+
+export { createReplayCapabilities, requireElement };
+
+function createReplayCapabilities() {
+  let coordinator = null;
+  return Object.freeze({
+    capabilities: Object.freeze({
+      load: (options = {}) => coordinator?.loadAndPrepareReplay(options),
+      preview: (index) => coordinator?.updatePreviewWindow?.(index),
+      changeDataset: (kind, value, sourceEl) => coordinator?.handleSymbolTimeframeChange(kind, value, sourceEl),
+    }),
+    attach(nextCoordinator) { coordinator = nextCoordinator; },
+  });
+}
+
+function requireElement(id, root = document) {
+  const element = root.getElementById?.(id) || root.querySelector?.('#' + id);
+  if (!element) throw new Error(`Required element #${id} is missing`);
+  return element;
 }
 
 export function createApplication() {
