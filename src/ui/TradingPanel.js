@@ -137,6 +137,8 @@ export class TradingPanel {
       if (pill) { pill.textContent = inPos ? p.side : 'FLAT'; pill.className = `pos-state-pill ${inPos ? (p.side === 'LONG' ? 'is-long' : 'is-short') : 'is-flat'}`; }
       if (hint) hint.textContent = inPos ? `${p.side} ${p.quantity} · uPnL ${Number(p.unrealizedPnL) >= 0 ? '+' : ''}$${Number(p.unrealizedPnL).toFixed(2)}` : 'FLAT • Pick a size';
       const fmt = (v) => { const n = Number(v); return Number.isFinite(n) ? `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}` : '—'; };
+      const riskDetails = document.querySelector('.risk-details');
+      if (riskDetails) riskDetails.open = inPos;
       if (flatSummary) flatSummary.classList.toggle('hidden', !inPos);
       if (inPos) { if (fEntry) fEntry.textContent = fmt(p.entryPrice); if (fMark) fMark.textContent = fmt(p.currentPrice); if (fPnl) { fPnl.textContent = `${Number(p.unrealizedPnL) >= 0 ? '+' : ''}${fmt(p.unrealizedPnL)}`; fPnl.className = `num ${Number(p.unrealizedPnL) >= 0 ? 'pnl-pos' : 'pnl-neg'}`; } }
       if (this.closeBtn) this.closeBtn.textContent = inPos ? `FLATTEN ${p.side} ${p.quantity}` : 'CLOSE POSITION';
