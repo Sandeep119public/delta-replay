@@ -73,11 +73,9 @@ export class ReplayControls {
     const total = this.replayPort.getTotalCandles?.() ?? this.replayPort.getState()?.totalCandles ?? 0;
     const valid = Number.isInteger(n) && n >= 0 && n < total;
     if (valid) {
-      this.startReplayBtn.dataset.startIndex = String(n);
-      this.startReplayBtn.disabled = false;
+      if (this.startReplayBtn) { this.startReplayBtn.dataset.startIndex = String(n); this.startReplayBtn.disabled = false; }
     } else {
-      delete this.startReplayBtn.dataset.startIndex;
-      this.startReplayBtn.disabled = true;
+      if (this.startReplayBtn) { delete this.startReplayBtn.dataset.startIndex; this.startReplayBtn.disabled = true; }
     }
     return valid;
   }
@@ -101,7 +99,7 @@ export class ReplayControls {
       document.body?.classList?.toggle('velocity-boost', Number(state.speed) >= 5);
     } catch {}
 
-    if (this.startReplayBtn) this.startReplayBtn.disabled = !hasData || !isReady;
+    if (this.startReplayBtn) this.startReplayBtn.disabled = !hasData || !isReady || Number.isNaN(Number(this.startReplayBtn.dataset.startIndex));
     if (this.startReplayBtn) this.startReplayBtn.textContent = isReady ? 'START REPLAY' : (isPlaying ? 'PAUSE' : isPaused ? 'RESUME' : isEnded ? 'REPLAY AGAIN' : 'START REPLAY');
 
     if (isPlaying) {
