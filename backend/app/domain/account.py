@@ -1,4 +1,3 @@
-from copy import deepcopy
 from math import isfinite, isclose
 
 
