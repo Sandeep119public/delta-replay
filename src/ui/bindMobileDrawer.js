@@ -4,11 +4,20 @@ export function bindMobileDrawer() {
   const tradingPanelEl = document.getElementById('trading-panel');
 
   let previousFocus = null;
+  const mobileQuery = window.matchMedia?.('(max-width: 1024px)');
+  const isMobileDrawer = () => mobileQuery ? mobileQuery.matches : window.innerWidth <= 1024;
 
   const announce = (message) => { const live = document.getElementById('accessibility-live'); if (live) live.textContent = message; };
-  const getFocusable = () => [...tradingPanelEl?.querySelectorAll?.('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || []].filter((el) => !el.closest('[hidden]'));
+  const getFocusable = () => [...tradingPanelEl?.querySelectorAll?.('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || []].filter((el) => !el.closest('[hidden], .hidden, .compat-control'));
 
   const setDrawer = (open) => {
+    if (!isMobileDrawer()) {
+      document.body.classList.remove('drawer-open');
+      drawerBtn?.setAttribute('aria-expanded', 'false');
+      scrim?.setAttribute('aria-hidden', 'true');
+      tradingPanelEl?.removeAttribute('aria-hidden');
+      return;
+    }
     const isOpen = !!open;
     if (isOpen && !document.body.classList.contains('drawer-open')) previousFocus = document.activeElement;
     document.body.classList.toggle('drawer-open', isOpen);
@@ -19,8 +28,9 @@ export function bindMobileDrawer() {
     else { announce('Trading panel closed'); if (previousFocus?.focus) requestAnimationFrame(() => previousFocus.focus()); previousFocus = null; }
   };
 
-  const onDrawerClick = () => setDrawer(!document.body.classList.contains('drawer-open'));
-  const onScrimClick = () => setDrawer(false);
+  const onDrawerClick = () => { if (isMobileDrawer()) setDrawer(!document.body.classList.contains('drawer-open')); };
+  const onScrimClick = () => { if (isMobileDrawer()) setDrawer(false); };
+  const onViewportChange = () => setDrawer(false);
   const onKeyDown = (event) => {
     if (event.key === 'Escape' && document.body.classList.contains('drawer-open')) { event.preventDefault(); setDrawer(false); return; }
     if (event.key === 'Tab' && document.body.classList.contains('drawer-open')) { const focusable = getFocusable(); if (!focusable.length) return; const first = focusable[0], last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
@@ -29,6 +39,7 @@ export function bindMobileDrawer() {
   drawerBtn?.addEventListener('click', onDrawerClick);
   scrim?.addEventListener('click', onScrimClick);
   document.addEventListener('keydown', onKeyDown);
+  mobileQuery?.addEventListener?.('change', onViewportChange);
 
   let swipeStartY = null;
   const onTouchStart = (e) => {
@@ -56,6 +67,7 @@ export function bindMobileDrawer() {
       drawerBtn?.removeEventListener('click', onDrawerClick);
       scrim?.removeEventListener('click', onScrimClick);
       document.removeEventListener('keydown', onKeyDown);
+      mobileQuery?.removeEventListener?.('change', onViewportChange);
       tradingPanelEl?.removeEventListener('touchstart', onTouchStart);
       tradingPanelEl?.removeEventListener('touchend', onTouchEnd);
     },
