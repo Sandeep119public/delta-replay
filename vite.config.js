@@ -1,9 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // GitHub Pages hosts under /delta-replay/, not / . Base must be set so
-  // dist/index.html asset URLs become /delta-replay/assets/... not /assets/...
-  base: '/delta-replay/',
+  // Cloudflare Workers serves the app from the domain root.
+  base: '/',
   server: {
     port: 5174,
     open: false
