@@ -14,7 +14,10 @@
     "test:ui-contracts": "node --test tests/architecture/ui-contracts.test.js",
     "check": "npm run test:architecture:graph && npm run test:architecture && npm run test:ui-contracts && npm run test && npm run build",
     "vibe": "npm run check",
-    "dev:host": "vite --host 0.0.0.0"
+    "dev:host": "vite --host 0.0.0.0",
+    "vibe:quick": "npm run test:ui-contracts && npm run test:architecture",
+    "vibe:full": "npm run check",
+    "vibe:dev": "npm run dev:host"
   },
   "dependencies": {
     "lightweight-charts": "4.2.3"
