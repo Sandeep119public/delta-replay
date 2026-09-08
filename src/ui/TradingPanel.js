@@ -12,7 +12,7 @@ export class TradingPanel {
     posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
     qtyInput, buyBtn, sellBtn, closeBtn, resetBtn,
     tradesListEl, errorEl,
-    orderTypeSelect, limitPriceInput, stopPriceInput, pendingListEl,
+    orderTypeSelect, limitPriceInput, stopPriceInput, limitPriceRow, stopPriceRow, advancedToggle, pendingListEl,
     posSlEl, posTpEl, slInput, tpInput, setRiskBtn, clearRiskBtn
   }) {
     this.trading = assertTradingPresentation(trading);
@@ -27,12 +27,13 @@ export class TradingPanel {
     this.posSymbolEl = posSymbolEl; this.posSideEl = posSideEl; this.posQtyEl = posQtyEl; this.posEntryEl = posEntryEl; this.posCurrentEl = posCurrentEl; this.posPnlEl = posPnlEl;
     this.qtyInput = qtyInput; this.buyBtn = buyBtn; this.sellBtn = sellBtn; this.closeBtn = closeBtn; this.resetBtn = resetBtn; this.tradesListEl = tradesListEl;
     this.orderTypeSelect = orderTypeSelect || getEl('order-type'); this.limitPriceInput = limitPriceInput || getEl('limit-price'); this.stopPriceInput = stopPriceInput || getEl('stop-price');
+    this.limitPriceRow = limitPriceRow || getEl('limit-price-row'); this.stopPriceRow = stopPriceRow || getEl('stop-price-row'); this.advancedToggle = advancedToggle || getEl('advanced-toggle');
     this.pendingListEl = pendingListEl || getEl('pending-orders-list'); this.posSlEl = posSlEl || getEl('pos-sl'); this.posTpEl = posTpEl || getEl('pos-tp');
     this.slInput = slInput || getEl('sl-price'); this.tpInput = tpInput || getEl('tp-price'); this.setRiskBtn = setRiskBtn || getEl('btn-set-risk'); this.clearRiskBtn = clearRiskBtn || getEl('btn-clear-risk');
 
     const common = { trading: this.trading };
     this.accountSummaryView = new AccountSummaryView({ ...common, balanceEl: this.balanceEl, equityEl: this.equityEl, realizedEl: this.realizedEl, unrealizedEl: this.unrealizedEl, feesEl: this.feesEl, resetBtn: this.resetBtn, onError: (msg) => this.showError(msg), onRender: () => this.render() });
-    this.orderFormView = new OrderFormView({ ...common, qtyInput: this.qtyInput, buyBtn: this.buyBtn, sellBtn: this.sellBtn, orderTypeSelect: this.orderTypeSelect, limitPriceInput: this.limitPriceInput, stopPriceInput: this.stopPriceInput, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
+    this.orderFormView = new OrderFormView({ ...common, qtyInput: this.qtyInput, buyBtn: this.buyBtn, sellBtn: this.sellBtn, orderTypeSelect: this.orderTypeSelect, limitPriceInput: this.limitPriceInput, stopPriceInput: this.stopPriceInput, limitPriceRow: this.limitPriceRow, stopPriceRow: this.stopPriceRow, advancedToggle: this.advancedToggle, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
     this.positionView = new PositionView({ ...common, posSymbolEl: this.posSymbolEl, posSideEl: this.posSideEl, posQtyEl: this.posQtyEl, posEntryEl: this.posEntryEl, posCurrentEl: this.posCurrentEl, posPnlEl: this.posPnlEl, posSlEl: this.posSlEl, posTpEl: this.posTpEl, closeBtn: this.closeBtn, setRiskBtn: this.setRiskBtn, clearRiskBtn: this.clearRiskBtn, slInput: this.slInput, tpInput: this.tpInput, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
     this.tradeLogView = new TradeLogView({ trading: this.trading, tradesListEl: this.tradesListEl, pendingListEl: this.pendingListEl, onError: (msg) => this.showError(msg), onRender: () => this.render() });
 
@@ -111,13 +112,13 @@ export class TradingPanel {
       const inPos = positions.length > 0, p = positions[0];
       const ticket = document.getElementById('order-ticket'), hint = document.getElementById('ticket-state-hint'), pill = document.getElementById('pos-state-pill');
       const flatSummary = document.getElementById('ticket-flatten-summary'), fEntry = document.getElementById('flatten-entry'), fMark = document.getElementById('flatten-mark'), fPnl = document.getElementById('flatten-pnl');
-      if (ticket) { ticket.classList.toggle('is-flat', !inPos); ticket.classList.toggle('is-in-position', inPos); ticket.classList.toggle(`is-${String(p?.side || 'flat').toLowerCase()}`, true); }
+      if (ticket) { ticket.classList.toggle('is-flat', !inPos); ticket.classList.toggle('is-in-position', inPos); ticket.classList.remove('is-long', 'is-short'); if (inPos) ticket.classList.add(`is-${String(p.side || '').toLowerCase()}`); }
       if (document.body) { document.body.classList.toggle('has-position', inPos); document.body.classList.toggle('is-flat', !inPos); }
       if (pill) { pill.textContent = inPos ? p.side : 'FLAT'; pill.className = `pos-state-pill ${inPos ? (p.side === 'LONG' ? 'is-long' : 'is-short') : 'is-flat'}`; }
-      if (hint) hint.textContent = inPos ? `${p.side} ${p.quantity} · uPnL ${Number(p.unrealizedPnL) >= 0 ? '+' : ''}$${Number(p.unrealizedPnL).toFixed(2)}` : 'FLAT — pick a size';
+      if (hint) hint.textContent = inPos ? `${p.side} ${p.quantity} · uPnL ${Number(p.unrealizedPnL) >= 0 ? '+' : ''}$${Number(p.unrealizedPnL).toFixed(2)}` : 'FLAT • Pick a size';
       const fmt = (v) => { const n = Number(v); return Number.isFinite(n) ? `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}` : '—'; };
       if (flatSummary) flatSummary.classList.toggle('hidden', !inPos);
-      if (inPos) { if (fEntry) fEntry.textContent = fmt(p.entryPrice); if (fMark) fMark.textContent = fmt(p.currentPrice); if (fPnl) { fPnl.textContent = `${Number(p.unrealizedPnL) >= 0 ? '+' : ''}${fmt(p.unrealizedPnL).replace('$', '$')}`; fPnl.className = `num ${Number(p.unrealizedPnL) >= 0 ? 'pnl-pos' : 'pnl-neg'}`; } }
+      if (inPos) { if (fEntry) fEntry.textContent = fmt(p.entryPrice); if (fMark) fMark.textContent = fmt(p.currentPrice); if (fPnl) { fPnl.textContent = `${Number(p.unrealizedPnL) >= 0 ? '+' : ''}${fmt(p.unrealizedPnL)}`; fPnl.className = `num ${Number(p.unrealizedPnL) >= 0 ? 'pnl-pos' : 'pnl-neg'}`; } }
       if (this.closeBtn) this.closeBtn.textContent = inPos ? `FLATTEN ${p.side} ${p.quantity}` : 'CLOSE POSITION';
       const fillsEl = document.getElementById('ticket-fills-list');
       if (fillsEl) fillsEl.innerHTML = trades.length ? trades.slice(-3).reverse().map(t => { const net = t.netPnL ?? t.realizedPnL ?? 0; const cls = net >= 0 ? 'pnl-pos' : 'pnl-neg'; return `<div class="trade-row"><span class="num">${t.symbol} ${t.side} ${t.quantity}</span><span class="num ${cls}">${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}</span></div>`; }).join('') : '<span class="empty-hint">No fills yet</span>';

@@ -166,6 +166,9 @@ function createPaperTerminalViews(ctx) {
     orderTypeSelect: orderTypeSelect || el('order-type'),
     limitPriceInput: limitPriceInput || el('limit-price'),
     stopPriceInput: stopPriceInput || el('stop-price'),
+    limitPriceRow: el('limit-price-row'),
+    stopPriceRow: el('stop-price-row'),
+    advancedToggle: el('advanced-toggle'),
     pendingListEl: el('pending-orders-list'),
     posSlEl: el('pos-sl'),
     posTpEl: el('pos-tp'),
@@ -174,17 +177,6 @@ function createPaperTerminalViews(ctx) {
     setRiskBtn: el('btn-set-risk'),
     clearRiskBtn: el('btn-clear-risk'),
   });
-
-  if (tradingPanel.orderFormView) {
-    tradingPanel.orderFormView.limitPriceRow = el('limit-price-row');
-    tradingPanel.orderFormView.stopPriceRow = el('stop-price-row');
-    tradingPanel.orderFormView.advancedToggle = el('advanced-toggle');
-    tradingPanel.orderFormView.listen?.(tradingPanel.orderFormView.advancedToggle, 'click', () => {
-      tradingPanel.orderFormView.advanced = !tradingPanel.orderFormView.advanced;
-      tradingPanel.orderFormView.updateAdvancedUI();
-      tradingPanel.orderFormView.updateOrderTypeUI();
-    });
-  }
 
   return { sparkline, toastView, floatingPosView, dateSelector, tradingPanel };
 }
