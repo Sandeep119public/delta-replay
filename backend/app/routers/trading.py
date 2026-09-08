@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Literal
-from ..models import OrderRequest, Candle
+from ..models import OrderRequest
 from ..services.paper_engine import PaperTradingEngine
 from .replay import service as replay_service
 
@@ -14,13 +14,32 @@ class RiskRequest(BaseModel):
 class CloseRequest(BaseModel):
     quantity: float|None=None
 class MarketCandleRequest(BaseModel):
-    candle: Candle|None=None
+    candle: dict|None=None
     index: int|None=None
 
 def snapshot(): return service.snapshot()
 def candle():
     c=replay_service.state().get("candle")
     if not c: raise HTTPException(409,"Load data and start replay before trading")
+    return c
+
+def normalize_candle(raw):
+    if not isinstance(raw,dict): raise HTTPException(422,"candle must be an object")
+    try:
+        c={
+            "time": int(float(raw.get("time"))),
+            "open": float(raw.get("open")),
+            "high": float(raw.get("high")),
+            "low": float(raw.get("low")),
+            "close": float(raw.get("close")),
+            "volume": float(raw.get("volume",0) or 0),
+        }
+    except (TypeError,ValueError):
+        raise HTTPException(422,"candle must contain numeric time/open/high/low/close/volume fields")
+    if c["time"] < 0 or any(not __import__('math').isfinite(v) for v in c.values() if isinstance(v,(int,float))):
+        raise HTTPException(422,"candle contains non-finite or invalid numeric values")
+    if c["high"] < max(c["open"],c["close"]) or c["low"] > min(c["open"],c["close"]) or c["high"] < c["low"]:
+        raise HTTPException(422,"candle OHLC values are inconsistent")
     return c
 
 @router.get("/state")
@@ -53,7 +72,7 @@ def risk(request:RiskRequest):
 @router.post("/candle")
 def process(request: MarketCandleRequest|None = None):
     request = request or MarketCandleRequest()
-    c = request.candle.model_dump() if request.candle is not None else candle()
+    c = normalize_candle(request.candle) if request.candle is not None else normalize_candle(candle())
     index = request.index if request.index is not None else replay_service.state()["index"]
     events=service.on_candle(c,index)
     return {"events":events,**snapshot()}
