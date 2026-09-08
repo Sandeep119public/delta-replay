@@ -13,7 +13,8 @@ export class TradingPanel {
     qtyInput, buyBtn, sellBtn, closeBtn, resetBtn,
     tradesListEl, errorEl,
     orderTypeSelect, limitPriceInput, stopPriceInput, limitPriceRow, stopPriceRow, advancedToggle, pendingListEl,
-    posSlEl, posTpEl, slInput, tpInput, setRiskBtn, clearRiskBtn
+    posSlEl, posTpEl, slInput, tpInput, setRiskBtn, clearRiskBtn,
+    getSymbol = () => 'BTCUSDT',
   }) {
     this.trading = assertTradingPresentation(trading);
     this.tradingEvents = tradingEvents;
@@ -33,7 +34,7 @@ export class TradingPanel {
 
     const common = { trading: this.trading };
     this.accountSummaryView = new AccountSummaryView({ ...common, balanceEl: this.balanceEl, equityEl: this.equityEl, realizedEl: this.realizedEl, unrealizedEl: this.unrealizedEl, feesEl: this.feesEl, resetBtn: this.resetBtn, onError: (msg) => this.showError(msg), onRender: () => this.render() });
-    this.orderFormView = new OrderFormView({ ...common, qtyInput: this.qtyInput, buyBtn: this.buyBtn, sellBtn: this.sellBtn, orderTypeSelect: this.orderTypeSelect, limitPriceInput: this.limitPriceInput, stopPriceInput: this.stopPriceInput, limitPriceRow: this.limitPriceRow, stopPriceRow: this.stopPriceRow, advancedToggle: this.advancedToggle, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
+    this.orderFormView = new OrderFormView({ ...common, qtyInput: this.qtyInput, buyBtn: this.buyBtn, sellBtn: this.sellBtn, orderTypeSelect: this.orderTypeSelect, limitPriceInput: this.limitPriceInput, stopPriceInput: this.stopPriceInput, limitPriceRow: this.limitPriceRow, stopPriceRow: this.stopPriceRow, advancedToggle: this.advancedToggle, getSymbol, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
     this.positionView = new PositionView({ ...common, posSymbolEl: this.posSymbolEl, posSideEl: this.posSideEl, posQtyEl: this.posQtyEl, posEntryEl: this.posEntryEl, posCurrentEl: this.posCurrentEl, posPnlEl: this.posPnlEl, posSlEl: this.posSlEl, posTpEl: this.posTpEl, closeBtn: this.closeBtn, setRiskBtn: this.setRiskBtn, clearRiskBtn: this.clearRiskBtn, slInput: this.slInput, tpInput: this.tpInput, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
     this.tradeLogView = new TradeLogView({ trading: this.trading, tradesListEl: this.tradesListEl, pendingListEl: this.pendingListEl, onError: (msg) => this.showError(msg), onRender: () => this.render() });
 
@@ -84,11 +85,14 @@ export class TradingPanel {
     const events = this.tradingEvents?.events || TRADING_PRESENTATION_EVENTS;
     const rerender = () => this.render();
     [events.ACCOUNT_UPDATED, events.POSITION_OPENED, events.POSITION_CLOSED, events.POSITION_UPDATED, events.TRADE_EXECUTED, events.ACCOUNT_RESET, events.ORDER_PLACED, events.ORDER_TRIGGERED, events.ORDER_FILLED, events.ORDER_CANCELLED, events.STOP_LOSS_TRIGGERED, events.TAKE_PROFIT_TRIGGERED].forEach((event) => {
+      if (!event) return;
       const unsubscribe = on(event, rerender);
       if (typeof unsubscribe === 'function') this._engineSubscriptions.push(unsubscribe);
     });
-    const unsubscribe = on(events.ORDER_REJECTED, (err) => this.showError(err?.message || err?.reason || 'Order rejected'));
-    if (typeof unsubscribe === 'function') this._engineSubscriptions.push(unsubscribe);
+    if (events.ORDER_REJECTED) {
+      const unsubscribe = on(events.ORDER_REJECTED, (err) => this.showError(err?.message || err?.reason || 'Order rejected'));
+      if (typeof unsubscribe === 'function') this._engineSubscriptions.push(unsubscribe);
+    }
   }
 
   destroy() {
