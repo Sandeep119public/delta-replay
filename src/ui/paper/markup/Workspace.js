@@ -36,7 +36,7 @@ export const workspaceMarkup = () => `<div class="main-layout">
     <div id="tab-view-trade" class="tab-panel active" role="tabpanel" aria-label="Trade">
       <section id="order-ticket" class="order-ticket is-flat" aria-label="Order ticket">
         <div class="ticket-header"><div><span class="eyebrow">ORDER TICKET</span><p id="ticket-state-hint" class="ticket-state-hint">FLAT • Pick a size</p></div><span id="pos-state-pill" class="pos-state-pill is-flat">FLAT</span></div>
-        <div class="ticket-field-grid">
+        <div class="ticket-quick-start"><span class="quick-start-label">Quick order</span><span class="quick-start-hint">Set size, then choose a side</span></div><div class="ticket-field-grid">
           <label class="field">Order type<select id="order-type" aria-label="Order type"><option value="MARKET">Market</option><option value="LIMIT">Limit</option><option value="STOP_MARKET">Stop market</option></select></label>
           <label class="field">Quantity<input id="trade-qty" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-describedby="qty-notional"><span id="qty-notional" class="field-hint">≈ $0</span></label>
           <label id="limit-price-row" class="field hidden">Limit price<input id="limit-price" inputmode="decimal" placeholder="0.00"></label>
@@ -47,7 +47,7 @@ export const workspaceMarkup = () => `<div class="main-layout">
           <button id="btn-buy" class="order-action buy btn-buy-main" type="button"><span>Buy / Long</span><kbd>1</kbd></button>
           <button id="btn-sell" class="order-action sell btn-sell-main" type="button"><span>Sell / Short</span><kbd>2</kbd></button>
         </div>
-        <div class="position-card">
+        <details class="risk-details"><summary>Position & risk management</summary><div class="position-card">
           <div class="position-card-head"><div><span class="eyebrow">OPEN POSITION</span><strong id="pos-symbol">No position</strong></div><span id="pos-side" class="position-side">—</span></div>
           <div class="pos-compact-grid"><div><span>Size</span><strong id="pos-qty">—</strong></div><div><span>Entry</span><strong id="pos-entry">—</strong></div><div><span>Mark</span><strong id="pos-current">—</strong></div><div><span>P&amp;L</span><strong id="pos-pnl">—</strong></div></div>
           <div class="risk-grid"><label class="field">Stop loss<input id="sl-price" inputmode="decimal" placeholder="Optional"></label><label class="field">Take profit<input id="tp-price" inputmode="decimal" placeholder="Optional"></label></div>
@@ -55,7 +55,7 @@ export const workspaceMarkup = () => `<div class="main-layout">
           <div class="current-risk"><span>SL <strong id="pos-sl">—</strong></span><span>TP <strong id="pos-tp">—</strong></span></div>
           <div id="ticket-flatten-summary" class="flatten-summary hidden"><div><span>Entry</span><strong id="flatten-entry">—</strong></div><div><span>Mark</span><strong id="flatten-mark">—</strong></div><div><span>P&amp;L</span><strong id="flatten-pnl" class="num">—</strong></div></div>
           <button id="btn-close" class="flatten-button" type="button">Close position</button>
-        </div>
+        </div></details>
       </section>
       <section class="activity-card" aria-label="Order activity">
         <div class="section-heading"><span>Pending orders</span><span class="section-count">LIVE</span></div>
