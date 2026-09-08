@@ -73,6 +73,30 @@ def test_postgres_manager_rehydrates_after_cache_loss():
         repository.delete(session_id)
 
 
+def test_postgres_atomic_update_rolls_back_after_operation_failure():
+    repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
+    manager = SessionManager(repository)
+    session_id = str(uuid4())
+
+    try:
+        manager.get(session_id)
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            def fail_after_mutation(state):
+                state.replay.speed = 7
+                state.replay.load([candle(100, 101, 99, 100)])
+                raise RuntimeError("simulated crash")
+
+            manager.atomic(session_id, fail_after_mutation)
+
+        manager.clear_cache()
+        restored = manager.get(session_id)
+        assert restored.replay.speed == 1
+        assert restored.replay.state()["total"] == 0
+        assert restored.replay.state()["status"] == "idle"
+    finally:
+        repository.delete(session_id)
+
+
 def test_postgres_atomic_updates_serialize_concurrent_managers():
     repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
     first_manager = SessionManager(repository)

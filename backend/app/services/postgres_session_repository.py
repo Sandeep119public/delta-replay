@@ -34,7 +34,10 @@ class PostgresSessionRepository(SessionRepository):
     def _encode(document: SessionDocument) -> str:
         clean_document = dict(document)
         clean_document.pop("revision", None)
-        return json.dumps(clean_document, separators=(",", ":"))
+        try:
+            return json.dumps(clean_document, separators=(",", ":"), allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"session document is not JSON-safe: {exc}") from exc
 
     def get(self, session_id: str) -> Optional[SessionDocument]:
         with self._connect() as connection:

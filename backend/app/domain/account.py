@@ -1,4 +1,5 @@
 from copy import deepcopy
+from math import isfinite
 
 
 class TradingAccount:
@@ -82,14 +83,30 @@ class TradingAccount:
         if missing:
             raise ValueError(f"account state missing fields: {', '.join(missing)}")
 
-        account = cls(float(state["startingBalance"]))
-        account.wallet_balance = float(state["walletBalance"])
-        account.realized_pnl = float(state["realizedPnL"])
-        account.unrealized_pnl = float(state["unrealizedPnL"])
-        account.total_fees = float(state["totalFees"])
-        account.used_margin = float(state["usedMargin"])
-        account.maintenance_margin = float(state["maintenanceMargin"])
-        account.total_funding_paid = float(state["totalFundingPaid"])
-        account.total_funding_received = float(state["totalFundingReceived"])
-        account.net_funding = float(state["netFunding"])
+        values = {}
+        for key in required:
+            try:
+                value = float(state[key])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"account field {key} must be numeric") from exc
+            if not isfinite(value):
+                raise ValueError(f"account field {key} must be finite")
+            values[key] = value
+
+        if values["startingBalance"] <= 0:
+            raise ValueError("account startingBalance must be positive")
+        for key in ("totalFees", "usedMargin", "maintenanceMargin"):
+            if values[key] < 0:
+                raise ValueError(f"account field {key} must be non-negative")
+
+        account = cls(values["startingBalance"])
+        account.wallet_balance = values["walletBalance"]
+        account.realized_pnl = values["realizedPnL"]
+        account.unrealized_pnl = values["unrealizedPnL"]
+        account.total_fees = values["totalFees"]
+        account.used_margin = values["usedMargin"]
+        account.maintenance_margin = values["maintenanceMargin"]
+        account.total_funding_paid = values["totalFundingPaid"]
+        account.total_funding_received = values["totalFundingReceived"]
+        account.net_funding = values["netFunding"]
         return account

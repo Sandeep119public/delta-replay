@@ -1,7 +1,10 @@
 from copy import deepcopy
+from math import isfinite
 
 
 class ReplayService:
+    VALID_STATUSES = {"idle", "ready", "paused", "ended"}
+
     def __init__(self):
         self.candles = []
         self.index = -1
@@ -74,20 +77,41 @@ class ReplayService:
             raise ValueError(f"replay state missing fields: {', '.join(missing)}")
         if not isinstance(state["candles"], list):
             raise ValueError("replay candles must be a list")
+        try:
+            index = int(state["index"])
+            start_index = int(state["startIndex"])
+            speed = int(state["speed"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("replay index, startIndex and speed must be integers") from exc
+        if isinstance(state["index"], bool) or isinstance(state["startIndex"], bool) or isinstance(state["speed"], bool):
+            raise ValueError("replay index, startIndex and speed must be integers")
+        if float(state["index"]) != index or float(state["startIndex"]) != start_index or float(state["speed"]) != speed:
+            raise ValueError("replay index, startIndex and speed must be integral")
+        status = state["status"]
+        if status not in cls.VALID_STATUSES:
+            raise ValueError("unsupported replay status")
+        if speed <= 0 or not isfinite(speed):
+            raise ValueError("replay speed must be positive and finite")
 
         replay = cls()
         replay.candles = deepcopy(state["candles"])
-        replay.index = int(state["index"])
-        replay.start_index = int(state["startIndex"])
-        replay.speed = int(state["speed"])
-        replay.status = str(state["status"])
-        if replay.speed <= 0:
-            raise ValueError("replay speed must be positive")
+        replay.index = index
+        replay.start_index = start_index
+        replay.speed = speed
+        replay.status = status
         if replay.candles:
             if replay.index < -1 or replay.index >= len(replay.candles):
                 raise ValueError("replay index is outside candle range")
             if replay.start_index < -1 or replay.start_index >= len(replay.candles):
                 raise ValueError("replay start index is outside candle range")
+            if replay.status == "idle":
+                raise ValueError("non-empty replay cannot be idle")
+            if replay.status == "ended" and replay.index != len(replay.candles) - 1:
+                raise ValueError("ended replay must point to the final candle")
+            if replay.status in {"paused", "ended"} and replay.index < 0:
+                raise ValueError("active replay must have an index")
         elif replay.index != -1 or replay.start_index != -1:
             raise ValueError("empty replay cannot have an active index")
+        elif replay.status != "idle":
+            raise ValueError("empty replay must be idle")
         return replay

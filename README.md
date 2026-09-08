@@ -23,4 +23,4 @@ The application also performs a safe `CREATE TABLE IF NOT EXISTS` bootstrap when
 
 Each browser session is keyed by the `X-Session-ID` UUID header. Persisted state includes replay position and candles plus account, positions, orders, trades, risk settings, fees, margin configuration, engine index, and the next order sequence.
 
-Atomic replay-plus-trading advancement and cross-process concurrency control are intentionally handled in the next persistence phase.
+Replay advancement and trading execution are committed atomically, with per-session in-process serialization and PostgreSQL row locking for cross-process serialization. Recovery tests cover manager/cache loss, PostgreSQL rehydration, concurrent managers, and rollback after simulated operation failure. Persisted state is rejected when its schema version, replay state, trading state, or JSON numeric safety is invalid.
