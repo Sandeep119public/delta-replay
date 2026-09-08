@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from app.services.paper_engine import PaperTradingEngine
 from app.services.replay_service import ReplayService
-from app.services.session_manager import SessionManager, SessionState
+from app.services.session_manager import SessionManager
 from app.services.session_repository import InMemorySessionRepository
 from app.services.session_state import SESSION_STATE_VERSION, restore_session, serialize_session
 
@@ -83,11 +83,11 @@ def test_restore_rejects_unknown_version():
         assert "unsupported session state version" in str(exc)
 
 
-def test_restore_rejects_malformed_replay_state():
+def test_restore_rejects_malformed_trading_state():
     try:
         restore_session({
             "version": SESSION_STATE_VERSION,
-            "replay": {"candles": [], "index": 0, "startIndex": -1, "speed": 1, "status": "ready"},
+            "replay": {"candles": [], "index": -1, "startIndex": -1, "speed": 1, "status": "idle"},
             "trading": {},
         })
         assert False
