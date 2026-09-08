@@ -25,7 +25,10 @@ class PaperTradingEngine:
 
     @staticmethod
     def _positive_finite(value, name):
-        value = float(value)
+        try:
+            value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be numeric") from exc
         if not isfinite(value) or value <= 0:
             raise ValueError(f"{name} must be finite and positive")
         return value
@@ -110,6 +113,9 @@ class PaperTradingEngine:
             raise ValueError("insufficient margin")
 
         self.account.wallet_balance -= fee
+        # Entry fees are realized cash costs immediately. This keeps the account
+        # identity stable while the position remains open.
+        self.account.realized_pnl -= fee
         self.account.total_fees += fee
         self.account.validate_invariants()
         self.positions[symbol] = {
@@ -142,7 +148,7 @@ class PaperTradingEngine:
         net = gross - entry_fee - exit_fee
 
         self.account.wallet_balance += gross - exit_fee
-        self.account.realized_pnl += net
+        self.account.realized_pnl += gross - exit_fee
         self.account.total_fees += exit_fee
         self.account.validate_invariants()
 
@@ -413,11 +419,9 @@ class PaperTradingEngine:
                 raise ValueError("position key and symbol must match")
             if position.get("side") not in ("long", "short"):
                 raise ValueError("position side is invalid")
-            quantity = self._positive_finite(position.get("quantity"), "position quantity")
-            entry = self._positive_finite(position.get("entry_price"), "position entry_price")
-            current = self._positive_finite(position.get("current_price"), "position current_price")
-            if not isfinite(quantity) or not isfinite(entry) or not isfinite(current):
-                raise ValueError("position fields must be finite")
+            self._positive_finite(position.get("quantity"), "position quantity")
+            self._positive_finite(position.get("entry_price"), "position entry_price")
+            self._positive_finite(position.get("current_price"), "position current_price")
             self._positive_finite(position.get("entry_fee"), "position entry_fee")
             for field in ("stop_loss", "take_profit"):
                 if position.get(field) is not None:
@@ -476,7 +480,10 @@ class PaperTradingEngine:
         )
         engine.account = TradingAccount.from_state(state["account"])
         engine.positions = deepcopy(state["positions"])
-        engine.orders = {int(key): deepcopy(value) for key, value in state["orders"].items()}
+        try:
+            engine.orders = {int(key): deepcopy(value) for key, value in state["orders"].items()}
+        except (TypeError, ValueError) as exc:
+            raise ValueError("order ids must be integers") from exc
         engine.trades = deepcopy(state["trades"])
         try:
             engine.index = int(state["index"])
