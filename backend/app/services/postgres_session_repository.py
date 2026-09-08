@@ -13,6 +13,8 @@ T = TypeVar("T")
 class PostgresSessionRepository(SessionRepository):
     """PostgreSQL implementation of the session persistence boundary."""
 
+    durable = True
+
     def __init__(self, dsn: str | None = None, *, connect_timeout: int = 5) -> None:
         self.dsn = dsn or os.getenv("DATABASE_URL")
         if not self.dsn:
