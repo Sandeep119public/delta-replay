@@ -60,3 +60,16 @@ For fast experimentation, keep changes small and loop through:
 4. If you change markup IDs or controller contracts, update the UI contract tests in the same change.
 
 The app deliberately keeps composition in `src/app/Application.js`, layout construction in `src/ui/PaperUI.js`, and behavior in focused controllers. Treat DOM IDs as contracts: change the controller and its contract tests together.
+
+
+### Architecture map
+
+When exploring the codebase, start here:
+
+- `src/app/Application.js` — composition root: wires modules together, not business logic.
+- `src/app/createCoreServices.js` — backend clients and stateful core services.
+- `src/app/bindReplayLifecycle.js` — replay event subscriptions and replay-driven UI updates.
+- `src/app/bindApplicationLifecycle.js` — teardown ownership and cleanup.
+- `src/ui/PaperUI.js` — UI composition and DOM-facing adapters.
+
+A useful exploration rule: **trace one user action end-to-end before changing code**. For example, follow PLAY from markup → UI control → replay port → command controller → engine. This keeps fast experiments from becoming dependency archaeology.
