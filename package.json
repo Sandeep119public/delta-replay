@@ -20,7 +20,8 @@
     "vibe:dev": "npm run dev:host",
     "vibe:fast": "npm run test:ui-contracts && npm run test",
     "vibe:check": "npm run check",
-    "vibe:build": "npm run check"
+    "vibe:build": "npm run check",
+    "vibe:where": "node -e \"console.log('Read ARCHITECTURE.md for ownership and change boundaries')\""
   },
   "dependencies": {
     "lightweight-charts": "4.2.3"
