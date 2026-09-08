@@ -1,3 +1,9 @@
+CREATE TABLE IF NOT EXISTS replay_datasets (
+    dataset_id TEXT PRIMARY KEY,
+    candles JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS replay_sessions (
     session_id UUID PRIMARY KEY,
     state JSONB NOT NULL,
