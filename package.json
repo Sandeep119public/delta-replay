@@ -21,7 +21,7 @@
     "vibe:fast": "npm run test:ui-contracts && npm run test",
     "vibe:check": "npm run check",
     "vibe:build": "npm run check",
-    "vibe:where": "node -e \"console.log('Read ARCHITECTURE.md for ownership and change boundaries')\""
+    "vibe:where": "node -e \"console.log('Ownership: app=composition, ui=DOM, replay=playback, trading=domain. Run vibe:fast while iterating.')\""
   },
   "dependencies": {
     "lightweight-charts": "4.2.3"
