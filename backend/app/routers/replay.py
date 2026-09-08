@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..models import CandleBatch
 from ..services.paper_engine import PaperTradingEngine
-from ..services.session_manager import atomic_session, get_session, persist_session
+from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
 
@@ -14,25 +14,23 @@ def state(request: Request):
 
 @router.post("/load")
 def load(request: Request, batch: CandleBatch):
-    session = get_session(request)
-    if session.trading.has_open_position() or session.trading.pending_orders():
-        raise HTTPException(409, "Close positions and cancel pending orders before loading new data")
+    candles = [c.model_dump() for c in batch.candles]
 
-    balance = session.trading.account.starting_balance
-    fee_rate = session.trading.fee_rate
-    session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate)
-    result = session.replay.load([c.model_dump() for c in batch.candles])
-    persist_session(request, session)
-    return result
+    def replace(session):
+        if session.trading.has_open_position() or session.trading.pending_orders():
+            raise HTTPException(409, "Close positions and cancel pending orders before loading new data")
+        balance = session.trading.account.starting_balance
+        fee_rate = session.trading.fee_rate
+        session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate)
+        return session.replay.load(candles)
+
+    return atomic_session(request, replace)
 
 
 @router.post("/start/{index}")
 def start(request: Request, index: int):
-    session = get_session(request)
     try:
-        result = session.replay.start(index)
-        persist_session(request, session)
-        return result
+        return atomic_session(request, lambda session: session.replay.start(index))
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -57,20 +55,17 @@ def step(request: Request):
 
 @router.post("/seek/{index}")
 def seek(request: Request, index: int):
-    session = get_session(request)
-    if session.trading.has_open_position() or session.trading.pending_orders():
-        raise HTTPException(409, "Close positions and cancel pending orders before seeking")
+    def reposition(session):
+        if session.trading.has_open_position() or session.trading.pending_orders():
+            raise HTTPException(409, "Close positions and cancel pending orders before seeking")
+        return session.replay.seek(index)
+
     try:
-        result = session.replay.seek(index)
-        persist_session(request, session)
-        return result
+        return atomic_session(request, reposition)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/reset")
 def reset(request: Request):
-    session = get_session(request)
-    result = session.replay.reset()
-    persist_session(request, session)
-    return result
+    return atomic_session(request, lambda session: session.replay.reset())
