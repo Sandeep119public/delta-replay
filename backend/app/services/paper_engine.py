@@ -43,7 +43,7 @@ class PaperTradingEngine:
   for o in self.orders.values():
    if o["status"]!="PENDING" or o["symbol"]!=symbol:continue
    px=None
-   if o["type"]=="market" and o["createdIndex"]<self.index:px=candle["open"]
+   if o["type"]=="market" and self.index>=o["createdIndex"]+2:px=candle["open"]
    elif o["type"]=="limit" and ((o["side"]=="buy" and candle["low"]<=o["limitPrice"]) or (o["side"]=="sell" and candle["high"]>=o["limitPrice"])):px=min(o["limitPrice"],candle["open"]) if o["side"]=="buy" else max(o["limitPrice"],candle["open"])
    elif o["type"]=="stop_market" and ((o["side"]=="buy" and candle["high"]>=o["stopPrice"]) or (o["side"]=="sell" and candle["low"]<=o["stopPrice"])):px=max(o["stopPrice"],candle["open"]) if o["side"]=="buy" else min(o["stopPrice"],candle["open"])
    if px is not None:
