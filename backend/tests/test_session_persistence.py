@@ -1,4 +1,7 @@
+from math import nan
 from uuid import uuid4
+
+import pytest
 
 from app.services.paper_engine import PaperTradingEngine
 from app.services.replay_service import ReplayService
@@ -66,6 +69,27 @@ def test_manager_rehydrates_from_repository_after_cache_loss():
     assert restored.trading.export_state()["orders"]
 
 
+def test_atomic_mutation_rolls_back_after_operation_failure():
+    repository = InMemorySessionRepository()
+    manager = SessionManager(repository)
+    session_id = str(uuid4())
+    manager.get(session_id)
+
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        def fail_after_mutation(state):
+            state.replay.speed = 9
+            state.replay.load([candle(100, 101, 99, 100)])
+            raise RuntimeError("simulated crash")
+
+        manager.atomic(session_id, fail_after_mutation)
+
+    manager.clear_cache()
+    restored = manager.get(session_id)
+    assert restored.replay.speed == 1
+    assert restored.replay.state()["total"] == 0
+    assert restored.replay.state()["status"] == "idle"
+
+
 def test_repository_defensively_copies_documents():
     repository = InMemorySessionRepository()
     session_id = str(uuid4())
@@ -79,23 +103,27 @@ def test_repository_defensively_copies_documents():
 
 
 def test_restore_rejects_unknown_version():
-    try:
+    with pytest.raises(ValueError, match="unsupported session state version"):
         restore_session({"version": 99, "replay": {}, "trading": {}})
-        assert False
-    except ValueError as exc:
-        assert "unsupported session state version" in str(exc)
 
 
 def test_restore_rejects_malformed_trading_state():
-    try:
+    with pytest.raises(ValueError, match="trading state missing fields"):
         restore_session({
             "version": SESSION_STATE_VERSION,
             "replay": {"candles": [], "index": -1, "startIndex": -1, "speed": 1, "status": "idle"},
             "trading": {},
         })
-        assert False
-    except ValueError as exc:
-        assert "trading state missing fields" in str(exc)
+
+
+def test_restore_rejects_non_finite_persisted_numbers():
+    replay = ReplayService()
+    trading = PaperTradingEngine()
+    document = serialize_session(replay, trading)
+    document["trading"]["account"]["walletBalance"] = nan
+
+    with pytest.raises(ValueError, match="JSON-safe"):
+        restore_session(document)
 
 
 def test_session_manager_delete_removes_persisted_state():
