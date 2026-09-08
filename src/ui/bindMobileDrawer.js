@@ -3,17 +3,27 @@ export function bindMobileDrawer() {
   const scrim = document.getElementById('drawer-scrim');
   const tradingPanelEl = document.getElementById('trading-panel');
 
+  let previousFocus = null;
+
+  const announce = (message) => { const live = document.getElementById('accessibility-live'); if (live) live.textContent = message; };
+  const getFocusable = () => [...tradingPanelEl?.querySelectorAll?.('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || []].filter((el) => !el.closest('[hidden]'));
+
   const setDrawer = (open) => {
     const isOpen = !!open;
+    if (isOpen && !document.body.classList.contains('drawer-open')) previousFocus = document.activeElement;
     document.body.classList.toggle('drawer-open', isOpen);
     drawerBtn?.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     scrim?.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    tradingPanelEl?.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    if (isOpen) { requestAnimationFrame(() => getFocusable()[0]?.focus?.()); announce('Trading panel opened'); }
+    else { announce('Trading panel closed'); if (previousFocus?.focus) requestAnimationFrame(() => previousFocus.focus()); previousFocus = null; }
   };
 
   const onDrawerClick = () => setDrawer(!document.body.classList.contains('drawer-open'));
   const onScrimClick = () => setDrawer(false);
   const onKeyDown = (event) => {
-    if (event.key === 'Escape' && document.body.classList.contains('drawer-open')) setDrawer(false);
+    if (event.key === 'Escape' && document.body.classList.contains('drawer-open')) { event.preventDefault(); setDrawer(false); return; }
+    if (event.key === 'Tab' && document.body.classList.contains('drawer-open')) { const focusable = getFocusable(); if (!focusable.length) return; const first = focusable[0], last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
   };
 
   drawerBtn?.addEventListener('click', onDrawerClick);
