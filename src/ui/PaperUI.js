@@ -15,24 +15,6 @@ import { TradingPanel } from './TradingPanel.js';
 import { renderPaperLayout } from './paper/PaperLayout.js';
 import { createPaperPorts } from './paper/PaperPorts.js';
 
-/**
- * PaperUI assembles presentation components from narrow view models and
- * capability callbacks. It receives:
- *   replayPort    - narrow replay capability (required)
- *   trading       - narrow trading presentation { snapshot, actions, events, on }
- *   tradingEvents - presentation event port
- *   dataset       - dataset view ({ snapshot() } provider or frozen snapshot)
- *   candles       - narrow candle view { getCount, get, getAll, findIndexByTime }
- *   chart         - chart handles injected by the composition root
- *                   { chartManager, adapter } (required)
- *   callbacks     - capability functions owned by the application layer:
- *                   { onRetry, onFollow, onLoadReplay, onPreviewWindow,
- *                     onSeek, onTimeframeChange }
- *
- * The UI never receives a ReplayCoordinator, CandleStore, AppState, or
- * engine-shaped trading object. Chart construction lives in the composition
- * root (Application.js), which injects ready chart handles here.
- */
 export function createPaperUI({
   replayPort,
   trading = null,
@@ -181,17 +163,28 @@ function createPaperTerminalViews(ctx) {
     resetBtn: el('btn-reset-acct'),
     tradesListEl: el('trades-list'),
     errorEl: el('trading-error'),
-    orderTypeSelect,
-    limitPriceInput,
-    stopPriceInput,
+    orderTypeSelect: orderTypeSelect || el('order-type'),
+    limitPriceInput: limitPriceInput || el('limit-price'),
+    stopPriceInput: stopPriceInput || el('stop-price'),
     pendingListEl: el('pending-orders-list'),
     posSlEl: el('pos-sl'),
     posTpEl: el('pos-tp'),
-    slInput,
-    tpInput,
+    slInput: slInput || el('sl-price'),
+    tpInput: tpInput || el('tp-price'),
     setRiskBtn: el('btn-set-risk'),
     clearRiskBtn: el('btn-clear-risk'),
   });
+
+  if (tradingPanel.orderFormView) {
+    tradingPanel.orderFormView.limitPriceRow = el('limit-price-row');
+    tradingPanel.orderFormView.stopPriceRow = el('stop-price-row');
+    tradingPanel.orderFormView.advancedToggle = el('advanced-toggle');
+    tradingPanel.orderFormView.listen?.(tradingPanel.orderFormView.advancedToggle, 'click', () => {
+      tradingPanel.orderFormView.advanced = !tradingPanel.orderFormView.advanced;
+      tradingPanel.orderFormView.updateAdvancedUI();
+      tradingPanel.orderFormView.updateOrderTypeUI();
+    });
+  }
 
   return { sparkline, toastView, floatingPosView, dateSelector, tradingPanel };
 }
