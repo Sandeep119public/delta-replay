@@ -11,6 +11,8 @@ SessionMutation = Callable[[SessionDocument], tuple[SessionDocument, T]]
 class SessionRepository(Protocol):
     """Storage boundary for serialized replay/trading session state."""
 
+    durable: bool
+
     def get(self, session_id: str) -> Optional[SessionDocument]: ...
     def save(self, session_id: str, document: SessionDocument) -> None: ...
     def delete(self, session_id: str) -> None: ...
@@ -19,6 +21,8 @@ class SessionRepository(Protocol):
 
 class InMemorySessionRepository:
     """Thread-safe reference repository used by tests and local development."""
+
+    durable = False
 
     def __init__(self) -> None:
         self._documents: Dict[str, SessionDocument] = {}
