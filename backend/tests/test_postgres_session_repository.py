@@ -1,4 +1,5 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 import pytest
@@ -66,5 +67,25 @@ def test_postgres_manager_rehydrates_after_cache_loss():
         restored = second_manager.get(session_id)
         assert restored.replay.state() == state.replay.state()
         assert restored.trading.export_state() == state.trading.export_state()
+    finally:
+        repository.delete(session_id)
+
+
+def test_postgres_atomic_updates_serialize_concurrent_managers():
+    repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
+    first_manager = SessionManager(repository)
+    second_manager = SessionManager(repository)
+    session_id = str(uuid4())
+    first_manager.get(session_id)
+
+    def increment(manager):
+        return manager.atomic(session_id, lambda state: setattr(state.replay, "speed", state.replay.speed + 1) or state.replay.speed)
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda item: increment(item), [first_manager, second_manager]))
+        assert sorted(results) == [2, 3]
+        final = first_manager.get(session_id)
+        assert final.replay.speed == 3
     finally:
         repository.delete(session_id)

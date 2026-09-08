@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..models import CandleBatch
 from ..services.paper_engine import PaperTradingEngine
-from ..services.session_manager import get_session, persist_session
+from ..services.session_manager import atomic_session, get_session, persist_session
 
 router = APIRouter()
 
@@ -39,12 +39,19 @@ def start(request: Request, index: int):
 
 @router.post("/step")
 def step(request: Request):
-    session = get_session(request)
-    try:
+    def advance(session):
+        previous_index = session.replay.index
         result = session.replay.step()
-        persist_session(request, session)
-        return result
-    except ValueError as exc:
+        if result["index"] == previous_index or result["index"] < 0:
+            return {**result, "events": [], "trading": session.trading.snapshot()}
+
+        candle = result["candle"]
+        events = session.trading.on_candle(candle, result["index"], "BTCUSDT")
+        return {**result, "events": events, "trading": session.trading.snapshot()}
+
+    try:
+        return atomic_session(request, advance)
+    except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc))
 
 

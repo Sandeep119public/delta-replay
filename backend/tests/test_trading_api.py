@@ -21,9 +21,11 @@ def test_full_lifecycle():
     assert client.post("/api/v1/replay/load", headers=h(session), json={"candles": CANDLES}).status_code == 200
     assert client.post("/api/v1/replay/start/0", headers=h(session)).status_code == 200
     assert client.post("/api/v1/trading/order", headers=h(session), json={"symbol": "BTCUSDT", "side": "buy", "quantity": 1, "type": "market"}).status_code == 200
-    assert client.post("/api/v1/replay/step", headers=h(session)).status_code == 200
-    candle = client.post("/api/v1/trading/candle", headers=h(session)).json()
-    assert candle["candle"]["close"] == 110
+    stepped = client.post("/api/v1/replay/step", headers=h(session))
+    assert stepped.status_code == 200
+    body = stepped.json()
+    assert body["candle"]["close"] == 110
+    assert body["trading"]["positions"]
     assert client.get("/api/v1/trading/state", headers=h(session)).json()["positions"]
     assert client.post("/api/v1/trading/risk", headers=h(session), json={"symbol": "BTCUSDT", "stopLoss": 95, "takeProfit": 125}).status_code == 200
 
