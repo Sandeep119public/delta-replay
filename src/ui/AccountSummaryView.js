@@ -1,73 +1,88 @@
 import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
-/**
- * Account summary presentation view. Trading capabilities arrive only through
- * the narrow presentation contract ({ snapshot, actions, events, on }), never
- * through the trading domain module; engine-shaped objects are rejected.
- */
 export class AccountSummaryView {
   constructor({ trading = null, balanceEl, equityEl, realizedEl, unrealizedEl, feesEl, resetBtn,
-    statWinEl = typeof document !== 'undefined' ? document.getElementById('stat-winrate') : null,
-    statPfEl = typeof document !== 'undefined' ? document.getElementById('stat-pf') : null,
-    statTrEl = typeof document !== 'undefined' ? document.getElementById('stat-trades') : null,
-    statRetEl = typeof document !== 'undefined' ? document.getElementById('stat-return') : null,
+    statWinEl = document.getElementById('stat-winrate'), statPfEl = document.getElementById('stat-pf'),
+    statTrEl = document.getElementById('stat-trades'), statRetEl = document.getElementById('stat-return'),
     onError = null, onRender = null } = {}) {
-    this.trading = trading ? assertTradingPresentation(trading) : null; this.balanceEl = balanceEl; this.equityEl = equityEl; this.realizedEl = realizedEl; this.unrealizedEl = unrealizedEl; this.feesEl = feesEl;
-    this.resetBtn = resetBtn; this.statWinEl = statWinEl; this.statPfEl = statPfEl; this.statTrEl = statTrEl; this.statRetEl = statRetEl; this.onError = onError; this.onRender = onRender; this._listeners = [];
-    this._bindControls();
+    this.trading = trading ? assertTradingPresentation(trading) : null;
+    Object.assign(this, { balanceEl, equityEl, realizedEl, unrealizedEl, feesEl, resetBtn, statWinEl, statPfEl, statTrEl, statRetEl, onError, onRender });
+    this.busy = false;
+    this._listeners = [];
+    this._listen(this.resetBtn, 'click', () => void this.resetAccount());
+    this._bindCapitalControls();
   }
 
-  _bindControls() {
-    if (this.resetBtn) { const handler = () => this.trading?.actions.resetAccount(); this.resetBtn.addEventListener('click', handler); this._listeners.push([this.resetBtn, 'click', handler]); }
-    try {
-      const chips = document.querySelectorAll('.capital-chip');
-      const setBalance = (balance) => {
-        if (this.trading?.actions.hasOpenPosition?.()) { this.onError?.('Close position before changing starting balance'); return; }
-        const res = this.trading?.actions.setCapital?.(balance);
-        if (res?.success === false) this.onError?.(res.message);
-        else this.onRender?.();
-      };
-      chips.forEach(chip => chip.addEventListener('click', () => {
-        const balance = Number(chip.getAttribute('data-balance'));
-        setBalance(balance);
-        chips.forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-      }));
-      const customInput = document.getElementById('custom-capital-input');
-      const setCapitalBtn = document.getElementById('btn-set-capital');
-      if (setCapitalBtn && customInput) setCapitalBtn.addEventListener('click', () => {
-        const val = parseFloat(customInput.value);
-        if (!Number.isFinite(val) || val <= 0) { this.onError?.('Enter a valid capital amount (> 0)'); return; }
-        if (this.trading?.actions.hasOpenPosition?.()) { this.onError?.('Close position before changing starting balance'); return; }
-        const res = this.trading?.actions.setCapital?.(val);
-        if (res?.success === false) { this.onError?.(res.message); return; }
-        chips.forEach(c => c.classList.remove('active')); customInput.value = ''; this.onRender?.();
-      });
-      const feeSelect = document.getElementById('fee-tier-select');
-      if (feeSelect) feeSelect.addEventListener('change', () => this.trading?.actions.setFeeRate?.(parseFloat(feeSelect.value)));
-    } catch {}
+  _listen(element, type, handler) {
+    element?.addEventListener?.(type, handler);
+    if (element?.removeEventListener) this._listeners.push([element, type, handler]);
   }
 
-  destroy() { this._listeners.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler)); this._listeners = []; }
-  _fmtMoney(v) { const n = Number(v); if (!Number.isFinite(n)) return '—'; return `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}`; }
+  _bindCapitalControls() {
+    const setBalance = (balance) => void this.setCapital(Number(balance));
+    document.querySelectorAll('.capital-chip').forEach((chip) => {
+      this._listen(chip, 'click', () => setBalance(chip.getAttribute('data-balance')));
+    });
+    const customInput = document.getElementById('custom-capital-input');
+    const customButton = document.getElementById('btn-set-capital');
+    this._listen(customButton, 'click', () => void this.setCapital(Number(customInput?.value)));
+    const feeSelect = document.getElementById('fee-tier-select');
+    this._listen(feeSelect, 'change', () => void this.setFeeRate(Number(feeSelect.value)));
+  }
 
-  render(acct, trades = []) {
-    if (!acct) return;
-    if (this.balanceEl) this.balanceEl.textContent = this._fmtMoney(acct.cashBalance);
-    if (this.equityEl) this.equityEl.textContent = this._fmtMoney(acct.equity);
-    if (this.realizedEl) { this.realizedEl.textContent = this._fmtMoney(acct.realizedPnL); this.realizedEl.className = acct.realizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg'; }
-    if (this.unrealizedEl) { this.unrealizedEl.textContent = this._fmtMoney(acct.unrealizedPnL); this.unrealizedEl.className = acct.unrealizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg'; }
-    if (this.feesEl) this.feesEl.textContent = this._fmtMoney(acct.totalFees);
+  async _run(action) {
+    if (this.busy) return { success: false, message: 'Account request already in progress' };
+    this.busy = true;
     try {
-      const stats = this.trading?.snapshot().stats || { totalTrades: trades.length, winRate: 0, profitFactor: 1, netReturn: 0 };
-      const winEl = this.statWinEl || document.getElementById('stat-winrate'); const pfEl = this.statPfEl || document.getElementById('stat-pf');
-      const trEl = this.statTrEl || document.getElementById('stat-trades'); const retEl = this.statRetEl || document.getElementById('stat-return');
-      if (winEl) winEl.textContent = `${stats.winRate.toFixed(1)}%`;
-      if (pfEl) pfEl.textContent = Number.isFinite(stats.profitFactor) ? `${stats.profitFactor.toFixed(2)}x` : '—';
-      if (trEl) trEl.textContent = String(stats.totalTrades);
-      if (retEl) { retEl.textContent = `${stats.netReturn >= 0 ? '+' : ''}${stats.netReturn.toFixed(2)}%`; retEl.className = `stat-val ${stats.netReturn >= 0 ? 'pnl-pos' : 'pnl-neg'}`; }
-      const startingBal = Number(acct.startingBalance);
-      if (Number.isFinite(startingBal)) document.querySelectorAll('.capital-chip').forEach(chip => chip.classList.toggle('active', Number(chip.getAttribute('data-balance')) === startingBal));
-    } catch {}
+      const result = await action();
+      if (!result?.success) this.onError?.(result?.message || 'Account request failed');
+      else this.onRender?.();
+      return result;
+    } catch (error) {
+      this.onError?.(error?.message || 'Account request failed');
+      return { success: false, message: error?.message || 'Account request failed' };
+    } finally {
+      this.busy = false;
+      this.onRender?.();
+    }
+  }
+
+  resetAccount() {
+    return this._run(() => this.trading.actions.resetAccount());
+  }
+
+  setCapital(balance) {
+    if (!Number.isFinite(balance) || balance <= 0) { const message = 'Enter a valid capital amount (> 0)'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
+    if (this.trading.actions.hasOpenPosition?.()) { const message = 'Close the position before changing starting balance'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
+    return this._run(() => this.trading.actions.setCapital(balance));
+  }
+
+  setFeeRate(rate) {
+    if (!Number.isFinite(rate) || rate < 0) { const message = 'Enter a valid fee rate'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
+    return this._run(() => this.trading.actions.setFeeRate(rate));
+  }
+
+  destroy() { this._listeners.splice(0).forEach(([el, type, handler]) => el.removeEventListener?.(type, handler)); }
+
+  _fmtMoney(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}` : '—';
+  }
+
+  render(account, trades = []) {
+    if (!account) return;
+    if (this.balanceEl) this.balanceEl.textContent = this._fmtMoney(account.cashBalance);
+    if (this.equityEl) this.equityEl.textContent = this._fmtMoney(account.equity);
+    if (this.realizedEl) { this.realizedEl.textContent = this._fmtMoney(account.realizedPnL); this.realizedEl.className = account.realizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg'; }
+    if (this.unrealizedEl) { this.unrealizedEl.textContent = this._fmtMoney(account.unrealizedPnL); this.unrealizedEl.className = account.unrealizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg'; }
+    if (this.feesEl) this.feesEl.textContent = this._fmtMoney(account.totalFees);
+
+    const stats = this.trading?.snapshot().stats || { totalTrades: trades.length, winRate: 0, profitFactor: 0, netReturn: 0 };
+    if (this.statWinEl) this.statWinEl.textContent = `${Number(stats.winRate).toFixed(1)}%`;
+    if (this.statPfEl) this.statPfEl.textContent = Number.isFinite(stats.profitFactor) ? `${Number(stats.profitFactor).toFixed(2)}x` : '—';
+    if (this.statTrEl) this.statTrEl.textContent = String(stats.totalTrades);
+    if (this.statRetEl) this.statRetEl.textContent = `${stats.netReturn >= 0 ? '+' : ''}${Number(stats.netReturn).toFixed(2)}%`;
+    const starting = Number(account.startingBalance);
+    if (Number.isFinite(starting)) document.querySelectorAll('.capital-chip').forEach((chip) => chip.classList.toggle('active', Number(chip.getAttribute('data-balance')) === starting));
   }
 }
