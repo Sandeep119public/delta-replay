@@ -7,7 +7,9 @@ from psycopg.rows import dict_row
 
 
 class SessionGarbageCollector:
-    """Remove expired sessions and unreferenced replay datasets."""
+    """Remove expired sessions and replay datasets no longer referenced by sessions."""
+
+    LOCK_KEY = 8443217
 
     def __init__(self, dsn: str, *, retention_hours: int = 168) -> None:
         if retention_hours <= 0:
@@ -18,6 +20,13 @@ class SessionGarbageCollector:
     def collect(self) -> dict[str, int]:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=self.retention_hours)
         with psycopg.connect(self.dsn, row_factory=dict_row) as connection:
+            locked = connection.execute(
+                "SELECT pg_try_advisory_xact_lock(%s) AS locked",
+                (self.LOCK_KEY,),
+            ).fetchone()["locked"]
+            if not locked:
+                return {"sessions": 0, "datasets": 0}
+
             deleted_sessions = connection.execute(
                 "DELETE FROM replay_sessions WHERE updated_at < %s RETURNING session_id",
                 (cutoff,),
