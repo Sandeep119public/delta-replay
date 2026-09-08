@@ -88,3 +88,10 @@ def get_session(request: Request) -> SessionState:
     if not session_id:
         raise HTTPException(status_code=400, detail=f"{SESSION_HEADER} header is required")
     return manager.get(session_id)
+
+
+def persist_session(request: Request, session: SessionState) -> None:
+    session_id = request.headers.get(SESSION_HEADER, "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail=f"{SESSION_HEADER} header is required")
+    manager.save(session_id, session)
