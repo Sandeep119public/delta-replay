@@ -1,8 +1,10 @@
 from copy import deepcopy
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Callable, Dict, Optional, Protocol, TypeVar
 
 
 SessionDocument = Dict[str, Any]
+T = TypeVar("T")
+SessionMutation = Callable[[SessionDocument], tuple[SessionDocument, T]]
 
 
 class SessionRepository(Protocol):
@@ -17,13 +19,13 @@ class SessionRepository(Protocol):
     def delete(self, session_id: str) -> None:
         ...
 
+    def atomic_update(self, session_id: str, mutation: SessionMutation[T]) -> T:
+        """Apply one mutation and persist it atomically."""
+        ...
+
 
 class InMemorySessionRepository:
-    """Reference repository used by tests and local development.
-
-    Production persistence will replace this implementation without changing
-    the session manager or trading/replay domain services.
-    """
+    """Reference repository used by tests and local development."""
 
     def __init__(self) -> None:
         self._documents: Dict[str, SessionDocument] = {}
@@ -37,3 +39,11 @@ class InMemorySessionRepository:
 
     def delete(self, session_id: str) -> None:
         self._documents.pop(session_id, None)
+
+    def atomic_update(self, session_id: str, mutation: SessionMutation[T]) -> T:
+        current = self._documents.get(session_id)
+        if current is None:
+            raise KeyError(f"session {session_id} not found")
+        updated, result = mutation(deepcopy(current))
+        self._documents[session_id] = deepcopy(updated)
+        return result
