@@ -95,8 +95,6 @@ class TradingAccount:
 
         if values["startingBalance"] <= 0:
             raise ValueError("account startingBalance must be positive")
-        if values["walletBalance"] < 0:
-            raise ValueError("account walletBalance must be non-negative")
         for key in ("totalFees", "usedMargin", "maintenanceMargin"):
             if values[key] < 0:
                 raise ValueError(f"account field {key} must be non-negative")
