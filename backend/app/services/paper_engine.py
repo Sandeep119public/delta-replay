@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from ..domain.account import TradingAccount
 from ..domain.ambiguity import evaluate
 
@@ -162,17 +164,27 @@ class PaperTradingEngine:
             if order["type"] == "market" and self.index > order["createdIndex"]:
                 price = candle["open"]
             elif order["type"] == "limit":
-                touched = ((order["side"] == "buy" and candle["low"] <= order["limitPrice"]) or
-                           (order["side"] == "sell" and candle["high"] >= order["limitPrice"]))
+                touched = (
+                    (order["side"] == "buy" and candle["low"] <= order["limitPrice"])
+                    or (order["side"] == "sell" and candle["high"] >= order["limitPrice"])
+                )
                 if touched:
-                    price = (min(order["limitPrice"], candle["open"]) if order["side"] == "buy"
-                             else max(order["limitPrice"], candle["open"]))
+                    price = (
+                        min(order["limitPrice"], candle["open"])
+                        if order["side"] == "buy"
+                        else max(order["limitPrice"], candle["open"])
+                    )
             elif order["type"] == "stop_market":
-                touched = ((order["side"] == "buy" and candle["high"] >= order["stopPrice"]) or
-                           (order["side"] == "sell" and candle["low"] <= order["stopPrice"]))
+                touched = (
+                    (order["side"] == "buy" and candle["high"] >= order["stopPrice"])
+                    or (order["side"] == "sell" and candle["low"] <= order["stopPrice"])
+                )
                 if touched:
-                    price = (max(order["stopPrice"], candle["open"]) if order["side"] == "buy"
-                             else min(order["stopPrice"], candle["open"]))
+                    price = (
+                        max(order["stopPrice"], candle["open"])
+                        if order["side"] == "buy"
+                        else min(order["stopPrice"], candle["open"])
+                    )
 
             if price is not None:
                 try:
@@ -276,3 +288,59 @@ class PaperTradingEngine:
             "trades": list(self.trades),
             "index": self.index,
         }
+
+    def export_state(self):
+        """Return all engine state required to reconstruct this service."""
+        return {
+            "marginRate": self.margin_rate,
+            "maintenanceMarginRate": self.maint_margin_rate,
+            "feeRate": self.fee_rate,
+            "account": self.account.export_state(),
+            "positions": deepcopy(self.positions),
+            "orders": deepcopy(self.orders),
+            "trades": deepcopy(self.trades),
+            "index": self.index,
+            "nextOrder": self._next_order,
+        }
+
+    @classmethod
+    def from_state(cls, state):
+        if not isinstance(state, dict):
+            raise ValueError("trading state must be an object")
+        required = (
+            "marginRate",
+            "maintenanceMarginRate",
+            "feeRate",
+            "account",
+            "positions",
+            "orders",
+            "trades",
+            "index",
+            "nextOrder",
+        )
+        missing = [key for key in required if key not in state]
+        if missing:
+            raise ValueError(f"trading state missing fields: {', '.join(missing)}")
+        if not isinstance(state["positions"], dict):
+            raise ValueError("trading positions must be an object")
+        if not isinstance(state["orders"], dict):
+            raise ValueError("trading orders must be an object")
+        if not isinstance(state["trades"], list):
+            raise ValueError("trading trades must be a list")
+
+        engine = cls(
+            starting_balance=float(state["account"]["startingBalance"]),
+            fee_rate=float(state["feeRate"]),
+            margin_rate=float(state["marginRate"]),
+            maint_margin_rate=float(state["maintenanceMarginRate"]),
+        )
+        engine.account = TradingAccount.from_state(state["account"])
+        engine.positions = deepcopy(state["positions"])
+        engine.orders = {int(key): deepcopy(value) for key, value in state["orders"].items()}
+        engine.trades = deepcopy(state["trades"])
+        engine.index = int(state["index"])
+        engine._next_order = int(state["nextOrder"])
+        if engine._next_order <= 0:
+            raise ValueError("next order id must be positive")
+        engine._recalc()
+        return engine
