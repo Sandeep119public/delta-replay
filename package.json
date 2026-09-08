@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:architecture": "node --test tests/architecture/boundaries.test.js",
-    "test:architecture:graph": "node scripts/check-architecture.mjs"
+    "test:architecture:graph": "node scripts/check-architecture.mjs",
+    "test:ui-contracts": "node --test tests/architecture/ui-contracts.test.js"
   },
   "dependencies": {
     "lightweight-charts": "4.2.3"
