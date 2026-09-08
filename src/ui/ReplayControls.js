@@ -19,7 +19,7 @@ export class ReplayControls {
       if (el?.removeEventListener) this._listeners.push([el, type, handler]);
     };
 
-    this._listen(this.playBtn, 'click', () => { void this._safeAction(() => { const state = this.replayPort.getState(); return state.status === 'ready' || state.status === 'ended' ? this.replayPort.start(Number(state.startIndex ?? 0)) : this.replayPort.play(); }); });
+    this._listen(this.playBtn, 'click', () => { void this._safeAction(() => { const state = this.replayPort.getState(); if (state.status === 'ready' || state.status === 'ended') { const candidate = Number(state.startIndex); const total = Number(state.totalCandles ?? state.total ?? 0); const startIndex = Number.isInteger(candidate) && candidate >= 0 && (total <= 0 || candidate < total) ? candidate : 0; return this.replayPort.start(startIndex); } return this.replayPort.play(); }); });
     this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.replayPort.pause()); });
     this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.replayPort.stepForward()); });
     this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.replayPort.reset()); });
