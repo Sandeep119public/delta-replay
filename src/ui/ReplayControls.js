@@ -113,7 +113,7 @@ export class ReplayControls {
       this.playBtn.classList.remove('hidden');
       this.pauseBtn.classList.add('hidden');
       this.pauseBtn.disabled = true;
-      this.playBtn.disabled = !isPaused;
+      this.playBtn.disabled = !hasData || isIdle;
     }
 
     this.stepBtn.disabled = !(isPaused && index < total - 1);
@@ -121,12 +121,12 @@ export class ReplayControls {
     this.speedSelect.disabled = !hasData || isIdle;
 
     if (isReady) {
-      this.playBtn.disabled = true;
+      this.playBtn.disabled = !hasData;
       this.pauseBtn.disabled = true;
       this.stepBtn.disabled = true;
     }
     if (isEnded) {
-      this.playBtn.disabled = true;
+      this.playBtn.disabled = !hasData;
       this.pauseBtn.disabled = true;
       this.stepBtn.disabled = true;
       this.resetBtn.disabled = state.startIndex < 0;
