@@ -1,36 +1,56 @@
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+from typing import Literal
 from ..models import OrderRequest
-from ..services.trading_service import TradingService
+from ..services.paper_engine import PaperTradingEngine
 from .replay import service as replay_service
 
-router = APIRouter()
-service = TradingService()
+router=APIRouter(); service=PaperTradingEngine()
 
-def mark():
-    candle = replay_service.state().get('candle')
-    if not candle:
-        raise HTTPException(409, 'Load data and start replay before trading')
-    return float(candle['close'])
+class EngineOrder(BaseModel):
+    side: Literal["buy","sell"]; quantity: float=Field(gt=0); type: Literal["market","limit","stop_market"]="market"; limitPrice: float|None=None; stopPrice: float|None=None
+class RiskRequest(BaseModel):
+    stopLoss: float|None=None; takeProfit: float|None=None
+class CloseRequest(BaseModel):
+    quantity: float|None=None
 
-@router.get('/state')
-def state():
-    candle = replay_service.state().get('candle')
-    return service.snapshot(float(candle['close']) if candle else None)
+def snapshot(): return service.snapshot()
+def candle():
+    c=replay_service.state().get("candle")
+    if not c: raise HTTPException(409,"Load data and start replay before trading")
+    return c
 
-@router.post('/order')
-def order(request: OrderRequest):
+@router.get("/state")
+def state(): return snapshot()
+@router.get("/orders")
+def orders(): return {"orders":list(service.orders.values()),"pendingOrders":[o for o in service.orders.values() if o["status"]=="PENDING"]}
+@router.get("/trades")
+def trades(): return {"trades":service.trades}
+@router.post("/order")
+def order(request:EngineOrder):
     try:
-        return service.open(request, mark())
-    except ValueError as error:
-        raise HTTPException(422, str(error)) from error
-
-@router.post('/close')
-def close():
+        o=service.submit("BTCUSD",request.side,request.quantity,request.type,request.limitPrice,request.stopPrice)
+        return {"order":o,**snapshot()}
+    except ValueError as e: raise HTTPException(422,str(e))
+@router.post("/close")
+def close(request:CloseRequest=CloseRequest()):
     try:
-        return service.close(mark())
-    except ValueError as error:
-        raise HTTPException(422, str(error)) from error
-
-@router.post('/reset')
+        c=candle(); trade=service.close("BTCUSD",float(c["close"]),quantity=request.quantity,timestamp=c.get("time"))
+        if not trade: raise HTTPException(422,"no open position")
+        return {"trade":trade,**snapshot()}
+    except ValueError as e: raise HTTPException(422,str(e))
+@router.post("/orders/{order_id}/cancel")
+def cancel(order_id:int):
+    try:return {"order":service.cancel(order_id),**snapshot()}
+    except ValueError as e: raise HTTPException(422,str(e))
+@router.post("/risk")
+def risk(request:RiskRequest):
+    try:return {"position":service.set_risk("BTCUSD",request.stopLoss,request.takeProfit),**snapshot()}
+    except (ValueError,KeyError) as e: raise HTTPException(422,str(e))
+@router.post("/candle")
+def process():
+    c=candle(); events=service.on_candle(c,replay_service.state()["index"])
+    return {"events":events,**snapshot()}
+@router.post("/reset")
 def reset():
-    return service.reset()
+    global service; service=PaperTradingEngine(); return snapshot()
