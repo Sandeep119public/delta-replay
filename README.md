@@ -35,3 +35,28 @@ DATABASE_URL='postgresql://user:password@host:5432/delta_replay' SESSION_RETENTI
 ```
 
 The cleanup job uses a PostgreSQL transaction-scoped advisory lock so overlapping cleanup processes do not race. It deletes expired sessions first, then removes replay datasets that are no longer referenced by any session. Recently active sessions and referenced datasets are preserved.
+
+## Development quick start
+
+```bash
+npm install
+npm run dev
+```
+
+Useful commands:
+
+- `npm run check` — run the complete frontend regression gate (architecture, UI contracts, tests, build).
+- `npm run vibe` — friendly alias for the full safety gate before pushing exploratory changes.
+- `npm run test:watch` — keep Vitest running while iterating.
+- `npm run dev:host` — expose Vite on the local network for device testing.
+
+### Vibe-coding workflow
+
+For fast experimentation, keep changes small and loop through:
+
+1. Make one focused change.
+2. Run the narrowest relevant test while iterating.
+3. Run `npm run check` before pushing.
+4. If you change markup IDs or controller contracts, update the UI contract tests in the same change.
+
+The app deliberately keeps composition in `src/app/Application.js`, layout construction in `src/ui/PaperUI.js`, and behavior in focused controllers. Treat DOM IDs as contracts: change the controller and its contract tests together.
