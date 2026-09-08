@@ -53,13 +53,17 @@ class SessionManager:
                 session = SessionState()
                 self.repository.save(session_id, serialize_session(session.replay, session.trading))
             else:
-                try:
-                    replay, trading = restore_session(document)
-                except (TypeError, ValueError, KeyError) as exc:
-                    raise RuntimeError(f"unable to restore session state: {exc}") from exc
-                session = SessionState(replay=replay, trading=trading)
+                session = self._restore(document)
             self._sessions[session_id] = session
             return session
+
+    @staticmethod
+    def _restore(document) -> SessionState:
+        try:
+            replay, trading = restore_session(document)
+        except (TypeError, ValueError, KeyError) as exc:
+            raise RuntimeError(f"unable to restore session state: {exc}") from exc
+        return SessionState(replay=replay, trading=trading)
 
     def save(self, session_id: str, state: SessionState) -> None:
         self._validate_session_id(session_id)
@@ -67,6 +71,25 @@ class SessionManager:
         with self._lock:
             self.repository.save(session_id, document)
             self._sessions[session_id] = state
+
+    def atomic(self, session_id: str, operation):
+        """Run a session mutation with one durable commit."""
+        self._validate_session_id(session_id)
+        with self._lock:
+            self._ensure_exists(session_id)
+            def mutate(document):
+                session = self._restore(document)
+                result = operation(session)
+                return serialize_session(session.replay, session.trading), (result, session)
+
+            result, session = self.repository.atomic_update(session_id, mutate)
+            self._sessions[session_id] = session
+            return result
+
+    def _ensure_exists(self, session_id: str) -> None:
+        if self.repository.get(session_id) is None:
+            session = SessionState()
+            self.repository.save(session_id, serialize_session(session.replay, session.trading))
 
     def delete(self, session_id: str) -> None:
         self._validate_session_id(session_id)
@@ -95,3 +118,10 @@ def persist_session(request: Request, session: SessionState) -> None:
     if not session_id:
         raise HTTPException(status_code=400, detail=f"{SESSION_HEADER} header is required")
     manager.save(session_id, session)
+
+
+def atomic_session(request: Request, operation):
+    session_id = request.headers.get(SESSION_HEADER, "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail=f"{SESSION_HEADER} header is required")
+    return manager.atomic(session_id, operation)
