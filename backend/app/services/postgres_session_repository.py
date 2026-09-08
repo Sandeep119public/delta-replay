@@ -1,11 +1,13 @@
 import json
 import os
-from typing import Optional
+from typing import Optional, TypeVar
 
 import psycopg
 from psycopg.rows import dict_row
 
 from .session_repository import SessionDocument, SessionMutation, SessionRepository
+
+T = TypeVar("T")
 
 
 class PostgresSessionRepository(SessionRepository):
@@ -19,31 +21,12 @@ class PostgresSessionRepository(SessionRepository):
         self._ensure_schema()
 
     def _connect(self):
-        return psycopg.connect(
-            self.dsn,
-            connect_timeout=self.connect_timeout,
-            row_factory=dict_row,
-        )
+        return psycopg.connect(self.dsn, connect_timeout=self.connect_timeout, row_factory=dict_row)
 
     def _ensure_schema(self) -> None:
         with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS replay_sessions (
-                    session_id UUID PRIMARY KEY,
-                    state JSONB NOT NULL,
-                    revision BIGINT NOT NULL DEFAULT 1,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS replay_sessions_updated_at_idx
-                    ON replay_sessions (updated_at)
-                """
-            )
+            connection.execute("""CREATE TABLE IF NOT EXISTS replay_sessions (session_id UUID PRIMARY KEY, state JSONB NOT NULL, revision BIGINT NOT NULL DEFAULT 1, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
+            connection.execute("""CREATE INDEX IF NOT EXISTS replay_sessions_updated_at_idx ON replay_sessions (updated_at)""")
 
     @staticmethod
     def _encode(document: SessionDocument) -> str:
@@ -53,10 +36,7 @@ class PostgresSessionRepository(SessionRepository):
 
     def get(self, session_id: str) -> Optional[SessionDocument]:
         with self._connect() as connection:
-            row = connection.execute(
-                "SELECT state, revision FROM replay_sessions WHERE session_id = %s",
-                (session_id,),
-            ).fetchone()
+            row = connection.execute("SELECT state, revision FROM replay_sessions WHERE session_id = %s", (session_id,)).fetchone()
         if row is None:
             return None
         document = dict(row["state"])
@@ -66,69 +46,26 @@ class PostgresSessionRepository(SessionRepository):
     def save(self, session_id: str, document: SessionDocument) -> None:
         encoded = self._encode(document)
         with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO replay_sessions (session_id, state, revision)
-                VALUES (%s, %s::jsonb, 1)
-                ON CONFLICT (session_id) DO UPDATE
-                SET state = EXCLUDED.state,
-                    revision = replay_sessions.revision + 1,
-                    updated_at = NOW()
-                """,
-                (session_id, encoded),
-            )
+            connection.execute("""INSERT INTO replay_sessions (session_id, state, revision) VALUES (%s, %s::jsonb, 1) ON CONFLICT (session_id) DO UPDATE SET state = EXCLUDED.state, revision = replay_sessions.revision + 1, updated_at = NOW()""", (session_id, encoded))
 
     def delete(self, session_id: str) -> None:
         with self._connect() as connection:
-            connection.execute(
-                "DELETE FROM replay_sessions WHERE session_id = %s",
-                (session_id,),
-            )
+            connection.execute("DELETE FROM replay_sessions WHERE session_id = %s", (session_id,))
 
-    def save_if_revision(
-        self,
-        session_id: str,
-        document: SessionDocument,
-        expected_revision: int,
-    ) -> int:
+    def save_if_revision(self, session_id: str, document: SessionDocument, expected_revision: int) -> int:
         encoded = self._encode(document)
         with self._connect() as connection:
-            row = connection.execute(
-                """
-                UPDATE replay_sessions
-                SET state = %s::jsonb,
-                    revision = revision + 1,
-                    updated_at = NOW()
-                WHERE session_id = %s AND revision = %s
-                RETURNING revision
-                """,
-                (encoded, session_id, expected_revision),
-            ).fetchone()
+            row = connection.execute("""UPDATE replay_sessions SET state = %s::jsonb, revision = revision + 1, updated_at = NOW() WHERE session_id = %s AND revision = %s RETURNING revision""", (encoded, session_id, expected_revision)).fetchone()
             if row is None:
                 raise RuntimeError("session revision conflict")
             return int(row["revision"])
 
     def atomic_update(self, session_id: str, mutation: SessionMutation[T]) -> T:
         with self._connect() as connection:
-            row = connection.execute(
-                "SELECT state, revision FROM replay_sessions WHERE session_id = %s FOR UPDATE",
-                (session_id,),
-            ).fetchone()
+            row = connection.execute("SELECT state FROM replay_sessions WHERE session_id = %s FOR UPDATE", (session_id,)).fetchone()
             if row is None:
                 raise KeyError(f"session {session_id} not found")
-
             document = dict(row["state"])
-            document["revision"] = row["revision"]
             updated, result = mutation(document)
-            encoded = self._encode(updated)
-            connection.execute(
-                """
-                UPDATE replay_sessions
-                SET state = %s::jsonb,
-                    revision = revision + 1,
-                    updated_at = NOW()
-                WHERE session_id = %s
-                """,
-                (encoded, session_id),
-            )
+            connection.execute("UPDATE replay_sessions SET state = %s::jsonb, revision = revision + 1, updated_at = NOW() WHERE session_id = %s", (self._encode(updated), session_id))
             return result
