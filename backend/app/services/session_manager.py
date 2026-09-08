@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import os
 from threading import RLock
 from uuid import UUID
 
@@ -7,7 +8,7 @@ from fastapi import HTTPException, Request
 from .paper_engine import PaperTradingEngine
 from .replay_service import ReplayService
 from .session_repository import InMemorySessionRepository, SessionRepository
-from .session_state import serialize_session, restore_session
+from .session_state import restore_session, serialize_session
 
 
 SESSION_HEADER = "X-Session-ID"
@@ -21,9 +22,18 @@ class SessionState:
 
 class SessionManager:
     def __init__(self, repository: SessionRepository | None = None):
-        self.repository = repository or InMemorySessionRepository()
+        self.repository = repository or self._repository_from_environment()
         self._sessions = {}
         self._lock = RLock()
+
+    @staticmethod
+    def _repository_from_environment() -> SessionRepository:
+        database_url = os.getenv("DATABASE_URL", "").strip()
+        if database_url:
+            from .postgres_session_repository import PostgresSessionRepository
+
+            return PostgresSessionRepository(database_url)
+        return InMemorySessionRepository()
 
     def _validate_session_id(self, session_id: str) -> None:
         try:
