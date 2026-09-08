@@ -1,18 +1,47 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+
 from ..models import CandleBatch
-from ..services.replay_service import ReplayService
-router=APIRouter(); service=ReplayService()
+from ..services.session_manager import get_session
+
+router = APIRouter()
+
+
 @router.get("/state")
-def state(): return service.state()
+def state(request: Request):
+    return get_session(request).replay.state()
+
+
 @router.post("/load")
-def load(batch:CandleBatch): return service.load([c.model_dump() for c in batch.candles])
+def load(request: Request, batch: CandleBatch):
+    session = get_session(request)
+    # A dataset load starts a new replay session and must not leave stale
+    # trading state attached to the previous dataset.
+    if session.trading.has_open_position() or session.trading.orders:
+        raise HTTPException(409, "Close positions and cancel orders before loading new data")
+    return session.replay.load([c.model_dump() for c in batch.candles])
+
+
 @router.post("/start/{index}")
-def start(index:int): return service.start(index)
+def start(request: Request, index: int):
+    try:
+        return get_session(request).replay.start(index)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
 @router.post("/step")
-def step(): return service.step()
+def step(request: Request):
+    return get_session(request).replay.step()
+
+
 @router.post("/seek/{index}")
-def seek(index:int):
-    try:return service.seek(index)
-    except ValueError as e: raise HTTPException(422,str(e))
+def seek(request: Request, index: int):
+    try:
+        return get_session(request).replay.seek(index)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
 @router.post("/reset")
-def reset(): return service.reset()
+def reset(request: Request):
+    return get_session(request).replay.reset()
