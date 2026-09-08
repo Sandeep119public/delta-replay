@@ -16,7 +16,24 @@ import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
 import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
-import { createReplayCapabilities, requireElement } from './ApplicationComposition.js';
+
+function createReplayCapabilities() {
+  let coordinator = null;
+  return Object.freeze({
+    capabilities: Object.freeze({
+      load: (options = {}) => coordinator?.loadAndPrepareReplay(options),
+      preview: (index) => coordinator?.updatePreviewWindow?.(index),
+      changeDataset: (kind, value, sourceEl) => coordinator?.handleSymbolTimeframeChange(kind, value, sourceEl),
+    }),
+    attach(nextCoordinator) { coordinator = nextCoordinator; },
+  });
+}
+
+function requireElement(id, root = document) {
+  const element = root.getElementById?.(id) || root.querySelector?.('#' + id);
+  if (!element) throw new Error(`Required element #${id} is missing`);
+  return element;
+}
 
 function registerActionGuard(engine, canTrade, reportError) {
   return engine.registerActionGuard((action) => {
