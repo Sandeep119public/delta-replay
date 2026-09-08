@@ -72,16 +72,8 @@ class SessionManager:
             raise RuntimeError(f"unable to restore session state: {exc}") from exc
         return SessionState(replay=replay, trading=trading)
 
-    def save(self, session_id: str, state: SessionState) -> None:
-        self._validate_session_id(session_id)
-        document = serialize_session(state.replay, state.trading)
-        session_lock = self._lock_for(session_id)
-        with session_lock:
-            self.repository.save(session_id, document)
-            self._sessions[session_id] = state
-
     def atomic(self, session_id: str, operation):
-        """Run a session mutation with one durable commit."""
+        """Run a session mutation with one serialized repository commit."""
         self._validate_session_id(session_id)
         session_lock = self._lock_for(session_id)
         with session_lock:
@@ -128,10 +120,6 @@ def _session_id(request: Request) -> str:
 
 def get_session(request: Request) -> SessionState:
     return manager.get(_session_id(request))
-
-
-def persist_session(request: Request, session: SessionState) -> None:
-    manager.save(_session_id(request), session)
 
 
 def atomic_session(request: Request, operation):
