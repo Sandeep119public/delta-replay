@@ -82,8 +82,8 @@ export class RemoteTradingEngine {
   setStopLoss(symbol, price) { const position = this.getPositions().find((candidate) => candidate.symbol === String(symbol).toUpperCase()); return this.updateRisk({ symbol, stopLoss: price, takeProfit: position?.takeProfitPrice ?? null }); }
   setTakeProfit(symbol, price) { const position = this.getPositions().find((candidate) => candidate.symbol === String(symbol).toUpperCase()); return this.updateRisk({ symbol, stopLoss: position?.stopLossPrice ?? null, takeProfit: price }); }
   clearRisk(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}`, { method: 'POST' }, 'risk'); }
-  clearStopLoss(symbol) { return this.clearRisk(symbol); }
-  clearTakeProfit(symbol) { return this.clearRisk(symbol); }
+  clearStopLoss(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}&target=stopLoss`, { method: 'POST' }, 'risk'); }
+  clearTakeProfit(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}&target=takeProfit`, { method: 'POST' }, 'risk'); }
   cancelOrder(id) { return this._action(`/orders/${id}/cancel`, { method: 'POST' }, 'cancel'); }
   resetAccount() { return this._action('/reset', { method: 'POST' }, 'reset'); }
   setStartingBalance(balance) { return this._action('/account/capital', { method: 'POST', body: JSON.stringify({ balance }) }, 'capital'); }

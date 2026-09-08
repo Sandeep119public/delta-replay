@@ -248,13 +248,24 @@ class PaperTradingEngine:
         return position
 
     def clear_risk(self, symbol):
+        return self._clear_risk(symbol, stop_loss=True, take_profit=True)
+
+    def clear_stop_loss(self, symbol):
+        return self._clear_risk(symbol, stop_loss=True, take_profit=False)
+
+    def clear_take_profit(self, symbol):
+        return self._clear_risk(symbol, stop_loss=False, take_profit=True)
+
+    def _clear_risk(self, symbol, *, stop_loss, take_profit):
         position = self.positions.get(symbol)
         if not position:
             raise ValueError("no open position")
-        position["stop_loss"] = None
-        position["take_profit"] = None
-        position["stop_loss_created_index"] = -1
-        position["take_profit_created_index"] = -1
+        if stop_loss:
+            position["stop_loss"] = None
+            position["stop_loss_created_index"] = -1
+        if take_profit:
+            position["take_profit"] = None
+            position["take_profit_created_index"] = -1
         return position
 
     def set_starting_balance(self, balance):
