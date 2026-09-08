@@ -6,7 +6,7 @@ import { AppState } from '../state/AppState.js';
 import { RemoteReplayEngine } from './RemoteReplayEngine.js';
 import { RemoteTradingEngine } from './RemoteTradingEngine.js';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\\/$/, '');
 
 class BackendService {
   constructor(path) { this.path = path; }
