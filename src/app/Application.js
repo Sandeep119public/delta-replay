@@ -55,7 +55,9 @@ export function createApplication() {
   const mount = document.getElementById('app');
   if (!mount) throw new Error('Application mount #app is missing');
   renderPaperLayout(mount);
-  const chartManager = new ChartManager(document.getElementById('chart-container'));
+  const chartContainer = document.getElementById('chart-container');
+  if (!chartContainer) throw new Error('Chart container #chart-container is missing after layout render');
+  const chartManager = new ChartManager(chartContainer);
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
 
   let coordinator = null;
