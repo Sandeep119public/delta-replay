@@ -73,3 +73,11 @@ When exploring the codebase, start here:
 - `src/ui/PaperUI.js` — UI composition and DOM-facing adapters.
 
 A useful exploration rule: **trace one user action end-to-end before changing code**. For example, follow PLAY from markup → UI control → replay port → command controller → engine. This keeps fast experiments from becoming dependency archaeology.
+
+### Fast iteration commands
+
+- `npm run vibe:fast` — quick confidence loop for UI contracts and unit tests.
+- `npm run vibe:check` — full regression gate before a push.
+- `npm run vibe:build` — explicit alias for the full build-safe verification path.
+
+Recommended rhythm: **edit → vibe:fast → inspect → repeat → vibe:check before push**.
