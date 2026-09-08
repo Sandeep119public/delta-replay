@@ -51,3 +51,12 @@ Data: `/api/v1/data/csv`.
 Backtest: `/api/v1/backtest/run`.
 
 The V2 workflow verifies both Python tests and the production React build on every branch push and pull request.
+
+
+## Production deployment
+
+The frontend and API are deployed independently. Set `VITE_API_BASE_URL` to the public API origin during the frontend build and set `CORS_ORIGINS` on the API to the exact public frontend origin. Copy `.env.example` before configuring a host.
+
+Health check: `/health`.
+
+For a Python host using a Procfile, deploy the repository backend with the start command already provided in `backend/Procfile`. The API must expose a persistent public URL before building the frontend so `VITE_API_BASE_URL` is embedded correctly.
