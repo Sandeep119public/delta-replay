@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Literal
-from ..models import OrderRequest
+from ..models import OrderRequest, Candle
 from ..services.paper_engine import PaperTradingEngine
 from .replay import service as replay_service
 
@@ -13,6 +13,9 @@ class RiskRequest(BaseModel):
     stopLoss: float|None=None; takeProfit: float|None=None
 class CloseRequest(BaseModel):
     quantity: float|None=None
+class MarketCandleRequest(BaseModel):
+    candle: Candle|None=None
+    index: int|None=None
 
 def snapshot(): return service.snapshot()
 def candle():
@@ -48,8 +51,11 @@ def risk(request:RiskRequest):
     try:return {"position":service.set_risk("BTCUSD",request.stopLoss,request.takeProfit),**snapshot()}
     except (ValueError,KeyError) as e: raise HTTPException(422,str(e))
 @router.post("/candle")
-def process():
-    c=candle(); events=service.on_candle(c,replay_service.state()["index"])
+def process(request: MarketCandleRequest|None = None):
+    request = request or MarketCandleRequest()
+    c = request.candle.model_dump() if request.candle is not None else candle()
+    index = request.index if request.index is not None else replay_service.state()["index"]
+    events=service.on_candle(c,index)
     return {"events":events,**snapshot()}
 @router.post("/reset")
 def reset():
