@@ -40,6 +40,7 @@ jobs:
       - run: npm ci
       - run: npm run test:architecture:graph
       - run: npm run test:architecture
+      - run: npm run test:ui-contracts
       - run: npm test
       - run: npm run build
       - uses: actions/setup-python@v6
