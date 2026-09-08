@@ -1,4 +1,5 @@
 from copy import deepcopy
+from math import isfinite
 
 from ..domain.account import TradingAccount
 from ..domain.ambiguity import evaluate
@@ -9,6 +10,12 @@ class PaperTradingEngine:
         self.margin_rate = float(margin_rate)
         self.maint_margin_rate = float(maint_margin_rate)
         self.fee_rate = float(fee_rate)
+        if not 0 < self.margin_rate <= 1:
+            raise ValueError("margin rate must be in (0, 1]")
+        if not 0 <= self.maint_margin_rate <= self.margin_rate:
+            raise ValueError("maintenance margin rate must be in [0, margin_rate]")
+        if not 0 <= self.fee_rate < 1:
+            raise ValueError("fee rate must be in [0, 1)")
         self.account = TradingAccount(float(starting_balance))
         self.positions = {}
         self.orders = {}
@@ -16,7 +23,19 @@ class PaperTradingEngine:
         self.index = -1
         self._next_order = 1
 
+    @staticmethod
+    def _positive_finite(value, name):
+        try:
+            value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be numeric") from exc
+        if not isfinite(value) or value <= 0:
+            raise ValueError(f"{name} must be finite and positive")
+        return value
+
     def fee(self, price, quantity):
+        price = self._positive_finite(price, "price")
+        quantity = self._positive_finite(quantity, "quantity")
         return abs(price * quantity) * self.fee_rate
 
     def has_open_position(self, symbol=None):
@@ -26,6 +45,7 @@ class PaperTradingEngine:
         return [o for o in self.orders.values() if o["status"] == "PENDING"]
 
     def mark(self, symbol, price):
+        price = self._positive_finite(price, "price")
         if symbol in self.positions:
             self.positions[symbol]["current_price"] = price
         self._recalc()
@@ -36,11 +56,14 @@ class PaperTradingEngine:
             sign = 1 if position["side"] == "long" else -1
             mark = position["current_price"]
             unrealized += (mark - position["entry_price"]) * position["quantity"] * sign
-            used += mark * position["quantity"] * self.margin_rate
+            # Initial margin is reserved from entry notional. Maintenance margin is
+            # marked to market because the liquidation threshold changes with price.
+            used += position["entry_price"] * position["quantity"] * self.margin_rate
             maintenance += mark * position["quantity"] * self.maint_margin_rate
         self.account.unrealized_pnl = unrealized
         self.account.used_margin = used
         self.account.maintenance_margin = maintenance
+        self.account.validate_invariants()
 
     def submit(self, symbol, side, quantity, type="market", limit_price=None, stop_price=None):
         symbol = str(symbol).strip().upper()
@@ -48,14 +71,17 @@ class PaperTradingEngine:
             raise ValueError("symbol must be provided")
         if side not in ("buy", "sell"):
             raise ValueError("side must be buy or sell")
-        if quantity <= 0:
-            raise ValueError("quantity must be positive")
+        quantity = self._positive_finite(quantity, "quantity")
         if type not in ("market", "limit", "stop_market"):
             raise ValueError("unsupported order type")
-        if type == "limit" and (limit_price is None or limit_price <= 0):
-            raise ValueError("limit_price required")
-        if type == "stop_market" and (stop_price is None or stop_price <= 0):
-            raise ValueError("stop_price required")
+        if type == "limit":
+            limit_price = self._positive_finite(limit_price, "limit_price")
+        elif limit_price is not None:
+            limit_price = self._positive_finite(limit_price, "limit_price")
+        if type == "stop_market":
+            stop_price = self._positive_finite(stop_price, "stop_price")
+        elif stop_price is not None:
+            stop_price = self._positive_finite(stop_price, "stop_price")
         if self.has_open_position(symbol):
             raise ValueError("position already open")
 
@@ -64,7 +90,7 @@ class PaperTradingEngine:
             "symbol": symbol,
             "side": side,
             "type": type,
-            "quantity": float(quantity),
+            "quantity": quantity,
             "limitPrice": limit_price,
             "stopPrice": stop_price,
             "status": "PENDING",
@@ -87,7 +113,11 @@ class PaperTradingEngine:
             raise ValueError("insufficient margin")
 
         self.account.wallet_balance -= fee
+        # Entry fees are realized cash costs immediately. This keeps the account
+        # identity stable while the position remains open.
+        self.account.realized_pnl -= fee
         self.account.total_fees += fee
+        self.account.validate_invariants()
         self.positions[symbol] = {
             "symbol": symbol,
             "side": side,
@@ -104,13 +134,12 @@ class PaperTradingEngine:
         }
 
     def close(self, symbol, price, reason="MARKET", ambiguity="NONE", timestamp=None, quantity=None):
-        if price <= 0:
-            raise ValueError("price must be positive")
+        price = self._positive_finite(price, "price")
         position = self.positions.get(symbol)
         if not position:
             return None
-        qty = position["quantity"] if quantity is None else quantity
-        if qty <= 0 or qty > position["quantity"]:
+        qty = position["quantity"] if quantity is None else self._positive_finite(quantity, "quantity")
+        if qty > position["quantity"]:
             raise ValueError("invalid close quantity")
 
         gross = (price - position["entry_price"]) * qty * (1 if position["side"] == "long" else -1)
@@ -119,8 +148,9 @@ class PaperTradingEngine:
         net = gross - entry_fee - exit_fee
 
         self.account.wallet_balance += gross - exit_fee
-        self.account.realized_pnl += net
+        self.account.realized_pnl += gross - exit_fee
         self.account.total_fees += exit_fee
+        self.account.validate_invariants()
 
         trade = {
             "id": len(self.trades) + 1,
@@ -153,7 +183,15 @@ class PaperTradingEngine:
 
     def on_candle(self, candle, index=None, symbol="BTCUSDT"):
         symbol = str(symbol).strip().upper()
-        self.index = self.index + 1 if index is None else int(index)
+        if not isinstance(candle, dict):
+            raise ValueError("candle must be an object")
+        for key in ("open", "high", "low", "close"):
+            self._positive_finite(candle.get(key), f"candle {key}")
+        if index is not None:
+            index = int(index)
+            if index < 0:
+                raise ValueError("candle index must be non-negative")
+        self.index = self.index + 1 if index is None else index
         events = []
 
         for order in self.orders.values():
@@ -239,11 +277,19 @@ class PaperTradingEngine:
         position = self.positions.get(symbol)
         if not position:
             raise ValueError("no open position")
+        entry = position["entry_price"]
+        side = position["side"]
         if stop_loss is not None:
-            position["stop_loss"] = float(stop_loss)
+            stop_loss = self._positive_finite(stop_loss, "stop_loss")
+            if (side == "long" and stop_loss >= entry) or (side == "short" and stop_loss <= entry):
+                raise ValueError("stop_loss must be below entry for long or above entry for short")
+            position["stop_loss"] = stop_loss
             position["stop_loss_created_index"] = self.index
         if take_profit is not None:
-            position["take_profit"] = float(take_profit)
+            take_profit = self._positive_finite(take_profit, "take_profit")
+            if (side == "long" and take_profit <= entry) or (side == "short" and take_profit >= entry):
+                raise ValueError("take_profit must be above entry for long or below entry for short")
+            position["take_profit"] = take_profit
             position["take_profit_created_index"] = self.index
         return position
 
@@ -270,21 +316,19 @@ class PaperTradingEngine:
 
     def set_starting_balance(self, balance):
         balance = float(balance)
-        if balance <= 0:
-            raise ValueError("starting balance must be positive")
+        if not isfinite(balance) or balance <= 0:
+            raise ValueError("starting balance must be finite and positive")
         if self.has_open_position() or self.pending_orders():
             raise ValueError("close positions and cancel pending orders before changing starting balance")
-        self.account = TradingAccount(balance)
-        self.positions = {}
-        self.orders = {}
-        self.trades = []
-        self.index = -1
-        self._next_order = 1
+        fee_rate = self.fee_rate
+        margin_rate = self.margin_rate
+        maint_margin_rate = self.maint_margin_rate
+        self.__init__(balance, fee_rate, margin_rate, maint_margin_rate)
         return self
 
     def set_fee_rate(self, rate):
         rate = float(rate)
-        if rate < 0 or rate >= 1:
+        if not isfinite(rate) or rate < 0 or rate >= 1:
             raise ValueError("fee rate must be in [0, 1)")
         self.fee_rate = rate
         return self
@@ -302,6 +346,7 @@ class PaperTradingEngine:
 
     def export_state(self):
         """Return all engine state required to reconstruct this service."""
+        self._validate_state()
         return {
             "marginRate": self.margin_rate,
             "maintenanceMarginRate": self.maint_margin_rate,
@@ -313,6 +358,86 @@ class PaperTradingEngine:
             "index": self.index,
             "nextOrder": self._next_order,
         }
+
+    def _validate_state(self):
+        if not 0 < self.margin_rate <= 1:
+            raise ValueError("marginRate must be in (0, 1]")
+        if not 0 <= self.maint_margin_rate <= self.margin_rate:
+            raise ValueError("maintenanceMarginRate must be in [0, marginRate]")
+        if not 0 <= self.fee_rate < 1:
+            raise ValueError("feeRate must be in [0, 1)")
+        if not isinstance(self.index, int) or self.index < -1:
+            raise ValueError("trading index must be >= -1")
+        if not isinstance(self._next_order, int) or self._next_order <= 0:
+            raise ValueError("next order id must be positive")
+        self.account.validate_invariants()
+
+        allowed_statuses = {"PENDING", "FILLED", "CANCELLED", "REJECTED"}
+        order_ids = []
+        for key, order in self.orders.items():
+            try:
+                order_id = int(key)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("order id must be an integer") from exc
+            if order_id <= 0 or not isinstance(order, dict):
+                raise ValueError("invalid order state")
+            if order.get("id") != order_id:
+                raise ValueError("order id does not match its map key")
+            if not isinstance(order.get("symbol"), str) or not order["symbol"].strip():
+                raise ValueError("order symbol must be non-empty")
+            if order.get("side") not in ("buy", "sell"):
+                raise ValueError("order side is invalid")
+            if order.get("type") not in ("market", "limit", "stop_market"):
+                raise ValueError("order type is invalid")
+            self._positive_finite(order.get("quantity"), "order quantity")
+            if order.get("createdIndex") is None or int(order["createdIndex"]) < -1:
+                raise ValueError("order createdIndex is invalid")
+            if order.get("status") not in allowed_statuses:
+                raise ValueError("order status is invalid")
+            if order["type"] == "limit" and order.get("limitPrice") is None:
+                raise ValueError("limit order requires limitPrice")
+            if order["type"] == "stop_market" and order.get("stopPrice") is None:
+                raise ValueError("stop order requires stopPrice")
+            if order.get("limitPrice") is not None:
+                self._positive_finite(order["limitPrice"], "limitPrice")
+            if order.get("stopPrice") is not None:
+                self._positive_finite(order["stopPrice"], "stopPrice")
+            if order["status"] == "PENDING" and order.get("filledPrice") is not None:
+                raise ValueError("pending order cannot have a filled price")
+            if order["status"] == "FILLED" and order.get("filledPrice") is None:
+                raise ValueError("filled order requires a filled price")
+            if order.get("filledPrice") is not None:
+                self._positive_finite(order["filledPrice"], "filledPrice")
+            order_ids.append(order_id)
+        if order_ids and self._next_order <= max(order_ids):
+            raise ValueError("next order id must exceed all existing order ids")
+
+        for symbol, position in self.positions.items():
+            if not isinstance(symbol, str) or not symbol.strip():
+                raise ValueError("position symbol must be non-empty")
+            if not isinstance(position, dict) or position.get("symbol") != symbol:
+                raise ValueError("position key and symbol must match")
+            if position.get("side") not in ("long", "short"):
+                raise ValueError("position side is invalid")
+            self._positive_finite(position.get("quantity"), "position quantity")
+            self._positive_finite(position.get("entry_price"), "position entry_price")
+            self._positive_finite(position.get("current_price"), "position current_price")
+            self._positive_finite(position.get("entry_fee"), "position entry_fee")
+            for field in ("stop_loss", "take_profit"):
+                if position.get(field) is not None:
+                    self._positive_finite(position[field], field)
+            for field in ("stop_loss_created_index", "take_profit_created_index", "opened_index"):
+                if field in position and int(position[field]) < -1:
+                    raise ValueError(f"position {field} is invalid")
+
+        for trade in self.trades:
+            if not isinstance(trade, dict):
+                raise ValueError("trade must be an object")
+            self._positive_finite(trade.get("quantity"), "trade quantity")
+            self._positive_finite(trade.get("entryPrice"), "trade entryPrice")
+            self._positive_finite(trade.get("exitPrice"), "trade exitPrice")
+
+        return self
 
     @classmethod
     def from_state(cls, state):
@@ -339,19 +464,32 @@ class PaperTradingEngine:
         if not isinstance(state["trades"], list):
             raise ValueError("trading trades must be a list")
 
+        try:
+            starting_balance = float(state["account"]["startingBalance"])
+            fee_rate = float(state["feeRate"])
+            margin_rate = float(state["marginRate"])
+            maint_margin_rate = float(state["maintenanceMarginRate"])
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ValueError("invalid trading configuration") from exc
+
         engine = cls(
-            starting_balance=float(state["account"]["startingBalance"]),
-            fee_rate=float(state["feeRate"]),
-            margin_rate=float(state["marginRate"]),
-            maint_margin_rate=float(state["maintenanceMarginRate"]),
+            starting_balance=starting_balance,
+            fee_rate=fee_rate,
+            margin_rate=margin_rate,
+            maint_margin_rate=maint_margin_rate,
         )
         engine.account = TradingAccount.from_state(state["account"])
         engine.positions = deepcopy(state["positions"])
-        engine.orders = {int(key): deepcopy(value) for key, value in state["orders"].items()}
+        try:
+            engine.orders = {int(key): deepcopy(value) for key, value in state["orders"].items()}
+        except (TypeError, ValueError) as exc:
+            raise ValueError("order ids must be integers") from exc
         engine.trades = deepcopy(state["trades"])
-        engine.index = int(state["index"])
-        engine._next_order = int(state["nextOrder"])
-        if engine._next_order <= 0:
-            raise ValueError("next order id must be positive")
+        try:
+            engine.index = int(state["index"])
+            engine._next_order = int(state["nextOrder"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("trading index and nextOrder must be integers") from exc
+        engine._validate_state()
         engine._recalc()
         return engine
