@@ -159,7 +159,7 @@ class PaperTradingEngine:
                 continue
 
             price = None
-            if order["type"] == "market" and self.index >= order["createdIndex"] + 2:
+            if order["type"] == "market" and self.index > order["createdIndex"]:
                 price = candle["open"]
             elif order["type"] == "limit":
                 touched = ((order["side"] == "buy" and candle["low"] <= order["limitPrice"]) or
@@ -203,7 +203,7 @@ class PaperTradingEngine:
                 })
 
         self._recalc()
-        for sym, position in list(self.positions.items()):
+        for sym in list(self.positions):
             if self.account.equity <= self.account.maintenance_margin:
                 trade = self.close(sym, candle["close"], "LIQUIDATION", timestamp=candle.get("time"))
                 events.append({
@@ -252,8 +252,11 @@ class PaperTradingEngine:
         if self.has_open_position() or self.pending_orders():
             raise ValueError("close positions and cancel pending orders before changing starting balance")
         self.account = TradingAccount(balance)
+        self.positions = {}
+        self.orders = {}
         self.trades = []
         self.index = -1
+        self._next_order = 1
         return self
 
     def set_fee_rate(self, rate):
