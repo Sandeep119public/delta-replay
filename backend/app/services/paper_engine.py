@@ -33,7 +33,7 @@ class PaperTradingEngine:
   if qty<=0 or qty>p["quantity"]: raise ValueError("invalid close quantity")
   gross=(price-p["entry_price"])*qty*(1 if p["side"]=="long" else -1);exit_fee=self.fee(price,qty);entry_fee=p["entry_fee"]*(qty/p["quantity"]);net=gross-entry_fee-exit_fee
   self.account.wallet_balance+=gross-exit_fee;self.account.realized_pnl+=net;self.account.total_fees+=exit_fee
-  t={"id":len(self.trades)+1,"symbol":symbol,"side":p["side"].upper(),"quantity":qty,"entryPrice":p["entry_price"],"exitPrice":price,"openedAt":p["opened_at"],"closedAt":timestamp,"realizedPnL":net,"grossPnL":gross,"entryFee":entry_fee,"exitFee":exit_fee,"totalFee":p["entry_fee"]+exit_fee,"netPnL":net,"exitReason":reason,"ambiguityResolution":ambiguity};self.trades.append(t)
+  t={"id":len(self.trades)+1,"symbol":symbol,"side":p["side"].upper(),"quantity":qty,"entryPrice":p["entry_price"],"exitPrice":price,"openedAt":p["opened_at"],"closedAt":timestamp,"realizedPnL":net,"grossPnL":gross,"entryFee":entry_fee,"exitFee":exit_fee,"totalFee":entry_fee+exit_fee,"netPnL":net,"exitReason":reason,"ambiguityResolution":ambiguity};self.trades.append(t)
   if qty==p["quantity"]: del self.positions[symbol]
   else:
    p["quantity"]-=qty;p["entry_fee"]-=entry_fee
