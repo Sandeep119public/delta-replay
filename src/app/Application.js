@@ -16,6 +16,7 @@ import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
 import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
+import { createReplayCapabilities, requireElement } from './ApplicationComposition.js';
 
 function registerActionGuard(engine, canTrade, reportError) {
   return engine.registerActionGuard((action) => {
@@ -52,21 +53,16 @@ export function createApplication() {
   });
 
   // Render the shell once before constructing chart handles.
-  const mount = document.getElementById('app');
-  if (!mount) throw new Error('Application mount #app is missing');
+  const mount = requireElement('app');
   renderPaperLayout(mount);
-  const chartContainer = document.getElementById('chart-container');
-  if (!chartContainer) throw new Error('Chart container #chart-container is missing after layout render');
+  const chartContainer = requireElement('chart-container');
   const chartManager = new ChartManager(chartContainer);
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
 
   let coordinator = null;
   let commandController = null;
-  const replayCapabilities = Object.freeze({
-    load: (options = {}) => coordinator?.loadAndPrepareReplay(options),
-    preview: (idx) => coordinator?.updatePreviewWindow?.(idx),
-    changeDataset: (kind, value, sourceEl) => coordinator?.handleSymbolTimeframeChange(kind, value, sourceEl),
-  });
+  const replayRuntime = createReplayCapabilities();
+  const replayCapabilities = replayRuntime.capabilities;
 
   const callbacks = {
     onRetry: () => replayCapabilities.load({ autoStart: false }),
@@ -115,6 +111,8 @@ export function createApplication() {
     tradingErrorView: ui.tradingErrorView,
     ...ui.getReplayPorts(),
   });
+
+  replayRuntime.attach(coordinator);
 
   const coordinatorPorts = ui.getReplayPorts();
   commandController = new ReplayCommandController({
