@@ -3,6 +3,8 @@ import { HistoricalDataManager } from '../data/HistoricalDataManager.js';
 import { CandleStore } from '../data/CandleStore.js';
 import { CandleCache } from '../data/CandleCache.js';
 import { AppState } from '../state/AppState.js';
+import { RemoteReplayEngine } from './RemoteReplayEngine.js';
+import { RemoteTradingEngine } from './RemoteTradingEngine.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -31,13 +33,18 @@ export function createCoreServices() {
     chunkSize: 1000,
     strictMode: true,
   });
+  const replayApi = new BackendService('replay');
+  const tradingApi = new BackendService('trading');
+  const backtestApi = new BackendService('backtest');
   return {
+    engine: new RemoteReplayEngine(replayApi),
+    tradingEngine: new RemoteTradingEngine(tradingApi),
     appState,
     candleStore,
     candleCache,
     dataManager,
-    replayApi: new BackendService('replay'),
-    tradingApi: new BackendService('trading'),
-    backtestApi: new BackendService('backtest'),
+    replayApi,
+    tradingApi,
+    backtestApi,
   };
 }
