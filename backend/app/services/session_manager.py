@@ -24,6 +24,7 @@ class SessionManager:
     def __init__(self, repository: SessionRepository | None = None):
         self.repository = repository or self._repository_from_environment()
         self._sessions = {}
+        self._session_locks = {}
         self._lock = RLock()
 
     @staticmethod
@@ -40,9 +41,14 @@ class SessionManager:
         except (ValueError, AttributeError, TypeError):
             raise HTTPException(status_code=400, detail=f"{SESSION_HEADER} must be a valid UUID")
 
+    def _lock_for(self, session_id: str) -> RLock:
+        with self._lock:
+            return self._session_locks.setdefault(session_id, RLock())
+
     def get(self, session_id: str) -> SessionState:
         self._validate_session_id(session_id)
-        with self._lock:
+        session_lock = self._lock_for(session_id)
+        with session_lock:
             if not self.repository.durable:
                 session = self._sessions.get(session_id)
                 if session is not None:
@@ -69,14 +75,16 @@ class SessionManager:
     def save(self, session_id: str, state: SessionState) -> None:
         self._validate_session_id(session_id)
         document = serialize_session(state.replay, state.trading)
-        with self._lock:
+        session_lock = self._lock_for(session_id)
+        with session_lock:
             self.repository.save(session_id, document)
             self._sessions[session_id] = state
 
     def atomic(self, session_id: str, operation):
         """Run a session mutation with one durable commit."""
         self._validate_session_id(session_id)
-        with self._lock:
+        session_lock = self._lock_for(session_id)
+        with session_lock:
             self._ensure_exists(session_id)
 
             def mutate(document):
@@ -95,9 +103,12 @@ class SessionManager:
 
     def delete(self, session_id: str) -> None:
         self._validate_session_id(session_id)
-        with self._lock:
+        session_lock = self._lock_for(session_id)
+        with session_lock:
             self._sessions.pop(session_id, None)
             self.repository.delete(session_id)
+        with self._lock:
+            self._session_locks.pop(session_id, None)
 
     def clear_cache(self) -> None:
         """Drop in-process objects without touching the repository."""
@@ -108,22 +119,20 @@ class SessionManager:
 manager = SessionManager()
 
 
-def get_session(request: Request) -> SessionState:
+def _session_id(request: Request) -> str:
     session_id = request.headers.get(SESSION_HEADER, "").strip()
     if not session_id:
         raise HTTPException(status_code=400, detail=f"{SESSION_HEADER} header is required")
-    return manager.get(session_id)
+    return session_id
+
+
+def get_session(request: Request) -> SessionState:
+    return manager.get(_session_id(request))
 
 
 def persist_session(request: Request, session: SessionState) -> None:
-    session_id = request.headers.get(SESSION_HEADER, "").strip()
-    if not session_id:
-        raise HTTPException(status_code=400, detail=f"{SESSION_HEADER} header is required")
-    manager.save(session_id, session)
+    manager.save(_session_id(request), session)
 
 
 def atomic_session(request: Request, operation):
-    session_id = request.headers.get(SESSION_HEADER, "").strip()
-    if not session_id:
-        raise HTTPException(status_code=400, detail=f"{SESSION_HEADER} header is required")
-    return manager.atomic(session_id, operation)
+    return manager.atomic(_session_id(request), operation)
