@@ -66,7 +66,7 @@ export const workspaceMarkup = () => `<div class="main-layout">
       </section>
     </div>
 
-    <div id="tab-view-account" class="tab-panel" role="tabpanel" aria-labelledby="account-tab" tabindex="0">
+    <div id="tab-view-account" class="tab-panel" role="tabpanel" aria-labelledby="account-tab" tabindex="0" hidden>
       <section class="account-card"><div class="account-stat"><span>Cash balance</span><strong id="acct-balance">—</strong></div><div class="account-stat"><span>Realized P&amp;L</span><strong id="acct-realized">—</strong></div><div class="account-stat"><span>Fees paid</span><strong id="acct-fees">—</strong></div></section>
       <button id="btn-reset-acct" class="btn btn-danger" type="button">Reset paper account</button>
     </div>
