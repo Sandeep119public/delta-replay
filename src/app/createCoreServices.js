@@ -36,9 +36,11 @@ export function createCoreServices() {
   const replayApi = new BackendService('replay');
   const tradingApi = new BackendService('trading');
   const backtestApi = new BackendService('backtest');
+  const tradingEngine = new RemoteTradingEngine(tradingApi);
+  const engine = new RemoteReplayEngine(replayApi, tradingEngine);
   return {
-    engine: new RemoteReplayEngine(replayApi),
-    tradingEngine: new RemoteTradingEngine(tradingApi),
+    tradingEngine,
+    engine,
     appState,
     candleStore,
     candleCache,
