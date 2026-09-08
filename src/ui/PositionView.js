@@ -1,178 +1,102 @@
 import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
-/**
- * PositionView manages the active position card (symbol, side, size,
- * entry/current price, live unrealized PnL), risk stop/take profit inputs,
- * and position close triggers.
- *
- * Trading capabilities arrive only as the narrow presentation contract
- * ({ snapshot, actions, events, on }); engine-shaped objects are rejected.
- */
 export class PositionView {
   constructor({
     trading = null,
-    posSymbolEl,
-    posSideEl,
-    posQtyEl,
-    posEntryEl,
-    posCurrentEl,
-    posPnlEl,
-    posSlEl = typeof document !== 'undefined' ? document.getElementById('pos-sl') : null,
-    posTpEl = typeof document !== 'undefined' ? document.getElementById('pos-tp') : null,
-    posSideBadge = typeof document !== 'undefined' ? document.getElementById('pos-side-badge') : null,
-    positionPanel = typeof document !== 'undefined' && typeof document.querySelector === 'function' ? document.querySelector('.position-panel') : null,
-    closeBtn,
-    setRiskBtn = typeof document !== 'undefined' ? document.getElementById('btn-set-risk') : null,
-    clearRiskBtn = typeof document !== 'undefined' ? document.getElementById('btn-clear-risk') : null,
-    slInput = typeof document !== 'undefined' ? document.getElementById('sl-price') : null,
-    tpInput = typeof document !== 'undefined' ? document.getElementById('tp-price') : null,
-    onError = null,
-    onSuccess = null,
-    onRender = null,
+    posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
+    posSlEl = document.getElementById('pos-sl'),
+    posTpEl = document.getElementById('pos-tp'),
+    closeBtn, setRiskBtn = document.getElementById('btn-set-risk'),
+    clearRiskBtn = document.getElementById('btn-clear-risk'),
+    slInput = document.getElementById('sl-price'), tpInput = document.getElementById('tp-price'),
+    onError = null, onSuccess = null, onRender = null,
   } = {}) {
     this.trading = trading ? assertTradingPresentation(trading) : null;
-    this.posSymbolEl = posSymbolEl;
-    this.posSideEl = posSideEl;
-    this.posQtyEl = posQtyEl;
-    this.posEntryEl = posEntryEl;
-    this.posCurrentEl = posCurrentEl;
-    this.posPnlEl = posPnlEl;
-    this.posSlEl = posSlEl;
-    this.posTpEl = posTpEl;
-    this.posSideBadge = posSideBadge;
-    this.positionPanel = positionPanel;
-    this.closeBtn = closeBtn;
-    this.setRiskBtn = setRiskBtn;
-    this.clearRiskBtn = clearRiskBtn;
-    this.slInput = slInput;
-    this.tpInput = tpInput;
-    this.onError = onError;
-    this.onSuccess = onSuccess;
-    this.onRender = onRender;
-
+    Object.assign(this, { posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
+      posSlEl, posTpEl, closeBtn, setRiskBtn, clearRiskBtn, slInput, tpInput, onError, onSuccess, onRender });
+    this.busy = false;
     this._listeners = [];
-    this._bindEvents();
+    this._listen(this.closeBtn, 'click', () => void this.closePosition());
+    this._listen(this.setRiskBtn, 'click', () => void this.setRisk());
+    this._listen(this.clearRiskBtn, 'click', () => void this.clearRisk());
   }
 
-  _bindEvents() {
-    if (this.closeBtn) { const h = () => this.closePosition(); this.closeBtn.addEventListener('click', h); this._listeners.push([this.closeBtn, 'click', h]); }
-    if (this.setRiskBtn) { const h = () => this.setRisk(); this.setRiskBtn.addEventListener('click', h); this._listeners.push([this.setRiskBtn, 'click', h]); }
-    if (this.clearRiskBtn) { const h = () => this.clearRisk(); this.clearRiskBtn.addEventListener('click', h); this._listeners.push([this.clearRiskBtn, 'click', h]); }
+  _listen(element, type, handler) {
+    element?.addEventListener?.(type, handler);
+    if (element?.removeEventListener) this._listeners.push([element, type, handler]);
   }
 
-  destroy() { this._listeners.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler)); this._listeners = []; }
+  destroy() { this._listeners.splice(0).forEach(([el, type, handler]) => el.removeEventListener?.(type, handler)); }
+  _fmt(v) { const n = Number(v); return Number.isFinite(n) ? `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}` : '—'; }
 
-  _fmtMoney(v) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return '—';
-    const sign = n >= 0 ? '' : '-';
-    return `${sign}$${Math.abs(n).toFixed(2)}`;
+  async _run(action) {
+    if (this.busy) return { success: false, message: 'Trading request already in progress' };
+    this.busy = true;
+    this.render(this.trading?.snapshot().positions || []);
+    try {
+      const result = await action();
+      if (!result?.success) this.onError?.(result?.message || 'Trading request failed');
+      else this.onSuccess?.();
+      this.onRender?.();
+      return result;
+    } catch (error) {
+      this.onError?.(error?.message || 'Trading request failed');
+      return { success: false, message: error?.message || 'Trading request failed' };
+    } finally {
+      this.busy = false;
+      this.render(this.trading?.snapshot().positions || []);
+    }
   }
 
   closePosition() {
-    if (!this.trading) throw new Error('PositionView requires a trading presentation to close positions');
-    const positions = this.trading.snapshot().positions;
-    if (!positions.length) {
-      this.onError?.('No open position to close');
-      return;
-    }
-    const symbol = positions[0].symbol;
-    const res = this.trading.actions.flattenPosition(symbol);
-    if (!res.success) this.onError?.(res.message);
-    else this.onSuccess?.();
-    this.onRender?.();
-    return res;
+    const position = this.trading?.snapshot().positions?.[0];
+    if (!position) { const message = 'No open position to close'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
+    return this._run(() => this.trading.actions.flattenPosition(position.symbol));
   }
 
   setRisk() {
-    if (!this.trading) throw new Error('PositionView requires a trading presentation to set risk');
-    const positions = this.trading.snapshot().positions;
-    if (!positions.length) {
-      this.onError?.('No open position for SL/TP');
-      return;
-    }
-    const symbol = positions[0].symbol;
-    const slVal = this.slInput?.value?.trim?.();
-    const tpVal = this.tpInput?.value?.trim?.();
-    const { actions } = this.trading;
-
-    let res;
-    if (slVal && tpVal) {
-      res = actions.updateRisk({ symbol, stopLoss: parseFloat(slVal), takeProfit: parseFloat(tpVal) });
-    } else if (slVal) {
-      res = actions.setStopLoss(symbol, parseFloat(slVal));
-    } else if (tpVal) {
-      res = actions.setTakeProfit(symbol, parseFloat(tpVal));
-    } else {
-      this.onError?.('Enter SL or TP price');
-      return;
-    }
-
-    if (!res.success) this.onError?.(res.message);
-    else this.onSuccess?.();
-    this.onRender?.();
-    return res;
+    const position = this.trading?.snapshot().positions?.[0];
+    if (!position) { const message = 'No open position for SL/TP'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
+    const sl = this.slInput?.value?.trim();
+    const tp = this.tpInput?.value?.trim();
+    if (!sl && !tp) { const message = 'Enter SL or TP price'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
+    const symbol = position.symbol;
+    if (sl && tp) return this._run(() => this.trading.actions.updateRisk({ symbol, stopLoss: Number(sl), takeProfit: Number(tp) }));
+    if (sl) return this._run(() => this.trading.actions.setStopLoss(symbol, Number(sl)));
+    return this._run(() => this.trading.actions.setTakeProfit(symbol, Number(tp)));
   }
 
   clearRisk() {
-    if (!this.trading) throw new Error('PositionView requires a trading presentation to clear risk');
-    const positions = this.trading.snapshot().positions;
-    if (!positions.length) {
-      this.onError?.('No open position to clear');
-      return;
-    }
-    const symbol = positions[0].symbol;
+    const position = this.trading?.snapshot().positions?.[0];
+    if (!position) { const message = 'No open position to clear'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
     if (this.slInput) this.slInput.value = '';
     if (this.tpInput) this.tpInput.value = '';
-    this.trading.actions.clearRisk(symbol);
-    this.onRender?.();
+    return this._run(() => this.trading.actions.clearRisk(position.symbol));
   }
 
   render(positions = []) {
-    const posSideBadge = this.posSideBadge || document.getElementById('pos-side-badge');
-    const positionPanel = this.positionPanel || (typeof document?.querySelector === 'function' ? document.querySelector('.position-panel') : null);
-
-    if (positionPanel) positionPanel.classList.toggle('is-empty', positions.length === 0);
-
-    if (!positions || positions.length === 0) {
-      if (this.posSymbolEl) this.posSymbolEl.textContent = '—';
-      if (this.posSideEl) this.posSideEl.textContent = '—';
-      if (this.posQtyEl) this.posQtyEl.textContent = '—';
-      if (this.posEntryEl) this.posEntryEl.textContent = '—';
-      if (this.posCurrentEl) this.posCurrentEl.textContent = '—';
-      if (this.posPnlEl) {
-        this.posPnlEl.textContent = '—';
-        this.posPnlEl.className = '';
-      }
-      if (this.posSlEl) this.posSlEl.textContent = '—';
-      if (this.posTpEl) this.posTpEl.textContent = '—';
-      if (posSideBadge) {
-        posSideBadge.textContent = 'NO POSITION';
-        posSideBadge.className = 'pos-badge hidden';
-      }
+    const position = positions[0] || null;
+    if (!position) {
+      [this.posSymbolEl, this.posSideEl, this.posQtyEl, this.posEntryEl, this.posCurrentEl, this.posPnlEl, this.posSlEl, this.posTpEl]
+        .forEach((el) => { if (el) el.textContent = '—'; });
       if (this.closeBtn) this.closeBtn.disabled = true;
       if (this.setRiskBtn) this.setRiskBtn.disabled = true;
       if (this.clearRiskBtn) this.clearRiskBtn.disabled = true;
-    } else {
-      const p = positions[0];
-      if (this.posSymbolEl) this.posSymbolEl.textContent = p.symbol;
-      if (this.posSideEl) this.posSideEl.textContent = p.side;
-      if (this.posQtyEl) this.posQtyEl.textContent = String(p.quantity);
-      if (this.posEntryEl) this.posEntryEl.textContent = this._fmtMoney(p.entryPrice);
-      if (this.posCurrentEl) this.posCurrentEl.textContent = this._fmtMoney(p.currentPrice);
-      if (this.posPnlEl) {
-        this.posPnlEl.textContent = this._fmtMoney(p.unrealizedPnL);
-        this.posPnlEl.className = p.unrealizedPnL >= 0 ? 'pnl-pos' : 'pnl-neg';
-      }
-      if (posSideBadge) {
-        posSideBadge.textContent = p.side;
-        posSideBadge.className = `pos-badge ${p.side === 'LONG' ? 'pos-long' : 'pos-short'}`;
-      }
-      if (this.posSlEl) this.posSlEl.textContent = p.stopLossPrice != null ? this._fmtMoney(p.stopLossPrice) : '—';
-      if (this.posTpEl) this.posTpEl.textContent = p.takeProfitPrice != null ? this._fmtMoney(p.takeProfitPrice) : '—';
-      if (this.closeBtn) this.closeBtn.disabled = false;
-      if (this.setRiskBtn) this.setRiskBtn.disabled = false;
-      if (this.clearRiskBtn) this.clearRiskBtn.disabled = false;
+      return;
     }
+    if (this.posSymbolEl) this.posSymbolEl.textContent = position.symbol;
+    if (this.posSideEl) this.posSideEl.textContent = position.side;
+    if (this.posQtyEl) this.posQtyEl.textContent = String(position.quantity);
+    if (this.posEntryEl) this.posEntryEl.textContent = this._fmt(position.entryPrice);
+    if (this.posCurrentEl) this.posCurrentEl.textContent = this._fmt(position.currentPrice);
+    if (this.posPnlEl) {
+      this.posPnlEl.textContent = this._fmt(position.unrealizedPnL);
+      this.posPnlEl.className = Number(position.unrealizedPnL) >= 0 ? 'pnl-pos' : 'pnl-neg';
+    }
+    if (this.posSlEl) this.posSlEl.textContent = position.stopLossPrice != null ? this._fmt(position.stopLossPrice) : '—';
+    if (this.posTpEl) this.posTpEl.textContent = position.takeProfitPrice != null ? this._fmt(position.takeProfitPrice) : '—';
+    if (this.closeBtn) this.closeBtn.disabled = this.busy;
+    if (this.setRiskBtn) this.setRiskBtn.disabled = this.busy;
+    if (this.clearRiskBtn) this.clearRiskBtn.disabled = this.busy;
   }
 }
