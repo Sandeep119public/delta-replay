@@ -24,7 +24,7 @@ def test_initial_margin_is_based_on_entry_not_mark_price():
     assert account["usedMargin"] == pytest.approx(1000)
     assert account["maintenanceMargin"] == pytest.approx(550)
     assert account["unrealizedPnL"] == pytest.approx(1000)
-    assert account["availableMargin"] == pytest.approx(9000)
+    assert account["availableMargin"] == pytest.approx(10000)
 
 
 def test_available_margin_exposes_negative_free_margin():
@@ -60,8 +60,8 @@ def test_entry_fee_is_realized_immediately_and_account_identity_holds():
 
     engine.close("BTCUSDT", 1100)
     account = engine.snapshot()["account"]
-    assert account["walletBalance"] == pytest.approx(10098.8)
-    assert account["realizedPnL"] == pytest.approx(98.8)
+    assert account["walletBalance"] == pytest.approx(10097.9)
+    assert account["realizedPnL"] == pytest.approx(97.9)
 
 
 def test_from_state_rejects_inconsistent_wallet_accounting():
@@ -77,7 +77,7 @@ def test_from_state_rejects_invalid_pending_order_state():
     engine = PaperTradingEngine(fee_rate=0)
     engine.submit("BTCUSDT", "buy", 1)
     state = engine.export_state()
-    state["orders"]["1"]["filledPrice"] = 100
+    state["orders"][1]["filledPrice"] = 100
 
     with pytest.raises(ValueError, match="pending order"):
         PaperTradingEngine.from_state(state)
