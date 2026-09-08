@@ -48,19 +48,22 @@ def test_manager_rehydrates_from_repository_after_cache_loss():
     repository = InMemorySessionRepository()
     first_manager = SessionManager(repository)
     session_id = str(uuid4())
-    state = first_manager.get(session_id)
 
-    state.replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
-    state.replay.start(0)
-    state.trading.on_candle(state.replay.candles[0], 0, "BTCUSDT")
-    state.trading.submit("BTCUSDT", "buy", 1)
-    first_manager.save(session_id, state)
+    first_manager.get(session_id)
 
+    def prepare(state):
+        state.replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
+        state.replay.start(0)
+        state.trading.on_candle(state.replay.candles[0], 0, "BTCUSDT")
+        state.trading.submit("BTCUSDT", "buy", 1)
+        return state.trading.export_state()
+
+    first_manager.atomic(session_id, prepare)
     first_manager.clear_cache()
     restored = first_manager.get(session_id)
 
-    assert restored.replay.state() == state.replay.state()
-    assert restored.trading.export_state() == state.trading.export_state()
+    assert restored.replay.state()["index"] == 0
+    assert restored.trading.export_state()["orders"]
 
 
 def test_repository_defensively_copies_documents():

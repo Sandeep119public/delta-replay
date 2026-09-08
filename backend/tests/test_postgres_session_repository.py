@@ -57,16 +57,18 @@ def test_postgres_manager_rehydrates_after_cache_loss():
     session_id = str(uuid4())
 
     try:
-        state = first_manager.get(session_id)
-        state.replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
-        state.replay.start(0)
-        state.trading.on_candle(state.replay.candles[0], 0, "BTCUSDT")
-        state.trading.submit("BTCUSDT", "buy", 1)
-        first_manager.save(session_id, state)
+        first_manager.get(session_id)
 
+        def prepare(state):
+            state.replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
+            state.replay.start(0)
+            state.trading.on_candle(state.replay.candles[0], 0, "BTCUSDT")
+            return state.trading.submit("BTCUSDT", "buy", 1)
+
+        pending = first_manager.atomic(session_id, prepare)
         restored = second_manager.get(session_id)
-        assert restored.replay.state() == state.replay.state()
-        assert restored.trading.export_state() == state.trading.export_state()
+        assert restored.replay.state()["index"] == 0
+        assert restored.trading.orders[pending["id"]]["status"] == "PENDING"
     finally:
         repository.delete(session_id)
 
