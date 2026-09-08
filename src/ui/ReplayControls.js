@@ -19,7 +19,7 @@ export class ReplayControls {
       if (el?.removeEventListener) this._listeners.push([el, type, handler]);
     };
 
-    this._listen(this.playBtn, 'click', () => { void this._safeAction(() => this.replayPort.play()); });
+    this._listen(this.playBtn, 'click', () => { void this._safeAction(() => { const state = this.replayPort.getState(); return state.status === 'ready' || state.status === 'ended' ? this.replayPort.start(Number(state.startIndex ?? 0)) : this.replayPort.play(); }); });
     this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.replayPort.pause()); });
     this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.replayPort.stepForward()); });
     this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.replayPort.reset()); });
@@ -101,8 +101,8 @@ export class ReplayControls {
       document.body?.classList?.toggle('velocity-boost', Number(state.speed) >= 5);
     } catch {}
 
-    this.startReplayBtn.disabled = !hasData || !isReady;
-    this.startReplayBtn.textContent = isReady ? 'START REPLAY' : (isPlaying ? 'PAUSE' : isPaused ? 'RESUME' : isEnded ? 'REPLAY AGAIN' : 'START REPLAY');
+    if (this.startReplayBtn) this.startReplayBtn.disabled = !hasData || !isReady;
+    if (this.startReplayBtn) this.startReplayBtn.textContent = isReady ? 'START REPLAY' : (isPlaying ? 'PAUSE' : isPaused ? 'RESUME' : isEnded ? 'REPLAY AGAIN' : 'START REPLAY');
 
     if (isPlaying) {
       this.playBtn.classList.add('hidden');
