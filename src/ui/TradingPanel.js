@@ -147,7 +147,16 @@ export class TradingPanel {
       if (inPos) { if (fEntry) fEntry.textContent = fmt(p.entryPrice); if (fMark) fMark.textContent = fmt(p.currentPrice); if (fPnl) { fPnl.textContent = `${Number(p.unrealizedPnL) >= 0 ? '+' : ''}${fmt(p.unrealizedPnL)}`; fPnl.className = `num ${Number(p.unrealizedPnL) >= 0 ? 'pnl-pos' : 'pnl-neg'}`; } }
       if (this.closeBtn) this.closeBtn.textContent = inPos ? `FLATTEN ${p.side} ${p.quantity}` : 'CLOSE POSITION';
       const fillsEl = document.getElementById('ticket-fills-list');
-      if (fillsEl) fillsEl.innerHTML = trades.length ? trades.slice(-3).reverse().map(t => { const net = t.netPnL ?? t.realizedPnL ?? 0; const cls = net >= 0 ? 'pnl-pos' : 'pnl-neg'; return `<div class="trade-row"><span class="num">${t.symbol} ${t.side} ${t.quantity}</span><span class="num ${cls}">${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}</span></div>`; }).join('') : '<span class="empty-hint">No fills yet</span>';
+      if (fillsEl) {
+        const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        fillsEl.innerHTML = trades.length ? trades.slice(-3).reverse().map((t) => {
+          const net = Number(t.netPnL ?? t.realizedPnL ?? 0);
+          const safeNet = Number.isFinite(net) ? net : 0;
+          const qty = Number(t.quantity);
+          const cls = safeNet >= 0 ? 'pnl-pos' : 'pnl-neg';
+          return `<div class="trade-row"><span class="num">${esc(t.symbol)} ${esc(t.side)} ${Number.isFinite(qty) ? qty : '—'}</span><span class="num ${cls}">${safeNet >= 0 ? '+' : '-'}$${Math.abs(safeNet).toFixed(2)}</span></div>`;
+        }).join('') : '<span class="empty-hint">No fills yet</span>';
+      }
     } catch {}
   }
 }
