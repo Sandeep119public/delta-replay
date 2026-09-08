@@ -6,7 +6,7 @@ from typing import Literal
 
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
-from ..services.session_manager import get_session
+from ..services.session_manager import get_session, persist_session
 
 router = APIRouter()
 
@@ -99,7 +99,8 @@ def trades(request: Request):
 
 @router.post("/order")
 def order(request: Request, command: EngineOrder):
-    service = get_session(request).trading
+    session = get_session(request)
+    service = session.trading
     try:
         created = service.submit(
             command.symbol,
@@ -109,6 +110,7 @@ def order(request: Request, command: EngineOrder):
             command.limitPrice,
             command.stopPrice,
         )
+        persist_session(request, session)
         return {"order": created, **snapshot(service)}
     except ValueError as exc:
         raise HTTPException(422, str(exc))
@@ -127,6 +129,7 @@ def close(request: Request, command: CloseRequest):
         )
         if not trade:
             raise HTTPException(422, "no open position")
+        persist_session(request, session)
         return {"trade": trade, **snapshot(session.trading)}
     except ValueError as exc:
         raise HTTPException(422, str(exc))
@@ -134,28 +137,33 @@ def close(request: Request, command: CloseRequest):
 
 @router.post("/orders/{order_id}/cancel")
 def cancel(request: Request, order_id: int):
-    service = get_session(request).trading
+    session = get_session(request)
     try:
-        return {"order": service.cancel(order_id), **snapshot(service)}
+        order_result = session.trading.cancel(order_id)
+        persist_session(request, session)
+        return {"order": order_result, **snapshot(session.trading)}
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/risk")
 def risk(request: Request, command: RiskRequest):
-    service = get_session(request).trading
+    session = get_session(request)
     try:
-        return {"position": service.set_risk(command.symbol, command.stopLoss, command.takeProfit), **snapshot(service)}
+        position = session.trading.set_risk(command.symbol, command.stopLoss, command.takeProfit)
+        persist_session(request, session)
+        return {"position": position, **snapshot(session.trading)}
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/risk/clear")
 def clear_risk(request: Request, symbol: str):
-    service = get_session(request).trading
+    session = get_session(request)
     try:
-        position = service.clear_risk(symbol)
-        return {"position": position, **snapshot(service)}
+        position = session.trading.clear_risk(symbol)
+        persist_session(request, session)
+        return {"position": position, **snapshot(session.trading)}
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc))
 
@@ -168,23 +176,28 @@ def process(request: Request, command: MarketCandleRequest | None = None):
     candle = normalize_candle(raw)
     index = command.index if command.index is not None else session.replay.state()["index"]
     events = session.trading.on_candle(candle, index, command.symbol)
+    persist_session(request, session)
     return {"events": events, "candle": candle, **snapshot(session.trading)}
 
 
 @router.post("/account/capital")
 def set_capital(request: Request, command: CapitalRequest):
-    service = get_session(request).trading
+    session = get_session(request)
     try:
-        return snapshot(service.set_starting_balance(command.balance))
+        result = snapshot(session.trading.set_starting_balance(command.balance))
+        persist_session(request, session)
+        return result
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/account/fee-rate")
 def set_fee_rate(request: Request, command: FeeRateRequest):
-    service = get_session(request).trading
+    session = get_session(request)
     try:
-        return snapshot(service.set_fee_rate(command.rate))
+        result = snapshot(session.trading.set_fee_rate(command.rate))
+        persist_session(request, session)
+        return result
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -195,4 +208,6 @@ def reset(request: Request):
     balance = session.trading.account.starting_balance
     fee_rate = session.trading.fee_rate
     session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate)
-    return snapshot(session.trading)
+    result = snapshot(session.trading)
+    persist_session(request, session)
+    return result
