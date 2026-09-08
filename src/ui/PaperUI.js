@@ -32,7 +32,7 @@ export function createPaperUI({
   const { onRetry = null, onFollow = null } = callbacks;
   const mount = document.getElementById('app');
   if (!mount) throw new Error('Paper UI mount #app is missing');
-  renderPaperLayout(mount);
+  if (!mount.querySelector('#chart-container')) renderPaperLayout(mount);
   const el = (id) => document.getElementById(id);
   const ports = createPaperPorts(el);
   const chartManager = chart.chartManager;
