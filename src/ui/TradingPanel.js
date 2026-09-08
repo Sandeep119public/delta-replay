@@ -44,16 +44,36 @@ export class TradingPanel {
 
   _bindSidebarTabs() {
     try {
-      const tabBtns = document.querySelectorAll('.panel-tab-btn');
-      tabBtns.forEach(btn => {
-        const handler = () => {
-          tabBtns.forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
-          btn.classList.add('active'); btn.setAttribute('aria-selected', 'true');
-          const targetTab = btn.getAttribute('data-tab');
-          document.querySelectorAll('.tab-panel').forEach(panel => { if (panel.id === `tab-view-${targetTab}`) panel.classList.add('active'); else panel.classList.remove('active'); });
+      const tabBtns = [...document.querySelectorAll('.panel-tab-btn')];
+      const activate = (btn, focus = false) => {
+        const targetTab = btn.getAttribute('data-tab');
+        tabBtns.forEach((tab) => {
+          const selected = tab === btn;
+          tab.classList.toggle('active', selected);
+          tab.setAttribute('aria-selected', String(selected));
+          tab.tabIndex = selected ? 0 : -1;
+        });
+        document.querySelectorAll('.tab-panel').forEach((panel) => {
+          const selected = panel.id === `tab-view-${targetTab}`;
+          panel.classList.toggle('active', selected);
+          panel.hidden = !selected;
+        });
+        if (focus) btn.focus();
+      };
+      tabBtns.forEach((btn, index) => {
+        const onClick = () => activate(btn);
+        const onKeyDown = (event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabBtns.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabBtns.length) % tabBtns.length;
+          activate(tabBtns[nextIndex], true);
         };
-        btn.addEventListener('click', handler); this._tabBindings.push([btn, handler]);
+        btn.addEventListener('click', onClick);
+        btn.addEventListener('keydown', onKeyDown);
+        this._tabBindings.push([btn, onClick, onKeyDown]);
       });
+      const selected = tabBtns.find((btn) => btn.getAttribute('aria-selected') === 'true') || tabBtns[0];
+      if (selected) activate(selected);
     } catch {}
   }
 
@@ -73,7 +93,7 @@ export class TradingPanel {
 
   destroy() {
     clearTimeout(this.errorTimeout); this.errorTimeout = null;
-    this._tabBindings.forEach(([btn, handler]) => btn.removeEventListener?.('click', handler)); this._tabBindings = [];
+    this._tabBindings.forEach(([btn, clickHandler, keyHandler]) => { btn.removeEventListener?.('click', clickHandler); btn.removeEventListener?.('keydown', keyHandler); }); this._tabBindings = [];
     this._engineSubscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[TradingPanel] unsubscribe failed', error); } });
     this._engineSubscriptions = [];
     this.accountSummaryView?.destroy?.(); this.orderFormView?.destroy?.(); this.positionView?.destroy?.(); this.tradeLogView?.destroy?.();
