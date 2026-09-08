@@ -1,6 +1,8 @@
 from copy import deepcopy
 from math import isfinite
 
+from ..models import Candle
+
 
 class ReplayService:
     VALID_STATUSES = {"idle", "ready", "paused", "ended"}
@@ -13,7 +15,7 @@ class ReplayService:
         self.status = "idle"
 
     def load(self, candles):
-        self.candles = candles
+        self.candles = [Candle.model_validate(candle).model_dump() for candle in candles]
         self.index = -1
         self.start_index = -1
         self.status = "ready"
@@ -94,7 +96,10 @@ class ReplayService:
             raise ValueError("replay speed must be positive and finite")
 
         replay = cls()
-        replay.candles = deepcopy(state["candles"])
+        try:
+            replay.candles = [Candle.model_validate(candle).model_dump() for candle in state["candles"]]
+        except ValueError as exc:
+            raise ValueError(f"invalid persisted candle data: {exc}") from exc
         replay.index = index
         replay.start_index = start_index
         replay.speed = speed
