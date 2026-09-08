@@ -17,7 +17,10 @@
     "dev:host": "vite --host 0.0.0.0",
     "vibe:quick": "npm run test:ui-contracts && npm run test:architecture",
     "vibe:full": "npm run check",
-    "vibe:dev": "npm run dev:host"
+    "vibe:dev": "npm run dev:host",
+    "vibe:fast": "npm run test:ui-contracts && npm run test",
+    "vibe:check": "npm run check",
+    "vibe:build": "npm run check"
   },
   "dependencies": {
     "lightweight-charts": "4.2.3"
