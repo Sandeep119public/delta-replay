@@ -1,10 +1,13 @@
 from copy import deepcopy
-from math import isfinite
+from math import isfinite, isclose
 
 
 class TradingAccount:
     def __init__(self, starting_balance=10000.0):
-        self.starting_balance = float(starting_balance)
+        starting_balance = float(starting_balance)
+        if not isfinite(starting_balance) or starting_balance <= 0:
+            raise ValueError("starting balance must be finite and positive")
+        self.starting_balance = starting_balance
         self.reset()
 
     def reset(self):
@@ -24,13 +27,43 @@ class TradingAccount:
 
     @property
     def available_margin(self):
-        return max(0.0, self.equity - self.used_margin)
+        return self.equity - self.used_margin
 
     @property
     def margin_ratio(self):
         return 1.0 if self.equity <= 0 else self.maintenance_margin / self.equity
 
+    def validate_invariants(self):
+        numeric = (
+            self.starting_balance,
+            self.wallet_balance,
+            self.realized_pnl,
+            self.unrealized_pnl,
+            self.total_fees,
+            self.used_margin,
+            self.maintenance_margin,
+            self.total_funding_paid,
+            self.total_funding_received,
+            self.net_funding,
+        )
+        if not all(isfinite(value) for value in numeric):
+            raise ValueError("account fields must be finite")
+        if self.starting_balance <= 0:
+            raise ValueError("account startingBalance must be positive")
+        if self.total_fees < 0 or self.used_margin < 0 or self.maintenance_margin < 0:
+            raise ValueError("account fees and margins must be non-negative")
+        if self.total_funding_paid < 0 or self.total_funding_received < 0:
+            raise ValueError("funding totals must be non-negative")
+        expected_net_funding = self.total_funding_received - self.total_funding_paid
+        if not isclose(self.net_funding, expected_net_funding, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError("account netFunding is inconsistent with funding totals")
+        expected_wallet = self.starting_balance + self.realized_pnl + self.net_funding
+        if not isclose(self.wallet_balance, expected_wallet, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError("account walletBalance is inconsistent with realizedPnL and netFunding")
+        return self
+
     def snapshot(self):
+        self.validate_invariants()
         return {
             "startingBalance": self.starting_balance,
             "walletBalance": self.wallet_balance,
@@ -50,6 +83,7 @@ class TradingAccount:
         }
 
     def export_state(self):
+        self.validate_invariants()
         return {
             "startingBalance": self.starting_balance,
             "walletBalance": self.wallet_balance,
@@ -95,7 +129,7 @@ class TradingAccount:
 
         if values["startingBalance"] <= 0:
             raise ValueError("account startingBalance must be positive")
-        for key in ("totalFees", "usedMargin", "maintenanceMargin"):
+        for key in ("totalFees", "usedMargin", "maintenanceMargin", "totalFundingPaid", "totalFundingReceived"):
             if values[key] < 0:
                 raise ValueError(f"account field {key} must be non-negative")
 
@@ -109,4 +143,5 @@ class TradingAccount:
         account.total_funding_paid = values["totalFundingPaid"]
         account.total_funding_received = values["totalFundingReceived"]
         account.net_funding = values["netFunding"]
+        account.validate_invariants()
         return account
