@@ -1,8 +1,7 @@
-import math
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
-from typing import Literal
+from pydantic import BaseModel, Field, ValidationError
 
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
@@ -58,26 +57,9 @@ def replay_candle(session, symbol: str):
 
 def normalize_candle(raw: dict):
     try:
-        candle = {
-            "time": int(float(raw.get("time"))),
-            "open": float(raw.get("open")),
-            "high": float(raw.get("high")),
-            "low": float(raw.get("low")),
-            "close": float(raw.get("close")),
-            "volume": float(raw.get("volume", 0) or 0),
-        }
-    except (TypeError, ValueError):
-        raise HTTPException(422, "candle must contain numeric time/open/high/low/close/volume fields")
-
-    if candle["time"] < 0 or any(not math.isfinite(float(v)) for v in candle.values()):
-        raise HTTPException(422, "candle contains non-finite or invalid numeric values")
-    if candle["high"] < max(candle["open"], candle["close"]):
-        raise HTTPException(422, "candle high is below open/close")
-    if candle["low"] > min(candle["open"], candle["close"]):
-        raise HTTPException(422, "candle low is above open/close")
-    if candle["high"] < candle["low"]:
-        raise HTTPException(422, "candle high is below low")
-    return candle
+        return Candle.model_validate(raw).model_dump()
+    except ValidationError as exc:
+        raise HTTPException(422, f"invalid candle: {exc.errors()[0]['msg']}") from exc
 
 
 @router.get("/state")
