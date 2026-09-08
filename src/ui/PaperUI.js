@@ -93,6 +93,7 @@ export function createPaperUI({
     createTerminalViews(ctx) {
       return createPaperTerminalViews({
         ...ctx, replayPort, trading, tradingEvents, dataset, candles, el,
+        getSymbol: () => el('symbol-select')?.value || 'BTCUSDT',
       });
     },
     createChartTradingController(ctx) {
@@ -119,6 +120,7 @@ function createPaperTerminalViews(ctx) {
     stopPriceInput,
     slInput,
     tpInput,
+    getSymbol = () => 'BTCUSDT',
   } = ctx;
 
   const sparkline = new TimelineSparkline({
@@ -176,6 +178,7 @@ function createPaperTerminalViews(ctx) {
     tpInput: tpInput || el('tp-price'),
     setRiskBtn: el('btn-set-risk'),
     clearRiskBtn: el('btn-clear-risk'),
+    getSymbol,
   });
 
   return { sparkline, toastView, floatingPosView, dateSelector, tradingPanel };
