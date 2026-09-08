@@ -25,6 +25,7 @@ export const paperMarkup = () => `
     ${workspaceMarkup()}
     ${timelineMarkup()}
   </div>
+  <div id="accessibility-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <div id="drawer-scrim" aria-hidden="true"></div>
   <button id="btn-trading-drawer" type="button" aria-controls="trading-panel" aria-expanded="false">TRADE</button>
 `;
