@@ -1,3 +1,5 @@
+export const SCHEMA_VERSION = 1;
+
 export const LAYERS = [
   'core', 'data', 'indicators', 'replay', 'trading', 'strategy',
   'state', 'app', 'chart', 'ui', 'pages', 'router', 'utils', 'ports', 'personality',
@@ -69,7 +71,7 @@ export const IMPACT_RULES = [
   { id: 'ci', prefixes: ['.github/workflows/'], checks: [['CI', CHECKS.tooling]] },
 ];
 
-export const IMPACT_ORDER = ['Architecture', 'UI', 'UI contracts', 'Replay', 'Trading', 'Data/state', 'Data', 'Tests', 'Tooling', 'Guidance', 'Backend', 'CI'];
+export const IMPACT_ORDER = ['Architecture', 'UI', 'UI contracts', 'Replay', 'Trading', 'Data/state', 'Tests', 'Tooling', 'Guidance', 'Backend', 'CI'];
 
 export const PRESENTATION_COMPAT_FILE = 'src/ui/presentationCompat.js';
 export const INTEGRATION_LAYERS = new Set(['ui', 'pages', 'chart', 'app', 'router']);
