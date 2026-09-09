@@ -26,7 +26,15 @@ export class ReplayCommandController {
   async stepForward() { return this.hasData() && this.allowed('stepForward') ? this.run(() => this.engine.stepForward()) : false; }
   async stepBackward() { const n = this.engine.getState().currentIndex - 1; return n >= 0 ? this.trySeek(n) : false; }
   async jumpBy(delta) { const s = this.engine.getState(); const total = this.engine.getTotalCandles(); const n = Math.min(Math.max(0, s.currentIndex + Number(delta)), total - 1); return n === s.currentIndex ? false : this.trySeek(n); }
-  cycleSpeed(direction = 1) { try { const current = Number(this.engine.getState().speed || 1); let i = PLAYBACK_SPEEDS.indexOf(current); if (i < 0) i = PLAYBACK_SPEEDS.indexOf(1); return this.engine.setSpeed(PLAYBACK_SPEEDS[Math.min(PLAYBACK_SPEEDS.length - 1, Math.max(0, i + direction))]); } catch (e) { this.error(e?.message); return null; } }
+  cycleSpeed(direction = 1) {
+    if (this.destroyed || this.busy) return null;
+    try {
+      const current = Number(this.engine.getState().speed || 1);
+      let i = PLAYBACK_SPEEDS.indexOf(current);
+      if (i < 0) i = PLAYBACK_SPEEDS.indexOf(1);
+      return this.engine.setSpeed(PLAYBACK_SPEEDS[Math.min(PLAYBACK_SPEEDS.length - 1, Math.max(0, i + direction))]);
+    } catch (e) { this.error(e?.message); return null; }
+  }
   async pause() { return this.engine.getState().status === 'playing' ? this.run(() => this.engine.pause()) : false; }
   async reset() { if (!this.hasData() || !this.allowed('reset')) return false; return this.run(async () => { const state = await this.engine.reset(); if (state.status === 'ready') this.onPreview?.(state.startIndex); }); }
   async trySeek(index) { const n = Number(index); if (!this.hasData() || !Number.isInteger(n) || n < 0 || n >= this.engine.getTotalCandles() || !this.allowed('seek')) return false; return this.run(() => this.engine.seek(n)); }
