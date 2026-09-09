@@ -17,6 +17,12 @@
 - Every listener, timer, subscription, observer, or resource needs an explicit cleanup path.
 - Avoid broad formatting changes in focused bug fixes.
 
+## Focused commands
+
+- `npm run vibe:ui` for markup and DOM contracts.
+- `npm run vibe:architecture` for dependency-boundary changes.
+- `npm run vibe:verify` for a compact architecture + frontend gate.
+
 ## Verification
 
 During iteration:
