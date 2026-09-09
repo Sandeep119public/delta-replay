@@ -9,9 +9,9 @@ export function bindApplicationLifecycle({
 }) {
   let destroyed = false;
   const destroy = () => {
-    win?.removeEventListener?.('pagehide', destroy);
     if (destroyed) return;
     destroyed = true;
+    win?.removeEventListener?.('pagehide', destroy);
     const cleanup = [
       ['keyboard cleanup', () => unbindKeyboardShortcuts?.()],
       ['application cleanup', () => onDestroy?.()],
