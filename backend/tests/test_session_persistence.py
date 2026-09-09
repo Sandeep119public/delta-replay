@@ -47,6 +47,28 @@ def test_session_round_trip_preserves_replay_and_trading_state():
     assert next_order["id"] > second_order["id"]
 
 
+def test_replay_persistence_preserves_fractional_speed():
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102)])
+    replay.start(0)
+    replay.speed = 2.5
+
+    restored = ReplayService.from_state(replay.export_state())
+
+    assert restored.speed == 2.5
+    assert restored.export_state() == replay.export_state()
+
+
+def test_replay_rejects_fractional_indices():
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102)])
+
+    with pytest.raises(ValueError, match="integer"):
+        replay.start(0.5)
+    with pytest.raises(ValueError, match="integer"):
+        replay.seek(0.5)
+
+
 def test_manager_rehydrates_from_repository_after_cache_loss():
     repository = InMemorySessionRepository()
     first_manager = SessionManager(repository)
