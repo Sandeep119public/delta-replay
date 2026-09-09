@@ -5,6 +5,7 @@
 1. Identify the owning area using `ARCHITECTURE.md`.
 2. Read the target module and its direct caller before changing a contract.
 3. Prefer the smallest patch that preserves existing ports and lifecycle ownership.
+4. Run `npm run vibe:context` to load the current machine-backed ownership and architecture rules.
 
 ## Change rules
 
@@ -25,11 +26,16 @@
 
 ## Focused commands
 
+- `npm run vibe:context` for the current AI-facing ownership and architecture context.
+- `npm run vibe:context:json` for machine-readable context suitable for coding agents and tools.
 - `npm run vibe:ui` for markup and DOM contracts.
 - `npm run vibe:architecture` for dependency-boundary changes.
 - `npm run vibe:verify` for a compact architecture + frontend gate.
 - `npm run vibe:baseline` for the fast architecture/UI baseline.
-- `npm run vibe:changed` to see recommended checks for the latest commit.
+- `npm run vibe:changed` to see recommended checks for the current diff.
+- `npm run vibe:changed:json` for machine-readable changed-file routing.
+
+The architecture policy used by `check-architecture.mjs` and `vibe-context.mjs` lives in `scripts/architecture-policy.mjs`; update that source rather than duplicating ownership or dependency rules elsewhere.
 
 ## Verification
 
