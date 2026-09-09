@@ -83,14 +83,7 @@ def trades(request: Request):
 def order(request: Request, command: EngineOrder):
     def submit(session):
         service = session.trading
-        created = service.submit(
-            command.symbol,
-            command.side,
-            command.quantity,
-            command.type,
-            command.limitPrice,
-            command.stopPrice,
-        )
+        created = service.submit(command.symbol, command.side, command.quantity, command.type, command.limitPrice, command.stopPrice)
         return {"order": created, **snapshot(service)}
 
     try:
@@ -103,12 +96,7 @@ def order(request: Request, command: EngineOrder):
 def close(request: Request, command: CloseRequest):
     def close_position(session):
         candle = replay_candle(session, command.symbol)
-        trade = session.trading.close(
-            command.symbol,
-            float(candle["close"]),
-            quantity=command.quantity,
-            timestamp=candle.get("time"),
-        )
+        trade = session.trading.close(command.symbol, float(candle["close"]), quantity=command.quantity, timestamp=candle.get("time"))
         if not trade:
             raise HTTPException(422, "no open position")
         return {"trade": trade, **snapshot(session.trading)}
@@ -119,13 +107,27 @@ def close(request: Request, command: CloseRequest):
         raise HTTPException(422, str(exc))
 
 
+@router.post("/orders/cancel-all")
+def cancel_all(request: Request, reason: str | None = None):
+    def cancel_pending(session):
+        service = session.trading
+        cancelled = [service.cancel(order["id"]) for order in list(service.pending_orders())]
+        if reason:
+            for order in cancelled:
+                order["cancelReason"] = str(reason)
+                service.orders[order["id"]]["cancelReason"] = str(reason)
+        return {"orders": cancelled, **snapshot(service)}
+
+    try:
+        return atomic_session(request, cancel_pending)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
 @router.post("/orders/{order_id}/cancel")
 def cancel(request: Request, order_id: int):
     try:
-        return atomic_session(
-            request,
-            lambda session: {"order": session.trading.cancel(order_id), **snapshot(session.trading)},
-        )
+        return atomic_session(request, lambda session: {"order": session.trading.cancel(order_id), **snapshot(session.trading)})
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -133,13 +135,7 @@ def cancel(request: Request, order_id: int):
 @router.post("/risk")
 def risk(request: Request, command: RiskRequest):
     try:
-        return atomic_session(
-            request,
-            lambda session: {
-                "position": session.trading.set_risk(command.symbol, command.stopLoss, command.takeProfit),
-                **snapshot(session.trading),
-            },
-        )
+        return atomic_session(request, lambda session: {"position": session.trading.set_risk(command.symbol, command.stopLoss, command.takeProfit), **snapshot(session.trading)})
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc))
 
@@ -198,12 +194,7 @@ def reset(request: Request):
         fee_rate = session.trading.fee_rate
         margin_rate = session.trading.margin_rate
         maint_margin_rate = session.trading.maint_margin_rate
-        session.trading = PaperTradingEngine(
-            starting_balance=balance,
-            fee_rate=fee_rate,
-            margin_rate=margin_rate,
-            maint_margin_rate=maint_margin_rate,
-        )
+        session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate, margin_rate=margin_rate, maint_margin_rate=maint_margin_rate)
         return snapshot(session.trading)
 
     return atomic_session(request, reset_engine)
