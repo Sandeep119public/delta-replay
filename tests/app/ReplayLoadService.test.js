@@ -50,4 +50,33 @@ describe('ReplayLoadService', () => {
     await secondRun;
     expect(unsubSecond).toHaveBeenCalledOnce();
   });
+
+  it('resets the retry budget when a new load session starts', async () => {
+    vi.useFakeTimers();
+    try {
+      const firstFailure = Object.assign(new Error('temporary network failure'), { category: 'NETWORK' });
+      const firstSuccess = { candles: [{ openTime: 1 }], metadata: {} };
+      const load = vi.fn()
+        .mockRejectedValueOnce(firstFailure)
+        .mockRejectedValueOnce(firstFailure)
+        .mockResolvedValueOnce(firstSuccess)
+        .mockRejectedValueOnce(firstFailure);
+      const d = deps(load);
+      const service = createReplayLoadService(d);
+
+      const firstRun = service.loadAndPrepareReplay({ targetSec: 1 });
+      await vi.runOnlyPendingTimersAsync();
+      await vi.runOnlyPendingTimersAsync();
+      await vi.runOnlyPendingTimersAsync();
+      await firstRun;
+      expect(load).toHaveBeenCalledTimes(3);
+
+      const secondRun = service.loadAndPrepareReplay({ targetSec: 2 });
+      await secondRun;
+      expect(service.retryCount).toBe(1);
+      expect(load).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
