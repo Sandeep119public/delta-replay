@@ -69,8 +69,8 @@ class ReplayService:
             "startIndex": self.start_index,
             "total": len(self.candles),
             "speed": self.speed,
-            "candle": self.candles[self.index] if self.index >= 0 else None,
-            "visibleCandles": self.candles[: self.index + 1] if self.index >= 0 else [],
+            "candle": deepcopy(self.candles[self.index]) if self.index >= 0 else None,
+            "visibleCandles": deepcopy(self.candles[: self.index + 1]) if self.index >= 0 else [],
         }
 
     def export_state(self):
@@ -111,7 +111,7 @@ class ReplayService:
         replay = cls()
         try:
             replay.candles = [Candle.model_validate(candle).model_dump() for candle in state["candles"]]
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid persisted candle data: {exc}") from exc
         replay.index = index
         replay.start_index = start_index
