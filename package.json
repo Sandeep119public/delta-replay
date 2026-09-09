@@ -21,7 +21,10 @@
     "vibe:fast": "npm run test:ui-contracts && npm run test",
     "vibe:check": "npm run check",
     "vibe:build": "npm run check",
-    "vibe:where": "node -e \"console.log('Ownership: app=composition, ui=DOM, replay=playback, trading=domain. Run vibe:fast while iterating.')\""
+    "vibe:where": "node -e \"console.log('Ownership: app=composition, ui=DOM, replay=playback, trading=domain. Run vibe:fast while iterating.')\"",
+    "vibe:ui": "npm run test:ui-contracts",
+    "vibe:architecture": "npm run test:architecture:graph && npm run test:architecture",
+    "vibe:verify": "npm run vibe:architecture && npm run vibe:fast"
   },
   "dependencies": {
     "lightweight-charts": "4.2.3"
