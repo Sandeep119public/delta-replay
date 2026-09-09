@@ -37,10 +37,18 @@ export function createReplayLoadService({
     if (typeof unsubscribe !== 'function') return;
     try { unsubscribe(); } catch (error) { console.warn('[ReplayLoadService] progress unsubscribe failed', error); }
   }
+  function makeIdempotentUnsubscribe(unsubscribe) {
+    let called = false;
+    return () => {
+      if (called) return;
+      called = true;
+      unsubscribeProgress(unsubscribe);
+    };
+  }
   function clearProgressSubscription() {
     const unsubscribe = progressUnsubscribe;
     progressUnsubscribe = null;
-    unsubscribeProgress(unsubscribe);
+    unsubscribe?.();
   }
   function clearCurrentLoad() {
     clearProgressSubscription();
@@ -82,13 +90,13 @@ export function createReplayLoadService({
       if (token !== loadToken || destroyed) return;
       if (dataStatusEl) dataStatusEl.textContent = `Loading ${symbol} · ${timeframe} — chunk ${completed}/${totalChunks} (${pct}%) — ${loaded} candles`;
     };
-    const sessionProgressUnsubscribe = dataManager.on(DataEvents.PROGRESS, onProgress);
+    const sessionProgressUnsubscribe = makeIdempotentUnsubscribe(dataManager.on(DataEvents.PROGRESS, onProgress));
     progressUnsubscribe = sessionProgressUnsubscribe;
 
     let retryScheduled = false;
     try {
       const { candles, metadata } = await dataManager.load({ symbol, timeframe, from, to, signal, strict: true, halfOpen: true });
-      unsubscribeProgress(sessionProgressUnsubscribe);
+      sessionProgressUnsubscribe();
       if (progressUnsubscribe === sessionProgressUnsubscribe) progressUnsubscribe = null;
       if (token !== loadToken || signal.aborted || destroyed) return;
       if (!candles || !candles.length) throw Object.assign(new Error('No candles returned'), { code: 'NO_DATA' });
@@ -105,7 +113,7 @@ export function createReplayLoadService({
       timeline?.setEnabled(true); appState.transitionLoading(LoadingState.SUCCESS); reportStatus();
       if (autoStart) replayEngine.start(replayIdx);
     } catch (err) {
-      unsubscribeProgress(sessionProgressUnsubscribe);
+      sessionProgressUnsubscribe();
       if (progressUnsubscribe === sessionProgressUnsubscribe) progressUnsubscribe = null;
       if (err?.name === 'AbortError') {
         if (token === loadToken) { appState.transitionLoading(LoadingState.ABORTED); if (dataStatusEl) dataStatusEl.textContent = 'Load cancelled'; }
