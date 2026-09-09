@@ -70,6 +70,24 @@ describe('remote contracts', () => {
     expect(updates).not.toHaveBeenCalled();
   });
 
+  it('ignores an older trading response when a newer request has completed', async () => {
+    let resolveOld;
+    let resolveNew;
+    const old = new Promise((resolve) => { resolveOld = resolve; });
+    const newer = new Promise((resolve) => { resolveNew = resolve; });
+    const client = { request: vi.fn((path) => path === '/state' ? old : newer) };
+    const engine = new RemoteTradingEngine(client);
+    const initialRefresh = engine._refreshPromise;
+
+    const nextRefresh = engine.refresh();
+    resolveNew({ account: { startingBalance: 10000, equity: 12000 }, positions: [], orders: [], trades: [] });
+    await nextRefresh;
+    resolveOld({ account: { startingBalance: 10000, equity: 9000 }, positions: [], orders: [], trades: [] });
+    await initialRefresh;
+
+    expect(engine.getAccountSnapshot().equity).toBe(12000);
+  });
+
   it('maps trading actions to canonical API payloads', async () => {
     const client = api({ '/order': { account: {}, positions: [], orders: [], trades: [] } });
     const engine = new RemoteTradingEngine(client);
