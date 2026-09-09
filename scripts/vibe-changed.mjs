@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { CHECKS, IMPACT_ORDER, IMPACT_RULES } from './architecture-policy.mjs';
+import { CHECKS, IMPACT_ORDER, IMPACT_RULES, SCHEMA_VERSION } from './architecture-policy.mjs';
 
 function runGit(args) {
   return execFileSync('git', args, { encoding: 'utf8' }).trim();
@@ -74,7 +74,7 @@ for (const file of changed) {
 }
 
 const payload = {
-  schemaVersion: 1,
+  schemaVersion: SCHEMA_VERSION,
   base,
   strategy,
   changedFiles: changed,
