@@ -16,6 +16,7 @@ import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
 import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
+import { createLifecycleGuard } from './createLifecycleGuard.js';
 
 function registerActionGuard(engine, canTrade, reportError) {
   return engine.registerActionGuard((action) => {
@@ -252,24 +253,19 @@ export function createApplication() {
     extraCleanup: [unbindAutoFollow, actionGuardUnsub],
   });
 
-  let started = false;
-  let destroyed = false;
-  const guardedDestroy = () => {
-    if (destroyed) return;
-    destroyed = true;
-    destroy();
-  };
-
-  return {
+  const lifecycle = createLifecycleGuard({
     start() {
-      if (destroyed || started) return;
-      started = true;
       ui.modeBanner.update(statusView.snapshot());
       Promise.resolve(replayCapabilities.load({ autoStart: false })).catch((error) => {
-        if (!destroyed) coordinator?.showTradingError?.(error?.message || 'Failed to load replay');
+        if (!lifecycle.destroyed) coordinator?.showTradingError?.(error?.message || 'Failed to load replay');
       });
     },
-    destroy: guardedDestroy,
+    destroy,
+  });
+
+  return {
+    start: lifecycle.start,
+    destroy: lifecycle.destroy,
     services,
     ui,
     coordinator,
