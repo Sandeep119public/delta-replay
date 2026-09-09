@@ -29,13 +29,17 @@ export class RemoteTradingEngine {
     this.data = { account: normalizeAccount(), positions: [], orders: [], pendingOrders: [], trades: [] };
     this.latestCandle = null;
     this._generation = 0;
+    this._requestSequence = 0;
+    this._lastAppliedRequest = 0;
     this._destroyed = false;
     this._refreshPromise = this.refresh().catch(() => null);
   }
   on(event, handler) { return this._destroyed ? () => {} : this.events.on(event, handler); }
   async _request(path, options = {}, action = null, generation = this._generation) {
+    const requestSequence = ++this._requestSequence;
     const response = await this.api.request(path, options);
-    if (this._destroyed || generation !== this._generation) return response;
+    if (this._destroyed || generation !== this._generation || requestSequence < this._lastAppliedRequest) return response;
+    this._lastAppliedRequest = requestSequence;
     const previous = this.data;
     this._sync(response, action, previous);
     return response;
