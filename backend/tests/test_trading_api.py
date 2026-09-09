@@ -3,7 +3,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.session_manager import get_session
+from app.services.session_manager import manager
 
 CANDLES = [
     {"time": 1, "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1},
@@ -50,15 +50,14 @@ def test_session_header_is_required():
 def test_reset_preserves_custom_trading_configuration():
     client = TestClient(app)
     session = uuid4()
-    assert client.post("/api/v1/trading/account/fee-rate", headers=h(session), json={"rate": 0.002}).status_code == 200
-
-    service = get_session(type("Request", (), {"headers": h(session)})())
-    service.trading.margin_rate = 0.2
-    service.trading.maint_margin_rate = 0.08
+    state = manager.get(str(session))
+    state.trading.fee_rate = 0.002
+    state.trading.margin_rate = 0.2
+    state.trading.maint_margin_rate = 0.08
 
     response = client.post("/api/v1/trading/reset", headers=h(session))
     assert response.status_code == 200
-    fresh = get_session(type("Request", (), {"headers": h(session)})()).trading
+    fresh = manager.get(str(session)).trading
     assert fresh.fee_rate == 0.002
     assert fresh.margin_rate == 0.2
     assert fresh.maint_margin_rate == 0.08
