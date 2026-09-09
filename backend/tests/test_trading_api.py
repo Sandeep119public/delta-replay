@@ -69,9 +69,20 @@ def test_reset_preserves_custom_trading_configuration():
 def test_market_candle_rejects_fractional_index():
     client = TestClient(app)
     session = uuid4()
-    response = client.post(
-        "/api/v1/trading/candle",
-        headers=h(session),
-        json={"symbol": "BTCUSDT", "candle": CANDLES[0], "index": 1.5},
-    )
+    response = client.post("/api/v1/trading/candle", headers=h(session), json={"symbol": "BTCUSDT", "candle": CANDLES[0], "index": 1.5})
     assert response.status_code == 422
+
+
+def test_cancel_all_clears_pending_orders():
+    client = TestClient(app)
+    session = uuid4()
+    manager.get(str(session))
+    manager.atomic(str(session), lambda current: current.trading.submit("BTCUSDT", "buy", 1, "limit", limit_price=90))
+
+    response = client.post("/api/v1/trading/orders/cancel-all", headers=h(session), params={"reason": "TIMEFRAME_CHANGE"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["pendingOrders"] == []
+    assert body["orders"][0]["status"] == "CANCELLED"
+    assert body["orders"][0]["cancelReason"] == "TIMEFRAME_CHANGE"
