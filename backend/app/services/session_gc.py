@@ -5,11 +5,13 @@ from datetime import datetime, timedelta, timezone
 import psycopg
 from psycopg.rows import dict_row
 
+from .postgres_session_repository import DATASET_GC_LOCK_KEY
+
 
 class SessionGarbageCollector:
     """Remove expired sessions and replay datasets no longer referenced by sessions."""
 
-    LOCK_KEY = 8443217
+    LOCK_KEY = DATASET_GC_LOCK_KEY
 
     def __init__(self, dsn: str, *, retention_hours: int = 168) -> None:
         if retention_hours <= 0:
