@@ -101,7 +101,11 @@ export function createReplayLoadService({
       if (token !== loadToken || signal.aborted || destroyed) return;
       if (!candles || !candles.length) throw Object.assign(new Error('No candles returned'), { code: 'NO_DATA' });
 
-      resetRetryState(); appState.setCandles(candles); replayEngine.load(candles); appState.setReplayState(replayEngine.getState());
+      resetRetryState();
+      appState.setCandles(candles);
+      await replayEngine.load(candles);
+      if (token !== loadToken || signal.aborted || destroyed) return;
+      appState.setReplayState(replayEngine.getState());
       timeline?.setTotal(candles.length, candles);
       let replayIdx = findClosestCandleIndex(resolvedTarget, candleStore, candles);
       if (replayIdx < 0) replayIdx = Math.max(0, Math.floor(candles.length * 0.25));
@@ -111,7 +115,7 @@ export function createReplayLoadService({
       if (cacheBadgeEl) cacheBadgeEl.classList.toggle('hidden', !metadata?.cached);
       if (dataStatusEl) dataStatusEl.textContent = `Ready: ${symbol} ${timeframe} (${candles.length.toLocaleString()} candles)${metadata?.cached ? ' [Cached]' : ''}`;
       timeline?.setEnabled(true); appState.transitionLoading(LoadingState.SUCCESS); reportStatus();
-      if (autoStart) replayEngine.start(replayIdx);
+      if (autoStart) await replayEngine.start(replayIdx);
     } catch (err) {
       sessionProgressUnsubscribe();
       if (progressUnsubscribe === sessionProgressUnsubscribe) progressUnsubscribe = null;
