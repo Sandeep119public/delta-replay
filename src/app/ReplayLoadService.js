@@ -50,9 +50,10 @@ export function createReplayLoadService({
   function invalidateCurrentLoad() { loadToken++; clearCurrentLoad(); }
   function resetRetryState() { retryCount = 0; appState.setRetryCount(0); }
 
-  async function loadAndPrepareReplay({ targetSec = null, autoStart = false } = {}) {
+  async function loadAndPrepareReplay({ targetSec = null, autoStart = false, preserveRetryState = false } = {}) {
     if (destroyed) return;
-    if (hasOpenPosition()) { showTradingError('Cannot change replay date while a position is open — close position or reset account first.'); return; }
+    if (hasOpenPosition()) { showTradingError('Cannot change replay date while a position is open. Close the position or reset the account first.'); return; }
+    if (!preserveRetryState) resetRetryState();
 
     const token = ++loadToken;
     clearCurrentLoad();
@@ -130,7 +131,7 @@ export function createReplayLoadService({
       if (isRetryableErrorCategory(dataErr.category) && retryCount < MAX_RETRIES) {
         retryCount++; appState.setRetryCount(retryCount); const backoff = Math.min(5000, Math.pow(2, retryCount - 1) * 1000);
         if (dataStatusEl) dataStatusEl.textContent = `Retrying… ${retryCount}/${MAX_RETRIES}`; appState.transitionLoading(LoadingState.LOADING); retryScheduled = true;
-        retryTimer = setTimeout(() => { retryTimer = null; if (token === loadToken && !destroyed) loadAndPrepareReplay({ targetSec: resolvedTarget, autoStart }); }, backoff);
+        retryTimer = setTimeout(() => { retryTimer = null; if (token === loadToken && !destroyed) loadAndPrepareReplay({ targetSec: resolvedTarget, autoStart, preserveRetryState: true }); }, backoff);
         return;
       }
       resetRetryState();
