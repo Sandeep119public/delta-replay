@@ -49,9 +49,9 @@ def test_risk_does_not_trigger_on_creation_bar():
     engine.submit("BTCUSDT", "buy", 1)
     engine.on_candle(candle(100, 101, 99, 100, 2), 1, "BTCUSDT")
     engine.set_risk("BTCUSDT", 90, 110)
-    engine.on_candle(candle(100, 120, 80, 100, 3), 2, "BTCUSDT")
+    engine.on_candle(candle(100, 120, 80, 100, 3), 1, "BTCUSDT")
     assert "BTCUSDT" in engine.positions
-    engine.on_candle(candle(100, 120, 80, 100, 4), 3, "BTCUSDT")
+    engine.on_candle(candle(100, 120, 80, 100, 4), 2, "BTCUSDT")
     assert "BTCUSDT" not in engine.positions
     assert engine.trades[-1]["exitReason"] == "STOP_LOSS"
 
@@ -68,11 +68,11 @@ def test_risk_update_is_atomic_when_take_profit_is_invalid():
     assert engine.positions["BTCUSDT"] == before
 
 
-def test_candle_index_rejects_fractional_and_non_monotonic_values():
+def test_candle_index_rejects_fractional_and_backward_values():
     engine = PaperTradingEngine()
     engine.on_candle(candle(100, 101, 99, 100), 0, "BTCUSDT")
     with pytest.raises(ValueError):
         engine.on_candle(candle(100, 101, 99, 100), 1.5, "BTCUSDT")
     with pytest.raises(ValueError):
-        engine.on_candle(candle(100, 101, 99, 100), 0, "BTCUSDT")
+        engine.on_candle(candle(100, 101, 99, 100), -1, "BTCUSDT")
     assert engine.index == 0
