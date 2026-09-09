@@ -51,6 +51,44 @@ describe('ReplayLoadService', () => {
     expect(unsubSecond).toHaveBeenCalledOnce();
   });
 
+  it('waits for replay load before publishing replay state', async () => {
+    let resolveEngineLoad;
+    const engineLoad = new Promise((resolve) => { resolveEngineLoad = resolve; });
+    const d = deps(vi.fn().mockResolvedValue({ candles: [{ openTime: 1 }], metadata: {} }));
+    d.replayEngine.load = vi.fn(() => engineLoad);
+    d.replayEngine.getState = vi.fn(() => ({ status: 'ready', totalCandles: 1 }));
+
+    const pending = d.replayEngine.load;
+    const run = createReplayLoadService(d).loadAndPrepareReplay({ targetSec: 1 });
+    await Promise.resolve();
+    expect(pending).toHaveBeenCalledOnce();
+    expect(d.appState.setReplayState).not.toHaveBeenCalled();
+
+    resolveEngineLoad();
+    await run;
+    expect(d.appState.setReplayState).toHaveBeenCalledWith({ status: 'ready', totalCandles: 1 });
+  });
+
+  it('waits for replay start when auto-starting', async () => {
+    let resolveStart;
+    const start = new Promise((resolve) => { resolveStart = resolve; });
+    const d = deps(vi.fn().mockResolvedValue({ candles: [{ openTime: 1 }], metadata: {} }));
+    d.replayEngine.start = vi.fn(() => start);
+
+    const run = createReplayLoadService(d).loadAndPrepareReplay({ targetSec: 1, autoStart: true });
+    await Promise.resolve();
+    expect(d.replayEngine.start).toHaveBeenCalledOnce();
+
+    let settled = false;
+    run.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolveStart();
+    await run;
+    expect(settled).toBe(true);
+  });
+
   it('resets the retry budget when a new load session starts', async () => {
     vi.useFakeTimers();
     try {
