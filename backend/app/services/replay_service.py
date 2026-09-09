@@ -14,14 +14,27 @@ class ReplayService:
         self.speed = 1
         self.status = "idle"
 
+    @staticmethod
+    def _index(value, name="replay index"):
+        if isinstance(value, bool):
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not isfinite(numeric) or numeric != int(numeric):
+            raise ValueError(f"{name} must be an integer")
+        return int(numeric)
+
     def load(self, candles):
         self.candles = [Candle.model_validate(candle).model_dump() for candle in candles]
         self.index = -1
         self.start_index = -1
-        self.status = "ready"
+        self.status = "ready" if self.candles else "idle"
         return self.state()
 
     def start(self, index=0):
+        index = self._index(index)
         if not self.candles:
             return self.state()
         self.start_index = max(0, min(index, len(self.candles) - 1))
@@ -37,6 +50,7 @@ class ReplayService:
         return self.state()
 
     def seek(self, index):
+        index = self._index(index)
         if not self.candles or index < 0 or index >= len(self.candles):
             raise ValueError("Invalid replay index")
         self.index = index
@@ -80,20 +94,19 @@ class ReplayService:
         if not isinstance(state["candles"], list):
             raise ValueError("replay candles must be a list")
         try:
-            index = int(state["index"])
-            start_index = int(state["startIndex"])
-            speed = int(state["speed"])
+            index = cls._index(state["index"], "replay index")
+            start_index = cls._index(state["startIndex"], "replay start index")
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        try:
+            speed = float(state["speed"])
         except (TypeError, ValueError) as exc:
-            raise ValueError("replay index, startIndex and speed must be integers") from exc
-        if isinstance(state["index"], bool) or isinstance(state["startIndex"], bool) or isinstance(state["speed"], bool):
-            raise ValueError("replay index, startIndex and speed must be integers")
-        if float(state["index"]) != index or float(state["startIndex"]) != start_index or float(state["speed"]) != speed:
-            raise ValueError("replay index, startIndex and speed must be integral")
+            raise ValueError("replay speed must be positive and finite") from exc
+        if isinstance(state["speed"], bool) or not isfinite(speed) or speed <= 0:
+            raise ValueError("replay speed must be positive and finite")
         status = state["status"]
         if status not in cls.VALID_STATUSES:
             raise ValueError("unsupported replay status")
-        if speed <= 0 or not isfinite(speed):
-            raise ValueError("replay speed must be positive and finite")
 
         replay = cls()
         try:
