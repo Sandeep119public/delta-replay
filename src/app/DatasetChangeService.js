@@ -23,16 +23,14 @@ export function createDatasetChangeService({
   invalidateLoad,
   reload,
 }) {
-  if (!appState || !candleStore || !replayEngine) {
-    throw new TypeError('createDatasetChangeService requires appState, candleStore, and replayEngine');
-  }
+  if (!appState || !candleStore || !replayEngine) throw new TypeError('createDatasetChangeService requires appState, candleStore, and replayEngine');
   if (typeof hasOpenPosition !== 'function') throw new TypeError('createDatasetChangeService requires hasOpenPosition() capability');
   if (typeof reportError !== 'function' || typeof invalidateLoad !== 'function' || typeof reload !== 'function') {
     throw new TypeError('createDatasetChangeService requires reportError, invalidateLoad, and reload callbacks');
   }
 
   return Object.freeze({
-    handleSymbolTimeframeChange(kind, newValue, selectElement) {
+    async handleSymbolTimeframeChange(kind, newValue, selectElement) {
       if (hasOpenPosition()) {
         const msg = `Cannot change ${kind} while a position is open — close position first.`;
         reportError(msg);
@@ -41,7 +39,18 @@ export function createDatasetChangeService({
       }
       if (kind === 'symbol') appState.symbol = newValue;
       else appState.timeframe = newValue;
-      try { clearPendingOrders?.(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE'); } catch (error) { console.warn('[DatasetChange] clear pending orders failed', error); }
+
+      if (typeof clearPendingOrders === 'function') {
+        try {
+          const result = await clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE');
+          if (result?.success === false) throw new Error(result.message || 'Unable to clear pending orders');
+        } catch (error) {
+          reportError(error?.message || 'Unable to clear pending orders. Dataset change cancelled.');
+          if (selectElement) selectElement.value = kind === 'symbol' ? appState.symbol : appState.timeframe;
+          return false;
+        }
+      }
+
       invalidateLoad();
       try { replayEngine.stop(); } catch (error) { console.warn('[DatasetChange] stop during dataset change failed', error); }
       candleStore.clear();
