@@ -9,6 +9,7 @@ from psycopg.rows import dict_row
 from .session_repository import SessionDocument, SessionMutation, SessionRepository
 
 T = TypeVar("T")
+DATASET_GC_LOCK_KEY = 8443217
 
 
 class PostgresSessionRepository(SessionRepository):
@@ -25,6 +26,10 @@ class PostgresSessionRepository(SessionRepository):
 
     def _connect(self):
         return psycopg.connect(self.dsn, connect_timeout=self.connect_timeout, row_factory=dict_row)
+
+    @staticmethod
+    def _lock_dataset_gc(connection) -> None:
+        connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
 
     def _ensure_schema(self) -> None:
         with self._connect() as connection:
@@ -90,6 +95,7 @@ class PostgresSessionRepository(SessionRepository):
 
     def save(self, session_id: str, document: SessionDocument) -> None:
         with self._connect() as connection:
+            self._lock_dataset_gc(connection)
             storage_document = self._prepare_storage_document(connection, document)
             encoded = self._encode(storage_document)
             connection.execute(
@@ -103,6 +109,7 @@ class PostgresSessionRepository(SessionRepository):
 
     def save_if_revision(self, session_id: str, document: SessionDocument, expected_revision: int) -> int:
         with self._connect() as connection:
+            self._lock_dataset_gc(connection)
             storage_document = self._prepare_storage_document(connection, document)
             encoded = self._encode(storage_document)
             row = connection.execute(
@@ -115,6 +122,7 @@ class PostgresSessionRepository(SessionRepository):
 
     def atomic_update(self, session_id: str, mutation: SessionMutation[T]) -> T:
         with self._connect() as connection:
+            self._lock_dataset_gc(connection)
             row = connection.execute("SELECT state FROM replay_sessions WHERE session_id = %s FOR UPDATE", (session_id,)).fetchone()
             if row is None:
                 raise KeyError(f"session {session_id} not found")
