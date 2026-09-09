@@ -69,6 +69,20 @@ def test_replay_rejects_fractional_indices():
         replay.seek(0.5)
 
 
+def test_replay_state_is_defensively_copied():
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
+    replay.start(0)
+
+    state = replay.state()
+    state["candle"]["close"] = 999
+    state["visibleCandles"][0]["open"] = 999
+
+    fresh = replay.state()
+    assert fresh["candle"]["close"] == 102
+    assert fresh["visibleCandles"][0]["open"] == 100
+
+
 def test_manager_rehydrates_from_repository_after_cache_loss():
     repository = InMemorySessionRepository()
     first_manager = SessionManager(repository)
