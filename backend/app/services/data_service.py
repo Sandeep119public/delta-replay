@@ -23,7 +23,9 @@ class DataService:
             raise ValueError("CSV content must be text")
 
         reader = csv.DictReader(io.StringIO(text))
-        fieldnames = set(reader.fieldnames or [])
+        if reader.fieldnames is None:
+            return []
+        fieldnames = set(reader.fieldnames)
         missing = self.REQUIRED - fieldnames
         if missing:
             raise ValueError("Missing columns: " + ", ".join(sorted(missing)))
