@@ -1,6 +1,6 @@
 # Delta Replay Architecture Guide
 
-This document is the fast orientation layer for human and AI-assisted changes.
+This document is the fast orientation layer for human and AI-assisted changes. The machine-enforced dependency and ownership policy lives in `scripts/architecture-policy.mjs`.
 
 ## Ownership map
 
@@ -9,8 +9,16 @@ This document is the fast orientation layer for human and AI-assisted changes.
 | `src/app/` | application composition, runtime wiring, lifecycle, intent bridges | cross-feature behavior |
 | `src/ui/` | DOM rendering, controls, interaction, accessibility | UI and interaction behavior |
 | `src/data/` | candle providers, stores, caches, historical data | market-data behavior |
-| `src/chart/` | chart integration and chart/replay translation | chart behavior |
+| `src/indicators/` | indicator calculations and indicator data | technical indicators |
+| `src/replay/` | replay state and playback behavior | replay mechanics |
+| `src/trading/` | trading domain and execution behavior | orders, positions, risk, execution |
+| `src/strategy/` | strategy and signal behavior | strategy logic |
 | `src/state/` | application state | state shape and state transitions |
+| `src/chart/` | chart integration and chart/replay translation | chart behavior |
+| `src/pages/` | page-level composition | route/page wiring |
+| `src/router/` | route selection and navigation wiring | routing |
+| `src/ports/` | narrow cross-layer contracts | integration interfaces |
+| `src/utils/` | shared low-level utilities | generic helpers |
 | `backend/` | HTTP API, persistence, backend tests | server behavior |
 | `tests/architecture/` | architectural and UI contract tests | boundary changes |
 
@@ -40,6 +48,19 @@ Every listener, subscription, timer, observer, chart handle, or cache handle cre
 
 Prefer `destroy()` or an unsubscribe function and register it with the application lifecycle.
 
+## AI context and changed-file routing
+
+Use the same machine-backed architecture policy that the verifier uses:
+
+```bash
+npm run vibe:context
+npm run vibe:context:json
+npm run vibe:changed
+npm run vibe:changed:json
+```
+
+The JSON variants are stable interfaces for coding agents and automation. Do not copy ownership or dependency tables into new scripts; update `scripts/architecture-policy.mjs` instead.
+
 ## Safe vibe-coding loop
 
 Use the smallest useful verification command while iterating, then run the full gate before pushing:
@@ -55,6 +76,7 @@ Useful project commands:
 npm run dev
 npm run dev:host
 npm run vibe:where
+npm run vibe:context
 npm run test:ui-contracts
 npm test
 npm run build

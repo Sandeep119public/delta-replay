@@ -17,6 +17,7 @@ import { createDatasetView, createCandleView, createReplayStatusView } from './D
 import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
 import { createLifecycleGuard } from './createLifecycleGuard.js';
+import { createReplayCapabilities } from './ReplayCapabilities.js';
 
 function registerActionGuard(engine, canTrade, reportError) {
   return engine.registerActionGuard((action) => {
@@ -37,19 +38,7 @@ function bindDatasetSelectors(ui, actions) {
   return { destroy() { unbinds.forEach((unbind) => { try { unbind?.(); } catch {} }); } };
 }
 
-export { createReplayCapabilities, requireElement };
-
-function createReplayCapabilities() {
-  let coordinator = null;
-  return Object.freeze({
-    capabilities: Object.freeze({
-      load: (options = {}) => coordinator?.loadAndPrepareReplay(options),
-      preview: (index) => coordinator?.updatePreviewWindow?.(index),
-      changeDataset: (kind, value, sourceEl) => coordinator?.handleSymbolTimeframeChange(kind, value, sourceEl),
-    }),
-    attach(nextCoordinator) { coordinator = nextCoordinator; },
-  });
-}
+export { requireElement };
 
 function requireElement(id, root = document) {
   const element = root.getElementById?.(id) || root.querySelector?.('#' + id);

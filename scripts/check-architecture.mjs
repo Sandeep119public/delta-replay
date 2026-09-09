@@ -1,60 +1,16 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {
+  ALLOWED,
+  BANNED_PRESENTATION_TOKENS,
+  BROWSER_GLOBALS,
+  FORBIDDEN_LEGACY_FILES,
+  INTEGRATION_LAYERS,
+  LAYERS,
+  PRESENTATION_COMPAT_FILE,
+} from './architecture-policy.mjs';
 
 const ROOT = process.cwd();
-const LAYERS = [
-  'core', 'data', 'indicators', 'replay', 'trading', 'strategy',
-  'state', 'app', 'chart', 'ui', 'pages', 'router', 'utils', 'ports', 'personality',
-];
-
-const ALLOWED = {
-  core: new Set(), data: new Set(['core']), indicators: new Set(['core']), replay: new Set(['core', 'data']),
-  trading: new Set(['core', 'replay', 'data']), strategy: new Set(['core', 'trading']), state: new Set(['core', 'data']),
-  app: new Set(['core', 'data', 'indicators', 'replay', 'trading', 'strategy', 'state', 'chart', 'ui', 'pages', 'router', 'utils', 'ports', 'personality']),
-  chart: new Set(['replay', 'utils', 'ports']),
-  ui: new Set(['utils', 'ports']),
-  pages: new Set(['utils', 'ports']),
-  router: new Set(['app', 'ui', 'pages', 'utils']), utils: new Set(['data']), ports: new Set(), personality: new Set(),
-};
-
-const PRESENTATION_COMPAT_FILE = 'src/ui/presentationCompat.js';
-const BANNED_PRESENTATION_TOKENS = [
-  /\w*[Cc]oordinator\w*/,
-  /\b[Cc]andleStore\b/,
-  /\bcandleStore\b/,
-  /\b[Aa]ppState\b/,
-  /\bPaperTradingEngine\b/,
-  /\btradingEngine\b/,
-  /\btradingState\b/,
-  /\bcommandController\b/,
-  /\bengine\b/,
-  /\bloadAndPrepareReplay\b/,
-  /\bapplyWindowedChart\b/,
-  /\bupdatePreviewWindow\b/,
-  /\btrySeek\b/,
-  /\bgetAccountSnapshot\b/,
-  /\bgetPerformanceStats\b/,
-  /\bgetPositions\b/,
-  /\bgetTrades\b/,
-  /\bgetOrders\b/,
-  /\bgetPendingOrders\b/,
-  /\bgetLatestCandle\b/,
-  /\bplaceLimitOrder\b/,
-  /\bplaceStopOrder\b/,
-  /\bsetStartingBalance\b/,
-  /\bclearStopLoss\b/,
-  /\bclearTakeProfit\b/,
-  /\.\s*onMarketCandle\s*\(/,
-  /\.\s*clearPendingOrders\s*\(/,
-];
-
-const FORBIDDEN_LEGACY_FILES = [
-  'src/app/TradingUIPort.js',
-  'src/app/TradingUIState.js',
-];
-
-const INTEGRATION_LAYERS = new Set(['ui', 'pages', 'chart', 'app', 'router']);
-const BROWSER_GLOBALS = /\b(document|window|navigator|localStorage|sessionStorage)\b/;
 const IMPORT_PATTERN = /(?:\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\)|\bimport\s*['"]([^'"]+)['"]|\bexport\s+(?:\*|\{[^}]*\})\s*from\s*['"]([^'"]+)['"])/g;
 
 async function collectFiles(dir) {
