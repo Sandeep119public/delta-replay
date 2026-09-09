@@ -5,6 +5,7 @@ class Events {
 }
 
 const BASE_STEP_DELAY_MS = 500;
+const clone = (value) => value == null ? value : structuredClone(value);
 
 export class RemoteReplayEngine {
   constructor(api, tradingEngine = null) {
@@ -21,8 +22,8 @@ export class RemoteReplayEngine {
   on(event, handler) { return this._destroyed ? () => {} : this.events.on(event, handler); }
   _sync(snapshot = {}) {
     if (this._destroyed) return;
-    this.state = { ...this.state, status: snapshot.status ?? this.state.status, currentIndex: Number.isInteger(snapshot.index) ? snapshot.index : this.state.currentIndex, startIndex: Number.isInteger(snapshot.startIndex) ? snapshot.startIndex : this.state.startIndex, totalCandles: Number.isFinite(snapshot.total) ? snapshot.total : this.state.totalCandles, speed: Number.isFinite(snapshot.speed) ? snapshot.speed : this.state.speed, candle: snapshot.candle ?? null, visibleCandles: Array.isArray(snapshot.visibleCandles) ? snapshot.visibleCandles : [] };
-    if (snapshot.trading && this.tradingEngine?.syncFromReplayStep) this.tradingEngine.syncFromReplayStep(snapshot);
+    this.state = { ...this.state, status: snapshot.status ?? this.state.status, currentIndex: Number.isInteger(snapshot.index) ? snapshot.index : this.state.currentIndex, startIndex: Number.isInteger(snapshot.startIndex) ? snapshot.startIndex : this.state.startIndex, totalCandles: Number.isFinite(snapshot.total) ? snapshot.total : this.state.totalCandles, speed: Number.isFinite(snapshot.speed) ? snapshot.speed : this.state.speed, candle: clone(snapshot.candle), visibleCandles: Array.isArray(snapshot.visibleCandles) ? clone(snapshot.visibleCandles) : [] };
+    if (snapshot.trading && this.tradingEngine?.syncFromReplayStep) this.tradingEngine.syncFromReplayStep(clone(snapshot));
     this.events.emit('stateChanged', this.getState());
   }
   async _call(path, options = {}, generation = this._generation) {
@@ -31,11 +32,11 @@ export class RemoteReplayEngine {
     this._sync(response);
     return this.getState();
   }
-  getState() { return { ...this.state, total: this.state.totalCandles, totalCandles: this.state.totalCandles, visibleCandles: [...this.state.visibleCandles] }; }
+  getState() { return { ...this.state, candle: clone(this.state.candle), total: this.state.totalCandles, totalCandles: this.state.totalCandles, visibleCandles: clone(this.state.visibleCandles) }; }
   getTotalCandles() { return this.state.totalCandles; }
-  getVisibleCandles() { return [...this.state.visibleCandles]; }
-  async load(candles) { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; return this._call('/load', { method: 'POST', body: JSON.stringify({ candles: Array.isArray(candles) ? candles : [] }) }, generation); }
-  async start(index = 0) { if (this._destroyed) return this.getState(); const generation = ++this._generation; const result = await this._call(`/start/${Number(index)}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result }); return result; }
+  getVisibleCandles() { return clone(this.state.visibleCandles); }
+  async load(candles) { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; return this._call('/load', { method: 'POST', body: JSON.stringify({ candles: Array.isArray(candles) ? clone(candles) : [] }) }, generation); }
+  async start(index = 0) { if (this._destroyed) return this.getState(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay start index must be an integer'); const generation = ++this._generation; const result = await this._call(`/start/${numericIndex}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result }); return result; }
   async stepForward() {
     if (this._destroyed || this._stepInFlight) return this.getState();
     if (this.state.currentIndex < 0 || this.state.currentIndex >= this.state.totalCandles - 1) { if (this.state.totalCandles > 0 && this.state.currentIndex >= this.state.totalCandles - 1) this.pause(); return this.getState(); }
@@ -45,12 +46,12 @@ export class RemoteReplayEngine {
     try {
       const result = await this._call('/step', { method: 'POST' }, generation);
       if (this._destroyed || generation !== this._generation) return result;
-      this.events.emit('stepped', { index: this.state.currentIndex, previousIndex, state: result, candle: this.state.candle });
+      this.events.emit('stepped', { index: this.state.currentIndex, previousIndex, state: result, candle: clone(this.state.candle) });
       if (this.state.status === 'ended' || this.state.currentIndex >= this.state.totalCandles - 1) this.pause();
       return result;
     } finally { this._stepInFlight = false; }
   }
-  async seek(index) { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; const result = await this._call(`/seek/${Number(index)}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('seeked', { index: this.state.currentIndex, state: result }); return result; }
+  async seek(index) { if (this._destroyed) return this.getState(); this.pause(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay seek index must be an integer'); const generation = ++this._generation; const result = await this._call(`/seek/${numericIndex}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('seeked', { index: this.state.currentIndex, state: result }); return result; }
   async reset() { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; const result = await this._call('/reset', { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('reset', { index: this.state.currentIndex, state: result }); return result; }
   async play() { if (this._destroyed) return this.getState(); if (this.state.status === 'ready') await this.start(this.state.startIndex >= 0 ? this.state.startIndex : 0); if (this._destroyed || !['paused', 'playing'].includes(this.state.status)) return this.getState(); if (this._playTimer) return this.getState(); this.state = { ...this.state, status: 'playing' }; this.events.emit('stateChanged', this.getState()); this._scheduleStep(); return this.getState(); }
   pause() { if (this._playTimer) clearTimeout(this._playTimer); this._playTimer = null; if (!this._destroyed && this.state.status === 'playing') { this.state = { ...this.state, status: 'paused' }; this.events.emit('stateChanged', this.getState()); } return this.getState(); }
