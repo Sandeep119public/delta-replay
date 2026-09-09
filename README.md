@@ -45,31 +45,40 @@ npm run dev
 
 Useful commands:
 
-- `npm run check` — run the complete frontend regression gate (architecture, UI contracts, tests, build).
+- `npm run check` — run the complete frontend regression gate.
 - `npm run vibe` — friendly alias for the full safety gate before pushing exploratory changes.
 - `npm run test:watch` — keep Vitest running while iterating.
 - `npm run dev:host` — expose Vite on the local network for device testing.
 
 ### Vibe-coding workflow
 
-For fast experimentation, keep changes small and loop through:
+For fast experimentation, keep changes small and use the repository's machine-backed context and impact routing:
 
-1. Make one focused change.
-2. Run the narrowest relevant test while iterating.
-3. Run `npm run check` before pushing.
-4. If you change markup IDs or controller contracts, update the UI contract tests in the same change.
+```bash
+npm run vibe:context
+npm run vibe:changed
+npm run vibe:fast
+npm run vibe:check
+```
 
-The app deliberately keeps composition in `src/app/Application.js`, layout construction in `src/ui/PaperUI.js`, and behavior in focused controllers. Treat DOM IDs as contracts: change the controller and its contract tests together.
+Coding agents can consume the JSON forms:
 
+```bash
+npm run vibe:context:json
+npm run vibe:changed:json
+```
+
+The architecture policy used by the verifier and context tools lives in `scripts/architecture-policy.mjs`. Treat it as the machine source of truth for ownership and dependency rules.
 
 ### Architecture map
 
-When exploring the codebase, start here:
+When exploring the codebase, start with `ARCHITECTURE.md` and the current context command.
 
 - `src/app/Application.js` — composition root: wires modules together, not business logic.
 - `src/app/createCoreServices.js` — backend clients and stateful core services.
 - `src/app/bindReplayLifecycle.js` — replay event subscriptions and replay-driven UI updates.
 - `src/app/bindApplicationLifecycle.js` — teardown ownership and cleanup.
+- `src/app/ReplayCapabilities.js` — narrow replay capability contract used by composition and callers.
 - `src/ui/PaperUI.js` — UI composition and DOM-facing adapters.
 
 A useful exploration rule: **trace one user action end-to-end before changing code**. For example, follow PLAY from markup → UI control → replay port → command controller → engine. This keeps fast experiments from becoming dependency archaeology.
@@ -78,6 +87,7 @@ A useful exploration rule: **trace one user action end-to-end before changing co
 
 - `npm run vibe:fast` — quick confidence loop for UI contracts and unit tests.
 - `npm run vibe:check` — full regression gate before a push.
-- `npm run vibe:build` — explicit alias for the full build-safe verification path.
+- `npm run vibe:context` — compact ownership and architecture context.
+- `npm run vibe:changed` — changed-file impact routing.
 
 Recommended rhythm: **edit → vibe:fast → inspect → repeat → vibe:check before push**.
