@@ -43,6 +43,34 @@ export const RULES = [
   'Keep patches small. Avoid broad formatting or unrelated refactors.',
 ];
 
+export const CHECKS = {
+  fast: 'npm run vibe:fast',
+  architecture: 'npm run vibe:architecture',
+  ui: 'npm run vibe:ui',
+  full: 'npm run vibe:verify',
+  tests: 'npm test',
+  backend: 'PYTHONPATH=backend pytest backend/tests -q',
+  tooling: 'npm run vibe:check',
+};
+
+export const IMPACT_RULES = [
+  { id: 'ui', prefixes: ['src/ui/'], contains: ['paperMarkup'], extensions: ['.css', '.scss'], checks: [['UI', CHECKS.ui]] },
+  { id: 'architecture', prefixes: ['src/app/', 'src/core/', 'src/ports/'], exact: ['tests/architecture/boundaries.test.js'], checks: [['Architecture', CHECKS.architecture]] },
+  { id: 'chart', prefixes: ['src/chart/'], checks: [['UI', CHECKS.ui], ['Architecture', CHECKS.architecture]] },
+  { id: 'pages-router', prefixes: ['src/pages/', 'src/router/'], checks: [['Architecture', CHECKS.architecture], ['UI contracts', CHECKS.ui]] },
+  { id: 'replay', prefixes: ['src/replay/'], checks: [['Replay', CHECKS.fast]] },
+  { id: 'trading-strategy', prefixes: ['src/trading/', 'src/strategy/'], checks: [['Trading', CHECKS.fast]] },
+  { id: 'data-state', prefixes: ['src/data/', 'src/indicators/', 'src/state/'], checks: [['Data/state', CHECKS.fast]] },
+  { id: 'utils', prefixes: ['src/utils/'], checks: [['Tests', CHECKS.tests]] },
+  { id: 'backend', prefixes: ['backend/'], checks: [['Backend', CHECKS.backend]] },
+  { id: 'tests', prefixes: ['tests/'], excludePrefixes: ['tests/architecture/'], checks: [['Tests', CHECKS.tests]] },
+  { id: 'tooling', prefixes: ['scripts/'], exact: ['package.json', 'package-lock.json'], checks: [['Tooling', CHECKS.tooling]] },
+  { id: 'guidance', exact: ['ARCHITECTURE.md', 'AGENTS.md'], checks: [['Guidance', CHECKS.full]] },
+  { id: 'ci', prefixes: ['.github/workflows/'], checks: [['CI', CHECKS.tooling]] },
+];
+
+export const IMPACT_ORDER = ['Architecture', 'UI', 'UI contracts', 'Replay', 'Trading', 'Data/state', 'Data', 'Tests', 'Tooling', 'Guidance', 'Backend', 'CI'];
+
 export const PRESENTATION_COMPAT_FILE = 'src/ui/presentationCompat.js';
 export const INTEGRATION_LAYERS = new Set(['ui', 'pages', 'chart', 'app', 'router']);
 export const BROWSER_GLOBALS = /\b(document|window|navigator|localStorage|sessionStorage)\b/;
