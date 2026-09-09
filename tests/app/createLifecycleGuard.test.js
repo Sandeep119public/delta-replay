@@ -1,35 +1,36 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
+import { describe, expect, it } from 'vitest';
 import { createLifecycleGuard } from '../../src/app/createLifecycleGuard.js';
 
-test('starts only once and destroys only once', () => {
-  let starts = 0;
-  let destroys = 0;
-  const lifecycle = createLifecycleGuard({
-    start: () => { starts += 1; },
-    destroy: () => { destroys += 1; },
+describe('createLifecycleGuard', () => {
+  it('starts only once and destroys only once', () => {
+    let starts = 0;
+    let destroys = 0;
+    const lifecycle = createLifecycleGuard({
+      start: () => { starts += 1; },
+      destroy: () => { destroys += 1; },
+    });
+
+    lifecycle.start();
+    lifecycle.start();
+    lifecycle.destroy();
+    lifecycle.destroy();
+
+    expect(starts).toBe(1);
+    expect(destroys).toBe(1);
+    expect(lifecycle.started).toBe(true);
+    expect(lifecycle.destroyed).toBe(true);
   });
 
-  lifecycle.start();
-  lifecycle.start();
-  lifecycle.destroy();
-  lifecycle.destroy();
+  it('does not start after destroy', () => {
+    let starts = 0;
+    const lifecycle = createLifecycleGuard({
+      start: () => { starts += 1; },
+      destroy: () => {},
+    });
 
-  assert.equal(starts, 1);
-  assert.equal(destroys, 1);
-  assert.equal(lifecycle.started, true);
-  assert.equal(lifecycle.destroyed, true);
-});
+    lifecycle.destroy();
+    lifecycle.start();
 
-test('does not start after destroy', () => {
-  let starts = 0;
-  const lifecycle = createLifecycleGuard({
-    start: () => { starts += 1; },
-    destroy: () => {},
+    expect(starts).toBe(0);
   });
-
-  lifecycle.destroy();
-  lifecycle.start();
-
-  assert.equal(starts, 0);
 });
