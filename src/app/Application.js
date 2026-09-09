@@ -3,6 +3,8 @@ import { ReplayCommandController } from './ReplayCommandController.js';
 import { createCoreServices } from './createCoreServices.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
+import { registerActionGuard } from './registerActionGuard.js';
+import { bindDatasetSelectors } from './bindDatasetSelectors.js';
 import { createPaperUI } from '../ui/PaperUI.js';
 import { renderPaperLayout } from '../ui/paper/PaperLayout.js';
 import { ChartManager } from '../chart/ChartManager.js';
@@ -18,25 +20,6 @@ import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
 import { createLifecycleGuard } from './createLifecycleGuard.js';
 import { createReplayCapabilities } from './ReplayCapabilities.js';
-
-function registerActionGuard(engine, canTrade, reportError) {
-  return engine.registerActionGuard((action) => {
-    if (!canTrade()) return { allowed: true };
-    const msg = action === 'load'
-      ? 'Cannot load new data while a position is open — close position or reset account first.'
-      : `Cannot ${action} while a position is open — close position first.`;
-    reportError(msg);
-    return { allowed: false, reason: msg };
-  });
-}
-
-function bindDatasetSelectors(ui, actions) {
-  const unbinds = [
-    ui.symbolSelector.onChange((symbol) => actions.changeDataset('symbol', symbol, ui.el('symbol-select'))),
-    ui.timeframeSelector.onChange((timeframe) => actions.changeDataset('timeframe', timeframe, ui.el('timeframe-select'))),
-  ];
-  return { destroy() { unbinds.forEach((unbind) => { try { unbind?.(); } catch {} }); } };
-}
 
 export { requireElement };
 

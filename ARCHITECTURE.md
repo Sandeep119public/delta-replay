@@ -1,6 +1,6 @@
 # Delta Replay Architecture Guide
 
-This document is the fast orientation layer for human and AI-assisted changes. The machine-enforced dependency and ownership policy lives in `scripts/architecture-policy.mjs`.
+This document is the fast orientation layer for human and AI-assisted changes. The machine-enforced dependency, ownership, verification, and changed-file impact policy lives in `scripts/architecture-policy.mjs`.
 
 ## Ownership map
 
@@ -24,7 +24,7 @@ This document is the fast orientation layer for human and AI-assisted changes. T
 
 ## Composition rules
 
-`src/app/Application.js` is a composition root. Keep feature logic out of it.
+`src/app/Application.js` is a composition root. Keep feature logic out of it. Small application helpers may own one wiring concern, but should not become alternate feature layers.
 
 Prefer this flow:
 
@@ -46,7 +46,7 @@ When changing a required ID, role, tab relationship, hidden state, or compatibil
 
 Every listener, subscription, timer, observer, chart handle, or cache handle created by application code should have an obvious cleanup owner.
 
-Prefer `destroy()` or an unsubscribe function and register it with the application lifecycle.
+Prefer `destroy()` or an unsubscribe function and register it with the application lifecycle. Cleanup should be idempotent because multiple lifecycle signals can converge on the same teardown path.
 
 ## AI context and changed-file routing
 
@@ -59,7 +59,7 @@ npm run vibe:changed
 npm run vibe:changed:json
 ```
 
-The JSON variants are stable interfaces for coding agents and automation. Do not copy ownership or dependency tables into new scripts; update `scripts/architecture-policy.mjs` instead.
+The JSON variants use schema version `1` and expose ownership, dependency rules, verification commands, and changed-file impact routing. Treat this output as an agent-facing API. Do not copy ownership, dependency, or impact tables into new scripts; update `scripts/architecture-policy.mjs` instead.
 
 ## Safe vibe-coding loop
 

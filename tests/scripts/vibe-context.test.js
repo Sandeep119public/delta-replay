@@ -9,7 +9,7 @@ describe('vibe context command', () => {
     expect(source).toContain("console.log('\\nOwnership:')");
     expect(source).toContain("console.log('\\nEdit rules:')");
     expect(source).toContain("console.log('\\nVerification:')");
-    expect(source).toContain("npm run vibe:changed");
-    expect(source).toContain("npm run vibe:verify");
+    expect(source).toContain("'run vibe:changed'");
+    expect(source).toContain("'run full verification before merge'");
   });
 });
