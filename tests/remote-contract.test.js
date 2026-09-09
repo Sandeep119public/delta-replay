@@ -99,6 +99,39 @@ describe('remote contracts', () => {
     expect(engine.getAccountSnapshot().equity).toBe(12000);
   });
 
+  it('returns canonical state when an older action response arrives late', async () => {
+    let resolveOld;
+    let resolveNew;
+    const old = new Promise((resolve) => { resolveOld = resolve; });
+    const newer = new Promise((resolve) => { resolveNew = resolve; });
+    let requestCount = 0;
+    const client = { request: vi.fn((path) => path === '/state' ? { account: { startingBalance: 10000, equity: 10000 }, positions: [], orders: [], trades: [] } : (++requestCount === 1 ? old : newer)) };
+    const engine = new RemoteTradingEngine(client);
+    await engine._refreshPromise;
+    const first = engine.setStartingBalance(9000);
+    const second = engine.setStartingBalance(12000);
+    resolveNew({ account: { startingBalance: 12000, equity: 12000 }, positions: [], orders: [], trades: [] });
+    await second;
+    resolveOld({ account: { startingBalance: 9000, equity: 9000 }, positions: [], orders: [], trades: [] });
+    const stale = await first;
+    expect(stale.stale).toBe(true);
+    expect(stale.account.equity).toBe(12000);
+    expect(engine.getAccountSnapshot().equity).toBe(12000);
+  });
+
+  it('returns defensive trading snapshots', async () => {
+    const client = api({ '/state': { account: { equity: 100 }, positions: [{ symbol: 'BTCUSDT', quantity: 1 }], orders: [{ id: 1, status: 'PENDING' }], trades: [] } });
+    const engine = new RemoteTradingEngine(client);
+    await engine._refreshPromise;
+    const snapshot = engine.getStateSnapshot();
+    snapshot.account.equity = 999;
+    snapshot.positions[0].quantity = 999;
+    snapshot.orders[0].status = 'FILLED';
+    expect(engine.getAccountSnapshot().equity).toBe(100);
+    expect(engine.getPositions()[0].quantity).toBe(1);
+    expect(engine.getOrders()[0].status).toBe('PENDING');
+  });
+
   it('maps trading actions to canonical API payloads', async () => {
     const client = api({ '/order': { account: {}, positions: [], orders: [], trades: [] } });
     const engine = new RemoteTradingEngine(client);
