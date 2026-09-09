@@ -28,39 +28,48 @@ function changedFiles() {
   };
 }
 
+const IMPACT = [
+  { match: (file) => file.startsWith('src/ui/') || file.includes('paperMarkup') || /\.(css|scss)$/.test(file), checks: [['UI', 'npm run vibe:ui']] },
+  { match: (file) => file.startsWith('src/app/') || file.startsWith('src/core/') || file.startsWith('src/ports/') || file === 'tests/architecture/boundaries.test.js', checks: [['Architecture', 'npm run vibe:architecture']] },
+  { match: (file) => file.startsWith('src/chart/'), checks: [['UI', 'npm run vibe:ui']] },
+  { match: (file) => file.startsWith('src/pages/') || file.startsWith('src/router/'), checks: [['Architecture', 'npm run vibe:architecture'], ['UI contracts', 'npm run vibe:ui']] },
+  { match: (file) => file.startsWith('src/replay/'), checks: [['Replay', 'npm run vibe:fast']] },
+  { match: (file) => file.startsWith('src/trading/') || file.startsWith('src/strategy/'), checks: [['Trading', 'npm run vibe:fast']] },
+  { match: (file) => file.startsWith('src/data/') || file.startsWith('src/indicators/') || file.startsWith('src/state/'), checks: [['Data/state', 'npm run vibe:fast']] },
+  { match: (file) => file.startsWith('src/utils/'), checks: [['Tests', 'npm test']] },
+  { match: (file) => file.startsWith('backend/'), checks: [['Backend', 'PYTHONPATH=backend pytest backend/tests -q']] },
+  { match: (file) => file.startsWith('tests/') && !file.startsWith('tests/architecture/'), checks: [['Tests', 'npm test']] },
+  { match: (file) => file.startsWith('scripts/') || file === 'package.json' || file === 'package-lock.json', checks: [['Tooling', 'npm run vibe:check']] },
+  { match: (file) => file === 'ARCHITECTURE.md' || file === 'AGENTS.md', checks: [['Guidance', 'npm run vibe:verify']] },
+  { match: (file) => file.startsWith('.github/workflows/'), checks: [['CI', 'npm run vibe:check']] },
+];
+
+const ORDER = ['Architecture', 'UI', 'UI contracts', 'Replay', 'Trading', 'Data/state', 'Data', 'Tests', 'Tooling', 'Guidance', 'Backend', 'CI'];
 const { base, files: changed } = changedFiles();
 const checks = new Map();
-const add = (label, command) => checks.set(label, command);
 
 for (const file of changed) {
-  if (file.startsWith('src/ui/') || file.includes('paperMarkup') || file.endsWith('.css') || file.endsWith('.scss')) {
-    add('UI', 'npm run vibe:ui');
+  for (const rule of IMPACT) {
+    if (!rule.match(file)) continue;
+    for (const [label, command] of rule.checks) checks.set(label, command);
   }
-  if (file.startsWith('src/app/') || file.startsWith('src/core/') || file === 'tests/architecture/boundaries.test.js') {
-    add('Architecture', 'npm run vibe:architecture');
-  }
-  if (file === 'tests/architecture/ui-contracts.test.js') add('UI contracts', 'npm run vibe:ui');
-  if (file.startsWith('src/replay/')) add('Replay', 'npm run vibe:fast');
-  if (file.startsWith('src/trading/')) add('Trading', 'npm run vibe:fast');
-  if (file.startsWith('src/data/')) add('Data', 'npm run vibe:fast');
-  if (file.startsWith('backend/')) add('Backend', 'PYTHONPATH=backend pytest backend/tests -q');
-  if (file.startsWith('tests/') && !file.startsWith('tests/architecture/')) add('Tests', 'npm test');
-  if (file.startsWith('scripts/') || file === 'package.json' || file === 'package-lock.json') add('Tooling', 'npm run vibe:check');
-  if (file === 'ARCHITECTURE.md' || file === 'AGENTS.md') add('Guidance', 'npm run vibe:verify');
-  if (file.startsWith('.github/workflows/')) add('CI', 'npm run vibe:check');
 }
 
-const ORDER = ['Architecture', 'UI', 'UI contracts', 'Replay', 'Trading', 'Data', 'Backend', 'Tests', 'Tooling', 'Guidance', 'CI'];
+const payload = {
+  base,
+  changedFiles: changed,
+  checks: ORDER.filter((label) => checks.has(label)).map((label) => ({ label, command: checks.get(label) })),
+  defaultCheck: 'npm run vibe:fast',
+};
+
+if (process.argv.includes('--json')) {
+  console.log(JSON.stringify(payload, null, 2));
+  process.exit(0);
+}
 
 console.log(`Compared against: ${base}`);
 console.log('Changed files:', changed.length ? changed.join(', ') : '(none)');
 console.log('\nRecommended verification:');
-for (const label of ORDER) {
-  const command = checks.get(label);
-  if (command) console.log(`${label} → ${command}`);
-}
-if (!checks.size) console.log('Default → npm run vibe:fast');
-
-if (changed.length === 0) {
-  console.log('\nNo changes detected. The fast loop is the safest default.');
-}
+for (const { label, command } of payload.checks) console.log(`${label} → ${command}`);
+if (!payload.checks.length) console.log(`Default → ${payload.defaultCheck}`);
+if (!changed.length) console.log('\nNo changes detected. The fast loop is the safest default.');
