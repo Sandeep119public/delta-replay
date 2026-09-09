@@ -1,7 +1,7 @@
 class Events {
   constructor() { this.map = new Map(); }
   on(event, handler) { const listeners = this.map.get(event) || new Set(); listeners.add(handler); this.map.set(event, listeners); return () => listeners.delete(handler); }
-  emit(event, payload) { for (const handler of this.map.get(event) || []) { try { handler(payload); } catch (error) { console.warn(`[RemoteReplayEngine] ${event} handler failed`, error); } }
+  emit(event, payload) { for (const handler of this.map.get(event) || []) { try { handler(payload); } catch (error) { console.warn(`[RemoteReplayEngine] ${event} handler failed`, error); } } }
 }
 
 const BASE_STEP_DELAY_MS = 500;
@@ -25,12 +25,17 @@ export class RemoteReplayEngine {
     if (snapshot.trading && this.tradingEngine?.syncFromReplayStep) this.tradingEngine.syncFromReplayStep(snapshot);
     this.events.emit('stateChanged', this.getState());
   }
-  async _call(path, options = {}, generation = this._generation) { const response = await this.api.request(path, options); if (this._destroyed || generation !== this._generation) return this.getState(); this._sync(response); return this.getState(); }
+  async _call(path, options = {}, generation = this._generation) {
+    const response = await this.api.request(path, options);
+    if (this._destroyed || generation !== this._generation) return this.getState();
+    this._sync(response);
+    return this.getState();
+  }
   getState() { return { ...this.state, total: this.state.totalCandles, totalCandles: this.state.totalCandles, visibleCandles: [...this.state.visibleCandles] }; }
   getTotalCandles() { return this.state.totalCandles; }
   getVisibleCandles() { return [...this.state.visibleCandles]; }
   async load(candles) { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; return this._call('/load', { method: 'POST', body: JSON.stringify({ candles: Array.isArray(candles) ? candles : [] }) }, generation); }
-  async start(index = 0) { if (this._destroyed) return this.getState(); const generation = this._generation; const result = await this._call(`/start/${Number(index)}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result }); return result; }
+  async start(index = 0) { if (this._destroyed) return this.getState(); const generation = ++this._generation; const result = await this._call(`/start/${Number(index)}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result }); return result; }
   async stepForward() {
     if (this._destroyed || this._stepInFlight) return this.getState();
     if (this.state.currentIndex < 0 || this.state.currentIndex >= this.state.totalCandles - 1) { if (this.state.totalCandles > 0 && this.state.currentIndex >= this.state.totalCandles - 1) this.pause(); return this.getState(); }
