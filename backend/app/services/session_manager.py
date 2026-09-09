@@ -25,6 +25,7 @@ class SessionManager:
         self.repository = repository or self._repository_from_environment()
         self._sessions = {}
         self._session_locks = {}
+        self._cache_generation = 0
         self._lock = RLock()
 
     @staticmethod
@@ -49,6 +50,8 @@ class SessionManager:
         self._validate_session_id(session_id)
         session_lock = self._lock_for(session_id)
         with session_lock:
+            with self._lock:
+                cache_generation = self._cache_generation
             if not self.repository.durable:
                 session = self._sessions.get(session_id)
                 if session is not None:
@@ -61,14 +64,16 @@ class SessionManager:
             else:
                 session = self._restore(document)
 
-            self._sessions[session_id] = session
+            with self._lock:
+                if cache_generation == self._cache_generation:
+                    self._sessions[session_id] = session
             return session
 
     @staticmethod
     def _restore(document) -> SessionState:
         try:
             replay, trading = restore_session(document)
-        except (TypeError, ValueError, KeyError) as exc:
+        except (TypeError, ValueError, KeyError, RuntimeError) as exc:
             raise RuntimeError(f"unable to restore session state: {exc}") from exc
         return SessionState(replay=replay, trading=trading)
 
@@ -78,6 +83,8 @@ class SessionManager:
         session_lock = self._lock_for(session_id)
         with session_lock:
             self._ensure_exists(session_id)
+            with self._lock:
+                cache_generation = self._cache_generation
 
             def mutate(document):
                 session = self._restore(document)
@@ -85,7 +92,9 @@ class SessionManager:
                 return serialize_session(session.replay, session.trading), (result, session)
 
             result, session = self.repository.atomic_update(session_id, mutate)
-            self._sessions[session_id] = session
+            with self._lock:
+                if cache_generation == self._cache_generation:
+                    self._sessions[session_id] = session
             return result
 
     def _ensure_exists(self, session_id: str) -> None:
@@ -106,6 +115,7 @@ class SessionManager:
     def clear_cache(self) -> None:
         """Drop in-process objects without touching the repository."""
         with self._lock:
+            self._cache_generation += 1
             self._sessions.clear()
 
 
