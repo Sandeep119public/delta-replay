@@ -3,6 +3,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.session_manager import manager
 
 CANDLES = [
     {"time": 1, "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1},
@@ -44,3 +45,33 @@ def test_session_header_is_required():
     client = TestClient(app)
     assert client.get("/api/v1/trading/state").status_code == 400
     assert client.get("/api/v1/trading/state", headers={"X-Session-ID": "bad"}).status_code == 400
+
+
+def test_reset_preserves_custom_trading_configuration():
+    client = TestClient(app)
+    session = uuid4()
+
+    def configure(current):
+        current.trading.fee_rate = 0.002
+        current.trading.margin_rate = 0.2
+        current.trading.maint_margin_rate = 0.08
+        return None
+
+    manager.atomic(str(session), configure)
+    response = client.post("/api/v1/trading/reset", headers=h(session))
+    assert response.status_code == 200
+    fresh = manager.get(str(session)).trading
+    assert fresh.fee_rate == 0.002
+    assert fresh.margin_rate == 0.2
+    assert fresh.maint_margin_rate == 0.08
+
+
+def test_market_candle_rejects_fractional_index():
+    client = TestClient(app)
+    session = uuid4()
+    response = client.post(
+        "/api/v1/trading/candle",
+        headers=h(session),
+        json={"symbol": "BTCUSDT", "candle": CANDLES[0], "index": 1.5},
+    )
+    assert response.status_code == 422

@@ -1,3 +1,5 @@
+import pytest
+
 from app.services.paper_engine import PaperTradingEngine
 
 
@@ -37,11 +39,8 @@ def test_pending_order_can_be_cancelled():
 def test_validation_rejects_bad_orders():
     engine = PaperTradingEngine()
     for args in [("BTCUSDT", "hold", 1), ("BTCUSDT", "buy", 0), ("BTCUSDT", "buy", 1, "limit")]:
-        try:
+        with pytest.raises(ValueError):
             engine.submit(*args)
-            assert False
-        except ValueError:
-            pass
 
 
 def test_risk_does_not_trigger_on_creation_bar():
@@ -55,3 +54,25 @@ def test_risk_does_not_trigger_on_creation_bar():
     engine.on_candle(candle(100, 120, 80, 100, 4), 2, "BTCUSDT")
     assert "BTCUSDT" not in engine.positions
     assert engine.trades[-1]["exitReason"] == "STOP_LOSS"
+
+
+def test_risk_update_is_atomic_when_take_profit_is_invalid():
+    engine = PaperTradingEngine()
+    engine.on_candle(candle(100, 101, 99, 100, 1), 0, "BTCUSDT")
+    engine.submit("BTCUSDT", "buy", 1)
+    engine.on_candle(candle(100, 101, 99, 100, 2), 1, "BTCUSDT")
+    engine.set_risk("BTCUSDT", 90, 110)
+    before = engine.positions["BTCUSDT"].copy()
+    with pytest.raises(ValueError):
+        engine.set_risk("BTCUSDT", 95, 99)
+    assert engine.positions["BTCUSDT"] == before
+
+
+def test_candle_index_rejects_fractional_and_backward_values():
+    engine = PaperTradingEngine()
+    engine.on_candle(candle(100, 101, 99, 100), 0, "BTCUSDT")
+    with pytest.raises(ValueError):
+        engine.on_candle(candle(100, 101, 99, 100), 1.5, "BTCUSDT")
+    with pytest.raises(ValueError):
+        engine.on_candle(candle(100, 101, 99, 100), -1, "BTCUSDT")
+    assert engine.index == 0

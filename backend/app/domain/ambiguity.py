@@ -3,7 +3,7 @@ def evaluate(position,candle,candle_index,policy="CONSERVATIVE",execution_policy
     sl=position.get("stop_loss");tp=position.get("take_profit")
     sl_ok=sl is not None and position.get("stop_loss_created_index",-1)<candle_index
     tp_ok=tp is not None and position.get("take_profit_created_index",-1)<candle_index
-    side=position["side"]; hit_sl=sl_ok and ((side=="long" and candle["low"]<=sl) or (side=="short" and candle["high"]>=sl));hit_tp=tp_ok and ((side=="long" and candle["high"]>=tp) or (side=="short" and candle["low"]<=tp))
+    side=str(position["side"]).strip().lower(); hit_sl=sl_ok and ((side=="long" and candle["low"]<=sl) or (side=="short" and candle["high"]>=sl));hit_tp=tp_ok and ((side=="long" and candle["high"]>=tp) or (side=="short" and candle["low"]<=tp))
     resolution="NONE";ambiguous=False
     if hit_sl and hit_tp:
         ambiguous=True

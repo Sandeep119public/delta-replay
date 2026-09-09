@@ -47,6 +47,42 @@ def test_session_round_trip_preserves_replay_and_trading_state():
     assert next_order["id"] > second_order["id"]
 
 
+def test_replay_persistence_preserves_fractional_speed():
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102)])
+    replay.start(0)
+    replay.speed = 2.5
+
+    restored = ReplayService.from_state(replay.export_state())
+
+    assert restored.speed == 2.5
+    assert restored.export_state() == replay.export_state()
+
+
+def test_replay_rejects_fractional_indices():
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102)])
+
+    with pytest.raises(ValueError, match="integer"):
+        replay.start(0.5)
+    with pytest.raises(ValueError, match="integer"):
+        replay.seek(0.5)
+
+
+def test_replay_state_is_defensively_copied():
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
+    replay.start(0)
+
+    state = replay.state()
+    state["candle"]["close"] = 999
+    state["visibleCandles"][0]["open"] = 999
+
+    fresh = replay.state()
+    assert fresh["candle"]["close"] == 102
+    assert fresh["visibleCandles"][0]["open"] == 100
+
+
 def test_manager_rehydrates_from_repository_after_cache_loss():
     repository = InMemorySessionRepository()
     first_manager = SessionManager(repository)
@@ -138,3 +174,15 @@ def test_session_manager_delete_removes_persisted_state():
     fresh = manager.get(session_id)
     assert fresh.replay.state()["status"] == "idle"
     assert fresh.trading.index == -1
+
+
+def test_delete_keeps_session_lock_identity_for_future_operations():
+    repository = InMemorySessionRepository()
+    manager = SessionManager(repository)
+    session_id = str(uuid4())
+
+    first_lock = manager._lock_for(session_id)
+    manager.get(session_id)
+    manager.delete(session_id)
+
+    assert manager._lock_for(session_id) is first_lock

@@ -60,8 +60,7 @@ describe('ReplayLoadService', () => {
 
     const pending = d.replayEngine.load;
     const run = createReplayLoadService(d).loadAndPrepareReplay({ targetSec: 1 });
-    await Promise.resolve();
-    expect(pending).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(pending).toHaveBeenCalledOnce());
     expect(d.appState.setReplayState).not.toHaveBeenCalled();
 
     resolveEngineLoad();
@@ -76,8 +75,7 @@ describe('ReplayLoadService', () => {
     d.replayEngine.start = vi.fn(() => start);
 
     const run = createReplayLoadService(d).loadAndPrepareReplay({ targetSec: 1, autoStart: true });
-    await Promise.resolve();
-    expect(d.replayEngine.start).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(d.replayEngine.start).toHaveBeenCalledOnce());
 
     let settled = false;
     run.then(() => { settled = true; });

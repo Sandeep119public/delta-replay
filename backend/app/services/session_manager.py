@@ -99,8 +99,9 @@ class SessionManager:
         with session_lock:
             self._sessions.pop(session_id, None)
             self.repository.delete(session_id)
-        with self._lock:
-            self._session_locks.pop(session_id, None)
+        # Keep the lock object for this session. Removing it after releasing the
+        # lock creates a race where a concurrent caller can acquire the old lock
+        # while a later caller creates a new lock, allowing mutations to overlap.
 
     def clear_cache(self) -> None:
         """Drop in-process objects without touching the repository."""

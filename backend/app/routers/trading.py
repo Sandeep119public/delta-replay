@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, StrictInt, ValidationError
 
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
@@ -33,7 +33,7 @@ class CloseRequest(BaseModel):
 class MarketCandleRequest(BaseModel):
     symbol: str = Field(default="BTCUSDT", min_length=1)
     candle: Candle | None = None
-    index: int | None = None
+    index: StrictInt | None = None
 
 
 class CapitalRequest(BaseModel):
@@ -196,7 +196,14 @@ def reset(request: Request):
     def reset_engine(session):
         balance = session.trading.account.starting_balance
         fee_rate = session.trading.fee_rate
-        session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate)
+        margin_rate = session.trading.margin_rate
+        maint_margin_rate = session.trading.maint_margin_rate
+        session.trading = PaperTradingEngine(
+            starting_balance=balance,
+            fee_rate=fee_rate,
+            margin_rate=margin_rate,
+            maint_margin_rate=maint_margin_rate,
+        )
         return snapshot(session.trading)
 
     return atomic_session(request, reset_engine)
