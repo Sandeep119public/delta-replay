@@ -94,7 +94,7 @@ export class RemoteTradingEngine {
   flattenPosition(symbol) { return this._action('/close', { method: 'POST', body: JSON.stringify({ symbol: String(symbol).toUpperCase() }) }, 'close'); }
   closePosition(symbol) { return this.flattenPosition(symbol); }
   updateRisk({ symbol, stopLoss, takeProfit }) { return this._action('/risk', { method: 'POST', body: JSON.stringify({ symbol: String(symbol).toUpperCase(), stopLoss, takeProfit }) }, 'risk'); }
-  setRisk({ symbol, stopLoss, takeProfit }) { return this.updateRisk(payload); }
+  setRisk({ symbol, stopLoss, takeProfit }) { return this.updateRisk({ symbol, stopLoss, takeProfit }); }
   setStopLoss(symbol, price) { const position = this.getPositions().find((candidate) => candidate.symbol === String(symbol).toUpperCase()); return this.updateRisk({ symbol, stopLoss: price, takeProfit: position?.takeProfitPrice ?? null }); }
   setTakeProfit(symbol, price) { const position = this.getPositions().find((candidate) => candidate.symbol === String(symbol).toUpperCase()); return this.updateRisk({ symbol, stopLoss: position?.stopLossPrice ?? null, takeProfit: price }); }
   clearRisk(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}`, { method: 'POST' }, 'risk'); }
