@@ -30,12 +30,28 @@ describe('remote contracts', () => {
     const engine = new RemoteReplayEngine(client);
     await engine.load([candle, candle, candle]);
     await engine.start(0);
-
     const pendingStep = engine.stepForward();
     await engine.seek(2);
     resolveStep({ status: 'paused', index: 1, startIndex: 0, total: 3, speed: 1, candle: { ...candle, time: 2 }, visibleCandles: [candle] });
     await pendingStep;
+    expect(engine.getState().currentIndex).toBe(2);
+  });
 
+  it('ignores stale concurrent start responses', async () => {
+    let resolveOld;
+    let resolveNew;
+    const old = new Promise((resolve) => { resolveOld = resolve; });
+    const newer = new Promise((resolve) => { resolveNew = resolve; });
+    let requestCount = 0;
+    const client = { request: vi.fn((path) => path === '/load' ? { status: 'ready', index: -1, startIndex: -1, total: 3, speed: 1, visibleCandles: [] } : (++requestCount === 1 ? old : newer)) };
+    const engine = new RemoteReplayEngine(client);
+    await engine.load([candle, candle, candle]);
+    const first = engine.start(0);
+    const second = engine.start(2);
+    resolveNew({ status: 'paused', index: 2, startIndex: 2, total: 3, speed: 1, candle: { ...candle, time: 3 }, visibleCandles: [] });
+    await second;
+    resolveOld({ status: 'paused', index: 0, startIndex: 0, total: 3, speed: 1, candle, visibleCandles: [] });
+    await first;
     expect(engine.getState().currentIndex).toBe(2);
   });
 
@@ -45,11 +61,9 @@ describe('remote contracts', () => {
     const client = api({ '/load': pending });
     const engine = new RemoteReplayEngine(client);
     const load = engine.load([candle]);
-
     engine.destroy();
     resolveLoad({ status: 'ready', index: -1, startIndex: -1, total: 1, speed: 1, visibleCandles: [] });
     await load;
-
     expect(engine.getState().status).toBe('idle');
     expect(engine.getState().totalCandles).toBe(0);
   });
@@ -61,13 +75,28 @@ describe('remote contracts', () => {
     const engine = new RemoteTradingEngine(client);
     const updates = vi.fn();
     engine.on('accountUpdated', updates);
-
     engine.destroy();
     resolveState({ account: { equity: 999 }, positions: [{ symbol: 'BTCUSDT', quantity: 1 }], orders: [], trades: [] });
     await engine.refresh();
-
     expect(engine.getAccountSnapshot().equity).toBe(0);
     expect(updates).not.toHaveBeenCalled();
+  });
+
+  it('ignores an older trading response when a newer request has completed', async () => {
+    let resolveOld;
+    let resolveNew;
+    const old = new Promise((resolve) => { resolveOld = resolve; });
+    const newer = new Promise((resolve) => { resolveNew = resolve; });
+    let requestCount = 0;
+    const client = { request: vi.fn(() => { requestCount += 1; return requestCount === 1 ? old : newer; }) };
+    const engine = new RemoteTradingEngine(client);
+    const initialRefresh = engine._refreshPromise;
+    const nextRefresh = engine.refresh();
+    resolveNew({ account: { startingBalance: 10000, equity: 12000 }, positions: [], orders: [], trades: [] });
+    await nextRefresh;
+    resolveOld({ account: { startingBalance: 10000, equity: 9000 }, positions: [], orders: [], trades: [] });
+    await initialRefresh;
+    expect(engine.getAccountSnapshot().equity).toBe(12000);
   });
 
   it('maps trading actions to canonical API payloads', async () => {
