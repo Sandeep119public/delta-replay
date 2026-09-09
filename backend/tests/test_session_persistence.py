@@ -160,3 +160,15 @@ def test_session_manager_delete_removes_persisted_state():
     fresh = manager.get(session_id)
     assert fresh.replay.state()["status"] == "idle"
     assert fresh.trading.index == -1
+
+
+def test_delete_keeps_session_lock_identity_for_future_operations():
+    repository = InMemorySessionRepository()
+    manager = SessionManager(repository)
+    session_id = str(uuid4())
+
+    first_lock = manager._lock_for(session_id)
+    manager.get(session_id)
+    manager.delete(session_id)
+
+    assert manager._lock_for(session_id) is first_lock
