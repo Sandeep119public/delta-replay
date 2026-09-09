@@ -17,11 +17,19 @@
 - Every listener, timer, subscription, observer, or resource needs an explicit cleanup path.
 - Avoid broad formatting changes in focused bug fixes.
 
+## Test runner convention
+
+- `tests/architecture/boundaries.test.js` and `tests/architecture/ui-contracts.test.js` use Node's built-in test runner.
+- Product and regression tests use Vitest unless the existing suite explicitly uses another runner.
+- Do not mix `node:test` and Vitest APIs in the same test file.
+
 ## Focused commands
 
 - `npm run vibe:ui` for markup and DOM contracts.
 - `npm run vibe:architecture` for dependency-boundary changes.
 - `npm run vibe:verify` for a compact architecture + frontend gate.
+- `npm run vibe:baseline` for the fast architecture/UI baseline.
+- `npm run vibe:changed` to see recommended checks for the latest commit.
 
 ## Verification
 
