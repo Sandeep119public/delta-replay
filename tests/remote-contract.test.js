@@ -54,6 +54,22 @@ describe('remote contracts', () => {
     expect(engine.getState().totalCandles).toBe(0);
   });
 
+  it('does not publish stale trading state after destroy', async () => {
+    let resolveState;
+    const pending = new Promise((resolve) => { resolveState = resolve; });
+    const client = api({ '/state': pending });
+    const engine = new RemoteTradingEngine(client);
+    const updates = vi.fn();
+    engine.on('accountUpdated', updates);
+
+    engine.destroy();
+    resolveState({ account: { equity: 999 }, positions: [{ symbol: 'BTCUSDT', quantity: 1 }], orders: [], trades: [] });
+    await engine.refresh();
+
+    expect(engine.getAccountSnapshot().equity).toBe(0);
+    expect(updates).not.toHaveBeenCalled();
+  });
+
   it('maps trading actions to canonical API payloads', async () => {
     const client = api({ '/order': { account: {}, positions: [], orders: [], trades: [] } });
     const engine = new RemoteTradingEngine(client);
