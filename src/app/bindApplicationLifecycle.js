@@ -16,24 +16,14 @@ export function bindApplicationLifecycle({
     const cleanup = [
       ['keyboard cleanup', () => unbindKeyboardShortcuts?.()],
       ['application cleanup', () => onDestroy?.()],
-      ['resource cleanup', () => {
-        for (const resource of resources) {
-          try {
-            resource?.destroy?.();
-          } catch (error) {
-            console.warn('[App] resource cleanup failed', error);
-          }
-        }
-      }],
-      ['extra cleanup', () => {
-        for (const cleanupFn of extraCleanup) {
-          try {
-            cleanupFn?.();
-          } catch (error) {
-            console.warn('[App] extra cleanup failed', error);
-          }
-        }
-      }],
+      ...resources.map((resource, index) => [
+        `resource cleanup #${index + 1}`,
+        () => resource?.destroy?.(),
+      ]),
+      ...extraCleanup.map((cleanupFn, index) => [
+        `extra cleanup #${index + 1}`,
+        () => cleanupFn?.(),
+      ]),
       ['engine cleanup', () => engine?.destroy?.()],
       ['cache cleanup', () => candleCache?.close?.()],
     ];

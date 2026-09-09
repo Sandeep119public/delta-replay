@@ -6,9 +6,8 @@ import {
   LAYERS,
   OWNERSHIP,
   RULES,
+  SCHEMA_VERSION,
 } from './architecture-policy.mjs';
-
-const SCHEMA_VERSION = 1;
 
 function context() {
   return {
