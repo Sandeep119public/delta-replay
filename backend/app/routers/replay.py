@@ -21,7 +21,14 @@ def load(request: Request, batch: CandleBatch):
             raise HTTPException(409, "Close positions and cancel pending orders before loading new data")
         balance = session.trading.account.starting_balance
         fee_rate = session.trading.fee_rate
-        session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate)
+        margin_rate = session.trading.margin_rate
+        maint_margin_rate = session.trading.maint_margin_rate
+        session.trading = PaperTradingEngine(
+            starting_balance=balance,
+            fee_rate=fee_rate,
+            margin_rate=margin_rate,
+            maint_margin_rate=maint_margin_rate,
+        )
         return session.replay.load(candles)
 
     return atomic_session(request, replace)
