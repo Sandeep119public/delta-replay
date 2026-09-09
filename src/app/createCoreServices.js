@@ -33,7 +33,7 @@ function getSessionId() {
   }
 }
 
-class SessionRequestQueue {
+export class SessionRequestQueue {
   constructor() { this.tail = Promise.resolve(); }
 
   enqueue(task) {
