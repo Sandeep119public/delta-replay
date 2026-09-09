@@ -32,7 +32,8 @@ describe('Responsive UI regression', () => {
     expect(css).toMatch(/\.main/);
     expect(css).toMatch(/\.chart-container/);
     expect(css).toMatch(/100dvh/);
-    expect(css).toMatch(/minmax\(0, 1fr\)/);
+    // CSS may be minified, so whitespace around grid track separators is not a contract.
+    expect(css).toMatch(/minmax\(\s*0\s*,\s*1fr\s*\)/);
   });
 
   it('trading panel docks as a bottom drawer on small screens', () => {
