@@ -50,11 +50,14 @@ def test_session_header_is_required():
 def test_reset_preserves_custom_trading_configuration():
     client = TestClient(app)
     session = uuid4()
-    state = manager.get(str(session))
-    state.trading.fee_rate = 0.002
-    state.trading.margin_rate = 0.2
-    state.trading.maint_margin_rate = 0.08
 
+    def configure(current):
+        current.trading.fee_rate = 0.002
+        current.trading.margin_rate = 0.2
+        current.trading.maint_margin_rate = 0.08
+        return None
+
+    manager.atomic(str(session), configure)
     response = client.post("/api/v1/trading/reset", headers=h(session))
     assert response.status_code == 200
     fresh = manager.get(str(session)).trading
