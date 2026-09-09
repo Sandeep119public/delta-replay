@@ -165,12 +165,10 @@ class PaperTradingEngine:
                 price = candle["open"]
             elif order["type"] == "limit":
                 touched = (order["side"] == "buy" and candle["low"] <= order["limitPrice"]) or (order["side"] == "sell" and candle["high"] >= order["limitPrice"])
-                if touched:
-                    price = min(order["limitPrice"], candle["open"]) if order["side"] == "buy" else max(order["limitPrice"], candle["open"])
+                if touched: price = min(order["limitPrice"], candle["open"]) if order["side"] == "buy" else max(order["limitPrice"], candle["open"])
             elif order["type"] == "stop_market":
                 touched = (order["side"] == "buy" and candle["high"] >= order["stopPrice"]) or (order["side"] == "sell" and candle["low"] <= order["stopPrice"])
-                if touched:
-                    price = max(order["stopPrice"], candle["open"]) if order["side"] == "buy" else min(order["stopPrice"], candle["open"])
+                if touched: price = max(order["stopPrice"], candle["open"]) if order["side"] == "buy" else min(order["stopPrice"], candle["open"])
             if price is not None:
                 try:
                     self._open(order, price, candle)
@@ -195,69 +193,50 @@ class PaperTradingEngine:
 
     def cancel(self, order_id):
         order = self.orders.get(order_id)
-        if not order:
-            raise ValueError("order not found")
-        if order["status"] != "PENDING":
-            raise ValueError("only pending orders can be cancelled")
+        if not order: raise ValueError("order not found")
+        if order["status"] != "PENDING": raise ValueError("only pending orders can be cancelled")
         order["status"] = "CANCELLED"
         return deepcopy(order)
 
     def set_risk(self, symbol, stop_loss=None, take_profit=None):
         symbol = str(symbol).strip().upper()
         position = self.positions.get(symbol)
-        if not position:
-            raise ValueError("no open position")
+        if not position: raise ValueError("no open position")
         entry = position["entry_price"]
         side = position["side"]
         stop = None if stop_loss is None else self._positive_finite(stop_loss, "stop_loss")
         target = None if take_profit is None else self._positive_finite(take_profit, "take_profit")
-        if stop is not None and ((side == "long" and stop >= entry) or (side == "short" and stop <= entry)):
-            raise ValueError("stop_loss must be below entry for long or above entry for short")
-        if target is not None and ((side == "long" and target <= entry) or (side == "short" and target >= entry)):
-            raise ValueError("take_profit must be above entry for long or below entry for short")
-        if stop is not None and target is not None:
-            if (side == "long" and stop >= target) or (side == "short" and stop <= target):
-                raise ValueError("stop loss and take profit are ordered incorrectly")
+        if stop is not None and ((side == "long" and stop >= entry) or (side == "short" and stop <= entry)): raise ValueError("stop_loss must be below entry for long or above entry for short")
+        if target is not None and ((side == "long" and target <= entry) or (side == "short" and target >= entry)): raise ValueError("take_profit must be above entry for long or below entry for short")
+        if stop is not None and target is not None and ((side == "long" and stop >= target) or (side == "short" and stop <= target)): raise ValueError("stop loss and take profit are ordered incorrectly")
         position["stop_loss"] = stop
         position["take_profit"] = target
         position["stop_loss_created_index"] = self.index if stop is not None else -1
         position["take_profit_created_index"] = self.index if target is not None else -1
         return deepcopy(position)
 
-    def clear_risk(self, symbol):
-        return self._clear_risk(symbol, stop_loss=True, take_profit=True)
-
-    def clear_stop_loss(self, symbol):
-        return self._clear_risk(symbol, stop_loss=True, take_profit=False)
-
-    def clear_take_profit(self, symbol):
-        return self._clear_risk(symbol, stop_loss=False, take_profit=True)
+    def clear_risk(self, symbol): return self._clear_risk(symbol, stop_loss=True, take_profit=True)
+    def clear_stop_loss(self, symbol): return self._clear_risk(symbol, stop_loss=True, take_profit=False)
+    def clear_take_profit(self, symbol): return self._clear_risk(symbol, stop_loss=False, take_profit=True)
 
     def _clear_risk(self, symbol, *, stop_loss, take_profit):
         symbol = str(symbol).strip().upper()
         position = self.positions.get(symbol)
-        if not position:
-            raise ValueError("no open position")
-        if stop_loss:
-            position["stop_loss"] = None
-            position["stop_loss_created_index"] = -1
-        if take_profit:
-            position["take_profit"] = None
-            position["take_profit_created_index"] = -1
+        if not position: raise ValueError("no open position")
+        if stop_loss: position["stop_loss"], position["stop_loss_created_index"] = None, -1
+        if take_profit: position["take_profit"], position["take_profit_created_index"] = None, -1
         return deepcopy(position)
 
     def set_starting_balance(self, balance):
         balance = self._positive_finite(balance, "starting balance")
-        if self.has_open_position() or self.pending_orders():
-            raise ValueError("close positions and cancel pending orders before changing starting balance")
+        if self.has_open_position() or self.pending_orders(): raise ValueError("close positions and cancel pending orders before changing starting balance")
         fee_rate, margin_rate, maint_margin_rate = self.fee_rate, self.margin_rate, self.maint_margin_rate
         self.__init__(balance, fee_rate, margin_rate, maint_margin_rate)
         return self
 
     def set_fee_rate(self, rate):
         rate = float(rate)
-        if not isfinite(rate) or rate < 0 or rate >= 1:
-            raise ValueError("fee rate must be in [0, 1)")
+        if not isfinite(rate) or rate < 0 or rate >= 1: raise ValueError("fee rate must be in [0, 1)")
         self.fee_rate = rate
         return self
 
@@ -270,10 +249,8 @@ class PaperTradingEngine:
         return {"marginRate": self.margin_rate, "maintenanceMarginRate": self.maint_margin_rate, "feeRate": self.fee_rate, "account": self.account.export_state(), "positions": deepcopy(self.positions), "orders": deepcopy(self.orders), "trades": deepcopy(self.trades), "index": self.index, "nextOrder": self._next_order}
 
     def _validate_state(self):
-        if not 0 < self.margin_rate <= 1 or not 0 <= self.maint_margin_rate <= self.margin_rate or not 0 <= self.fee_rate < 1:
-            raise ValueError("invalid trading configuration")
-        if not isinstance(self.index, int) or self.index < -1 or not isinstance(self._next_order, int) or self._next_order <= 0:
-            raise ValueError("invalid trading indices")
+        if not 0 < self.margin_rate <= 1 or not 0 <= self.maint_margin_rate <= self.margin_rate or not 0 <= self.fee_rate < 1: raise ValueError("invalid trading configuration")
+        if not isinstance(self.index, int) or self.index < -1 or not isinstance(self._next_order, int) or self._next_order <= 0: raise ValueError("invalid trading indices")
         self.account.validate_invariants()
         allowed = {"PENDING", "FILLED", "CANCELLED", "REJECTED"}
         ids = []
@@ -322,7 +299,7 @@ class PaperTradingEngine:
             engine.index = engine._integer(state["index"], "trading index")
             engine._next_order = engine._integer(state["nextOrder"], "next order id")
         except (TypeError, ValueError, KeyError) as exc:
-            raise ValueError("invalid trading state") from exc
+            raise ValueError(f"invalid trading state: {exc}") from exc
         engine._validate_state()
         engine._recalc()
         return engine
