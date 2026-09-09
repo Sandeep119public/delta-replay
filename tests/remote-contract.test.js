@@ -75,7 +75,8 @@ describe('remote contracts', () => {
     let resolveNew;
     const old = new Promise((resolve) => { resolveOld = resolve; });
     const newer = new Promise((resolve) => { resolveNew = resolve; });
-    const client = { request: vi.fn((path) => path === '/state' ? old : newer) };
+    let requestCount = 0;
+    const client = { request: vi.fn(() => { requestCount += 1; return requestCount === 1 ? old : newer; }) };
     const engine = new RemoteTradingEngine(client);
     const initialRefresh = engine._refreshPromise;
 
