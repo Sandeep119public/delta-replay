@@ -37,6 +37,8 @@ export function createDatasetChangeService({
         if (selectElement) selectElement.value = kind === 'symbol' ? appState.symbol : appState.timeframe;
         return false;
       }
+
+      const previousValue = kind === 'symbol' ? appState.symbol : appState.timeframe;
       if (kind === 'symbol') appState.symbol = newValue;
       else appState.timeframe = newValue;
 
@@ -45,8 +47,10 @@ export function createDatasetChangeService({
           const result = await clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE');
           if (result?.success === false) throw new Error(result.message || 'Unable to clear pending orders');
         } catch (error) {
+          if (kind === 'symbol') appState.symbol = previousValue;
+          else appState.timeframe = previousValue;
+          if (selectElement) selectElement.value = previousValue;
           reportError(error?.message || 'Unable to clear pending orders. Dataset change cancelled.');
-          if (selectElement) selectElement.value = kind === 'symbol' ? appState.symbol : appState.timeframe;
           return false;
         }
       }
