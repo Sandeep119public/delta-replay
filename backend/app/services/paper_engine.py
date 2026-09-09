@@ -121,7 +121,7 @@ class PaperTradingEngine:
         self.positions[symbol] = {"symbol": symbol, "side": order["side"], "quantity": qty, "entry_price": price, "current_price": price, "entry_fee": entry_fee, "opened_at": candle.get("time"), "created_index": self.index, "stop_loss": None, "take_profit": None}
         self._recalc()
 
-    def close(self, symbol, price, quantity=None, reason="MANUAL", ambiguity="", timestamp=None):
+    def close(self, symbol, price, reason="MANUAL", ambiguity="", timestamp=None, quantity=None):
         symbol = str(symbol).strip().upper()
         position = self.positions.get(symbol)
         if not position:
