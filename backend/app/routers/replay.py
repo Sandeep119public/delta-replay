@@ -17,11 +17,19 @@ def load(request: Request, batch: CandleBatch):
     candles = [c.model_dump() for c in batch.candles]
 
     def replace(session):
-        if session.trading.has_open_position() or session.trading.pending_orders():
+        trading = session.trading
+        if trading.has_open_position() or trading.pending_orders():
             raise HTTPException(409, "Close positions and cancel pending orders before loading new data")
-        balance = session.trading.account.starting_balance
-        fee_rate = session.trading.fee_rate
-        session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate)
+        balance = trading.account.starting_balance
+        fee_rate = trading.fee_rate
+        margin_rate = trading.margin_rate
+        maintenance_margin_rate = trading.maint_margin_rate
+        session.trading = PaperTradingEngine(
+            starting_balance=balance,
+            fee_rate=fee_rate,
+            margin_rate=margin_rate,
+            maint_margin_rate=maintenance_margin_rate,
+        )
         return session.replay.load(candles)
 
     return atomic_session(request, replace)
