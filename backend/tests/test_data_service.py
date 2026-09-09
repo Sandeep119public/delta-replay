@@ -5,6 +5,10 @@ import pytest
 from app.services.data_service import DataService
 
 
+def test_empty_csv_is_an_empty_dataset():
+    assert DataService().parse_csv("") == []
+
+
 def test_csv_import_uses_canonical_candle_contract():
     csv_text = "time,open,high,low,close,volume\n1,100,105,95,102,10\n2,102,108,101,107,12\n"
 
