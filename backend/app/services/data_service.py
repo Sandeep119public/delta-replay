@@ -48,4 +48,7 @@ class DataService:
             except ValueError as exc:
                 raise ValueError(f"invalid candle on CSV row {row_number}: {exc}") from exc
 
+        if any(current["time"] <= previous["time"] for previous, current in zip(candles, candles[1:])):
+            raise ValueError("candles must be strictly ordered by increasing time")
+
         return candles
