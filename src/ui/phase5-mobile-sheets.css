@@ -64,8 +64,12 @@
     padding-inline: 12px;
   }
 
-  .ticket-field-grid {
+  .ticket-field-grid,
+  .risk-grid {
     grid-template-columns: 1fr;
+  }
+
+  .ticket-field-grid {
     gap: 10px;
   }
 
@@ -80,10 +84,6 @@
     justify-content: space-between;
     padding-inline: 14px;
     font-size: 12px;
-  }
-
-  .risk-grid {
-    grid-template-columns: 1fr;
   }
 
   .risk-actions {
