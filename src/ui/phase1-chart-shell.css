@@ -1,5 +1,7 @@
 /* Phase 1: chart-first application shell.
- * Keeps existing UI hooks/IDs intact while changing spatial hierarchy.
+ * Keeps existing UI hooks/IDs intact while establishing a true chart +
+ * trading-workspace layout on desktop. The trading panel owns its own column
+ * instead of covering the market canvas.
  */
 
 :root {
@@ -25,8 +27,6 @@
     "controls";
 }
 
-/* A quieter, editorial top bar. Setup controls remain available without
-   consuming the chart workspace. */
 .topbar {
   grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
   gap: 18px;
@@ -82,8 +82,6 @@
   white-space: nowrap;
 }
 
-/* Status remains in the DOM for lifecycle/state contracts, but should not
-   steal a visual row from the primary workspace. */
 .mode-banner {
   min-height: 0;
   height: 0;
@@ -94,18 +92,20 @@
   pointer-events: none;
 }
 
+/* Desktop/tablet: real two-column workspace. The chart gets the flexible
+   column, while the trading desk reserves its own width. */
 .main-layout {
   position: relative;
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--phase1-dock);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
 .main {
-  position: absolute;
-  inset: 0;
-  width: 100%;
+  position: relative;
+  width: auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -122,23 +122,25 @@
   min-height: 0;
 }
 
-/* The trading surface is now a contextual dock floating over the chart,
-   rather than a permanent column that steals chart width. */
+/* The trading surface stays in normal document flow, so it cannot overlap the
+   chart. It still reads as a distinct workstation dock through its surface
+   treatment and border. */
 .trading-section {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  bottom: 14px;
-  z-index: 18;
-  width: var(--phase1-dock);
-  max-width: calc(100% - 28px);
+  grid-column: 2;
+  position: relative;
+  inset: auto;
+  z-index: 2;
+  width: auto;
+  max-width: none;
+  height: 100%;
   margin: 0;
   padding: 16px;
   overflow: auto;
-  border: 1px solid var(--phase1-border);
-  border-radius: 16px;
+  border: 0;
+  border-left: 1px solid var(--phase1-border);
+  border-radius: 0;
   background: var(--phase1-surface);
-  box-shadow: var(--phase1-shadow);
+  box-shadow: -10px 0 30px rgba(77, 64, 42, 0.06);
   backdrop-filter: blur(18px);
 }
 
@@ -151,7 +153,6 @@
   font-size: 18px;
 }
 
-/* Keep market context readable directly on the chart. */
 .chart-position-chip {
   top: 16px;
   left: 18px;
@@ -172,8 +173,6 @@
   font-size: 11px;
 }
 
-/* One coherent replay rail: timeline and transport now read as a single
-   bottom control surface. */
 .timeline-section {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 40px auto;
@@ -276,7 +275,6 @@
   font-size: 10px;
 }
 
-/* Error surface stays over the canvas rather than changing layout. */
 .error-panel {
   top: calc(var(--phase1-header) + 12px);
   border-radius: 12px;
@@ -305,7 +303,7 @@
   }
 }
 
-@media (max-width: 840px) {
+@media (max-width: 840px) and (min-width: 641px) {
   :root {
     --phase1-header: 58px;
     --phase1-rail: 108px;
@@ -322,18 +320,7 @@
   }
 
   .trading-section {
-    top: 10px;
-    right: 10px;
-    bottom: 10px;
-    width: min(310px, calc(100% - 20px));
-  }
-
-  .timeline-section {
-    padding-inline: 12px;
-  }
-
-  .controls-section {
-    padding-inline: 12px;
+    padding: 12px;
   }
 }
 
@@ -359,6 +346,8 @@
     display: none;
   }
 
+  /* Mobile intentionally switches the trading desk into the existing drawer
+     interaction. It must not reserve chart width when closed. */
   .trading-section {
     display: none;
   }
@@ -370,11 +359,15 @@
     right: 0;
     bottom: 0;
     left: 0;
+    z-index: 18;
     width: 100%;
     max-width: none;
     height: min(76dvh, 640px);
+    margin: 0;
     border-radius: 18px 18px 0 0;
+    border: 1px solid var(--phase1-border);
     border-bottom: 0;
+    box-shadow: 0 -16px 44px rgba(77, 64, 42, 0.18);
   }
 
   #drawer-scrim {
