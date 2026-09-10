@@ -267,3 +267,64 @@ class PaperTradingEngine:
     def snapshot(self):
         self._recalc()
         return {"account": self.account.snapshot(), "positions": [deepcopy(p) for p in self.positions.values()], "orders": [deepcopy(o) for o in self.orders.values()], "pendingOrders": [deepcopy(o) for o in self.pending_orders()], "trades": deepcopy(self.trades), "index": self.index}
+
+    def export_state(self):
+        self._validate_state()
+        return {"marginRate": self.margin_rate, "maintenanceMarginRate": self.maint_margin_rate, "feeRate": self.fee_rate, "account": self.account.export_state(), "positions": deepcopy(self.positions), "orders": deepcopy(self.orders), "trades": deepcopy(self.trades), "index": self.index, "nextOrder": self._next_order}
+
+    def _validate_state(self):
+        if not 0 < self.margin_rate <= 1 or not 0 <= self.maint_margin_rate <= self.margin_rate or not 0 <= self.fee_rate < 1: raise ValueError("invalid trading configuration")
+        if not isinstance(self.index, int) or self.index < -1 or not isinstance(self._next_order, int) or self._next_order <= 0: raise ValueError("invalid trading indices")
+        self.account.validate_invariants()
+        allowed = {"PENDING", "FILLED", "CANCELLED", "REJECTED"}
+        ids = []
+        for key, order in self.orders.items():
+            try: order_id = int(key)
+            except (TypeError, ValueError) as exc: raise ValueError("order id must be an integer") from exc
+            if order_id <= 0 or not isinstance(order, dict) or order.get("id") != order_id: raise ValueError("invalid order state")
+            if order.get("side") not in ("buy", "sell") or order.get("type") not in ("market", "limit", "stop_market"): raise ValueError("invalid order contract")
+            self._positive_finite(order.get("quantity"), "order quantity")
+            if order.get("status") not in allowed: raise ValueError("order status is invalid")
+            if order["type"] == "limit" and order.get("limitPrice") is None: raise ValueError("limit order requires limitPrice")
+            if order["type"] == "stop_market" and order.get("stopPrice") is None: raise ValueError("stop order requires stopPrice")
+            if order.get("limitPrice") is not None: self._positive_finite(order["limitPrice"], "limitPrice")
+            if order.get("stopPrice") is not None: self._positive_finite(order["stopPrice"], "stopPrice")
+            if order["status"] == "PENDING" and order.get("filledPrice") is not None: raise ValueError("pending order cannot have a filled price")
+            if order["status"] == "FILLED" and order.get("filledPrice") is None: raise ValueError("filled order requires a filled price")
+            if order.get("filledPrice") is not None: self._positive_finite(order["filledPrice"], "filledPrice")
+            ids.append(order_id)
+        if ids and self._next_order <= max(ids): raise ValueError("next order id must exceed existing order ids")
+        for symbol, position in self.positions.items():
+            if not isinstance(symbol, str) or not symbol.strip() or not isinstance(position, dict) or position.get("symbol") != symbol: raise ValueError("invalid position state")
+            if position.get("side") not in ("long", "short"): raise ValueError("position side is invalid")
+            for field in ("quantity", "entry_price", "current_price"): self._positive_finite(position.get(field), f"position {field}")
+            self._non_negative_finite(position.get("entry_fee"), "position entry_fee")
+            for field in ("stop_loss", "take_profit"):
+                if position.get(field) is not None: self._positive_finite(position[field], field)
+            for field in ("stop_loss_created_index", "take_profit_created_index", "opened_index"):
+                if field in position and self._integer(position[field], f"position {field}") < -1: raise ValueError(f"position {field} is invalid")
+        for trade in self.trades:
+            if not isinstance(trade, dict): raise ValueError("trade must be an object")
+            for field in ("quantity", "entryPrice", "exitPrice"): self._positive_finite(trade.get(field), f"trade {field}")
+        return self
+
+    @classmethod
+    def from_state(cls, state):
+        if not isinstance(state, dict): raise ValueError("trading state must be an object")
+        required = ("marginRate", "maintenanceMarginRate", "feeRate", "account", "positions", "orders", "trades", "index", "nextOrder")
+        missing = [key for key in required if key not in state]
+        if missing: raise ValueError(f"trading state missing fields: {', '.join(missing)}")
+        if not isinstance(state["positions"], dict) or not isinstance(state["orders"], dict) or not isinstance(state["trades"], list): raise ValueError("invalid trading collections")
+        try:
+            engine = cls(float(state["account"]["startingBalance"]), float(state["feeRate"]), float(state["marginRate"]), float(state["maintenanceMarginRate"]))
+            engine.account = TradingAccount.from_state(state["account"])
+            engine.positions = deepcopy(state["positions"])
+            engine.orders = {int(key): deepcopy(value) for key, value in state["orders"].items()}
+            engine.trades = deepcopy(state["trades"])
+            engine.index = engine._integer(state["index"], "trading index")
+            engine._next_order = engine._integer(state["nextOrder"], "next order id")
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ValueError(f"invalid trading state: {exc}") from exc
+        engine._validate_state()
+        engine._recalc()
+        return engine
