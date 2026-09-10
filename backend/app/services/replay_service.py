@@ -124,10 +124,12 @@ class ReplayService:
                 raise ValueError("replay start index is outside candle range")
             if replay.status == "idle":
                 raise ValueError("non-empty replay cannot be idle")
+            if replay.status == "ready" and (replay.index != -1 or replay.start_index != -1):
+                raise ValueError("ready replay cannot have an active index")
+            if replay.status in {"paused", "ended"} and (replay.index < 0 or replay.start_index < 0):
+                raise ValueError("active replay must have active indices")
             if replay.status == "ended" and replay.index != len(replay.candles) - 1:
                 raise ValueError("ended replay must point to the final candle")
-            if replay.status in {"paused", "ended"} and replay.index < 0:
-                raise ValueError("active replay must have an index")
         elif replay.index != -1 or replay.start_index != -1:
             raise ValueError("empty replay cannot have an active index")
         elif replay.status != "idle":
