@@ -16,11 +16,7 @@ def candle(o, h, l, c, t=1):
 
 def test_session_round_trip_preserves_replay_and_trading_state():
     replay = ReplayService()
-    replay.load([
-        candle(100, 105, 95, 102, 1),
-        candle(102, 108, 101, 107, 2),
-        candle(107, 110, 104, 109, 3),
-    ])
+    replay.load([candle(100, 105, 95, 102, 1), candle(102, 108, 101, 107, 2), candle(107, 110, 104, 109, 3)])
     replay.start(1)
     replay.speed = 4
     replay.step()
@@ -76,6 +72,29 @@ def test_restore_rejects_invalid_trading_market_context():
         restore_session(document)
 
 
+def test_restore_rejects_future_market_context():
+    replay = ReplayService()
+    replay.load([candle(100, 101, 99, 100)])
+    replay.start(0)
+    trading = PaperTradingEngine()
+    trading.on_candle(candle(100, 101, 99, 100), 0, "BTCUSDT")
+    document = serialize_session(replay, trading)
+    document["tradingMarket"]["BTCUSDT"]["index"] = 1
+
+    with pytest.raises(ValueError, match="outside trading timeline"):
+        restore_session(document)
+
+
+def test_restore_rejects_non_canonical_market_symbol():
+    trading = PaperTradingEngine()
+    trading.on_candle(candle(100, 101, 99, 100), 0, "BTCUSDT")
+    document = serialize_session(ReplayService(), trading)
+    document["tradingMarket"] = {"btcusdt": document["tradingMarket"]["BTCUSDT"]}
+
+    with pytest.raises(ValueError, match="market symbol"):
+        restore_session(document)
+
+
 def test_zero_fee_open_position_round_trips_through_persistence():
     trading = PaperTradingEngine(fee_rate=0)
     trading.on_candle(candle(100, 101, 99, 100), 0, "BTCUSDT")
@@ -95,9 +114,7 @@ def test_replay_persistence_preserves_fractional_speed():
     replay.load([candle(100, 105, 95, 102)])
     replay.start(0)
     replay.speed = 2.5
-
     restored = ReplayService.from_state(replay.export_state())
-
     assert restored.speed == 2.5
     assert restored.export_state() == replay.export_state()
 
@@ -105,7 +122,6 @@ def test_replay_persistence_preserves_fractional_speed():
 def test_replay_rejects_fractional_indices():
     replay = ReplayService()
     replay.load([candle(100, 105, 95, 102)])
-
     with pytest.raises(ValueError, match="integer"):
         replay.start(0.5)
     with pytest.raises(ValueError, match="integer"):
@@ -116,11 +132,9 @@ def test_replay_state_is_defensively_copied():
     replay = ReplayService()
     replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
     replay.start(0)
-
     state = replay.state()
     state["candle"]["close"] = 999
     state["visibleCandles"][0]["open"] = 999
-
     fresh = replay.state()
     assert fresh["candle"]["close"] == 102
     assert fresh["visibleCandles"][0]["open"] == 100
@@ -130,20 +144,16 @@ def test_manager_rehydrates_from_repository_after_cache_loss():
     repository = InMemorySessionRepository()
     first_manager = SessionManager(repository)
     session_id = str(uuid4())
-
     first_manager.get(session_id)
-
     def prepare(state):
         state.replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
         state.replay.start(0)
         state.trading.on_candle(state.replay.candles[0], 0, "BTCUSDT")
         state.trading.submit("BTCUSDT", "buy", 1)
         return state.trading.export_state()
-
     first_manager.atomic(session_id, prepare)
     first_manager.clear_cache()
     restored = first_manager.get(session_id)
-
     assert restored.replay.state()["index"] == 0
     assert restored.trading.export_state()["orders"]
 
@@ -153,15 +163,12 @@ def test_atomic_mutation_rolls_back_after_operation_failure():
     manager = SessionManager(repository)
     session_id = str(uuid4())
     manager.get(session_id)
-
     with pytest.raises(RuntimeError, match="simulated crash"):
         def fail_after_mutation(state):
             state.replay.speed = 9
             state.replay.load([candle(100, 101, 99, 100)])
             raise RuntimeError("simulated crash")
-
         manager.atomic(session_id, fail_after_mutation)
-
     manager.clear_cache()
     restored = manager.get(session_id)
     assert restored.replay.speed == 1
@@ -173,11 +180,9 @@ def test_repository_defensively_copies_documents():
     repository = InMemorySessionRepository()
     session_id = str(uuid4())
     document = {"version": 1, "replay": {"candles": []}, "trading": {"positions": {}}}
-
     repository.save(session_id, document)
     document["replay"]["candles"].append({"close": 10})
     loaded = repository.get(session_id)
-
     assert loaded["replay"]["candles"] == []
 
 
@@ -188,11 +193,7 @@ def test_restore_rejects_unknown_version():
 
 def test_restore_rejects_malformed_trading_state():
     with pytest.raises(ValueError, match="trading state missing fields"):
-        restore_session({
-            "version": SESSION_STATE_VERSION,
-            "replay": {"candles": [], "index": -1, "startIndex": -1, "speed": 1, "status": "idle"},
-            "trading": {},
-        })
+        restore_session({"version": SESSION_STATE_VERSION, "replay": {"candles": [], "index": -1, "startIndex": -1, "speed": 1, "status": "idle"}, "trading": {}})
 
 
 def test_restore_rejects_non_finite_persisted_numbers():
@@ -200,27 +201,14 @@ def test_restore_rejects_non_finite_persisted_numbers():
     trading = PaperTradingEngine()
     document = serialize_session(replay, trading)
     document["trading"]["account"]["walletBalance"] = nan
-
     with pytest.raises(ValueError, match="JSON-safe"):
         restore_session(document)
 
 
 def test_restore_rejects_inconsistent_replay_lifecycle_state():
-    base = {
-        "version": SESSION_STATE_VERSION,
-        "replay": {
-            "candles": [candle(100, 105, 95, 102)],
-            "index": 0,
-            "startIndex": 0,
-            "speed": 1,
-            "status": "ready",
-        },
-        "trading": serialize_session(ReplayService(), PaperTradingEngine())["trading"],
-    }
-
+    base = {"version": SESSION_STATE_VERSION, "replay": {"candles": [candle(100, 105, 95, 102)], "index": 0, "startIndex": 0, "speed": 1, "status": "ready"}, "trading": serialize_session(ReplayService(), PaperTradingEngine())["trading"]}
     with pytest.raises(ValueError, match="ready replay"):
         restore_session(base)
-
     base["replay"]["status"] = "paused"
     base["replay"]["startIndex"] = -1
     with pytest.raises(ValueError, match="active indices"):
@@ -232,10 +220,8 @@ def test_session_manager_delete_removes_persisted_state():
     session_id = str(uuid4())
     manager = SessionManager(repository)
     manager.get(session_id)
-
     manager.delete(session_id)
     manager.clear_cache()
-
     fresh = manager.get(session_id)
     assert fresh.replay.state()["status"] == "idle"
     assert fresh.trading.index == -1
@@ -245,9 +231,7 @@ def test_delete_keeps_session_lock_identity_for_future_operations():
     repository = InMemorySessionRepository()
     manager = SessionManager(repository)
     session_id = str(uuid4())
-
     first_lock = manager._lock_for(session_id)
     manager.get(session_id)
     manager.delete(session_id)
-
     assert manager._lock_for(session_id) is first_lock
