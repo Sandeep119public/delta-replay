@@ -27,6 +27,19 @@ describe('Phase 9 screen-size optimization', () => {
     }
   });
 
+  it('keeps the trading desk in its own desktop grid column', () => {
+    expect(css).toMatch(/\.main-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--phase9-dock\)/);
+    expect(css).toMatch(/\.trading-section\s*\{[\s\S]*grid-column:\s*2/);
+    expect(css).toMatch(/\.trading-section\s*\{[\s\S]*width:\s*auto\s*!important/);
+    expect(css).toMatch(/\.trading-section\s*\{[\s\S]*position:\s*relative\s*!important/);
+  });
+
+  it('clips chart rendering to the allocated chart lane', () => {
+    expect(css).toMatch(/\.main\s*\{[\s\S]*overflow:\s*hidden/);
+    expect(css).toMatch(/#chart-container\s*\{[\s\S]*overflow:\s*hidden/);
+    expect(css).toMatch(/#chart-container canvas,[\s\S]*max-width:\s*100%/);
+  });
+
   it('keeps core compact-screen controls touch-sized', () => {
     expect(css).toContain('--phase9-touch: 44px');
     expect(css).toMatch(/\.phase6-command-trigger[\s\S]*min-height:\s*var\(--phase9-touch\)/);
