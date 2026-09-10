@@ -31,6 +31,7 @@ export class RemoteTradingEngine {
     this.latestCandle = null;
     this._generation = 0;
     this._requestSequence = 0;
+    this._pendingRequests = new Set();
     this._lastAppliedRequest = 0;
     this._destroyed = false;
     this._refreshPromise = this.refresh().catch(() => null);
@@ -38,12 +39,18 @@ export class RemoteTradingEngine {
   on(event, handler) { return this._destroyed ? () => {} : this.events.on(event, handler); }
   async _request(path, options = {}, action = null, generation = this._generation) {
     const requestSequence = ++this._requestSequence;
-    const response = await this.api.request(path, options);
-    if (this._destroyed || generation !== this._generation || requestSequence < this._lastAppliedRequest) return { applied: false, response };
-    this._lastAppliedRequest = requestSequence;
-    const previous = this.data;
-    this._sync(response, action, previous);
-    return { applied: true, response };
+    this._pendingRequests.add(requestSequence);
+    try {
+      const response = await this.api.request(path, options);
+      const newerRequestPending = [...this._pendingRequests].some((sequence) => sequence > requestSequence);
+      if (this._destroyed || generation !== this._generation || newerRequestPending || requestSequence < this._lastAppliedRequest) return { applied: false, response };
+      this._lastAppliedRequest = requestSequence;
+      const previous = this.data;
+      this._sync(response, action, previous);
+      return { applied: true, response };
+    } finally {
+      this._pendingRequests.delete(requestSequence);
+    }
   }
   _sync(response = {}, action = null, previous = this.data) {
     if (this._destroyed) return;
