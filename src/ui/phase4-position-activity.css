@@ -1,0 +1,154 @@
+/* Phase 4: position + activity inspector.
+ * Clarifies live exposure, risk controls, pending orders, and fills.
+ * Markup and data-binding IDs remain unchanged.
+ */
+:root {
+  --phase4-line: color-mix(in srgb, var(--paper-line) 88%, transparent);
+  --phase4-surface: rgba(255, 253, 248, 0.96);
+  --phase4-soft: rgba(246, 241, 232, 0.7);
+  --phase4-ink: color-mix(in srgb, var(--paper-ink) 92%, transparent);
+}
+
+.position-card {
+  border-color: var(--phase4-line);
+  background: var(--phase4-soft);
+}
+
+.position-card-head {
+  align-items: center;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--phase4-line);
+}
+
+.position-card-head strong {
+  color: var(--phase4-ink);
+  font-size: 13px;
+}
+
+.position-side {
+  padding: 4px 7px;
+  border: 1px solid var(--phase4-line);
+  border-radius: 6px;
+  background: var(--phase4-surface);
+}
+
+.pos-compact-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 0;
+}
+
+.pos-compact-grid > div {
+  min-width: 0;
+  padding: 8px 7px;
+  border-color: var(--phase4-line);
+}
+
+.pos-compact-grid strong,
+.flatten-summary strong {
+  color: var(--phase4-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.risk-grid {
+  padding-top: 1px;
+}
+
+.current-risk {
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--phase4-line);
+}
+
+.current-risk span {
+  min-width: 62px;
+  padding: 5px 7px;
+  border: 1px solid var(--phase4-line);
+  border-radius: 6px;
+  background: var(--phase4-surface);
+}
+
+.flatten-summary {
+  padding-bottom: 2px;
+}
+
+.flatten-button {
+  min-height: 40px;
+  border-color: var(--paper-line-strong);
+}
+
+.activity-card {
+  border-color: var(--phase4-line);
+  background: rgba(255, 253, 248, 0.7);
+}
+
+.section-heading {
+  color: var(--phase4-ink);
+}
+
+.section-count {
+  padding: 3px 6px;
+  border: 1px solid var(--phase4-line);
+  border-radius: 5px;
+  background: var(--phase4-surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-list {
+  min-height: 34px;
+  padding: 5px 0 2px;
+}
+
+.trade-row {
+  min-height: 34px;
+  align-items: center;
+  border-color: var(--phase4-line);
+}
+
+.trade-row + .trade-row {
+  margin-top: 5px;
+}
+
+.empty-hint {
+  display: block;
+  padding: 7px 2px;
+}
+
+.ticket-fills-list {
+  max-height: 112px;
+  overflow: auto;
+}
+
+.account-stat strong {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 840px) {
+  .pos-compact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .position-card,
+  .activity-card {
+    background: rgba(255, 253, 248, 0.82);
+  }
+
+  .pos-compact-grid {
+    gap: 7px;
+  }
+
+  .pos-compact-grid > div {
+    min-height: 48px;
+  }
+
+  .current-risk span {
+    flex: 1 1 45%;
+  }
+
+  .flatten-button {
+    min-height: 44px;
+  }
+}
