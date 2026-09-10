@@ -1,0 +1,426 @@
+/* Phase 1: chart-first application shell.
+ * Keeps existing UI hooks/IDs intact while changing spatial hierarchy.
+ */
+
+:root {
+  --phase1-header: 64px;
+  --phase1-rail: 118px;
+  --phase1-controls: 56px;
+  --phase1-dock: min(348px, 30vw);
+  --phase1-border: color-mix(in srgb, var(--paper-line) 82%, transparent);
+  --phase1-surface: rgba(255, 253, 248, 0.94);
+  --phase1-shadow: 0 18px 48px rgba(77, 64, 42, 0.14);
+}
+
+#page-replay.active {
+  height: 100dvh;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: var(--phase1-header) 0 minmax(0, 1fr) var(--phase1-rail) var(--phase1-controls);
+  grid-template-areas:
+    "header"
+    "status"
+    "workspace"
+    "timeline"
+    "controls";
+}
+
+/* A quieter, editorial top bar. Setup controls remain available without
+   consuming the chart workspace. */
+.topbar {
+  grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
+  gap: 18px;
+  min-width: 0;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--phase1-border);
+  background: rgba(255, 253, 248, 0.9);
+  backdrop-filter: blur(18px);
+}
+
+.topbar-left {
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo {
+  font-size: 17px;
+  letter-spacing: 0.16em;
+}
+
+.terminal-subtitle {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+}
+
+.topbar-center {
+  justify-content: center;
+  gap: 7px;
+}
+
+.selector-group {
+  gap: 5px;
+  font-size: 9px;
+}
+
+.selector-group select,
+.selector-group input,
+.controls-row select {
+  min-height: 34px;
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.topbar-right {
+  min-width: 0;
+  gap: 9px;
+}
+
+#data-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status remains in the DOM for lifecycle/state contracts, but should not
+   steal a visual row from the primary workspace. */
+.mode-banner {
+  min-height: 0;
+  height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.main-layout {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.28), rgba(244, 238, 226, 0.18));
+}
+
+.chart-stage,
+.chart-container,
+#chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The trading surface is now a contextual dock floating over the chart,
+   rather than a permanent column that steals chart width. */
+.trading-section {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
+  z-index: 18;
+  width: var(--phase1-dock);
+  max-width: calc(100% - 28px);
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--phase1-border);
+  border-radius: 16px;
+  background: var(--phase1-surface);
+  box-shadow: var(--phase1-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.panel-heading {
+  margin-bottom: 12px;
+}
+
+.panel-heading h2 {
+  margin-top: 1px;
+  font-size: 18px;
+}
+
+/* Keep market context readable directly on the chart. */
+.chart-position-chip {
+  top: 16px;
+  left: 18px;
+  z-index: 9;
+  min-height: 38px;
+  padding-inline: 12px;
+  border-radius: 9px;
+  background: rgba(255, 253, 248, 0.9);
+  box-shadow: 0 10px 28px rgba(77, 64, 42, 0.1);
+  font-size: 11px;
+}
+
+.chart-toast {
+  bottom: 18px;
+  z-index: 20;
+  padding: 10px 14px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+/* One coherent replay rail: timeline and transport now read as a single
+   bottom control surface. */
+.timeline-section {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 40px auto;
+  gap: 4px;
+  padding: 8px 20px 7px;
+  border-top: 1px solid var(--phase1-border);
+  background: rgba(255, 253, 248, 0.92);
+}
+
+.timeline-header {
+  font-size: 10px;
+}
+
+#timeline-sparkline {
+  width: 100%;
+  height: 40px;
+}
+
+.timeline-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  font-size: 10px;
+}
+
+.timeline-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#timeline-slider {
+  width: 100%;
+}
+
+#timeline-start-btn {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--paper-line);
+  border-radius: 7px;
+  background: var(--paper-panel);
+  color: var(--paper-blue);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.controls-section {
+  padding: 0 20px;
+  border-top: 1px solid var(--phase1-border);
+  background: rgba(246, 241, 232, 0.96);
+}
+
+.controls-row {
+  justify-content: center;
+}
+
+.replay-primary,
+.replay-secondary,
+.replay-speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.replay-primary {
+  margin-right: 4px;
+}
+
+.replay-primary .replay-play {
+  min-width: 76px;
+  min-height: 40px;
+  border-radius: 8px;
+}
+
+.controls-row button,
+.controls-row select {
+  min-height: 38px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.replay-speed {
+  margin-left: 8px;
+}
+
+.replay-speed span {
+  color: var(--paper-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.replay-status {
+  min-width: 84px;
+  margin-left: 8px;
+  text-align: center;
+  font-size: 10px;
+}
+
+/* Error surface stays over the canvas rather than changing layout. */
+.error-panel {
+  top: calc(var(--phase1-header) + 12px);
+  border-radius: 12px;
+}
+
+@media (max-width: 1180px) {
+  :root {
+    --phase1-dock: 320px;
+  }
+
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding-inline: 14px;
+  }
+
+  .terminal-subtitle {
+    display: none;
+  }
+
+  .topbar-center {
+    min-width: 0;
+  }
+
+  .topbar-center .selector-group label {
+    display: none;
+  }
+}
+
+@media (max-width: 840px) {
+  :root {
+    --phase1-header: 58px;
+    --phase1-rail: 108px;
+    --phase1-controls: 54px;
+  }
+
+  .topbar-center .date-group,
+  .topbar-right #data-status {
+    display: none;
+  }
+
+  .topbar-center {
+    justify-content: flex-end;
+  }
+
+  .trading-section {
+    top: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: min(310px, calc(100% - 20px));
+  }
+
+  .timeline-section {
+    padding-inline: 12px;
+  }
+
+  .controls-section {
+    padding-inline: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  #page-replay.active {
+    grid-template-rows: var(--phase1-header) 0 minmax(0, 1fr) 100px var(--phase1-controls);
+  }
+
+  .topbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .logo {
+    font-size: 15px;
+  }
+
+  .topbar-center {
+    justify-content: flex-end;
+  }
+
+  .topbar-center .symbol-group,
+  .topbar-center .tf-group {
+    display: none;
+  }
+
+  .trading-section {
+    display: none;
+  }
+
+  body.drawer-open .trading-section {
+    display: block;
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    height: min(76dvh, 640px);
+    border-radius: 18px 18px 0 0;
+    border-bottom: 0;
+  }
+
+  #drawer-scrim {
+    z-index: 16;
+  }
+
+  .chart-position-chip {
+    top: 10px;
+    left: 10px;
+    max-width: calc(100% - 20px);
+  }
+
+  .timeline-section {
+    grid-template-rows: auto 36px auto;
+    padding-block: 6px;
+  }
+
+  .timeline-meta {
+    gap: 7px;
+    font-size: 9px;
+  }
+
+  .controls-row {
+    justify-content: space-between;
+    gap: 5px;
+  }
+
+  .replay-secondary button:nth-child(2),
+  .replay-follow,
+  .replay-status {
+    display: none;
+  }
+
+  .replay-primary .replay-play {
+    min-width: 68px;
+    min-height: 40px;
+  }
+
+  .replay-speed {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trading-section,
+  .topbar {
+    backdrop-filter: none;
+  }
+}
