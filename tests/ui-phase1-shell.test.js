@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const css = fs.readFileSync('src/ui/phase1-chart-shell.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const workspace = fs.readFileSync('src/ui/paper/markup/Workspace.js', 'utf8');
+const timeline = fs.readFileSync('src/ui/paper/markup/Timeline.js', 'utf8');
 
 
 describe('Phase 1 chart-first shell', () => {
@@ -23,9 +24,12 @@ describe('Phase 1 chart-first shell', () => {
     expect(css).toMatch(/#chart-container\s*\{[\s\S]*width:\s*100%[\s\S]*height:\s*100%/);
   });
 
-  it('retains the existing chart and trading DOM contracts', () => {
-    for (const id of ['chart-container', 'trading-panel', 'timeline-slider', 'btn-play', 'btn-buy', 'btn-sell']) {
-      expect(workspace).toContain(`#${id}`);
+  it('retains the existing chart, trading, replay and transport DOM contracts', () => {
+    for (const id of ['chart-container', 'trading-panel', 'btn-buy', 'btn-sell']) {
+      expect(workspace).toContain(`id="${id}"`);
+    }
+    for (const id of ['timeline-slider', 'btn-play', 'btn-step', 'btn-reset']) {
+      expect(timeline).toContain(`id="${id}"`);
     }
   });
 
