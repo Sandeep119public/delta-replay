@@ -214,7 +214,8 @@
     z-index: 18;
     width: 100%;
     max-width: none;
-    height: min(76dvh, 640px);
+    height: min(78dvh, 680px);
+    max-height: calc(100dvh - 54px);
     margin: 0;
     border-radius: 18px 18px 0 0;
     border: 1px solid var(--phase1-border);
@@ -227,6 +228,19 @@
     top: 10px;
     left: 10px;
     max-width: calc(100% - 20px);
+  }
+}
+
+@media (max-width: 420px) {
+  body.drawer-open .trading-section {
+    max-height: calc(100dvh - 52px);
+  }
+}
+
+@media (orientation: landscape) and (max-width: 840px) {
+  body.drawer-open .trading-section {
+    height: min(92dvh, 620px);
+    max-height: calc(100dvh - 50px);
   }
 }
 
