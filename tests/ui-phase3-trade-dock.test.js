@@ -5,6 +5,10 @@ const css = fs.readFileSync('src/ui/phase3-trade-dock.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const workspace = fs.readFileSync('src/ui/paper/markup/Workspace.js', 'utf8');
 
+const directTradingSectionRules = [...css.matchAll(/(?:^|\n)\s*\.trading-section\s*\{([^}]*)\}/g)]
+  .map((match) => match[1])
+  .join('\n');
+
 describe('Phase 3 trading desk presentation', () => {
   it('loads Phase 3 after the earlier UI layers', () => {
     expect(html.indexOf('src/ui/phase3-trade-dock.css')).toBeGreaterThan(html.indexOf('src/ui/phase2-replay-rail.css'));
@@ -12,9 +16,7 @@ describe('Phase 3 trading desk presentation', () => {
 
   it('does not own workspace geometry', () => {
     expect(css).not.toMatch(/--phase3-dock-width/);
-    expect(css).not.toMatch(/\.trading-section\s*\{[\s\S]*width\s*:/);
-    expect(css).not.toMatch(/\.trading-section\s*\{[\s\S]*position\s*:/);
-    expect(css).not.toMatch(/\.trading-section\s*\{[\s\S]*grid-column\s*:/);
+    expect(directTradingSectionRules).not.toMatch(/\b(?:width|min-width|max-width|height|min-height|max-height|position|inset|top|right|bottom|left|grid-column|grid-row)\s*:/);
   });
 
   it('prioritizes order entry with full-size primary actions', () => {
