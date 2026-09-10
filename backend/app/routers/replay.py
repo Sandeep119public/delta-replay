@@ -43,7 +43,11 @@ def start(request: Request, index: int):
 
 
 @router.post("/step")
-def step(request: Request):
+def step(request: Request, symbol: str = "BTCUSDT"):
+    symbol = str(symbol).strip().upper()
+    if not symbol:
+        raise HTTPException(422, "symbol must be provided")
+
     def advance(session):
         previous_index = session.replay.index
         result = session.replay.step()
@@ -51,7 +55,7 @@ def step(request: Request):
             return {**result, "events": [], "trading": session.trading.snapshot()}
 
         candle = result["candle"]
-        events = session.trading.on_candle(candle, result["index"], "BTCUSDT")
+        events = session.trading.on_candle(candle, result["index"], symbol)
         return {**result, "events": events, "trading": session.trading.snapshot()}
 
     try:

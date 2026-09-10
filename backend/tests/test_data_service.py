@@ -20,6 +20,13 @@ def test_csv_import_uses_canonical_candle_contract():
     ]
 
 
+def test_csv_import_rejects_non_monotonic_timestamps():
+    csv_text = "time,open,high,low,close\n2,100,105,95,102\n1,102,108,101,107\n"
+
+    with pytest.raises(ValueError, match="strictly ordered"):
+        DataService().parse_csv(csv_text)
+
+
 @pytest.mark.parametrize(
     "csv_text",
     [

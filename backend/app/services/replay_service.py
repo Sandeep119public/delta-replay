@@ -26,8 +26,16 @@ class ReplayService:
             raise ValueError(f"{name} must be an integer")
         return int(numeric)
 
+    @staticmethod
+    def _validate_chronology(candles):
+        times = [candle.time for candle in candles]
+        if any(current <= previous for previous, current in zip(times, times[1:])):
+            raise ValueError("candles must be strictly ordered by increasing time")
+
     def load(self, candles):
-        self.candles = [Candle.model_validate(candle).model_dump() for candle in candles]
+        validated = [Candle.model_validate(candle) for candle in candles]
+        self._validate_chronology(validated)
+        self.candles = [candle.model_dump() for candle in validated]
         self.index = -1
         self.start_index = -1
         self.status = "ready" if self.candles else "idle"
@@ -113,6 +121,7 @@ class ReplayService:
             replay.candles = [Candle.model_validate(candle).model_dump() for candle in state["candles"]]
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid persisted candle data: {exc}") from exc
+        replay._validate_chronology([Candle.model_validate(candle) for candle in replay.candles])
         replay.index = index
         replay.start_index = start_index
         replay.speed = speed
