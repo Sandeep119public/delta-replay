@@ -27,19 +27,6 @@
   max-width: 100%;
 }
 
-@media (min-width: 1440px) {
-  .topbar { padding-inline: 24px; }
-  .chart-position-chip { left: 20px; top: 18px; }
-}
-
-@media (min-width: 1025px) and (max-width: 1439px) {
-  .topbar {
-    gap: 12px;
-    padding-inline: 16px;
-  }
-  .chart-position-chip { max-width: min(420px, calc(100% - 360px)); }
-}
-
 @media (min-width: 841px) and (max-width: 1024px) {
   .topbar {
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -84,11 +71,6 @@
     min-width: var(--phase9-touch);
     min-height: var(--phase9-touch);
     padding-inline: 8px;
-  }
-  .chart-position-chip {
-    left: 8px;
-    top: 8px;
-    max-width: calc(100% - 16px);
   }
   .timeline-section { padding: 6px 8px; gap: 2px 7px; }
   .controls-section { padding: 4px 8px env(safe-area-inset-bottom); }
