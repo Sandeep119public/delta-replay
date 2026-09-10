@@ -12,10 +12,10 @@ describe('Phase 8 final responsive system', () => {
     expect(html.indexOf('src/ui/phase8-responsive-final.css')).toBeGreaterThan(html.indexOf('src/ui/phase7-final-system.css'));
   });
 
-  it('covers desktop, tablet, and mobile breakpoint contracts', () => {
-    expect(css).toContain('@media (min-width: 1025px)');
+  it('covers tablet and mobile breakpoint contracts without owning the desktop shell', () => {
     expect(css).toContain('@media (min-width: 641px) and (max-width: 1024px)');
     expect(css).toContain('@media (max-width: 640px)');
+    expect(css).toContain('@media (max-width: 420px)');
   });
 
   it('keeps core mobile controls at touch-sized targets', () => {
