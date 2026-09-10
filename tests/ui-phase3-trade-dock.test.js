@@ -6,8 +6,27 @@ const html = fs.readFileSync('index.html', 'utf8');
 const workspace = fs.readFileSync('src/ui/paper/markup/Workspace.js', 'utf8');
 
 const directTradingSectionRules = [...css.matchAll(/(?:^|\n)\s*\.trading-section\s*\{([^}]*)\}/g)]
-  .map((match) => match[1])
-  .join('\n');
+  .map((match) => match[1]);
+
+const forbiddenGeometryProperties = new Set([
+  'width',
+  'min-width',
+  'max-width',
+  'height',
+  'min-height',
+  'max-height',
+  'position',
+  'inset',
+  'top',
+  'right',
+  'bottom',
+  'left',
+  'grid-column',
+  'grid-row',
+]);
+
+const declarationNames = (rule) => [...rule.matchAll(/(?:^|\n)\s*([a-z-]+)\s*:/gi)]
+  .map((match) => match[1].toLowerCase());
 
 describe('Phase 3 trading desk presentation', () => {
   it('loads Phase 3 after the earlier UI layers', () => {
@@ -16,7 +35,12 @@ describe('Phase 3 trading desk presentation', () => {
 
   it('does not own workspace geometry', () => {
     expect(css).not.toMatch(/--phase3-dock-width/);
-    expect(directTradingSectionRules).not.toMatch(/\b(?:width|min-width|max-width|height|min-height|max-height|position|inset|top|right|bottom|left|grid-column|grid-row)\s*:/);
+
+    const geometryDeclarations = directTradingSectionRules
+      .flatMap(declarationNames)
+      .filter((name) => forbiddenGeometryProperties.has(name));
+
+    expect(geometryDeclarations).toEqual([]);
   });
 
   it('prioritizes order entry with full-size primary actions', () => {
