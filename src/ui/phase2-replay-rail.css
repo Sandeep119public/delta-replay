@@ -20,8 +20,13 @@
     "timeline";
 }
 
-/* Timeline + transport become one rail. The controls row is layered into
-   the same horizontal surface instead of reading as a second application bar. */
+/* Both sibling sections occupy the same final grid cell. The timeline keeps
+   the left/middle rail while transport overlays its reserved right-hand zone. */
+.timeline-section,
+.controls-section {
+  grid-area: timeline;
+}
+
 .timeline-section {
   position: relative;
   z-index: 14;
@@ -29,9 +34,9 @@
   grid-template-columns: minmax(140px, 190px) minmax(0, 1fr) minmax(260px, 410px);
   grid-template-rows: auto minmax(34px, 1fr) auto;
   grid-template-areas:
-    "meta header controls"
-    "meta chart controls"
-    "meta slider controls";
+    "meta header spacer"
+    "meta chart spacer"
+    "meta slider spacer";
   align-items: center;
   column-gap: 16px;
   row-gap: 2px;
@@ -129,14 +134,18 @@
 }
 
 .controls-section {
-  grid-area: controls;
+  position: relative;
+  z-index: 15;
   align-self: stretch;
+  justify-self: end;
   display: flex;
+  width: min(410px, 38vw);
   align-items: center;
   min-width: 0;
-  padding: 0;
+  padding: 8px 18px;
   border: 0;
-  background: transparent;
+  background: linear-gradient(90deg, rgba(255, 253, 248, 0), var(--phase2-surface) 12%);
+  pointer-events: none;
 }
 
 .controls-row {
@@ -146,6 +155,7 @@
   justify-content: flex-end;
   gap: 6px;
   min-width: 0;
+  pointer-events: auto;
 }
 
 .replay-primary {
@@ -230,6 +240,11 @@
     column-gap: 12px;
     padding-inline: 14px;
   }
+
+  .controls-section {
+    width: min(340px, 42vw);
+    padding-inline: 14px;
+  }
 }
 
 @media (max-width: 840px) {
@@ -240,6 +255,11 @@
   .timeline-section {
     grid-template-columns: 120px minmax(0, 1fr) minmax(220px, 290px);
     column-gap: 10px;
+    padding-inline: 12px;
+  }
+
+  .controls-section {
+    width: min(290px, 46vw);
     padding-inline: 12px;
   }
 
@@ -303,17 +323,15 @@
   }
 
   .controls-section {
-    position: absolute;
-    right: 10px;
-    bottom: 8px;
-    z-index: 2;
-    width: min(58vw, 280px);
-    pointer-events: none;
+    width: min(64vw, 280px);
+    right: 0;
+    bottom: 0;
+    padding: 6px 10px;
+    background: linear-gradient(90deg, rgba(255, 253, 248, 0), var(--phase2-surface) 18%);
   }
 
   .controls-row {
     justify-content: flex-end;
-    pointer-events: auto;
   }
 
   .replay-primary .replay-play {
@@ -343,7 +361,7 @@
 
 @media (max-width: 420px) {
   .controls-section {
-    width: min(64vw, 250px);
+    width: min(70vw, 250px);
   }
 
   .replay-primary .replay-play {
