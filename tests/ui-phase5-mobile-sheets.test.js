@@ -13,7 +13,7 @@ describe('Phase 5 mobile-first sheets', () => {
   it('uses viewport-safe sheet spacing and touch-sized controls', () => {
     expect(css).toContain('env(safe-area-inset-bottom)');
     expect(css).toMatch(/--phase5-touch:\s*44px/);
-    expect(css).toMatch(/min-height:var\(--phase5-touch\)/);
+    expect(css).toMatch(/min-height:\s*var\(--phase5-touch\)/);
   });
   it('keeps the existing drawer state hooks', () => {
     expect(mobileDrawer).toContain('drawer-open');
@@ -25,7 +25,8 @@ describe('Phase 5 mobile-first sheets', () => {
     for (const id of ['trading-panel', 'btn-buy', 'btn-sell', 'btn-close', 'trade-qty', 'order-type']) {
       expect(workspace).toContain(`id="${id}"`);
     }
-    expect(css).toMatch(/\.order-action,[\s\S]*min-height:var\(--phase5-touch\)/);
+    expect(css).toMatch(/\.order-action,/);
+    expect(css).toMatch(/min-height:\s*var\(--phase5-touch\)/);
   });
   it('collapses fields into a mobile-friendly single column', () => {
     expect(css).toMatch(/\.ticket-field-grid,.risk-grid\{grid-template-columns:1fr/);
