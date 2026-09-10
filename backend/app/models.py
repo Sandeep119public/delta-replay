@@ -33,17 +33,23 @@ class CandleBatch(BaseModel):
 
 
 class OrderRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     side: Literal["buy", "sell"]
     quantity: float = Field(gt=0)
 
 
 class Position(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     side: Literal["long", "short"]
-    quantity: float
-    entry_price: float
+    quantity: float = Field(gt=0)
+    entry_price: float = Field(gt=0)
 
 
 class AccountSnapshot(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     balance: float
     equity: float
     position: Position | None
