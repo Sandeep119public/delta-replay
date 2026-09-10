@@ -1,19 +1,16 @@
 /* Phase 9: screen-size optimization.
- * This layer owns responsive sizing only. Workspace geometry belongs to
- * phase1-chart-shell.css so later layers cannot move the trading desk.
+ * This layer owns responsive component sizing only. Workspace geometry belongs
+ * to phase1-chart-shell.css so later layers cannot move the trading desk.
  */
 
 :root {
   --phase9-touch: 44px;
 }
 
-.main-layout,
-.main,
-.chart-stage,
-.chart-container,
-#chart-container,
-.trading-section,
-.topbar,
+.topbar {
+  box-sizing: border-box;
+}
+
 .topbar-center,
 .topbar-right,
 .controls-row,
@@ -104,10 +101,6 @@
   .phase6-command-backdrop { padding-inline: 8px; }
   .phase6-command { max-height: min(78dvh, 680px); }
   .phase6-command-list { max-height: calc(78dvh - 94px); }
-  body.drawer-open .trading-section {
-    height: min(78dvh, 680px);
-    max-height: calc(100dvh - 54px);
-  }
   .field input,
   .field select,
   .tab-panel input,
@@ -136,7 +129,6 @@
     padding-bottom: calc(6px + env(safe-area-inset-bottom));
   }
   .phase6-command { border-radius: 16px; }
-  body.drawer-open .trading-section { max-height: calc(100dvh - 52px); }
 }
 
 @media (max-width: 360px) {
@@ -158,10 +150,6 @@
 
 @media (orientation: landscape) and (max-width: 840px) {
   #page-replay.active { grid-template-rows: 50px 0 minmax(0, 1fr) 84px 48px; }
-  body.drawer-open .trading-section {
-    height: min(92dvh, 620px);
-    max-height: calc(100dvh - 50px);
-  }
   .phase6-command { max-height: 88dvh; }
   .phase6-command-list { max-height: calc(88dvh - 94px); }
 }
