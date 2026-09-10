@@ -107,7 +107,10 @@ def order(request: Request, command: EngineOrder):
 @router.post("/close")
 def close(request: Request, command: CloseRequest):
     def close_position(session):
-        candle = replay_candle(session, command.symbol)
+        market = session.trading.get_latest_market(command.symbol)
+        if not market or not market.get("candle", {}).get("close"):
+            raise HTTPException(409, f"No market price available for {command.symbol}")
+        candle = market["candle"]
         trade = session.trading.close(command.symbol, float(candle["close"]), quantity=command.quantity, timestamp=candle.get("time"))
         if not trade:
             raise HTTPException(422, "no open position")
