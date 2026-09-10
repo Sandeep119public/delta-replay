@@ -182,3 +182,47 @@ def test_postgres_atomic_updates_serialize_concurrent_managers():
         assert final.replay.speed == 3
     finally:
         repository.delete(session_id)
+
+
+def test_postgres_reclaims_dataset_after_session_delete():
+    repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
+    session_id = str(uuid4())
+    document = serialize_session(ReplayService(), PaperTradingEngine())
+    document["replay"]["candles"] = [candle(100, 105, 95, 102)]
+
+    try:
+        repository.save(session_id, document)
+        dataset_id = repository.get(session_id)["replay"]["datasetId"]
+        repository.delete(session_id)
+        with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+            count = connection.execute("SELECT COUNT(*) FROM replay_datasets WHERE dataset_id = %s", (dataset_id,)).fetchone()[0]
+        assert count == 0
+    finally:
+        repository.delete(session_id)
+
+
+def test_postgres_reclaims_replaced_dataset_but_keeps_shared_dataset():
+    repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
+    first_id = str(uuid4())
+    second_id = str(uuid4())
+    first_document = serialize_session(ReplayService(), PaperTradingEngine())
+    first_document["replay"]["candles"] = [candle(100, 105, 95, 102)]
+    second_document = serialize_session(ReplayService(), PaperTradingEngine())
+    second_document["replay"]["candles"] = [candle(200, 205, 195, 202)]
+
+    try:
+        repository.save(first_id, first_document)
+        repository.save(second_id, first_document)
+        shared_dataset_id = repository.get(first_id)["replay"]["datasetId"]
+        replacement_dataset_id = repository._dataset_id(second_document["replay"]["candles"])
+
+        repository.save(first_id, second_document)
+
+        with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
+            shared_count = connection.execute("SELECT COUNT(*) FROM replay_datasets WHERE dataset_id = %s", (shared_dataset_id,)).fetchone()[0]
+            replacement_count = connection.execute("SELECT COUNT(*) FROM replay_datasets WHERE dataset_id = %s", (replacement_dataset_id,)).fetchone()[0]
+        assert shared_count == 1
+        assert replacement_count == 1
+    finally:
+        repository.delete(first_id)
+        repository.delete(second_id)
