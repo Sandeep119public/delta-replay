@@ -5,7 +5,7 @@ const css = fs.readFileSync('src/ui/phase6-command-surface.css', 'utf8');
 const commandSurface = fs.readFileSync('src/ui/CommandSurface.js', 'utf8');
 const main = fs.readFileSync('src/main.js', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
-const navigation = fs.readFileSync('src/ui/Navigation.js', 'utf8');
+const navigationPath = 'src/ui/Navigation.js';
 
 describe('Phase 6 command surface', () => {
   it('loads the command layer after the responsive sheet layer', () => {
@@ -14,7 +14,8 @@ describe('Phase 6 command surface', () => {
 
   it('keeps replay as the primary shell and removes the unused side navigation', () => {
     expect(css).toMatch(/\.side-nav\s*\{[\s\S]*display:\s*none/);
-    expect(navigation).toContain("className = 'side-nav'");
+    expect(fs.existsSync(navigationPath)).toBe(false);
+    expect(main).not.toContain("./ui/Navigation");
   });
 
   it('provides a keyboard accessible command trigger and dialog', () => {
