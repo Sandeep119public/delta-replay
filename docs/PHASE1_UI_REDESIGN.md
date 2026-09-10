@@ -1,6 +1,6 @@
-# UI Redesign: Phases 1-7
+# UI Redesign: Phases 1-8
 
-The redesign establishes a chart-first replay workstation with responsive trading interactions and a cleaned navigation surface, without changing replay or trading behavior.
+The redesign establishes a chart-first replay workstation with responsive trading interactions, focused navigation, and a final responsive safety layer, without changing replay or trading behavior.
 
 ## Phase 1: Chart-First Shell
 - Chart owns the full workspace.
@@ -42,8 +42,15 @@ The redesign establishes a chart-first replay workstation with responsive tradin
 - The unused legacy Navigation module is removed from the active code path.
 - A final cleanup layer neutralizes legacy navigation and orphaned page containers if stale markup appears.
 - Shared focus, sizing, and narrow-layout safety rules are centralized at the end of the cascade.
-- The stylesheet entrypoint now makes the final cleanup layer explicit.
+- The stylesheet entrypoint makes the final cleanup layer explicit.
 
-## Safety
+## Phase 8: Responsive Final Audit
+- Desktop preserves the chart-first canvas and bounded trade dock.
+- Tablet receives explicit spacing and touch-target guardrails.
+- Mobile keeps sheets and command surfaces within the viewport without width overflow.
+- Core replay, trading, and drawer IDs remain regression-protected.
+- Raw `100vw` width usage is guarded against in the final layer.
 
-Existing replay/trading IDs, markup hooks, accessibility state, and behavior remain unchanged. Phase 7 is limited to UI cleanup and removal of an unused navigation module. A browser-based visual pass is not available in this environment.
+## Verification note
+
+Source-level regression contracts cover the redesigned UI layers and responsive breakpoints. A browser-based visual pass is not available in this environment, so pixel-level rendering has not been manually verified here.
