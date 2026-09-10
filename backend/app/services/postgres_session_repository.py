@@ -31,6 +31,27 @@ class PostgresSessionRepository(SessionRepository):
     def _lock_dataset_gc(connection) -> None:
         connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
 
+    @staticmethod
+    def _dataset_id_from_state(state) -> Optional[str]:
+        replay = state.get("replay", {}) if isinstance(state, dict) else {}
+        dataset_id = replay.get("datasetId") if isinstance(replay, dict) else None
+        return str(dataset_id) if dataset_id else None
+
+    @staticmethod
+    def _gc_dataset(connection, dataset_id: Optional[str]) -> None:
+        if not dataset_id:
+            return
+        connection.execute(
+            """DELETE FROM replay_datasets d
+               WHERE d.dataset_id = %s
+                 AND NOT EXISTS (
+                   SELECT 1
+                   FROM replay_sessions s
+                   WHERE s.state->'replay'->>'datasetId' = d.dataset_id
+                 )""",
+            (dataset_id,),
+        )
+
     def _ensure_schema(self) -> None:
         with self._connect() as connection:
             connection.execute("""CREATE TABLE IF NOT EXISTS replay_datasets (dataset_id TEXT PRIMARY KEY, candles JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
@@ -96,20 +117,29 @@ class PostgresSessionRepository(SessionRepository):
     def save(self, session_id: str, document: SessionDocument) -> None:
         with self._connect() as connection:
             self._lock_dataset_gc(connection)
+            current = connection.execute("SELECT state FROM replay_sessions WHERE session_id = %s", (session_id,)).fetchone()
+            old_dataset_id = self._dataset_id_from_state(current["state"]) if current else None
             storage_document = self._prepare_storage_document(connection, document)
             encoded = self._encode(storage_document)
             connection.execute(
                 """INSERT INTO replay_sessions (session_id, state, revision) VALUES (%s, %s::jsonb, 1) ON CONFLICT (session_id) DO UPDATE SET state = EXCLUDED.state, revision = replay_sessions.revision + 1, updated_at = NOW()""",
                 (session_id, encoded),
             )
+            self._gc_dataset(connection, old_dataset_id)
 
     def delete(self, session_id: str) -> None:
         with self._connect() as connection:
+            self._lock_dataset_gc(connection)
+            current = connection.execute("SELECT state FROM replay_sessions WHERE session_id = %s", (session_id,)).fetchone()
+            old_dataset_id = self._dataset_id_from_state(current["state"]) if current else None
             connection.execute("DELETE FROM replay_sessions WHERE session_id = %s", (session_id,))
+            self._gc_dataset(connection, old_dataset_id)
 
     def save_if_revision(self, session_id: str, document: SessionDocument, expected_revision: int) -> int:
         with self._connect() as connection:
             self._lock_dataset_gc(connection)
+            current = connection.execute("SELECT state FROM replay_sessions WHERE session_id = %s", (session_id,)).fetchone()
+            old_dataset_id = self._dataset_id_from_state(current["state"]) if current else None
             storage_document = self._prepare_storage_document(connection, document)
             encoded = self._encode(storage_document)
             row = connection.execute(
@@ -118,6 +148,7 @@ class PostgresSessionRepository(SessionRepository):
             ).fetchone()
             if row is None:
                 raise RuntimeError("session revision conflict")
+            self._gc_dataset(connection, old_dataset_id)
             return int(row["revision"])
 
     def atomic_update(self, session_id: str, mutation: SessionMutation[T]) -> T:
@@ -126,6 +157,7 @@ class PostgresSessionRepository(SessionRepository):
             row = connection.execute("SELECT state FROM replay_sessions WHERE session_id = %s FOR UPDATE", (session_id,)).fetchone()
             if row is None:
                 raise KeyError(f"session {session_id} not found")
+            old_dataset_id = self._dataset_id_from_state(row["state"])
             document = self._hydrate_document(connection, dict(row["state"]))
             updated, result = mutation(document)
             storage_document = self._prepare_storage_document(connection, updated)
@@ -133,4 +165,5 @@ class PostgresSessionRepository(SessionRepository):
                 "UPDATE replay_sessions SET state = %s::jsonb, revision = revision + 1, updated_at = NOW() WHERE session_id = %s",
                 (self._encode(storage_document), session_id),
             )
+            self._gc_dataset(connection, old_dataset_id)
             return result
