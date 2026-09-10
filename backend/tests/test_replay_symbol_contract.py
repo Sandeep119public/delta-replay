@@ -20,7 +20,14 @@ def test_replay_step_uses_requested_symbol_for_trading_market_context():
     assert response.status_code == 200
     assert client.post("/api/v1/replay/start/0", headers=headers).status_code == 200
 
+    assert client.post(
+        "/api/v1/trading/order",
+        json={"symbol": "ETHUSDT", "side": "buy", "quantity": 1},
+        headers=headers,
+    ).status_code == 200
+
     response = client.post("/api/v1/replay/step?symbol=ETHUSDT", headers=headers)
     assert response.status_code == 200
     body = response.json()
-    assert body["trading"]["market"]["ETHUSDT"]["candle"]["close"] == 110
+    assert body["trading"]["positions"][0]["symbol"] == "ETHUSDT"
+    assert body["trading"]["positions"][0]["entry_price"] == 110
