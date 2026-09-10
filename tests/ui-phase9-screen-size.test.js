@@ -11,9 +11,7 @@ describe('Phase 9 screen-size optimization', () => {
     );
   });
 
-  it('covers wide desktop through very narrow mobile', () => {
-    expect(css).toContain('@media (min-width: 1440px)');
-    expect(css).toContain('@media (min-width: 1025px) and (max-width: 1439px)');
+  it('covers tablet through very narrow mobile', () => {
     expect(css).toContain('@media (min-width: 841px) and (max-width: 1024px)');
     expect(css).toContain('@media (min-width: 641px) and (max-width: 840px)');
     expect(css).toContain('@media (max-width: 640px)');
@@ -21,7 +19,8 @@ describe('Phase 9 screen-size optimization', () => {
     expect(css).toContain('@media (max-width: 360px)');
   });
 
-  it('does not redefine workspace geometry owned by Phase 1', () => {
+  it('does not redefine page-frame or workspace geometry owned by Phase 1', () => {
+    expect(css).not.toMatch(/(?:^|\n)\s*#page-replay\.active\s*\{/);
     expect(css).not.toMatch(/(?:^|\n)\s*\.main-layout\s*\{/);
     expect(css).not.toMatch(/(?:^|\n)\s*\.main\s*\{/);
     expect(css).not.toMatch(/(?:^|\n)\s*\.chart-stage\s*\{/);
