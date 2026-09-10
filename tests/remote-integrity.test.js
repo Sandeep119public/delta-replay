@@ -51,4 +51,27 @@ describe('remote state integrity', () => {
     await first;
     expect(engine.getLatestCandle().time).toBe(3);
   });
+
+  it('does not resume playback after a concurrent seek cancels play intent', async () => {
+    let resolveStart;
+    const startResponse = new Promise((resolve) => { resolveStart = resolve; });
+    const api = { request: vi.fn((path) => {
+      if (path.startsWith('/start/')) return startResponse;
+      if (path.startsWith('/seek/')) return Promise.resolve({ status: 'paused', index: 2, startIndex: 0, total: 4, speed: 1, candle: { ...candle, time: 3 }, visibleCandles: [] });
+      return Promise.resolve({ status: 'ready', index: -1, startIndex: -1, total: 4, speed: 1, candle: null, visibleCandles: [] });
+    }) };
+    const engine = new RemoteReplayEngine(api);
+    engine.state = { ...engine.state, status: 'ready', totalCandles: 4 };
+
+    const play = engine.play();
+    await Promise.resolve();
+    const seek = engine.seek(2);
+    await seek;
+    resolveStart({ status: 'paused', index: 0, startIndex: 0, total: 4, speed: 1, candle, visibleCandles: [candle] });
+
+    const result = await play;
+    expect(result.status).toBe('paused');
+    expect(engine.getState().status).toBe('paused');
+    expect(engine.getState().currentIndex).toBe(2);
+  });
 });
