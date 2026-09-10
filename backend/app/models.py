@@ -31,6 +31,13 @@ class Candle(BaseModel):
 class CandleBatch(BaseModel):
     candles: list[Candle] = Field(min_length=1)
 
+    @model_validator(mode="after")
+    def validate_chronology(self):
+        times = [candle.time for candle in self.candles]
+        if any(current <= previous for previous, current in zip(times, times[1:])):
+            raise ValueError("candles must be strictly ordered by increasing time")
+        return self
+
 
 class OrderRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
