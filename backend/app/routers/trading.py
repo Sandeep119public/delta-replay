@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field, StrictInt, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
@@ -11,6 +11,8 @@ router = APIRouter()
 
 
 class EngineOrder(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     symbol: str = Field(min_length=1)
     side: Literal["buy", "sell"]
     quantity: float = Field(gt=0)
@@ -20,27 +22,37 @@ class EngineOrder(BaseModel):
 
 
 class RiskRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     symbol: str = Field(min_length=1)
     stopLoss: float | None = Field(default=None, gt=0)
     takeProfit: float | None = Field(default=None, gt=0)
 
 
 class CloseRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     symbol: str = Field(min_length=1)
     quantity: float | None = Field(default=None, gt=0)
 
 
 class MarketCandleRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     symbol: str = Field(default="BTCUSDT", min_length=1)
     candle: Candle | None = None
     index: StrictInt | None = None
 
 
 class CapitalRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     balance: float = Field(gt=0)
 
 
 class FeeRateRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     rate: float = Field(ge=0, lt=1)
 
 
