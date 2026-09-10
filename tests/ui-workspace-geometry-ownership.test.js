@@ -13,6 +13,10 @@ const NON_OWNER_STYLES = [
   'src/ui/phase9-screen-size-optimization.css',
 ];
 
+const PAGE_SHELL_SELECTORS = [
+  '#page-replay.active',
+];
+
 const WORKSPACE_SELECTORS = [
   '.main-layout',
   '.main',
@@ -21,6 +25,8 @@ const WORKSPACE_SELECTORS = [
   '#chart-container',
   '.trading-section',
 ];
+
+const OWNED_SELECTORS = [...PAGE_SHELL_SELECTORS, ...WORKSPACE_SELECTORS];
 
 const GEOMETRY_PROPERTIES = [
   'display',
@@ -100,8 +106,8 @@ function cssRules(css) {
   return rules;
 }
 
-function selectorContainsWorkspace(selector) {
-  return WORKSPACE_SELECTORS.some((token) =>
+function selectorContainsOwnedGeometry(selector) {
+  return OWNED_SELECTORS.some((token) =>
     selector.split(',').some((part) => {
       const normalized = part.trim();
       return normalized === token || normalized.endsWith(` ${token}`);
@@ -122,6 +128,16 @@ function findRule(rules, selector) {
 }
 
 describe('workspace geometry ownership', () => {
+  it('keeps the replay page frame in Phase 1', () => {
+    const rules = cssRules(fs.readFileSync(OWNER, 'utf8'));
+    const pageFrame = findRule(rules, '#page-replay.active');
+
+    expect(pageFrame, `${OWNER} must define #page-replay.active`).toBeTruthy();
+    expect(pageFrame?.declarations).toMatch(/display\s*:\s*grid/);
+    expect(pageFrame?.declarations).toMatch(/grid-template-rows\s*:/);
+    expect(pageFrame?.declarations).toMatch(/grid-template-areas\s*:/);
+  });
+
   it('keeps the desktop workspace geometry in Phase 1', () => {
     const rules = cssRules(fs.readFileSync(OWNER, 'utf8'));
     for (const selector of WORKSPACE_SELECTORS) {
@@ -143,14 +159,14 @@ describe('workspace geometry ownership', () => {
     expect(mobileDrawer?.declarations).toMatch(/height\s*:/);
   });
 
-  it('prevents later UI phases from adding workspace geometry', () => {
+  it('prevents later UI phases from adding page-frame or workspace geometry', () => {
     for (const path of NON_OWNER_STYLES) {
       const violations = cssRules(fs.readFileSync(path, 'utf8'))
-        .filter(({ selector }) => selectorContainsWorkspace(selector))
+        .filter(({ selector }) => selectorContainsOwnedGeometry(selector))
         .map(({ selector, declarations }) => ({ selector, properties: geometryProperties(declarations) }))
         .filter(({ properties }) => properties.length > 0);
 
-      expect(violations, `${path} adds workspace geometry outside Phase 1`).toEqual([]);
+      expect(violations, `${path} adds owned geometry outside Phase 1`).toEqual([]);
     }
   });
 });
