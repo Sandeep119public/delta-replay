@@ -323,9 +323,9 @@
   }
 
   .controls-section {
+    position: absolute;
+    inset: auto 0 0 auto;
     width: min(64vw, 280px);
-    right: 0;
-    bottom: 0;
     padding: 6px 10px;
     background: linear-gradient(90deg, rgba(255, 253, 248, 0), var(--phase2-surface) 18%);
   }
