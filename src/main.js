@@ -1,4 +1,5 @@
 import { createApplication } from './app/Application.js';
+import { createCommandSurface } from './ui/CommandSurface.js';
 
 const isDevelopment = Boolean(import.meta.env?.DEV);
 
@@ -43,6 +44,8 @@ window.addEventListener('unhandledrejection', (event) => {
 try {
   const app = createApplication();
   app.start();
+  const commandSurface = createCommandSurface();
+  window.__DELTA_REPLAY_COMMAND_SURFACE__ = commandSurface;
   window.__DELTA_REPLAY_APP__ = app;
 } catch (error) {
   console.error('[Delta Replay] startup failed', error);

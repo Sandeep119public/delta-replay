@@ -1,0 +1,378 @@
+/* Phase 2: unified replay rail.
+ * Turns the timeline and transport into one continuous control surface.
+ * Existing markup/IDs remain untouched so bindings stay stable.
+ */
+
+:root {
+  --phase2-rail: 124px;
+  --phase2-border: color-mix(in srgb, var(--paper-line) 78%, transparent);
+  --phase2-surface: rgba(255, 253, 248, 0.96);
+  --phase2-subtle: rgba(246, 241, 232, 0.88);
+  --phase2-ink: color-mix(in srgb, var(--paper-ink) 86%, transparent);
+}
+
+#page-replay.active {
+  grid-template-rows: var(--phase1-header) 0 minmax(0, 1fr) var(--phase2-rail);
+  grid-template-areas:
+    "header"
+    "status"
+    "workspace"
+    "timeline";
+}
+
+/* Both sibling sections occupy the same final grid cell. The timeline keeps
+   the left/middle rail while transport overlays its reserved right-hand zone. */
+.timeline-section,
+.controls-section {
+  grid-area: timeline;
+}
+
+.timeline-section {
+  position: relative;
+  z-index: 14;
+  display: grid;
+  grid-template-columns: minmax(140px, 190px) minmax(0, 1fr) minmax(260px, 410px);
+  grid-template-rows: auto minmax(34px, 1fr) auto;
+  grid-template-areas:
+    "meta header spacer"
+    "meta chart spacer"
+    "meta slider spacer";
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 2px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--phase2-border);
+  background: var(--phase2-surface);
+  box-shadow: 0 -10px 28px rgba(77, 64, 42, 0.07);
+  overflow: hidden;
+}
+
+.timeline-header {
+  grid-area: header;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--paper-muted);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#timeline-current-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--phase2-ink);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#timeline-sparkline {
+  grid-area: chart;
+  width: 100%;
+  height: 34px;
+  min-height: 0;
+  opacity: 0.9;
+}
+
+#timeline-slider {
+  grid-area: slider;
+  width: 100%;
+  margin: 0;
+  accent-color: var(--paper-blue);
+}
+
+.timeline-meta {
+  grid-area: meta;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+#timeline-start-btn {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 28px;
+  padding-inline: 10px;
+  border-color: var(--paper-line);
+  border-radius: 7px;
+  background: transparent;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+#timeline-start-btn:hover,
+#timeline-start-btn:focus-visible {
+  background: var(--phase2-subtle);
+}
+
+#start-index-label,
+#timeline-index-label {
+  color: var(--paper-muted);
+}
+
+#start-time-label,
+#timeline-time-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--phase2-ink);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compat-control {
+  display: none !important;
+}
+
+.controls-section {
+  position: relative;
+  z-index: 15;
+  align-self: stretch;
+  justify-self: end;
+  display: flex;
+  width: min(410px, 38vw);
+  align-items: center;
+  min-width: 0;
+  padding: 8px 18px;
+  border: 0;
+  background: linear-gradient(90deg, rgba(255, 253, 248, 0), var(--phase2-surface) 12%);
+  pointer-events: none;
+}
+
+.controls-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  pointer-events: auto;
+}
+
+.replay-primary {
+  margin-right: 2px;
+}
+
+.replay-primary .replay-play {
+  min-width: 82px;
+  min-height: 42px;
+  border-radius: 9px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  box-shadow: 0 5px 14px rgba(77, 64, 42, 0.11);
+}
+
+.replay-secondary,
+.replay-speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.controls-row button,
+.controls-row select {
+  min-height: 36px;
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.replay-secondary button,
+.replay-follow {
+  padding-inline: 10px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--paper-muted);
+  font-size: 9px;
+}
+
+.replay-secondary button:hover,
+.replay-secondary button:focus-visible,
+.replay-follow:hover,
+.replay-follow:focus-visible {
+  border-color: var(--paper-line);
+  background: var(--phase2-subtle);
+  color: var(--phase2-ink);
+}
+
+.replay-speed {
+  margin-left: 4px;
+}
+
+.replay-speed span {
+  display: none;
+}
+
+#speed-select {
+  min-width: 58px;
+  padding-inline: 8px 20px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+#replay-status {
+  min-width: 64px;
+  margin-left: 2px;
+  overflow: hidden;
+  color: var(--paper-muted);
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  :root {
+    --phase2-rail: 116px;
+  }
+
+  .timeline-section {
+    grid-template-columns: 150px minmax(0, 1fr) minmax(250px, 340px);
+    column-gap: 12px;
+    padding-inline: 14px;
+  }
+
+  .controls-section {
+    width: min(340px, 42vw);
+    padding-inline: 14px;
+  }
+}
+
+@media (max-width: 840px) {
+  :root {
+    --phase2-rail: 112px;
+  }
+
+  .timeline-section {
+    grid-template-columns: 120px minmax(0, 1fr) minmax(220px, 290px);
+    column-gap: 10px;
+    padding-inline: 12px;
+  }
+
+  .controls-section {
+    width: min(290px, 46vw);
+    padding-inline: 12px;
+  }
+
+  .timeline-header {
+    font-size: 8px;
+  }
+
+  #timeline-current-label {
+    font-size: 11px;
+  }
+
+  .replay-secondary button,
+  .replay-follow {
+    padding-inline: 7px;
+  }
+
+  #replay-status {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --phase2-rail: 108px;
+  }
+
+  #page-replay.active {
+    grid-template-rows: var(--phase1-header) 0 minmax(0, 1fr) var(--phase2-rail);
+  }
+
+  .timeline-section {
+    grid-template-columns: minmax(96px, 0.8fr) minmax(0, 1.6fr);
+    grid-template-rows: auto 26px 20px;
+    grid-template-areas:
+      "meta header"
+      "meta chart"
+      "meta slider";
+    gap: 2px 9px;
+    padding: 6px 10px;
+  }
+
+  .timeline-header {
+    align-self: end;
+  }
+
+  #timeline-sparkline {
+    height: 26px;
+  }
+
+  .timeline-meta {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 3px 6px;
+    align-content: center;
+    font-size: 8px;
+  }
+
+  #timeline-start-btn {
+    min-height: 24px;
+    padding-inline: 8px;
+    font-size: 8px;
+  }
+
+  .controls-section {
+    position: absolute;
+    inset: auto 0 0 auto;
+    width: min(64vw, 280px);
+    padding: 6px 10px;
+    background: linear-gradient(90deg, rgba(255, 253, 248, 0), var(--phase2-surface) 18%);
+  }
+
+  .controls-row {
+    justify-content: flex-end;
+  }
+
+  .replay-primary .replay-play {
+    min-width: 70px;
+    min-height: 36px;
+  }
+
+  .replay-secondary {
+    gap: 2px;
+  }
+
+  .replay-secondary button:first-child {
+    min-width: 44px;
+    padding-inline: 6px;
+  }
+
+  .replay-secondary button:nth-child(2),
+  .replay-follow {
+    display: none;
+  }
+
+  #speed-select {
+    min-width: 50px;
+    min-height: 34px;
+  }
+}
+
+@media (max-width: 420px) {
+  .controls-section {
+    width: min(70vw, 250px);
+  }
+
+  .replay-primary .replay-play {
+    min-width: 64px;
+    padding-inline: 8px;
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-section {
+    scroll-behavior: auto;
+  }
+}
