@@ -315,11 +315,20 @@ class PaperTradingEngine:
         missing = [key for key in required if key not in state]
         if missing: raise ValueError(f"trading state missing fields: {', '.join(missing)}")
         if not isinstance(state["positions"], dict) or not isinstance(state["orders"], dict) or not isinstance(state["trades"], list): raise ValueError("invalid trading collections")
+        raw_orders = state["orders"]
+        normalized_orders = {}
+        for key, value in raw_orders.items():
+            if not isinstance(key, str) or not key.isdigit() or key == "0" or (len(key) > 1 and key.startswith("0")):
+                raise ValueError("order id key must be canonical")
+            order_id = int(key)
+            if order_id in normalized_orders:
+                raise ValueError("duplicate order id")
+            normalized_orders[order_id] = deepcopy(value)
         try:
             engine = cls(float(state["account"]["startingBalance"]), float(state["feeRate"]), float(state["marginRate"]), float(state["maintenanceMarginRate"]))
             engine.account = TradingAccount.from_state(state["account"])
             engine.positions = deepcopy(state["positions"])
-            engine.orders = {int(key): deepcopy(value) for key, value in state["orders"].items()}
+            engine.orders = normalized_orders
             engine.trades = deepcopy(state["trades"])
             engine.index = engine._integer(state["index"], "trading index")
             engine._next_order = engine._integer(state["nextOrder"], "next order id")
