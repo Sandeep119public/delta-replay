@@ -198,7 +198,10 @@
 }
 
 @media (max-width: 640px) {
-  :root { --phase1-timeline: 108px; }
+  :root {
+    --phase1-header: 54px;
+    --phase1-timeline: 108px;
+  }
 
   .topbar {
     grid-template-columns: 1fr auto;
@@ -241,13 +244,17 @@
 }
 
 @media (max-width: 420px) {
+  :root { --phase1-header: 52px; }
   body.drawer-open .trading-section {
     max-height: calc(100dvh - 52px);
   }
 }
 
 @media (orientation: landscape) and (max-width: 840px) {
-  :root { --phase1-timeline: 84px; }
+  :root {
+    --phase1-header: 50px;
+    --phase1-timeline: 84px;
+  }
   body.drawer-open .trading-section {
     height: min(92dvh, 620px);
     max-height: calc(100dvh - 50px);
