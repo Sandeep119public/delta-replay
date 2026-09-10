@@ -1,7 +1,6 @@
-/* Phase 1: chart-first application shell.
- * Keeps existing UI hooks/IDs intact while establishing a true chart +
- * trading-workspace layout on desktop. The trading panel owns its own column
- * instead of covering the market canvas.
+/* Phase 1: chart shell and workspace geometry.
+ * This is the single owner of desktop chart/trading layout. Later phases may
+ * style the controls, but must not reposition or resize the workspace itself.
  */
 
 :root {
@@ -11,25 +10,14 @@
   --phase1-dock: min(348px, 30vw);
   --phase1-border: color-mix(in srgb, var(--paper-line) 82%, transparent);
   --phase1-surface: rgba(255, 253, 248, 0.94);
-  --phase1-shadow: 0 18px 48px rgba(77, 64, 42, 0.14);
 }
 
 #page-replay.active {
   height: 100dvh;
   min-height: 0;
-  display: grid;
-  grid-template-rows: var(--phase1-header) 0 minmax(0, 1fr) var(--phase1-rail) var(--phase1-controls);
-  grid-template-areas:
-    "header"
-    "status"
-    "workspace"
-    "timeline"
-    "controls";
 }
 
 .topbar {
-  grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
-  gap: 18px;
   min-width: 0;
   padding: 0 20px;
   border-bottom: 1px solid var(--phase1-border);
@@ -92,10 +80,9 @@
   pointer-events: none;
 }
 
-/* Desktop/tablet: real two-column workspace. The chart gets the flexible
-   column, while the trading desk reserves its own width. */
+/* Desktop and tablet workspace: the chart and trading desk are real sibling
+   grid tracks. There is no absolute positioning in this layout. */
 .main-layout {
-  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--phase1-dock);
   min-width: 0;
@@ -104,35 +91,35 @@
 }
 
 .main {
+  grid-column: 1;
   position: relative;
-  width: auto;
   min-width: 0;
   min-height: 0;
+  width: auto;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.28), rgba(244, 238, 226, 0.18));
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.28), rgba(244, 238, 226, 0.18));
 }
 
 .chart-stage,
 .chart-container,
 #chart-container {
+  position: relative;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
-/* The trading surface stays in normal document flow, so it cannot overlap the
-   chart. It still reads as a distinct workstation dock through its surface
-   treatment and border. */
 .trading-section {
   grid-column: 2;
-  position: relative;
-  inset: auto;
-  z-index: 2;
+  grid-row: 1;
+  position: static;
   width: auto;
   max-width: none;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   margin: 0;
   padding: 16px;
   overflow: auto;
@@ -142,15 +129,6 @@
   background: var(--phase1-surface);
   box-shadow: -10px 0 30px rgba(77, 64, 42, 0.06);
   backdrop-filter: blur(18px);
-}
-
-.panel-heading {
-  margin-bottom: 12px;
-}
-
-.panel-heading h2 {
-  margin-top: 1px;
-  font-size: 18px;
 }
 
 .chart-position-chip {
@@ -173,134 +151,15 @@
   font-size: 11px;
 }
 
-.timeline-section {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto 40px auto;
-  gap: 4px;
-  padding: 8px 20px 7px;
-  border-top: 1px solid var(--phase1-border);
-  background: rgba(255, 253, 248, 0.92);
-}
-
-.timeline-header {
-  font-size: 10px;
-}
-
-#timeline-sparkline {
-  width: 100%;
-  height: 40px;
-}
-
-.timeline-meta {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  overflow: hidden;
-  font-size: 10px;
-}
-
-.timeline-meta span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#timeline-slider {
-  width: 100%;
-}
-
-#timeline-start-btn {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--paper-line);
-  border-radius: 7px;
-  background: var(--paper-panel);
-  color: var(--paper-blue);
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.controls-section {
-  padding: 0 20px;
-  border-top: 1px solid var(--phase1-border);
-  background: rgba(246, 241, 232, 0.96);
-}
-
-.controls-row {
-  justify-content: center;
-}
-
-.replay-primary,
-.replay-secondary,
-.replay-speed {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.replay-primary {
-  margin-right: 4px;
-}
-
-.replay-primary .replay-play {
-  min-width: 76px;
-  min-height: 40px;
-  border-radius: 8px;
-}
-
-.controls-row button,
-.controls-row select {
-  min-height: 38px;
-  border-radius: 8px;
-  box-shadow: none;
-}
-
-.replay-speed {
-  margin-left: 8px;
-}
-
-.replay-speed span {
-  color: var(--paper-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.replay-status {
-  min-width: 84px;
-  margin-left: 8px;
-  text-align: center;
-  font-size: 10px;
-}
-
-.error-panel {
-  top: calc(var(--phase1-header) + 12px);
-  border-radius: 12px;
-}
-
 @media (max-width: 1180px) {
-  :root {
-    --phase1-dock: 320px;
-  }
-
+  :root { --phase1-dock: 320px; }
   .topbar {
     grid-template-columns: auto minmax(0, 1fr) auto;
     padding-inline: 14px;
   }
-
-  .terminal-subtitle {
-    display: none;
-  }
-
-  .topbar-center {
-    min-width: 0;
-  }
-
-  .topbar-center .selector-group label {
-    display: none;
-  }
+  .terminal-subtitle { display: none; }
+  .topbar-center { min-width: 0; }
+  .topbar-center .selector-group label { display: none; }
 }
 
 @media (max-width: 840px) and (min-width: 641px) {
@@ -308,49 +167,42 @@
     --phase1-header: 58px;
     --phase1-rail: 108px;
     --phase1-controls: 54px;
+    --phase1-dock: min(300px, 38vw);
   }
-
   .topbar-center .date-group,
-  .topbar-right #data-status {
-    display: none;
-  }
+  .topbar-right #data-status { display: none; }
+  .topbar-center { justify-content: flex-end; }
+  .trading-section { padding: 12px; }
+}
 
-  .topbar-center {
-    justify-content: flex-end;
-  }
+@media (min-width: 1440px) {
+  :root { --phase1-dock: min(348px, 27vw); }
+  .topbar { padding-inline: 24px; }
+  .chart-position-chip { left: 20px; top: 18px; }
+}
 
-  .trading-section {
-    padding: 12px;
+@media (min-width: 1025px) and (max-width: 1439px) {
+  :root { --phase1-dock: min(332px, 27vw); }
+  .topbar {
+    gap: 12px;
+    padding-inline: 16px;
   }
+  .chart-position-chip { max-width: min(420px, calc(100% - 360px)); }
 }
 
 @media (max-width: 640px) {
-  #page-replay.active {
-    grid-template-rows: var(--phase1-header) 0 minmax(0, 1fr) 100px var(--phase1-controls);
-  }
-
   .topbar {
     grid-template-columns: 1fr auto;
   }
-
-  .logo {
-    font-size: 15px;
-  }
-
-  .topbar-center {
-    justify-content: flex-end;
-  }
-
+  .logo { font-size: 15px; }
+  .topbar-center { justify-content: flex-end; }
   .topbar-center .symbol-group,
-  .topbar-center .tf-group {
-    display: none;
-  }
+  .topbar-center .tf-group { display: none; }
 
-  /* Mobile intentionally switches the trading desk into the existing drawer
-     interaction. It must not reserve chart width when closed. */
-  .trading-section {
-    display: none;
-  }
+  /* Closed mobile state is removed from the layout. The existing drawer is
+     the only mobile presentation for the trading desk. */
+  .main-layout { display: block; }
+  .trading-section { display: none; }
 
   body.drawer-open .trading-section {
     display: block;
@@ -370,50 +222,15 @@
     box-shadow: 0 -16px 44px rgba(77, 64, 42, 0.18);
   }
 
-  #drawer-scrim {
-    z-index: 16;
-  }
-
+  #drawer-scrim { z-index: 16; }
   .chart-position-chip {
     top: 10px;
     left: 10px;
     max-width: calc(100% - 20px);
   }
-
-  .timeline-section {
-    grid-template-rows: auto 36px auto;
-    padding-block: 6px;
-  }
-
-  .timeline-meta {
-    gap: 7px;
-    font-size: 9px;
-  }
-
-  .controls-row {
-    justify-content: space-between;
-    gap: 5px;
-  }
-
-  .replay-secondary button:nth-child(2),
-  .replay-follow,
-  .replay-status {
-    display: none;
-  }
-
-  .replay-primary .replay-play {
-    min-width: 68px;
-    min-height: 40px;
-  }
-
-  .replay-speed {
-    margin-left: 0;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .trading-section,
-  .topbar {
-    backdrop-filter: none;
-  }
+  .topbar { backdrop-filter: none; }
 }
