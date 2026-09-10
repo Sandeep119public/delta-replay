@@ -1,12 +1,12 @@
 /* Phase 1: chart shell and workspace geometry.
- * This is the single owner of desktop chart/trading layout. Later phases may
- * style the controls, but must not reposition or resize the workspace itself.
+ * This is the single owner of the replay page frame and chart/trading layout.
+ * Later phases may style controls and content, but must not reposition, resize,
+ * or re-grid the page frame or workspace itself.
  */
 
 :root {
   --phase1-header: 64px;
-  --phase1-rail: 118px;
-  --phase1-controls: 56px;
+  --phase1-timeline: 124px;
   --phase1-dock: min(348px, 30vw);
   --phase1-border: color-mix(in srgb, var(--paper-line) 82%, transparent);
   --phase1-surface: rgba(255, 253, 248, 0.94);
@@ -15,6 +15,14 @@
 #page-replay.active {
   height: 100dvh;
   min-height: 0;
+  display: grid;
+  grid-template-rows: var(--phase1-header) 0 minmax(0, 1fr) var(--phase1-timeline);
+  grid-template-areas:
+    "header"
+    "status"
+    "workspace"
+    "timeline";
+  overflow: hidden;
 }
 
 .topbar {
@@ -165,8 +173,7 @@
 @media (max-width: 840px) and (min-width: 641px) {
   :root {
     --phase1-header: 58px;
-    --phase1-rail: 108px;
-    --phase1-controls: 54px;
+    --phase1-timeline: 112px;
     --phase1-dock: min(300px, 38vw);
   }
   .topbar-center .date-group,
@@ -191,6 +198,8 @@
 }
 
 @media (max-width: 640px) {
+  :root { --phase1-timeline: 108px; }
+
   .topbar {
     grid-template-columns: 1fr auto;
   }
@@ -238,6 +247,7 @@
 }
 
 @media (orientation: landscape) and (max-width: 840px) {
+  :root { --phase1-timeline: 84px; }
   body.drawer-open .trading-section {
     height: min(92dvh, 620px);
     max-height: calc(100dvh - 50px);
