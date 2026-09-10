@@ -20,10 +20,8 @@ input:focus-visible {
 }
 
 .topbar,
-.main-layout,
 .timeline-section,
 .controls-section,
-.trading-section,
 .phase6-command,
 .phase6-command-backdrop {
   min-width: 0;
@@ -38,8 +36,7 @@ input:focus-visible {
 
   .phase6-command-search,
   .phase6-command-item,
-  .controls-row,
-  .trading-section {
+  .controls-row {
     min-width: 0;
   }
 }
