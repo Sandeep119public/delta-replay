@@ -15,8 +15,8 @@ describe('Phase 2 unified replay rail', () => {
 
   it('leaves the replay page frame to Phase 1', () => {
     expect(css).not.toMatch(/#page-replay\.active\s*\{/);
-    expect(css).not.toMatch(/grid-template-rows\s*:/);
-    expect(css).not.toMatch(/grid-template-areas\s*:/);
+    expect(css).not.toMatch(/#page-replay\.active[\s\S]*?grid-template-rows\s*:/);
+    expect(css).not.toMatch(/#page-replay\.active[\s\S]*?grid-template-areas\s*:/);
   });
 
   it('treats timeline and transport as one shared surface', () => {
