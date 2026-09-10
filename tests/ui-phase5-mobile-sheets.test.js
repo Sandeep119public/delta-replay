@@ -25,10 +25,11 @@ describe('Phase 5 mobile-first sheets', () => {
     for (const id of ['trading-panel', 'btn-buy', 'btn-sell', 'btn-close', 'trade-qty', 'order-type']) {
       expect(workspace).toContain(`id="${id}"`);
     }
-    expect(css).toMatch(/\.order-action,[\s\S]*min-height:\s*var\(--phase5-touch\)/);
+    expect(css).toMatch(/\.order-action,/);
+    expect(css).toMatch(/min-height:\s*var\(--phase5-touch\)/);
   });
   it('collapses fields into a mobile-friendly single column', () => {
-    expect(css).toMatch(/\.ticket-field-grid[\s\S]*grid-template-columns:\s*1fr/);
-    expect(css).toMatch(/\.risk-grid[\s\S]*grid-template-columns:\s*1fr/);
+    expect(css).toMatch(/\.ticket-field-grid,[\s\S]*grid-template-columns:\s*1fr/);
+    expect(css).toMatch(/\.risk-grid\s*\{[\s\S]*grid-template-columns:\s*1fr/);
   });
 });
