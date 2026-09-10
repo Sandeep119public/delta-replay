@@ -29,3 +29,18 @@ def test_run_rejects_non_finite_fee_rate():
 def test_run_rejects_fee_rate_of_one():
     with pytest.raises(ValueError, match="fee_rate must be finite and in \[0,1\)"):
         BacktestService().run([candle(100, 101)], fee_rate=1)
+
+
+def test_run_rejects_invalid_quantity_with_empty_candles():
+    with pytest.raises(ValueError, match="quantity must be finite and positive"):
+        BacktestService().run([], quantity=0)
+
+
+def test_run_rejects_invalid_fee_rate_with_empty_candles():
+    with pytest.raises(ValueError, match="fee_rate must be finite and in \[0,1\)"):
+        BacktestService().run([], fee_rate=1)
+
+
+def test_run_rejects_unknown_strategy_with_empty_candles():
+    with pytest.raises(ValueError, match="unknown strategy"):
+        BacktestService().run([], strategy="not-a-strategy")
