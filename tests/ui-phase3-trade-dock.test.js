@@ -12,7 +12,8 @@ describe('Phase 3 contextual trade dock', () => {
 
   it('keeps the dock contextual and bounded', () => {
     expect(css).toMatch(/\.trading-section\s*\{[\s\S]*width:\s*var\(--phase3-dock-width\)/);
-    expect(css).toMatch(/max-width:\s*calc\(100% - 28px\)/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*1180px\)[\s\S]*--phase3-dock-width:\s*338px/);
+    expect(css).not.toMatch(/width:\s*100vw/);
   });
 
   it('prioritizes order entry with full-size primary actions', () => {
