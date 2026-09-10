@@ -82,13 +82,13 @@ def state(request: Request):
 @router.get("/orders")
 def orders(request: Request):
     service = get_session(request).trading
-    values = list(service.orders.values())
-    return {"orders": values, "pendingOrders": [o for o in values if o["status"] == "PENDING"]}
+    snapshot_value = service.snapshot()
+    return {"orders": snapshot_value["orders"], "pendingOrders": snapshot_value["pendingOrders"]}
 
 
 @router.get("/trades")
 def trades(request: Request):
-    return {"trades": get_session(request).trading.trades}
+    return {"trades": get_session(request).trading.snapshot()["trades"]}
 
 
 @router.post("/order")
