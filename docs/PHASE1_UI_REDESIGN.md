@@ -40,7 +40,7 @@ The redesign establishes a chart-first replay workstation with responsive tradin
 
 ## Phase 7: Final UI System Cleanup
 - The unused legacy Navigation module is removed from the active code path.
-- A final cleanup layer neutralizes legacy navigation and orphaned page containers if stale markup appears.
+- A final cleanup layer neutralizes legacy navigation and dormant page containers if stale markup appears.
 - Shared focus, sizing, and narrow-layout safety rules are centralized at the end of the cascade.
 - The stylesheet entrypoint makes the final cleanup layer explicit.
 
