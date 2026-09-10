@@ -155,6 +155,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .phase6-command,
-  .trading-section { scroll-behavior: auto; }
+  .phase6-command { scroll-behavior: auto; }
 }
