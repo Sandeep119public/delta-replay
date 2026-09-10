@@ -20,7 +20,7 @@ const COMMANDS = [
     group: 'Trading',
     items: [
       ['Focus quantity', 'Jump to order quantity', 'Q'],
-      ['Focus trade panel', 'Open and focus the trading sheet', 'P'],
+      ['Focus trade panel', 'Focus order entry', 'P'],
     ],
   },
 ];
@@ -58,9 +58,6 @@ function runCommand(label) {
     case 'Focus quantity':
       return focusElement('trade-qty');
     case 'Focus trade panel':
-      if (window.matchMedia?.('(max-width: 640px)').matches && !document.body.classList.contains('drawer-open')) {
-        document.getElementById('trading-panel')?.focus?.();
-      }
       return focusElement('trade-qty');
     default:
       return false;
@@ -79,6 +76,7 @@ export function createCommandSurface() {
   trigger.type = 'button';
   trigger.className = 'phase6-command-trigger';
   trigger.setAttribute('aria-haspopup', 'dialog');
+  trigger.setAttribute('aria-expanded', 'false');
   trigger.setAttribute('aria-label', 'Open command menu');
   trigger.innerHTML = 'COMMAND <kbd>⌘K</kbd>';
 
@@ -163,6 +161,7 @@ export function createCommandSurface() {
     previousFocus = document.activeElement;
     backdrop.classList.remove('hidden');
     backdrop.setAttribute('aria-hidden', 'false');
+    trigger.setAttribute('aria-expanded', 'true');
     activeIndex = 0;
     search.value = '';
     render();
@@ -172,12 +171,18 @@ export function createCommandSurface() {
   function closeMenu() {
     backdrop.classList.add('hidden');
     backdrop.setAttribute('aria-hidden', 'true');
+    trigger.setAttribute('aria-expanded', 'false');
     previousFocus?.focus?.();
   }
 
   function onTrigger() {
     if (backdrop.classList.contains('hidden')) openMenu();
     else closeMenu();
+  }
+
+  function onSearchInput() {
+    activeIndex = 0;
+    render();
   }
 
   function onKeydown(event) {
@@ -216,17 +221,14 @@ export function createCommandSurface() {
   backdrop.addEventListener('click', (event) => {
     if (event.target === backdrop) closeMenu();
   });
-  search.addEventListener('input', () => {
-    activeIndex = 0;
-    render();
-  });
+  search.addEventListener('input', onSearchInput);
   document.addEventListener('keydown', onKeydown);
 
   return {
     destroy() {
       trigger.removeEventListener('click', onTrigger);
       close.removeEventListener('click', closeMenu);
-      search.removeEventListener('input', render);
+      search.removeEventListener('input', onSearchInput);
       document.removeEventListener('keydown', onKeydown);
       backdrop.remove();
       trigger.remove();
