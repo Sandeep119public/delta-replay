@@ -1,7 +1,4 @@
-/* Phase 5: mobile-first sheet interaction layer.
- * Keeps the chart-first desktop hierarchy while making small-screen panels
- * easier to operate with touch and viewport-safe spacing.
- */
+/* Phase 5: mobile-first sheet interaction layer. */
 
 :root {
   --phase5-touch: 44px;
@@ -11,17 +8,10 @@
 
 @media (max-width: 640px) {
   html,
-  body {
-    overscroll-behavior-y: none;
-  }
+  body { overscroll-behavior-y: none; }
 
-  #page-replay.active {
-    min-height: 0;
-  }
-
-  .chart-stage {
-    touch-action: pan-x pan-y;
-  }
+  #page-replay.active { min-height: 0; }
+  .chart-stage { touch-action: pan-x pan-y; }
 
   .trading-section {
     box-sizing: border-box;
@@ -33,13 +23,8 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  body.drawer-open .trading-section {
-    animation: phase5-sheet-enter 180ms ease-out both;
-  }
-
-  .panel-heading h2 {
-    font-size: 18px;
-  }
+  body.drawer-open .trading-section { animation: phase5-sheet-enter 180ms ease-out both; }
+  .panel-heading h2 { font-size: 18px; }
 
   .panel-tab-btn,
   .field input,
@@ -52,31 +37,16 @@
   .flatten-button,
   .order-action,
   .btn-buy-main,
-  .btn-sell-main {
-    min-height: var(--phase5-touch);
-  }
+  .btn-sell-main,
+  .controls-row button,
+  .controls-row select { min-height: var(--phase5-touch); }
 
-  .trading-tab-nav {
-    gap: 8px;
-  }
-
-  .panel-tab-btn {
-    padding-inline: 12px;
-  }
-
+  .trading-tab-nav { gap: 8px; }
+  .panel-tab-btn { padding-inline: 12px; }
   .ticket-field-grid,
-  .risk-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .ticket-field-grid {
-    gap: 10px;
-  }
-
-  .side-actions {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
+  .risk-grid { grid-template-columns: 1fr; }
+  .ticket-field-grid { gap: 10px; }
+  .side-actions { grid-template-columns: 1fr; gap: 10px; }
 
   .order-action,
   .btn-buy-main,
@@ -86,79 +56,30 @@
     font-size: 12px;
   }
 
-  .risk-actions {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .activity-list {
-    max-height: 132px;
-  }
-
-  .timeline-section {
-    touch-action: pan-x;
-  }
-
-  #timeline-slider {
-    min-height: 24px;
-    touch-action: pan-x;
-  }
-
-  .controls-section {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  .controls-row button,
-  .controls-row select {
-    min-height: var(--phase5-touch);
-  }
-
+  .risk-actions { grid-template-columns: 1fr 1fr; }
+  .activity-list { max-height: 132px; }
+  .timeline-section { touch-action: pan-x; }
+  #timeline-slider { min-height: 24px; touch-action: pan-x; }
+  .controls-section { padding-bottom: env(safe-area-inset-bottom); }
   .chart-position-chip,
-  .chart-toast {
-    max-width: calc(100% - 20px);
-  }
+  .chart-toast { max-width: calc(100% - 20px); }
 }
 
 @media (max-width: 420px) {
-  .trading-section {
-    padding-inline: 12px;
-  }
-
-  .trading-top-summary {
-    grid-template-columns: 1fr;
-  }
-
+  .trading-section { padding-inline: 12px; }
+  .trading-top-summary { grid-template-columns: 1fr; }
   .summary-main,
-  .summary-side {
-    min-height: 58px;
-    border-radius: 0;
-  }
-
-  .summary-main {
-    border-radius: 10px 10px 0 0;
-  }
-
-  .summary-side {
-    border-radius: 0 0 10px 10px;
-  }
-
-  .controls-section {
-    width: min(75vw, 250px);
-  }
+  .summary-side { min-height: 58px; border-radius: 0; }
+  .summary-main { border-radius: 10px 10px 0 0; }
+  .summary-side { border-radius: 0 0 10px 10px; }
+  .controls-section { width: min(75vw, 250px); }
 }
 
 @keyframes phase5-sheet-enter {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.drawer-open .trading-section {
-    animation: none;
-  }
+  body.drawer-open .trading-section { animation: none; }
 }
