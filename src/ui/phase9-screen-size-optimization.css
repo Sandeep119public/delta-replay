@@ -1,0 +1,200 @@
+/* Phase 9: screen-size optimization. */
+
+:root {
+  --phase9-touch: 44px;
+}
+
+#page-replay.active {
+  height: 100dvh;
+  min-height: 0;
+}
+
+.main-layout,
+.main,
+.chart-stage,
+.chart-container,
+#chart-container,
+.timeline-section,
+.controls-section,
+.trading-section,
+.topbar,
+.topbar-center,
+.topbar-right,
+.controls-row,
+.timeline-meta,
+.phase6-command {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#chart-container canvas,
+#chart-container svg,
+.chart-stage canvas,
+.chart-stage svg {
+  max-width: 100%;
+}
+
+@media (min-width: 1440px) {
+  .topbar { padding-inline: 24px; }
+  .trading-section {
+    width: min(348px, 24vw);
+    right: 18px;
+    top: 18px;
+    bottom: 18px;
+  }
+  .chart-position-chip { left: 20px; top: 18px; }
+}
+
+@media (min-width: 1025px) and (max-width: 1439px) {
+  .topbar {
+    gap: 12px;
+    padding-inline: 16px;
+  }
+  .trading-section {
+    width: min(332px, 27vw);
+    right: 14px;
+    top: 14px;
+    bottom: 14px;
+  }
+  .chart-position-chip { max-width: min(420px, calc(100% - 360px)); }
+}
+
+@media (min-width: 841px) and (max-width: 1024px) {
+  #page-replay.active { grid-template-rows: 58px 0 minmax(0, 1fr) 112px 54px; }
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding-inline: 12px;
+  }
+  .topbar-center { overflow: hidden; }
+  .selector-group select,
+  .selector-group input,
+  .controls-row button,
+  .controls-row select,
+  .phase6-command-trigger { min-height: var(--phase9-touch); }
+  .trading-section {
+    width: min(318px, calc(100% - 24px));
+    top: 10px;
+    right: 10px;
+    bottom: 10px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 840px) {
+  #page-replay.active { grid-template-rows: 56px 0 minmax(0, 1fr) 106px 52px; }
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-inline: 10px;
+  }
+  .topbar-center .date-group,
+  .topbar-right #data-status { display: none; }
+  .topbar-center { justify-content: flex-end; overflow: hidden; }
+  .trading-section {
+    width: min(300px, calc(100% - 20px));
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+  }
+  .timeline-section,
+  .controls-section { padding-inline: 10px; }
+}
+
+@media (max-width: 640px) {
+  #page-replay.active { grid-template-rows: 54px 0 minmax(0, 1fr) 104px 52px; }
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-inline: 8px;
+  }
+  .logo {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .topbar-right { justify-content: flex-end; gap: 6px; }
+  .phase6-command-trigger {
+    min-width: var(--phase9-touch);
+    min-height: var(--phase9-touch);
+    padding-inline: 8px;
+  }
+  .chart-position-chip {
+    left: 8px;
+    top: 8px;
+    max-width: calc(100% - 16px);
+  }
+  .timeline-section { padding: 6px 8px; gap: 2px 7px; }
+  .controls-section { padding: 4px 8px env(safe-area-inset-bottom); }
+  .controls-row { gap: 4px; overflow: hidden; }
+  .controls-row button,
+  .controls-row select { min-height: var(--phase9-touch); }
+  .phase6-command-backdrop { padding-inline: 8px; }
+  .phase6-command { max-height: min(78dvh, 680px); }
+  .phase6-command-list { max-height: calc(78dvh - 94px); }
+  body.drawer-open .trading-section {
+    height: min(78dvh, 680px);
+    max-height: calc(100dvh - 54px);
+  }
+  .field input,
+  .field select,
+  .tab-panel input,
+  .tab-panel select,
+  .advanced-toggle,
+  .risk-details > summary,
+  .risk-actions .btn,
+  .flatten-button,
+  .order-action,
+  .btn-buy-main,
+  .btn-sell-main { min-height: var(--phase9-touch); }
+}
+
+@media (max-width: 420px) {
+  #page-replay.active { grid-template-rows: 52px 0 minmax(0, 1fr) 100px 50px; }
+  .topbar { padding-inline: 6px; }
+  .logo { font-size: 14px; letter-spacing: 0.12em; }
+  .timeline-section {
+    grid-template-columns: minmax(84px, 0.72fr) minmax(0, 1.6fr);
+    padding-inline: 6px;
+  }
+  .controls-section { padding-inline: 6px; }
+  .replay-primary .replay-play { min-width: 60px; padding-inline: 8px; }
+  .phase6-command-backdrop {
+    padding-inline: 6px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+  .phase6-command { border-radius: 16px; }
+  body.drawer-open .trading-section { max-height: calc(100dvh - 52px); }
+}
+
+@media (max-width: 360px) {
+  .topbar-right .phase6-command-trigger {
+    width: var(--phase9-touch);
+    padding: 0;
+    font-size: 0;
+  }
+  .topbar-right .phase6-command-trigger::before {
+    content: '⋯';
+    font-size: 20px;
+    line-height: 1;
+  }
+  .timeline-meta { gap: 4px; font-size: 8px; }
+  .controls-row .replay-secondary { display: none; }
+  .replay-speed { margin-left: 0; }
+  #speed-select { min-width: 48px; }
+}
+
+@media (orientation: landscape) and (max-width: 840px) {
+  #page-replay.active { grid-template-rows: 50px 0 minmax(0, 1fr) 84px 48px; }
+  body.drawer-open .trading-section {
+    height: min(92dvh, 620px);
+    max-height: calc(100dvh - 50px);
+  }
+  .phase6-command { max-height: 88dvh; }
+  .phase6-command-list { max-height: calc(88dvh - 94px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase6-command,
+  .trading-section { scroll-behavior: auto; }
+}
