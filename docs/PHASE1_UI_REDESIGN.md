@@ -1,6 +1,6 @@
-# UI Redesign: Phases 1-3
+# UI Redesign: Phases 1-4
 
-The first three UI phases establish the new replay workstation hierarchy without changing replay or trading behavior.
+The first four UI phases establish the replay workstation hierarchy without changing replay or trading behavior.
 
 ## Phase 1: Chart-First Shell
 
@@ -28,6 +28,15 @@ The first three UI phases establish the new replay workstation hierarchy without
 - Pending orders and recent fills become quieter supporting information.
 - Mobile preserves the bottom-sheet model with larger primary trade actions.
 
+## Phase 4: Position + Activity Inspector
+
+- Open exposure is presented as a compact live inspector rather than buried supporting content.
+- Size, entry, mark, and P&L form a consistent exposure grid.
+- Stop loss and take profit state are visually grouped as active risk controls.
+- Close-position and flatten information remain explicit.
+- Pending orders and recent fills use a quieter activity treatment that supports, rather than competes with, order entry.
+- Narrow screens collapse the exposure grid while retaining usable action targets.
+
 ## Safety
 
-Existing replay/trading IDs, markup hooks, and behavior remain unchanged. Later phases cover the position/activity inspector, navigation cleanup, command palette, legacy CSS removal, and the final responsive visual regression pass.
+Existing replay/trading IDs, markup hooks, and behavior remain unchanged. Later phases cover navigation cleanup, command palette work, legacy CSS removal, and the final responsive visual regression pass.
