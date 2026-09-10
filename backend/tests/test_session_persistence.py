@@ -47,6 +47,20 @@ def test_session_round_trip_preserves_replay_and_trading_state():
     assert next_order["id"] > second_order["id"]
 
 
+def test_zero_fee_open_position_round_trips_through_persistence():
+    trading = PaperTradingEngine(fee_rate=0)
+    trading.on_candle(candle(100, 101, 99, 100), 0, "BTCUSDT")
+    trading.submit("BTCUSDT", "buy", 1)
+    trading.on_candle(candle(100, 102, 99, 101), 1, "BTCUSDT")
+
+    document = trading.export_state()
+    restored = PaperTradingEngine.from_state(document)
+
+    assert restored.fee_rate == 0
+    assert restored.positions["BTCUSDT"]["entry_fee"] == 0
+    assert restored.export_state() == document
+
+
 def test_replay_persistence_preserves_fractional_speed():
     replay = ReplayService()
     replay.load([candle(100, 105, 95, 102)])
