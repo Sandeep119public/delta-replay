@@ -247,4 +247,5 @@
 @media (prefers-reduced-motion: reduce) {
   .trading-section,
   .topbar { backdrop-filter: none; }
+  .trading-section { scroll-behavior: auto; }
 }
