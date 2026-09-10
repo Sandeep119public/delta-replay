@@ -7,7 +7,7 @@ const application = fs.readFileSync('src/app/Application.js', 'utf8');
 const paperMarkup = fs.readFileSync('src/ui/paperMarkup.js', 'utf8');
 
 describe('Phase 7 final UI system cleanup', () => {
-  it('loads the cleanup layer before the final responsive layer', () => {
+  it('loads cleanup and final responsive layers in order', () => {
     expect(html.indexOf('src/ui/phase7-final-system.css')).toBeGreaterThan(html.indexOf('src/ui/phase6-command-surface.css'));
     expect(html.indexOf('src/ui/phase8-responsive-final.css')).toBeGreaterThan(html.indexOf('src/ui/phase7-final-system.css'));
   });
