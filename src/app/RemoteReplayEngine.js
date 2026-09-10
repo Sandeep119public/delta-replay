@@ -1,6 +1,6 @@
 class Events {
   constructor() { this.map = new Map(); }
-  on(event, handler) { const listeners = this.map.get(event) || new Set(); listeners.add(handler); this.map.set(event, listeners); return () => listeners.delete(handler); }
+  on(event, handler) { return this.map.get(event) || this.map.set(event, new Set()).get(event).add(handler), () => this.map.get(event)?.delete(handler); }
   emit(event, payload) { for (const handler of this.map.get(event) || []) { try { handler(payload); } catch (error) { console.warn(`[RemoteReplayEngine] ${event} handler failed`, error); } } }
 }
 
@@ -16,6 +16,7 @@ export class RemoteReplayEngine {
     this._playTimer = null;
     this._stepInFlight = false;
     this._generation = 0;
+    this._playIntent = 0;
     this._destroyed = false;
     this.state = { status: 'idle', currentIndex: -1, startIndex: -1, totalCandles: 0, speed: 1, candle: null, visibleCandles: [] };
   }
@@ -53,8 +54,27 @@ export class RemoteReplayEngine {
   }
   async seek(index) { if (this._destroyed) return this.getState(); this.pause(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay seek index must be an integer'); const generation = ++this._generation; const result = await this._call(`/seek/${numericIndex}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('seeked', { index: this.state.currentIndex, state: result }); return result; }
   async reset() { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; const result = await this._call('/reset', { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('reset', { index: this.state.currentIndex, state: result }); return result; }
-  async play() { if (this._destroyed) return this.getState(); if (this.state.status === 'ready') await this.start(this.state.startIndex >= 0 ? this.state.startIndex : 0); if (this._destroyed || !['paused', 'playing'].includes(this.state.status)) return this.getState(); if (this._playTimer) return this.getState(); this.state = { ...this.state, status: 'playing' }; this.events.emit('stateChanged', this.getState()); this._scheduleStep(); return this.getState(); }
-  pause() { if (this._playTimer) clearTimeout(this._playTimer); this._playTimer = null; if (!this._destroyed && this.state.status === 'playing') { this.state = { ...this.state, status: 'paused' }; this.events.emit('stateChanged', this.getState()); } return this.getState(); }
+  async play() {
+    if (this._destroyed) return this.getState();
+    const playIntent = ++this._playIntent;
+    if (this.state.status === 'ready') await this.start(this.state.startIndex >= 0 ? this.state.startIndex : 0);
+    if (this._destroyed || playIntent !== this._playIntent || !['paused', 'playing'].includes(this.state.status)) return this.getState();
+    if (this._playTimer) return this.getState();
+    this.state = { ...this.state, status: 'playing' };
+    this.events.emit('stateChanged', this.getState());
+    this._scheduleStep();
+    return this.getState();
+  }
+  pause() {
+    this._playIntent++;
+    if (this._playTimer) clearTimeout(this._playTimer);
+    this._playTimer = null;
+    if (!this._destroyed && this.state.status === 'playing') {
+      this.state = { ...this.state, status: 'paused' };
+      this.events.emit('stateChanged', this.getState());
+    }
+    return this.getState();
+  }
   _scheduleStep() { if (this._destroyed || this.state.status !== 'playing' || this._playTimer) return; const delay = Math.max(40, BASE_STEP_DELAY_MS / Number(this.state.speed || 1)); this._playTimer = setTimeout(async () => { this._playTimer = null; if (this._destroyed || this.state.status !== 'playing') return; try { await this.stepForward(); } catch (error) { this.pause(); if (!this._destroyed) this.events.emit('playbackError', error); return; } if (!this._destroyed && this.state.status === 'playing') this._scheduleStep(); }, delay); }
   setSpeed(speed) { if (this._destroyed) return this.state.speed; const next = Number(speed); if (!Number.isFinite(next) || next <= 0) throw new TypeError('Replay speed must be a positive number'); this.state = { ...this.state, speed: next }; this.events.emit('speedChanged', { speed: next }); this.events.emit('stateChanged', this.getState()); if (this.state.status === 'playing') { if (this._playTimer) clearTimeout(this._playTimer); this._playTimer = null; this._scheduleStep(); } return next; }
   registerActionGuard() { return () => {}; }
