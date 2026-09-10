@@ -1,21 +1,16 @@
-/* Phase 3: contextual trade dock.
- * Makes the trading surface feel like a focused workstation layered over the chart.
- * DOM IDs and interaction hooks remain unchanged.
+/* Phase 3: trading desk presentation.
+ * Workspace geometry is owned by phase1-chart-shell.css. This layer styles
+ * the trading surface and its controls without changing its position or size.
  */
 
 :root {
-  --phase3-dock-width: min(360px, 31vw);
-  --phase3-gap: 12px;
   --phase3-surface: rgba(255, 253, 248, 0.965);
   --phase3-border: color-mix(in srgb, var(--paper-line) 86%, transparent);
   --phase3-shadow: 0 20px 52px rgba(77, 64, 42, 0.16);
 }
 
 .trading-section {
-  width: var(--phase3-dock-width);
   padding: 14px;
-  border: 1px solid var(--phase3-border);
-  border-radius: 16px;
   background: var(--phase3-surface);
   box-shadow: var(--phase3-shadow);
   scrollbar-width: thin;
@@ -193,17 +188,7 @@
   box-shadow: none;
 }
 
-@media (max-width: 1180px) {
-  :root {
-    --phase3-dock-width: 338px;
-  }
-}
-
-@media (max-width: 840px) {
-  :root {
-    --phase3-dock-width: min(320px, 44vw);
-  }
-
+@media (max-width: 840px) and (min-width: 641px) {
   .trading-section {
     padding: 13px;
   }
@@ -212,8 +197,6 @@
 @media (max-width: 640px) {
   .trading-section {
     padding: 16px 14px calc(20px + env(safe-area-inset-bottom));
-    border-radius: 18px 18px 0 0;
-    box-shadow: 0 -16px 44px rgba(77, 64, 42, 0.18);
   }
 
   .panel-heading {
