@@ -1,12 +1,12 @@
-# UI Redesign: Phases 1-4
+# UI Redesign: Phases 1-5
 
-The first four UI phases establish the replay workstation hierarchy without changing replay or trading behavior.
+The first five UI phases establish a chart-first replay workstation with responsive trading interactions, without changing replay or trading behavior.
 
 ## Phase 1: Chart-First Shell
 
 - The chart owns the full workspace width.
-- The trading panel becomes a floating contextual dock instead of a permanent grid column.
-- The status banner keeps its DOM contract but no longer consumes visible workspace height.
+- The trading panel becomes a floating contextual dock.
+- The status banner keeps its DOM contract without consuming visible workspace height.
 - The header is tightened so the chart receives more visual attention.
 - Mobile uses the existing trading drawer mechanism as a bottom sheet.
 
@@ -23,20 +23,26 @@ The first four UI phases establish the replay workstation hierarchy without chan
 
 - The floating trading dock is tightened into a focused order-entry workstation.
 - Account snapshot and Trade/Account navigation are easier to scan.
-- Order configuration gets a clearer hierarchy before the primary trade actions.
-- Position and risk management sits behind a deliberate disclosure.
+- Order configuration gets a clearer hierarchy before primary trade actions.
+- Position and risk management sits behind deliberate disclosure.
 - Pending orders and recent fills become quieter supporting information.
-- Mobile preserves the bottom-sheet model with larger primary trade actions.
+- Mobile preserves the bottom-sheet model with larger primary actions.
 
 ## Phase 4: Position + Activity Inspector
 
-- Open exposure is presented as a compact live inspector rather than buried supporting content.
-- Size, entry, mark, and P&L form a consistent exposure grid.
-- Stop loss and take profit state are visually grouped as active risk controls.
-- Close-position and flatten information remain explicit.
-- Pending orders and recent fills use a quieter activity treatment that supports, rather than competes with, order entry.
-- Narrow screens collapse the exposure grid while retaining usable action targets.
+- Exposure is organized around size, entry, mark, and P&L.
+- SL/TP state and flatten controls are explicit.
+- Pending orders and fills become supporting activity surfaces.
+- Narrow layouts retain usable exposure and action targets.
+
+## Phase 5: Mobile-First Sheets
+
+- Trading sheets use viewport-safe bottom spacing.
+- Primary controls meet touch-sized minimums.
+- Order and risk fields collapse to single-column layouts on small screens.
+- Existing drawer state, accessibility, and interaction hooks remain unchanged.
+- Mobile account summaries stack cleanly at very narrow widths.
 
 ## Safety
 
-Existing replay/trading IDs, markup hooks, and behavior remain unchanged. Later phases cover navigation cleanup, command palette work, legacy CSS removal, and the final responsive visual regression pass.
+Existing replay/trading IDs, markup hooks, and behavior remain unchanged. Later phases cover navigation cleanup, command palette, legacy CSS removal, and the final responsive visual regression pass.
