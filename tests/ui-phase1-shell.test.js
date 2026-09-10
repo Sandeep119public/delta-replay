@@ -13,14 +13,15 @@ describe('Phase 1 chart-first shell', () => {
     expect(html.indexOf('src/ui/phase1-chart-shell.css')).toBeGreaterThan(html.indexOf('src/ui/index.css'));
   });
 
-  it('removes the trading sidebar from the chart layout grid', () => {
-    expect(css).toMatch(/\.main-layout\s*\{[\s\S]*display:\s*block/);
-    expect(css).toMatch(/\.trading-section\s*\{[\s\S]*position:\s*absolute/);
+  it('keeps the trading desk in a dedicated chart-adjacent column', () => {
+    expect(css).toMatch(/\.main-layout\s*\{[\s\S]*display:\s*grid/);
+    expect(css).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--phase1-dock\)/);
+    expect(css).toMatch(/\.trading-section\s*\{[\s\S]*grid-column:\s*2/);
+    expect(css).not.toMatch(/\.trading-section\s*\{[\s\S]*position:\s*absolute/);
   });
 
-  it('makes the chart fill the workspace', () => {
-    expect(css).toMatch(/\.main\s*\{[\s\S]*position:\s*absolute/);
-    expect(css).toMatch(/\.main\s*\{[\s\S]*inset:\s*0/);
+  it('keeps the chart contained inside the flexible workspace column', () => {
+    expect(css).toMatch(/\.main\s*\{[\s\S]*position:\s*relative/);
     expect(css).toMatch(/#chart-container\s*\{[\s\S]*width:\s*100%[\s\S]*height:\s*100%/);
   });
 
