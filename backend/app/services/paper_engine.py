@@ -35,6 +35,16 @@ class PaperTradingEngine:
         return value
 
     @staticmethod
+    def _non_negative_finite(value, name):
+        try:
+            value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be numeric") from exc
+        if not isfinite(value) or value < 0:
+            raise ValueError(f"{name} must be finite and non-negative")
+        return value
+
+    @staticmethod
     def _integer(value, name):
         if isinstance(value, bool):
             raise ValueError(f"{name} must be an integer")
@@ -287,7 +297,8 @@ class PaperTradingEngine:
         for symbol, position in self.positions.items():
             if not isinstance(symbol, str) or not symbol.strip() or not isinstance(position, dict) or position.get("symbol") != symbol: raise ValueError("invalid position state")
             if position.get("side") not in ("long", "short"): raise ValueError("position side is invalid")
-            for field in ("quantity", "entry_price", "current_price", "entry_fee"): self._positive_finite(position.get(field), f"position {field}")
+            for field in ("quantity", "entry_price", "current_price"): self._positive_finite(position.get(field), f"position {field}")
+            self._non_negative_finite(position.get("entry_fee"), "position entry_fee")
             for field in ("stop_loss", "take_profit"):
                 if position.get(field) is not None: self._positive_finite(position[field], field)
             for field in ("stop_loss_created_index", "take_profit_created_index", "opened_index"):
