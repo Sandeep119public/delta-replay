@@ -21,23 +21,13 @@ describe('Phase 9 screen-size optimization', () => {
     expect(css).toContain('@media (max-width: 360px)');
   });
 
-  it('keeps the main layout shrink-safe', () => {
-    for (const selector of ['.main-layout', '.main', '.chart-stage', '#chart-container', '.trading-section', '.topbar']) {
-      expect(css).toMatch(new RegExp(`${selector.replace('.', '\\.') }[\\s\\S]*min-width:\\s*0`));
-    }
-  });
-
-  it('keeps the trading desk in its own desktop grid column', () => {
-    expect(css).toMatch(/\.main-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--phase9-dock\)/);
-    expect(css).toMatch(/\.trading-section\s*\{[\s\S]*grid-column:\s*2/);
-    expect(css).toMatch(/\.trading-section\s*\{[\s\S]*width:\s*auto\s*!important/);
-    expect(css).toMatch(/\.trading-section\s*\{[\s\S]*position:\s*relative\s*!important/);
-  });
-
-  it('clips chart rendering to the allocated chart lane', () => {
-    expect(css).toMatch(/\.main\s*\{[\s\S]*overflow:\s*hidden/);
-    expect(css).toMatch(/#chart-container\s*\{[\s\S]*overflow:\s*hidden/);
-    expect(css).toMatch(/#chart-container canvas,[\s\S]*max-width:\s*100%/);
+  it('does not redefine workspace geometry owned by Phase 1', () => {
+    expect(css).not.toMatch(/\.main-layout\s*\{/);
+    expect(css).not.toMatch(/\.main\s*\{/);
+    expect(css).not.toMatch(/\.chart-stage\s*\{/);
+    expect(css).not.toMatch(/#chart-container\s*\{/);
+    expect(css).not.toMatch(/\.trading-section\s*\{/);
+    expect(css).not.toContain('--phase9-dock');
   });
 
   it('keeps core compact-screen controls touch-sized', () => {
