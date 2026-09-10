@@ -1,0 +1,243 @@
+/* Phase 3: contextual trade dock.
+ * Makes the trading surface feel like a focused workstation layered over the chart.
+ * DOM IDs and interaction hooks remain unchanged.
+ */
+
+:root {
+  --phase3-dock-width: min(360px, 31vw);
+  --phase3-gap: 12px;
+  --phase3-surface: rgba(255, 253, 248, 0.965);
+  --phase3-border: color-mix(in srgb, var(--paper-line) 86%, transparent);
+  --phase3-shadow: 0 20px 52px rgba(77, 64, 42, 0.16);
+}
+
+.trading-section {
+  width: var(--phase3-dock-width);
+  padding: 14px;
+  border: 1px solid var(--phase3-border);
+  border-radius: 16px;
+  background: var(--phase3-surface);
+  box-shadow: var(--phase3-shadow);
+  scrollbar-width: thin;
+}
+
+.panel-heading {
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 0 2px 10px;
+  border-bottom: 1px solid var(--phase3-border);
+}
+
+.panel-heading h2 {
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+
+.trading-top-summary {
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.summary-main,
+.summary-side {
+  min-height: 66px;
+  padding: 11px 12px;
+}
+
+.summary-main strong {
+  font-size: 18px;
+}
+
+.trading-tab-nav {
+  position: sticky;
+  top: -14px;
+  z-index: 3;
+  padding: 4px 0 8px;
+  margin-bottom: 4px;
+  background: linear-gradient(var(--phase3-surface) 72%, transparent);
+}
+
+.panel-tab-btn {
+  min-height: 32px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.panel-tab-btn.active {
+  border-color: var(--paper-line);
+  background: var(--paper-panel);
+  box-shadow: 0 3px 10px rgba(77, 64, 42, 0.06);
+}
+
+.tab-panel.active {
+  gap: 9px;
+}
+
+.order-ticket {
+  padding: 13px;
+  border-radius: 13px;
+  box-shadow: 0 5px 18px rgba(77, 64, 42, 0.06);
+}
+
+.ticket-header {
+  align-items: center;
+  padding-bottom: 10px;
+}
+
+.ticket-state-hint {
+  font-size: 9px;
+}
+
+.pos-state-pill {
+  min-height: 25px;
+  padding-inline: 9px;
+}
+
+.ticket-quick-start {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  color: var(--paper-ink);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.quick-start-hint {
+  color: var(--paper-faint);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ticket-field-grid {
+  gap: 8px;
+  padding: 10px 0 8px;
+}
+
+.field input,
+.field select,
+.tab-panel input,
+.tab-panel select {
+  min-height: 40px;
+}
+
+.advanced-toggle {
+  min-height: 32px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.side-actions {
+  gap: 9px;
+}
+
+.order-action,
+.btn-buy-main,
+.btn-sell-main {
+  min-height: 48px;
+  border-radius: 10px;
+}
+
+.order-action.buy:focus-visible,
+.btn-buy-main:focus-visible,
+.order-action.sell:focus-visible,
+.btn-sell-main:focus-visible {
+  outline-offset: 3px;
+}
+
+.risk-details {
+  margin-top: 8px;
+  border-top: 1px dashed var(--paper-line);
+}
+
+.risk-details > summary {
+  padding: 9px 2px 7px;
+  color: var(--paper-muted);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.risk-details[open] > summary {
+  color: var(--paper-ink);
+}
+
+.position-card {
+  margin-top: 2px;
+  border-radius: 10px;
+  background: rgba(246, 241, 232, 0.55);
+}
+
+.activity-card {
+  padding: 11px;
+  border-radius: 13px;
+  box-shadow: none;
+}
+
+.section-heading {
+  min-height: 24px;
+}
+
+.activity-list {
+  max-height: 96px;
+}
+
+.account-card {
+  box-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  :root {
+    --phase3-dock-width: 338px;
+  }
+}
+
+@media (max-width: 840px) {
+  :root {
+    --phase3-dock-width: min(320px, 44vw);
+  }
+
+  .trading-section {
+    padding: 13px;
+  }
+}
+
+@media (max-width: 640px) {
+  .trading-section {
+    padding: 16px 14px calc(20px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -16px 44px rgba(77, 64, 42, 0.18);
+  }
+
+  .panel-heading {
+    padding-top: 1px;
+  }
+
+  .trading-top-summary {
+    margin-bottom: 7px;
+  }
+
+  .trading-tab-nav {
+    position: static;
+    padding: 3px 0 8px;
+  }
+
+  .order-action,
+  .btn-buy-main,
+  .btn-sell-main {
+    min-height: 50px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trading-section {
+    scroll-behavior: auto;
+  }
+}

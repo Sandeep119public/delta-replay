@@ -1,24 +1,8 @@
-/* Phase 7: final UI system cleanup.
- * Normalizes the redesigned replay workstation and explicitly neutralizes
- * legacy navigation chrome without touching application behavior.
- */
+/* Phase 7: final UI system cleanup. */
 
-:root {
-  --ui-surface: var(--phase1-surface);
-  --ui-border: var(--phase2-border);
-  --ui-focus: var(--paper-blue);
-}
-
-/* The active product is the replay workstation. Legacy navigation must never
-   compete with the chart shell if an old module or cached markup reappears. */
+/* Legacy navigation and dormant page shells are no longer part of the active
+   replay product surface. Keep them inert if older markup is ever mounted. */
 .side-nav,
-.legacy-nav,
-.nav-shell,
-[data-legacy-nav] {
-  display: none !important;
-}
-
-/* Keep old page containers inert when legacy markup is present. */
 #page-dashboard,
 #page-analytics,
 #page-strategies,
@@ -27,32 +11,46 @@
   display: none !important;
 }
 
-/* One predictable focus language across the new surfaces. */
+/* Shared final interaction guardrails. */
 button:focus-visible,
 select:focus-visible,
-input:focus-visible,
-summary:focus-visible {
-  outline: 2px solid var(--ui-focus);
+input:focus-visible {
+  outline: 2px solid var(--paper-blue);
   outline-offset: 2px;
 }
 
-/* Do not allow legacy box treatments to reintroduce dense terminal chrome. */
-#page-replay.active .trading-section,
-#page-replay.active .timeline-section,
-#page-replay.active .controls-section {
-  color: var(--paper-ink);
-}
-
-/* Respect viewport-safe sizing on every narrow layout. */
-#page-replay.active,
-#page-replay.active .main-layout,
-#page-replay.active .main,
-#page-replay.active .trading-section {
+.topbar,
+.main-layout,
+.timeline-section,
+.controls-section,
+.trading-section,
+.phase6-command,
+.phase6-command-backdrop {
   min-width: 0;
 }
 
 @media (max-width: 640px) {
-  #page-replay.active .trading-section {
+  .topbar,
+  .timeline-section,
+  .controls-section {
     max-width: 100%;
+  }
+
+  .phase6-command-search,
+  .phase6-command-item,
+  .controls-row,
+  .trading-section {
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

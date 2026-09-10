@@ -1,0 +1,196 @@
+/* Phase 6: focused navigation + command surface.
+ * The replay canvas remains the primary destination; secondary navigation is
+ * available on demand through one keyboard-friendly command surface.
+ */
+
+:root {
+  --phase6-command-width: min(620px, calc(100vw - 28px));
+  --phase6-command-shadow: 0 28px 80px rgba(77, 64, 42, 0.22);
+}
+
+.side-nav {
+  display: none;
+}
+
+.phase6-command-trigger {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--paper-line);
+  border-radius: 8px;
+  color: var(--paper-muted);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.phase6-command-trigger:hover,
+.phase6-command-trigger:focus-visible {
+  color: var(--paper-ink);
+  background: var(--paper-panel);
+}
+
+.phase6-command-trigger kbd {
+  margin-left: 4px;
+  color: var(--paper-faint);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.phase6-command-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: start center;
+  padding: clamp(76px, 13vh, 112px) 14px 14px;
+  background: rgba(41, 39, 33, 0.14);
+  backdrop-filter: blur(4px);
+}
+
+.phase6-command {
+  width: var(--phase6-command-width);
+  max-height: min(680px, calc(100dvh - 120px));
+  overflow: hidden;
+  border: 1px solid var(--paper-line-strong);
+  border-radius: 16px;
+  background: var(--paper-panel);
+  box-shadow: var(--phase6-command-shadow);
+}
+
+.phase6-command-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--paper-line);
+}
+
+.phase6-command-search {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 12px;
+  color: var(--paper-ink);
+  background: var(--paper-deep);
+  outline: none;
+  font-size: 13px;
+}
+
+.phase6-command-search:focus-visible {
+  outline: 2px solid var(--paper-blue);
+  outline-offset: 1px;
+}
+
+.phase6-command-close {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border: 1px solid var(--paper-line);
+  border-radius: 8px;
+  color: var(--paper-muted);
+  background: var(--paper-panel);
+  font-size: 16px;
+}
+
+.phase6-command-list {
+  max-height: min(560px, calc(100dvh - 210px));
+  padding: 8px;
+  overflow: auto;
+}
+
+.phase6-command-group {
+  padding: 7px 7px 4px;
+  color: var(--paper-faint);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.phase6-command-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 8px 10px;
+  color: var(--paper-ink);
+  background: transparent;
+  text-align: left;
+}
+
+.phase6-command-item:hover,
+.phase6-command-item.is-active,
+.phase6-command-item:focus-visible {
+  border-color: var(--paper-line);
+  background: var(--paper-deep);
+  outline: none;
+}
+
+.phase6-command-item strong {
+  display: block;
+  font-size: 11px;
+}
+
+.phase6-command-item span {
+  display: block;
+  margin-top: 2px;
+  color: var(--paper-muted);
+  font-size: 9px;
+}
+
+.phase6-command-item kbd {
+  color: var(--paper-faint);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.phase6-command-empty {
+  padding: 24px 12px;
+  color: var(--paper-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .phase6-command-trigger {
+    padding-inline: 8px;
+    font-size: 9px;
+  }
+
+  .phase6-command-trigger kbd {
+    display: none;
+  }
+
+  .phase6-command-backdrop {
+    place-items: end center;
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .phase6-command {
+    width: 100%;
+    max-height: min(74dvh, 620px);
+    border-radius: 18px;
+  }
+
+  .phase6-command-header {
+    padding: 10px;
+  }
+
+  .phase6-command-list {
+    max-height: calc(74dvh - 90px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase6-command-backdrop {
+    backdrop-filter: none;
+  }
+}
