@@ -13,7 +13,7 @@ def test_candle_updates_only_matching_symbol_position():
     assert engine.positions["ETHUSDT"]["current_price"] == 110
 
     engine.on_candle(candle(50000, 3), index=2, symbol="BTCUSDT")
-    assert engine.positions["ETHUSDT"]["current_price"] == 50000 if False else 110
+    assert engine.positions["ETHUSDT"]["current_price"] == 110
     market = engine.get_latest_market("BTCUSDT")
     assert market["candle"]["close"] == 50000
     assert engine.get_latest_market("ETHUSDT")["candle"]["close"] == 110
@@ -26,5 +26,7 @@ def test_symbol_specific_market_price_is_used_for_close():
     engine.on_candle(candle(110, 2), index=1, symbol="ETHUSDT")
     engine.on_candle(candle(50000, 3), index=2, symbol="BTCUSDT")
 
-    trade = engine.close("ETHUSDT", engine.get_latest_market("ETHUSDT")["candle"]["close"], timestamp=2)
+    market = engine.get_latest_market("ETHUSDT")
+    trade = engine.close("ETHUSDT", market["candle"]["close"], timestamp=market["candle"]["time"])
     assert trade["exitPrice"] == 110
+    assert trade["closedAt"] == 2
