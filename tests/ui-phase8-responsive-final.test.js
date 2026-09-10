@@ -7,7 +7,6 @@ const workspace = fs.readFileSync('src/ui/paper/markup/Workspace.js', 'utf8');
 const timeline = fs.readFileSync('src/ui/paper/markup/Timeline.js', 'utf8');
 const mobileDrawer = fs.readFileSync('src/ui/bindMobileDrawer.js', 'utf8');
 
-
 describe('Phase 8 final responsive system', () => {
   it('loads the final responsive layer after all redesign layers', () => {
     expect(html.indexOf('src/ui/phase8-responsive-final.css')).toBeGreaterThan(html.indexOf('src/ui/phase7-final-system.css'));
@@ -24,7 +23,7 @@ describe('Phase 8 final responsive system', () => {
     expect(css).toMatch(/min-height:\s*var\(--phase8-touch\)/);
   });
 
-  it('preserves the replay and trading DOM contracts', () => {
+  it('preserves replay and trading DOM contracts', () => {
     for (const id of ['chart-container', 'trading-panel', 'btn-buy', 'btn-sell']) {
       expect(workspace).toContain(`id="${id}"`);
     }
