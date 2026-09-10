@@ -1,75 +1,10 @@
-/* Phase 9: screen-size optimization. */
+/* Phase 9: screen-size optimization.
+ * This layer owns responsive sizing only. Workspace geometry belongs to
+ * phase1-chart-shell.css so later layers cannot move the trading desk.
+ */
 
 :root {
   --phase9-touch: 44px;
-  --phase9-dock: clamp(300px, 27vw, 348px);
-}
-
-#page-replay.active {
-  height: 100dvh;
-  min-height: 0;
-}
-
-/* Final desktop/tablet workspace contract. Keep the trading desk in an
-   actual grid track and prevent the chart renderer from painting outside its
-   allocated column. */
-@media (min-width: 641px) {
-  .main-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--phase9-dock);
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    contain: layout paint;
-  }
-
-  .main {
-    grid-column: 1;
-    position: relative;
-    min-width: 0;
-    min-height: 0;
-    width: auto;
-    overflow: hidden;
-    contain: layout paint size;
-  }
-
-  .chart-stage,
-  .chart-container,
-  #chart-container {
-    position: relative;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    contain: layout paint size;
-  }
-
-  .trading-section {
-    grid-column: 2;
-    grid-row: 1;
-    position: relative !important;
-    inset: auto !important;
-    top: auto !important;
-    right: auto !important;
-    bottom: auto !important;
-    left: auto !important;
-    z-index: 2;
-    width: auto !important;
-    max-width: none;
-    height: 100%;
-    min-width: 0;
-    min-height: 0;
-    margin: 0;
-    overflow: auto;
-  }
-
-  #chart-container canvas,
-  #chart-container svg,
-  .chart-stage canvas,
-  .chart-stage svg {
-    max-width: 100%;
-  }
 }
 
 .main-layout,
@@ -77,8 +12,6 @@
 .chart-stage,
 .chart-container,
 #chart-container,
-.timeline-section,
-.controls-section,
 .trading-section,
 .topbar,
 .topbar-center,
@@ -90,14 +23,19 @@
   box-sizing: border-box;
 }
 
+#chart-container canvas,
+#chart-container svg,
+.chart-stage canvas,
+.chart-stage svg {
+  max-width: 100%;
+}
+
 @media (min-width: 1440px) {
-  :root { --phase9-dock: min(348px, 27vw); }
   .topbar { padding-inline: 24px; }
   .chart-position-chip { left: 20px; top: 18px; }
 }
 
 @media (min-width: 1025px) and (max-width: 1439px) {
-  :root { --phase9-dock: min(332px, 27vw); }
   .topbar {
     gap: 12px;
     padding-inline: 16px;
@@ -106,7 +44,6 @@
 }
 
 @media (min-width: 841px) and (max-width: 1024px) {
-  :root { --phase9-dock: min(318px, 32vw); }
   #page-replay.active { grid-template-rows: 58px 0 minmax(0, 1fr) 112px 54px; }
   .topbar {
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -122,7 +59,6 @@
 }
 
 @media (min-width: 641px) and (max-width: 840px) {
-  :root { --phase9-dock: min(300px, 38vw); }
   #page-replay.active { grid-template-rows: 56px 0 minmax(0, 1fr) 106px 52px; }
   .topbar {
     grid-template-columns: auto minmax(0, 1fr) auto;
