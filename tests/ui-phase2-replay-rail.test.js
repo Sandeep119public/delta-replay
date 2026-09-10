@@ -20,7 +20,8 @@ describe('Phase 2 unified replay rail', () => {
 
   it('treats timeline and transport as one shared surface', () => {
     expect(css).toMatch(/\.timeline-section\s*\{[\s\S]*display:\s*grid/);
-    expect(css).toMatch(/\.timeline-section\s*\{[\s\S]*grid-template-areas:[\s\S]*"meta header controls"/);
+    expect(css).toMatch(/\.timeline-section\s*\{[\s\S]*grid-template-areas:[\s\S]*"meta header spacer"/);
+    expect(css).toMatch(/\.timeline-section\s*,\s*\.controls-section\s*\{[\s\S]*grid-area:\s*timeline/);
     expect(css).toMatch(/\.controls-section\s*\{[\s\S]*border:\s*0/);
   });
 
