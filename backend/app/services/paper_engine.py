@@ -318,9 +318,16 @@ class PaperTradingEngine:
         raw_orders = state["orders"]
         normalized_orders = {}
         for key, value in raw_orders.items():
-            if not isinstance(key, str) or not key.isdigit() or key == "0" or (len(key) > 1 and key.startswith("0")):
+            if isinstance(key, bool):
                 raise ValueError("order id key must be canonical")
-            order_id = int(key)
+            if isinstance(key, int):
+                if key <= 0:
+                    raise ValueError("order id key must be canonical")
+                order_id = key
+            elif isinstance(key, str) and key.isdigit() and key != "0" and not (len(key) > 1 and key.startswith("0")):
+                order_id = int(key)
+            else:
+                raise ValueError("order id key must be canonical")
             if order_id in normalized_orders:
                 raise ValueError("duplicate order id")
             normalized_orders[order_id] = deepcopy(value)
