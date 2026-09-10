@@ -1,3 +1,5 @@
+from math import isfinite
+
 from ..models import Candle
 
 
@@ -10,14 +12,20 @@ class BacktestService:
     def run(self, candles, strategy="buy_and_hold", quantity=1.0, fee_rate=TAKER_FEE_RATE):
         if not candles:
             return {"summary": {"strategy": strategy, "trades": 0, "pnl": 0.0, "fees": 0.0}, "trades": []}
-        if quantity <= 0:
-            raise ValueError("quantity must be positive")
-        if not 0 <= fee_rate <= 1:
-            raise ValueError("fee_rate must be in [0,1]")
+
+        try:
+            quantity = float(quantity)
+            fee_rate = float(fee_rate)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("quantity and fee_rate must be numeric") from exc
+        if not isfinite(quantity) or quantity <= 0:
+            raise ValueError("quantity must be finite and positive")
+        if not isfinite(fee_rate) or not 0 <= fee_rate < 1:
+            raise ValueError("fee_rate must be finite and in [0,1)")
 
         try:
             candles = [Candle.model_validate(candle).model_dump() for candle in candles]
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid candle data: {exc}") from exc
 
         signals = self._signals(candles, strategy)
