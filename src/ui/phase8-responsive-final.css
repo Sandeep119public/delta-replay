@@ -4,10 +4,6 @@
   --phase8-touch: 44px;
 }
 
-@media (min-width: 1025px) {
-  #page-replay.active { min-width: 0; }
-}
-
 @media (min-width: 641px) and (max-width: 1024px) {
   .topbar { gap: 10px; padding-inline: 12px; }
   .topbar-center,
@@ -19,16 +15,9 @@
 }
 
 @media (max-width: 640px) {
-  #page-replay.active {
-    width: 100%;
-    max-width: 100%;
-    overflow: hidden;
-  }
-
   .topbar,
   .timeline-section,
   .controls-section {
-    width: 100%;
     max-width: 100%;
   }
 
