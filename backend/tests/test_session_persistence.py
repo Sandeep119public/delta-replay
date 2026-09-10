@@ -162,6 +162,28 @@ def test_restore_rejects_non_finite_persisted_numbers():
         restore_session(document)
 
 
+def test_restore_rejects_inconsistent_replay_lifecycle_state():
+    base = {
+        "version": SESSION_STATE_VERSION,
+        "replay": {
+            "candles": [candle(100, 105, 95, 102)],
+            "index": 0,
+            "startIndex": 0,
+            "speed": 1,
+            "status": "ready",
+        },
+        "trading": serialize_session(ReplayService(), PaperTradingEngine())["trading"],
+    }
+
+    with pytest.raises(ValueError, match="ready replay"):
+        restore_session(base)
+
+    base["replay"]["status"] = "paused"
+    base["replay"]["startIndex"] = -1
+    with pytest.raises(ValueError, match="active indices"):
+        restore_session(base)
+
+
 def test_session_manager_delete_removes_persisted_state():
     repository = InMemorySessionRepository()
     session_id = str(uuid4())
