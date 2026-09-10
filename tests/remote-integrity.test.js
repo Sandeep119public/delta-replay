@@ -74,4 +74,29 @@ describe('remote state integrity', () => {
     expect(engine.getState().status).toBe('paused');
     expect(engine.getState().currentIndex).toBe(2);
   });
+
+  it('does not apply an older response while a newer request is still pending', async () => {
+    let resolveOld;
+    let resolveNew;
+    const old = new Promise((resolve) => { resolveOld = resolve; });
+    const newer = new Promise((resolve) => { resolveNew = resolve; });
+    let calls = 0;
+    const api = { request: vi.fn((path) => {
+      calls += 1;
+      if (path === '/state') return Promise.resolve({ account: {}, positions: [], orders: [], trades: [] });
+      return calls === 2 ? old : newer;
+    }) };
+    const engine = new RemoteTradingEngine(api);
+    await engine._refreshPromise;
+
+    const first = engine.onMarketCandle({ symbol: 'BTCUSDT', candle: { ...candle, time: 2 }, index: 2 });
+    const second = engine.onMarketCandle({ symbol: 'BTCUSDT', candle: { ...candle, time: 3 }, index: 3 });
+    resolveOld({ account: {}, positions: [], orders: [], trades: [], candle: { ...candle, time: 2 } });
+    await first;
+    expect(engine.getLatestCandle()).toBeNull();
+
+    resolveNew({ account: {}, positions: [], orders: [], trades: [], candle: { ...candle, time: 3 } });
+    await second;
+    expect(engine.getLatestCandle().time).toBe(3);
+  });
 });
