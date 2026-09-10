@@ -13,9 +13,10 @@ describe('Phase 2 unified replay rail', () => {
     );
   });
 
-  it('collapses the page into one bottom replay rail', () => {
-    expect(css).toMatch(/grid-template-rows:\s*var\(--phase1-header\)\s*0\s*minmax\(0,\s*1fr\)\s*var\(--phase2-rail\)/);
-    expect(css).toMatch(/grid-template-areas:[\s\S]*"header"[\s\S]*"status"[\s\S]*"workspace"[\s\S]*"timeline"/);
+  it('leaves the replay page frame to Phase 1', () => {
+    expect(css).not.toMatch(/#page-replay\.active\s*\{/);
+    expect(css).not.toMatch(/grid-template-rows\s*:/);
+    expect(css).not.toMatch(/grid-template-areas\s*:/);
   });
 
   it('treats timeline and transport as one shared surface', () => {
@@ -44,7 +45,7 @@ describe('Phase 2 unified replay rail', () => {
 
   it('gives mobile a compact single-rail transport treatment', () => {
     expect(css).toMatch(/@media\s*\(max-width:\s*640px\)/);
-    expect(css).toMatch(/--phase2-rail:\s*108px/);
+    expect(css).toMatch(/\.timeline-section\s*\{[\s\S]*grid-template-columns:/);
     expect(css).toMatch(/\.controls-section\s*\{[\s\S]*position:\s*absolute/);
   });
 });
