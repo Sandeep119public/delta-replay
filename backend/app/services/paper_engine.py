@@ -22,6 +22,7 @@ class PaperTradingEngine:
         self.trades = []
         self.index = -1
         self._next_order = 1
+        self._market_by_symbol = {}
 
     @staticmethod
     def _positive_finite(value, name):
@@ -54,10 +55,17 @@ class PaperTradingEngine:
     def pending_orders(self):
         return [o for o in self.orders.values() if o["status"] == "PENDING"]
 
+    def get_latest_market(self, symbol):
+        symbol = str(symbol).strip().upper()
+        market = self._market_by_symbol.get(symbol)
+        return deepcopy(market) if market else None
+
     def mark(self, symbol, price):
         symbol = str(symbol).strip().upper()
+        price = self._positive_finite(price, "price")
         if symbol in self.positions:
-            self.positions[symbol]["current_price"] = self._positive_finite(price, "price")
+            self.positions[symbol]["current_price"] = price
+        self._market_by_symbol[symbol] = {"candle": {"close": price}, "index": self.index}
         self._recalc()
         return self.snapshot()
 
@@ -156,6 +164,7 @@ class PaperTradingEngine:
             if index < self.index:
                 raise ValueError("candle index cannot move backward")
         self.index = self.index + 1 if index is None else index
+        self._market_by_symbol[symbol] = {"candle": deepcopy(candle), "index": self.index}
         events = []
         for order in self.orders.values():
             if order["status"] != "PENDING" or order["symbol"] != symbol:
@@ -178,17 +187,22 @@ class PaperTradingEngine:
                 except ValueError as exc:
                     order["status"] = "REJECTED"
                     events.append({"type": "ORDER_REJECTED", "order": order["id"], "reason": str(exc)})
-        for sym, position in list(self.positions.items()):
+        position = self.positions.get(symbol)
+        if position is not None:
             position["current_price"] = candle["close"]
             result = evaluate(position, candle, self.index)
             if result["triggered"]:
-                trade = self.close(sym, result["exitPrice"], result["exitReason"], result["ambiguityResolution"], candle.get("time"))
-                events.append({"type": result["exitReason"], "trade": trade, "symbol": sym, "price": result["exitPrice"]})
+                trade = self.close(symbol, result["exitPrice"], result["exitReason"], result["ambiguityResolution"], candle.get("time"))
+                events.append({"type": result["exitReason"], "trade": trade, "symbol": symbol, "price": result["exitPrice"]})
         self._recalc()
-        for sym in list(self.positions):
-            if self.account.equity <= self.account.maintenance_margin:
-                trade = self.close(sym, candle["close"], "LIQUIDATION", timestamp=candle.get("time"))
-                events.append({"type": "LIQUIDATION", "trade": trade, "symbol": sym, "liquidationPrice": candle["close"]})
+        if self.account.equity <= self.account.maintenance_margin:
+            for sym in list(self.positions):
+                market = self._market_by_symbol.get(sym)
+                if not market:
+                    continue
+                market_candle = market["candle"]
+                trade = self.close(sym, market_candle["close"], "LIQUIDATION", timestamp=market_candle.get("time"))
+                events.append({"type": "LIQUIDATION", "trade": trade, "symbol": sym, "liquidationPrice": market_candle["close"]})
         return events
 
     def cancel(self, order_id):
