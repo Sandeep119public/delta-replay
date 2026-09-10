@@ -1,6 +1,6 @@
 class Events {
   constructor() { this.map = new Map(); }
-  on(event, handler) { return this.map.get(event) || this.map.set(event, new Set()).get(event).add(handler), () => this.map.get(event)?.delete(handler); }
+  on(event, handler) { const listeners = this.map.get(event) || new Set(); listeners.add(handler); this.map.set(event, listeners); return () => listeners.delete(handler); }
   emit(event, payload) { for (const handler of this.map.get(event) || []) { try { handler(payload); } catch (error) { console.warn(`[RemoteReplayEngine] ${event} handler failed`, error); } } }
 }
 
