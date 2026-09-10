@@ -1,6 +1,6 @@
 /* Phase 9: screen-size optimization.
- * This layer owns responsive component sizing only. Workspace geometry belongs
- * to phase1-chart-shell.css so later layers cannot move the trading desk.
+ * This layer owns responsive component sizing only. The replay page frame and
+ * workspace geometry belong to phase1-chart-shell.css.
  */
 
 :root {
@@ -41,7 +41,6 @@
 }
 
 @media (min-width: 841px) and (max-width: 1024px) {
-  #page-replay.active { grid-template-rows: 58px 0 minmax(0, 1fr) 112px 54px; }
   .topbar {
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 10px;
@@ -56,7 +55,6 @@
 }
 
 @media (min-width: 641px) and (max-width: 840px) {
-  #page-replay.active { grid-template-rows: 56px 0 minmax(0, 1fr) 106px 52px; }
   .topbar {
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 8px;
@@ -70,7 +68,6 @@
 }
 
 @media (max-width: 640px) {
-  #page-replay.active { grid-template-rows: 54px 0 minmax(0, 1fr) 104px 52px; }
   .topbar {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
@@ -115,7 +112,6 @@
 }
 
 @media (max-width: 420px) {
-  #page-replay.active { grid-template-rows: 52px 0 minmax(0, 1fr) 100px 50px; }
   .topbar { padding-inline: 6px; }
   .logo { font-size: 14px; letter-spacing: 0.12em; }
   .timeline-section {
@@ -149,7 +145,6 @@
 }
 
 @media (orientation: landscape) and (max-width: 840px) {
-  #page-replay.active { grid-template-rows: 50px 0 minmax(0, 1fr) 84px 48px; }
   .phase6-command { max-height: 88dvh; }
   .phase6-command-list { max-height: calc(88dvh - 94px); }
 }
