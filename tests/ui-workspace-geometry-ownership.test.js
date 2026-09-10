@@ -44,45 +44,111 @@ const GEOMETRY_PROPERTIES = [
   'grid-template-areas',
 ];
 
-function cssBlocks(css) {
-  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
-    selector: match[1].trim(),
-    declarations: match[2],
-  }));
+const AT_RULE_BLOCKS = /^(?:@media|@supports|@container|@layer|@scope|@document|@starting-style)\b/i;
+
+function stripComments(css) {
+  return css.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+function findMatchingBrace(source, openIndex, end) {
+  let depth = 1;
+  let quote = null;
+  for (let i = openIndex + 1; i < end; i += 1) {
+    const ch = source[i];
+    if (quote) {
+      if (ch === '\\') i += 1;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  throw new Error(`Unclosed CSS block at index ${openIndex}`);
+}
+
+function cssRules(css) {
+  const source = stripComments(css);
+  const rules = [];
+
+  function walk(start, end) {
+    let cursor = start;
+    while (cursor < end) {
+      while (cursor < end && /[\s;]/.test(source[cursor])) cursor += 1;
+      if (cursor >= end) break;
+
+      const open = source.indexOf('{', cursor);
+      if (open === -1 || open >= end) break;
+      const close = findMatchingBrace(source, open, end);
+      const header = source.slice(cursor, open).trim();
+      const body = source.slice(open + 1, close);
+
+      if (AT_RULE_BLOCKS.test(header)) walk(open + 1, close);
+      else rules.push({ selector: header, declarations: body });
+
+      cursor = close + 1;
+    }
+  }
+
+  walk(0, source.length);
+  return rules;
 }
 
 function selectorContainsWorkspace(selector) {
-  return WORKSPACE_SELECTORS.some((token) => selector.split(',').some((part) => part.trim().endsWith(token)));
+  return WORKSPACE_SELECTORS.some((token) =>
+    selector.split(',').some((part) => {
+      const normalized = part.trim();
+      return normalized === token || normalized.endsWith(` ${token}`);
+    }),
+  );
 }
 
 function geometryProperties(declarations) {
-  const found = [];
-  for (const property of GEOMETRY_PROPERTIES) {
-    const pattern = new RegExp(`(?:^|\\n|;)\\s*${property.replace('-', '\\-')}\\s*:`, 'm');
-    if (pattern.test(declarations)) found.push(property);
-  }
-  return found;
+  return GEOMETRY_PROPERTIES.filter((property) =>
+    new RegExp(`(?:^|[\\n;])\\s*${property.replace('-', '\\-')}\\s*:`, 'm').test(declarations),
+  );
+}
+
+function findRule(rules, selector) {
+  return rules.find(({ selector: candidate }) =>
+    candidate.split(',').some((part) => part.trim() === selector),
+  );
 }
 
 describe('workspace geometry ownership', () => {
-  it('keeps the chart/trading workspace geometry in Phase 1', () => {
-    const css = fs.readFileSync(OWNER, 'utf8');
-    const blocks = cssBlocks(css);
+  it('keeps the desktop workspace geometry in Phase 1', () => {
+    const rules = cssRules(fs.readFileSync(OWNER, 'utf8'));
     for (const selector of WORKSPACE_SELECTORS) {
-      expect(blocks.some(({ selector: blockSelector }) => blockSelector.split(',').some((part) => part.trim() === selector))).toBe(true);
+      expect(findRule(rules, selector), `${OWNER} must define ${selector}`).toBeTruthy();
     }
+
+    expect(findRule(rules, '.main-layout')?.declarations).toMatch(/grid-template-columns\s*:/);
+    expect(findRule(rules, '.main')?.declarations).toMatch(/grid-column\s*:\s*1/);
+    expect(findRule(rules, '.trading-section')?.declarations).toMatch(/grid-column\s*:\s*2/);
+    expect(findRule(rules, '.trading-section')?.declarations).toMatch(/grid-row\s*:\s*1/);
+  });
+
+  it('keeps mobile drawer geometry in Phase 1', () => {
+    const rules = cssRules(fs.readFileSync(OWNER, 'utf8'));
+    const mobileDrawer = findRule(rules, 'body.drawer-open .trading-section');
+    expect(mobileDrawer).toBeTruthy();
+    expect(mobileDrawer?.declarations).toMatch(/position\s*:\s*fixed/);
+    expect(mobileDrawer?.declarations).toMatch(/width\s*:/);
+    expect(mobileDrawer?.declarations).toMatch(/height\s*:/);
   });
 
   it('prevents later UI phases from adding workspace geometry', () => {
     for (const path of NON_OWNER_STYLES) {
-      const css = fs.readFileSync(path, 'utf8');
-      const violations = [];
-
-      for (const { selector, declarations } of cssBlocks(css)) {
-        if (!selectorContainsWorkspace(selector)) continue;
-        const properties = geometryProperties(declarations);
-        if (properties.length) violations.push({ selector, properties });
-      }
+      const violations = cssRules(fs.readFileSync(path, 'utf8'))
+        .filter(({ selector }) => selectorContainsWorkspace(selector))
+        .map(({ selector, declarations }) => ({ selector, properties: geometryProperties(declarations) }))
+        .filter(({ properties }) => properties.length > 0);
 
       expect(violations, `${path} adds workspace geometry outside Phase 1`).toEqual([]);
     }
