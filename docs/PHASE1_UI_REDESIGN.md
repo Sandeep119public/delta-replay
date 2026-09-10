@@ -54,3 +54,7 @@ The redesign establishes a chart-first replay workstation with responsive tradin
 ## Verification note
 
 Source-level regression contracts cover the redesigned UI layers and responsive breakpoints. A browser-based visual pass is not available in this environment, so pixel-level rendering has not been manually verified here.
+
+## Validation follow-up
+
+The final UI test contracts were updated after CI identified stale assertions tied to the pre-Phase-7 navigation file and earlier replay-rail sizing assumptions.
