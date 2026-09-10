@@ -26,7 +26,7 @@ def test_sma_cross_requires_an_actual_price_sma_cross():
         candle(1, 100, 101, 99, 100),
         candle(2, 99, 100, 98, 99),
         candle(3, 98, 99, 97, 98),
-        candle(4, 99, 100, 98, 99),
+        candle(4, 98, 99, 97, 98),
         candle(5, 101, 102, 100, 101),
         candle(6, 104, 105, 103, 104),
     ]
