@@ -44,14 +44,18 @@ def restore_session(document: Dict[str, Any]) -> tuple[ReplayService, PaperTradi
             raise ValueError("tradingMarket must be an object")
         trading._market_by_symbol = deepcopy(market)
         for symbol, value in trading._market_by_symbol.items():
-            if not isinstance(symbol, str) or not symbol.strip() or not isinstance(value, dict):
+            if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
+                raise ValueError("invalid trading market symbol")
+            if not isinstance(value, dict):
                 raise ValueError("invalid trading market context")
             candle = value.get("candle")
             if not isinstance(candle, dict):
                 raise ValueError("invalid trading market candle")
             close = candle.get("close")
             trading._positive_finite(close, "market close")
-            trading._integer(value.get("index"), "market index")
+            market_index = trading._integer(value.get("index"), "market index")
+            if market_index < -1 or market_index > trading.index:
+                raise ValueError("market index is outside trading timeline")
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"invalid session state: {exc}") from exc
     return replay, trading
