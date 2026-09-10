@@ -1,0 +1,103 @@
+/* Phase 8: final responsive and regression guardrails. */
+
+:root {
+  --phase8-touch: 44px;
+}
+
+/* Desktop: preserve the chart-first canvas and bounded contextual dock. */
+@media (min-width: 1025px) {
+  #page-replay.active {
+    min-width: 0;
+  }
+
+  .main-layout,
+  .main,
+  .chart-stage,
+  #chart-container {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .trading-section {
+    max-width: calc(100% - 28px);
+  }
+}
+
+/* Tablet: prevent controls from collapsing into the chart or trade dock. */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .topbar {
+    gap: 10px;
+    padding-inline: 12px;
+  }
+
+  .topbar-center {
+    min-width: 0;
+  }
+
+  .selector-group {
+    min-width: 0;
+  }
+
+  .selector-group select,
+  .selector-group input,
+  .controls-row button,
+  .controls-row select {
+    min-height: var(--phase8-touch);
+  }
+
+  .trading-section {
+    max-width: min(338px, calc(100% - 20px));
+  }
+}
+
+/* Mobile: the chart remains the base surface while sheets own dense actions. */
+@media (max-width: 640px) {
+  #page-replay.active {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .topbar,
+  .main-layout,
+  .timeline-section,
+  .controls-section {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .topbar {
+    padding-inline: 10px;
+  }
+
+  .topbar-right {
+    min-width: 0;
+  }
+
+  .phase6-command-trigger,
+  .phase6-command-close,
+  .phase6-command-item,
+  .panel-tab-btn,
+  .field input,
+  .field select,
+  .tab-panel input,
+  .tab-panel select,
+  .advanced-toggle,
+  .risk-details > summary,
+  .risk-actions .btn,
+  .flatten-button,
+  .controls-row button,
+  .controls-row select {
+    min-height: var(--phase8-touch);
+  }
+
+  .phase6-command-backdrop {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* Do not reintroduce layout width bugs through positioned overlays. */
+[data-page] {
+  max-width: 100%;
+}
