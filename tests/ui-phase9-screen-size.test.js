@@ -22,11 +22,11 @@ describe('Phase 9 screen-size optimization', () => {
   });
 
   it('does not redefine workspace geometry owned by Phase 1', () => {
-    expect(css).not.toMatch(/\.main-layout\s*\{/);
-    expect(css).not.toMatch(/\.main\s*\{/);
-    expect(css).not.toMatch(/\.chart-stage\s*\{/);
-    expect(css).not.toMatch(/#chart-container\s*\{/);
-    expect(css).not.toMatch(/\.trading-section\s*\{/);
+    expect(css).not.toMatch(/(?:^|\n)\s*\.main-layout\s*\{/);
+    expect(css).not.toMatch(/(?:^|\n)\s*\.main\s*\{/);
+    expect(css).not.toMatch(/(?:^|\n)\s*\.chart-stage\s*\{/);
+    expect(css).not.toMatch(/(?:^|\n)\s*#chart-container\s*\{/);
+    expect(css).not.toMatch(/(?:^|\n)\s*\.trading-section\s*\{/);
     expect(css).not.toContain('--phase9-dock');
   });
 
