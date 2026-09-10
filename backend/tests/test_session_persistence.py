@@ -38,6 +38,7 @@ def test_session_round_trip_preserves_replay_and_trading_state():
     assert document["version"] == SESSION_STATE_VERSION
     assert restored_replay.export_state() == replay.export_state()
     assert restored_trading.export_state() == trading.export_state()
+    assert restored_trading._market_by_symbol == trading._market_by_symbol
     assert restored_trading.orders[order["id"]]["status"] == "FILLED"
     assert restored_trading.orders[second_order["id"]]["status"] == "PENDING"
     assert restored_trading.positions["BTCUSDT"]["stop_loss"] == 96
@@ -45,6 +46,34 @@ def test_session_round_trip_preserves_replay_and_trading_state():
 
     next_order = restored_trading.submit("ETHUSDT", "buy", 0.5)
     assert next_order["id"] > second_order["id"]
+
+
+def test_session_round_trip_preserves_symbol_specific_close_price():
+    replay = ReplayService()
+    replay.load([candle(100, 101, 99, 100, 1)])
+    trading = PaperTradingEngine()
+    trading.on_candle(candle(100, 101, 99, 100, 1), 0, "ETHUSDT")
+    trading.submit("ETHUSDT", "buy", 1)
+    trading.on_candle(candle(100, 102, 99, 110, 2), 1, "ETHUSDT")
+    trading.on_candle(candle(50000, 50100, 49900, 50000, 3), 2, "BTCUSDT")
+
+    _, restored = restore_session(serialize_session(replay, trading))
+
+    market = restored.get_latest_market("ETHUSDT")
+    assert market["candle"]["close"] == 110
+    trade = restored.close("ETHUSDT", market["candle"]["close"], timestamp=market["candle"]["time"])
+    assert trade["exitPrice"] == 110
+    assert trade["closedAt"] == 2
+
+
+def test_restore_rejects_invalid_trading_market_context():
+    replay = ReplayService()
+    trading = PaperTradingEngine()
+    document = serialize_session(replay, trading)
+    document["tradingMarket"] = {"BTCUSDT": {"candle": {"close": 0}, "index": -1}}
+
+    with pytest.raises(ValueError, match="market close"):
+        restore_session(document)
 
 
 def test_zero_fee_open_position_round_trips_through_persistence():
