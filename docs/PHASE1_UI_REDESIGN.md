@@ -1,6 +1,6 @@
-# UI Redesign: Phases 1-5
+# UI Redesign: Phases 1-7
 
-The first five UI phases establish a chart-first replay workstation with responsive trading interactions, without changing replay or trading behavior.
+The redesign establishes a chart-first replay workstation with responsive trading interactions and a cleaned navigation surface, without changing replay or trading behavior.
 
 ## Phase 1: Chart-First Shell
 - Chart owns the full workspace.
@@ -33,6 +33,17 @@ The first five UI phases establish a chart-first replay workstation with respons
 - Existing drawer state, accessibility, and interaction hooks remain unchanged.
 - Very narrow screens stack account summary values cleanly.
 
+## Phase 6: Focused Navigation + Command Surface
+- Persistent navigation chrome is removed from the active replay shell.
+- An on-demand command menu provides replay, playback, and trading shortcuts.
+- Existing action handlers remain the execution path.
+
+## Phase 7: Final UI System Cleanup
+- The unused legacy Navigation module is removed from the active code path.
+- A final cleanup layer neutralizes legacy navigation and orphaned page containers if stale markup appears.
+- Shared focus, sizing, and narrow-layout safety rules are centralized at the end of the cascade.
+- The stylesheet entrypoint now makes the final cleanup layer explicit.
+
 ## Safety
 
-Existing replay/trading IDs, markup hooks, accessibility state, and behavior remain unchanged. Later phases cover navigation cleanup, command palette, legacy CSS removal, and the final responsive visual regression pass.
+Existing replay/trading IDs, markup hooks, accessibility state, and behavior remain unchanged. Phase 7 is limited to UI cleanup and removal of an unused navigation module. A browser-based visual pass is not available in this environment.
