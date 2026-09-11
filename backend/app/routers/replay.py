@@ -7,6 +7,10 @@ from ..services.session_manager import atomic_session, get_session
 router = APIRouter()
 
 
+def replay_snapshot(session):
+    return {"replay": session.replay.state(), "trading": session.trading.snapshot()}
+
+
 @router.get("/state")
 def state(request: Request):
     return get_session(request).replay.state()
@@ -29,7 +33,8 @@ def load(request: Request, batch: CandleBatch):
             margin_rate=margin_rate,
             maint_margin_rate=maint_margin_rate,
         )
-        return session.replay.load(candles)
+        session.replay.load(candles)
+        return replay_snapshot(session)
 
     return atomic_session(request, replace)
 
@@ -67,8 +72,11 @@ def step(request: Request, symbol: str = "BTCUSDT"):
 @router.post("/seek/{index}")
 def seek(request: Request, index: int):
     def reposition(session):
-        if session.trading.has_open_position() or session.trading.pending_orders():
+        trading = session.trading
+        if trading.has_open_position() or trading.pending_orders():
             raise HTTPException(409, "Close positions and cancel pending orders before seeking")
+        if trading.trades or trading.orders:
+            raise HTTPException(409, "Reset the simulation before seeking after trading activity")
         return session.replay.seek(index)
 
     try:
@@ -79,4 +87,19 @@ def seek(request: Request, index: int):
 
 @router.post("/reset")
 def reset(request: Request):
-    return atomic_session(request, lambda session: session.replay.reset())
+    def reset_session(session):
+        trading = session.trading
+        balance = trading.account.starting_balance
+        fee_rate = trading.fee_rate
+        margin_rate = trading.margin_rate
+        maint_margin_rate = trading.maint_margin_rate
+        session.trading = PaperTradingEngine(
+            starting_balance=balance,
+            fee_rate=fee_rate,
+            margin_rate=margin_rate,
+            maint_margin_rate=maint_margin_rate,
+        )
+        replay = session.replay.reset()
+        return {**replay, "trading": session.trading.snapshot()}
+
+    return atomic_session(request, reset_session)
