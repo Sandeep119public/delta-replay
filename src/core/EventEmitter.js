@@ -28,9 +28,10 @@ export class EventEmitter {
   }
 
   once(event, handler) {
+    if (typeof handler !== 'function') throw new TypeError('handler must be a function');
     const wrapper = (...args) => {
       this.off(event, wrapper);
-      handler(...args);
+      return handler(...args);
     };
     return this.on(event, wrapper);
   }
