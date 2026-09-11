@@ -9,6 +9,8 @@ function resolveClickIntent(price, activePosition) {
   return price > entry ? { action: 'SET_SL', price } : { action: 'SET_TP', price };
 }
 
+const KNOWN_ACTIONS = new Set(['OPEN', 'CLOSE', 'SET_SL', 'SET_TP']);
+
 export function createChartTradingActions({ trading, executeTrade, reportError }) {
   if (!trading || typeof trading !== 'object') throw new TypeError('createChartTradingActions requires trading presentation');
   if (typeof executeTrade !== 'function') throw new TypeError('createChartTradingActions requires executeTrade');
@@ -19,9 +21,17 @@ export function createChartTradingActions({ trading, executeTrade, reportError }
       const snapshot = trading.snapshot?.() || {};
       return resolveClickIntent(price, snapshot.positions?.[0] || null);
     },
-    execute(intent) {
-      if (!intent) return Promise.resolve({ success: false, message: 'No chart action' });
-      return executeTrade(intent);
+    async execute(intent) {
+      if (!intent) return { success: false, code: 'NO_ACTION', message: 'No chart action' };
+      if (!KNOWN_ACTIONS.has(intent.action)) return { success: false, code: 'UNSUPPORTED_ACTION', message: `Unsupported chart trading action: ${intent.action}` };
+      try {
+        const result = await executeTrade(intent);
+        if (!result || typeof result !== 'object') return { success: false, code: 'INVALID_ACTION_RESULT', message: 'Chart trading action returned an invalid result' };
+        return result;
+      } catch (error) {
+        reportError(error?.message || String(error));
+        return { success: false, code: error?.code || 'CHART_TRADING_FAILED', message: error?.message || 'Chart trading action failed', error };
+      }
     },
     reportError,
   });
