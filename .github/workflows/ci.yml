@@ -33,6 +33,12 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/delta_replay_test
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Scan repository for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
