@@ -151,8 +151,9 @@ export class HistoricalDataManager extends EventEmitter {
 
     const isRetryable = (err) => {
       if (!err || err.name === 'AbortError') return false;
-      if (err.code === 'INVALID_REQUEST' || err.code === 'INVALID_RESPONSE' || err.code === 'NO_DATA' || err.code === 'CORS_ERROR' || err.code === 'CACHE_ERROR' || err.code === 'CACHE_INTEGRITY_ERROR') return false;
-      if (err.code === 'TIMEOUT' || err.name === 'TimeoutError' || err.code === 'NETWORK_ERROR') return true;
+      const category = err.category ?? err.code;
+      if (['INVALID_REQUEST', 'INVALID_RESPONSE', 'NO_DATA', 'CORS', 'CORS_ERROR', 'CACHE', 'CACHE_ERROR', 'CACHE_INTEGRITY_ERROR', 'INTEGRITY', 'INTEGRITY_ERROR', 'INTEGRITY_PROCESSING_FAILED'].includes(category)) return false;
+      if (category === 'TIMEOUT' || err.name === 'TimeoutError' || category === 'NETWORK' || category === 'NETWORK_ERROR') return true;
       const status = err.details?.status ?? err.status;
       return status === 408 || status === 429 || (typeof status === 'number' && status >= 500 && status < 600);
     };
