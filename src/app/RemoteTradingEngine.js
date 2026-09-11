@@ -106,12 +106,12 @@ export class RemoteTradingEngine {
   clearRisk(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}`, { method: 'POST' }, 'risk'); }
   clearStopLoss(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}&target=stopLoss`, { method: 'POST' }, 'risk'); }
   clearTakeProfit(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}&target=takeProfit`, { method: 'POST' }, 'risk'); }
-  clearPendingOrders(reason = null) { const query = reason ? `?reason=${encodeURIComponent(String(reason)}` : ''; return this._action(`/orders/cancel-all${query}`, { method: 'POST' }, 'cancel'); }
+  clearPendingOrders(reason = null) { const query = reason ? `?reason=${encodeURIComponent(String(reason))}` : ''; return this._action(`/orders/cancel-all${query}`, { method: 'POST' }, 'cancel'); }
   cancelOrder(id) { return this._action(`/orders/${id}/cancel`, { method: 'POST' }, 'cancel'); }
   resetAccount() { return this._action('/reset', { method: 'POST' }, 'reset'); }
   setStartingBalance(balance) { return this._action('/account/capital', { method: 'POST', body: JSON.stringify({ balance }) }, 'capital'); }
   setCapital(balance) { return this.setStartingBalance(balance); }
-  setFeeRate(rate) { return this._action('/account/fee-rate', { method: 'POST' }, 'fee'); }
+  setFeeRate(rate) { return this._action('/account/fee-rate', { method: 'POST', body: JSON.stringify({ rate }) }, 'fee'); }
   async onMarketCandle(payload = null) { if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; const candle = payload?.candle || null; const body = candle ? JSON.stringify({ symbol: String(payload.symbol || candle.symbol || 'BTCUSDT').toUpperCase(), candle, index: payload.index ?? null }) : undefined; try { const requestSequence = this._requestSequence + 1; const result = await this._request('/candle', { method: 'POST', ...(body ? { body } : {}) }, 'candle'); return this._destroyed ? { success: false, message: 'Trading engine is destroyed' } : result.applied && this._lastAppliedRequest === requestSequence ? result.response : { success: true, ...this.getStateSnapshot(), stale: true }; } catch (error) { return { success: false, message: error?.message || 'Trading request failed', error }; }
   }
   destroy() { if (this._destroyed) return; this._destroyed = true; this._generation++; this.events = new Events(); this.latestCandle = null; }
