@@ -39,11 +39,7 @@ export function createReplayLoadService({
   }
   function makeIdempotentUnsubscribe(unsubscribe) {
     let called = false;
-    return () => {
-      if (called) return;
-      called = true;
-      unsubscribeProgress(unsubscribe);
-    };
+    return () => { if (called) return; called = true; unsubscribeProgress(unsubscribe); };
   }
   function clearProgressSubscription() {
     const unsubscribe = progressUnsubscribe;
@@ -62,7 +58,6 @@ export function createReplayLoadService({
     if (destroyed) return;
     if (hasOpenPosition()) { showTradingError('Cannot change replay date while a position is open. Close the position or reset the account first.'); return; }
     if (!preserveRetryState) resetRetryState();
-
     const token = ++loadToken;
     clearCurrentLoad();
     const abortController = new AbortController();
@@ -92,8 +87,8 @@ export function createReplayLoadService({
     };
     const sessionProgressUnsubscribe = makeIdempotentUnsubscribe(dataManager.on(DataEvents.PROGRESS, onProgress));
     progressUnsubscribe = sessionProgressUnsubscribe;
-
     let retryScheduled = false;
+
     try {
       const { candles, metadata } = await dataManager.load({ symbol, timeframe, from, to, signal, strict: true, halfOpen: true });
       sessionProgressUnsubscribe();
@@ -110,8 +105,18 @@ export function createReplayLoadService({
       let replayIdx = findClosestCandleIndex(resolvedTarget, candleStore, candles);
       if (replayIdx < 0) replayIdx = Math.max(0, Math.floor(candles.length * 0.25));
       appState.setPendingStartIndex(replayIdx); controls?.setStartIndex(replayIdx); timeline?.setPosition(replayIdx); updatePreviewWindow(replayIdx);
-      const startCandle = candleStore.get(replayIdx); if (startCandle) notifyMarketCandle({ candle: startCandle, index: replayIdx });
-      if (startReplayBtn) startReplayBtn.disabled = false; if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
+      const startCandle = candleStore.get(replayIdx);
+      if (startCandle) {
+        const tradingResult = await notifyMarketCandle({ candle: startCandle, index: replayIdx });
+        if (tradingResult?.success === false) {
+          const tradingError = new Error(tradingResult.message || 'Trading engine failed to synchronize with replay');
+          tradingError.code = 'TRADING_SYNC_FAILED';
+          tradingError.cause = tradingResult.error;
+          throw tradingError;
+        }
+      }
+      if (startReplayBtn) startReplayBtn.disabled = false;
+      if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
       if (cacheBadgeEl) cacheBadgeEl.classList.toggle('hidden', !metadata?.cached);
       if (dataStatusEl) dataStatusEl.textContent = `Ready: ${symbol} ${timeframe} (${candles.length.toLocaleString()} candles)${metadata?.cached ? ' [Cached]' : ''}`;
       timeline?.setEnabled(true); appState.transitionLoading(LoadingState.SUCCESS); reportStatus();
@@ -124,25 +129,36 @@ export function createReplayLoadService({
         return;
       }
       if (token !== loadToken || destroyed) return;
-      let dataErr;
-      if (err instanceof DataError) dataErr = err;
-      else if (err?.category) dataErr = new DataError({ category: err.category, technicalMessage: err.message, context: err.context || {} });
-      else dataErr = DataError.fromGenericError(err);
-      dataErr.context = dataErr.context || {}; Object.assign(dataErr.context, { symbol, timeframe, start: from, end: to });
+      const dataErr = err instanceof DataError ? err : DataError.fromGenericError(err);
+      dataErr.context = dataErr.context || {};
+      Object.assign(dataErr.context, { symbol, timeframe, start: from, end: to });
       const stateMap = {
-        [ErrorCategory.NETWORK]: LoadingState.NETWORK_ERROR, [ErrorCategory.TIMEOUT]: LoadingState.TIMEOUT,
-        [ErrorCategory.CORS]: LoadingState.NETWORK_ERROR, [ErrorCategory.HTTP]: LoadingState.HTTP_ERROR,
-        [ErrorCategory.INVALID_RESPONSE]: LoadingState.INVALID_DATA, [ErrorCategory.INVALID_REQUEST]: LoadingState.INVALID_DATA,
-        [ErrorCategory.NO_DATA]: LoadingState.EMPTY, [ErrorCategory.ABORTED]: LoadingState.ABORTED, [ErrorCategory.UNKNOWN]: LoadingState.UNKNOWN_ERROR,
+        [ErrorCategory.NETWORK]: LoadingState.NETWORK_ERROR,
+        [ErrorCategory.TIMEOUT]: LoadingState.TIMEOUT,
+        [ErrorCategory.CORS]: LoadingState.NETWORK_ERROR,
+        [ErrorCategory.HTTP]: LoadingState.HTTP_ERROR,
+        [ErrorCategory.INVALID_RESPONSE]: LoadingState.INVALID_DATA,
+        [ErrorCategory.INVALID_REQUEST]: LoadingState.INVALID_DATA,
+        [ErrorCategory.NO_DATA]: LoadingState.EMPTY,
+        [ErrorCategory.CACHE]: LoadingState.INVALID_DATA,
+        [ErrorCategory.INTEGRITY]: LoadingState.INVALID_DATA,
+        [ErrorCategory.ABORTED]: LoadingState.ABORTED,
+        [ErrorCategory.UNKNOWN]: LoadingState.UNKNOWN_ERROR,
       };
-      appState.transitionLoading(stateMap[dataErr.category] || LoadingState.UNKNOWN_ERROR, dataErr); errorPanel?.show(dataErr);
+      appState.transitionLoading(stateMap[dataErr.category] || LoadingState.UNKNOWN_ERROR, dataErr);
+      errorPanel?.show(dataErr);
       if (dataErr.category === ErrorCategory.NO_DATA) { if (dataStatusEl) dataStatusEl.textContent = 'No candles found for this date'; }
       else if (dataErr.category === ErrorCategory.HTTP) { if (dataStatusEl) dataStatusEl.textContent = `HTTP ${dataErr.context.status || 'error'} — ${symbol} ${timeframe}`; }
       else if ([ErrorCategory.NETWORK, ErrorCategory.CORS, ErrorCategory.TIMEOUT].includes(dataErr.category)) { if (dataStatusEl) dataStatusEl.textContent = `Network error — ${symbol} ${timeframe}`; }
+      else if (dataErr.category === ErrorCategory.INTEGRITY) { if (dataStatusEl) dataStatusEl.textContent = 'Historical data failed integrity validation'; }
       else if (dataStatusEl) dataStatusEl.textContent = 'Error loading replay candles';
       if (isRetryableErrorCategory(dataErr.category) && retryCount < MAX_RETRIES) {
-        retryCount++; appState.setRetryCount(retryCount); const backoff = Math.min(5000, Math.pow(2, retryCount - 1) * 1000);
-        if (dataStatusEl) dataStatusEl.textContent = `Retrying… ${retryCount}/${MAX_RETRIES}`; appState.transitionLoading(LoadingState.LOADING); retryScheduled = true;
+        retryCount++;
+        appState.setRetryCount(retryCount);
+        const backoff = Math.min(5000, Math.pow(2, retryCount - 1) * 1000);
+        if (dataStatusEl) dataStatusEl.textContent = `Retrying… ${retryCount}/${MAX_RETRIES}`;
+        appState.transitionLoading(LoadingState.LOADING);
+        retryScheduled = true;
         retryTimer = setTimeout(() => { retryTimer = null; if (token === loadToken && !destroyed) loadAndPrepareReplay({ targetSec: resolvedTarget, autoStart, preserveRetryState: true }); }, backoff);
         return;
       }
@@ -153,7 +169,10 @@ export function createReplayLoadService({
   }
 
   return Object.freeze({
-    loadAndPrepareReplay, updateLoadButton, clearCurrentLoad, invalidateCurrentLoad,
+    loadAndPrepareReplay,
+    updateLoadButton,
+    clearCurrentLoad,
+    invalidateCurrentLoad,
     destroy() { if (destroyed) return; destroyed = true; loadToken++; clearCurrentLoad(); tradingErrorView?.destroy?.(); },
     get retryCount() { return retryCount; },
   });

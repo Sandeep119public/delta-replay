@@ -3,6 +3,8 @@
  * ReplayEngine never sees this. Only DeltaCandleProvider uses it.
  */
 
+import { TIMEFRAME_SECONDS } from './CandleGrid.js';
+
 export const DELTA_DEFAULT_BASE = 'https://api.delta.exchange';
 export const DELTA_INDIA_BASE = 'https://api.india.delta.exchange';
 
@@ -35,8 +37,11 @@ export class DeltaClient {
   }
 
   async fetchCandles({ symbol, resolution, start, end, signal } = {}) {
-    if (!symbol) throw new DeltaError('INVALID_REQUEST', 'symbol required');
-    if (!resolution) throw new DeltaError('INVALID_REQUEST', 'resolution required');
+    if (!symbol || typeof symbol !== 'string') throw new DeltaError('INVALID_REQUEST', 'symbol required');
+    if (!resolution || typeof resolution !== 'string') throw new DeltaError('INVALID_REQUEST', 'resolution required');
+    if (!Object.prototype.hasOwnProperty.call(TIMEFRAME_SECONDS, resolution)) {
+      throw new DeltaError('INVALID_REQUEST', `Unsupported resolution: ${resolution}. Supported: ${Object.keys(TIMEFRAME_SECONDS).join(', ')}`, { resolution });
+    }
     if (!Number.isFinite(start) || !Number.isFinite(end)) throw new DeltaError('INVALID_REQUEST', 'start and end must be unix seconds');
     if (start > end) throw new DeltaError('INVALID_REQUEST', 'start must be < end');
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');

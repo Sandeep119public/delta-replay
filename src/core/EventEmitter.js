@@ -2,13 +2,15 @@
  * Minimal synchronous EventEmitter with safe async-handler handling.
  * No DOM/BOM dependency. Suitable for core/replay/trading modules.
  *
- * Errors are reported through an injected reporter so the emitter stays
- * environment-agnostic and reusable in browsers, Node, workers, and tests.
+ * Errors are recorded locally and optionally reported through an injected
+ * reporter so the emitter stays environment-agnostic and reusable in
+ * browsers, Node, workers, and tests.
  */
 export class EventEmitter {
   constructor({ errorReporter } = {}) {
     this._listeners = new Map();
-    this._errorReporter = typeof errorReporter === 'function' ? errorReporter : () => {};
+    this._errorReporter = typeof errorReporter === 'function' ? errorReporter : null;
+    this._listenerErrors = [];
   }
 
   on(event, handler) {
@@ -26,9 +28,10 @@ export class EventEmitter {
   }
 
   once(event, handler) {
+    if (typeof handler !== 'function') throw new TypeError('handler must be a function');
     const wrapper = (...args) => {
       this.off(event, wrapper);
-      handler(...args);
+      return handler(...args);
     };
     return this.on(event, wrapper);
   }
@@ -49,6 +52,10 @@ export class EventEmitter {
     }
   }
 
+  getLastListenerErrors() {
+    return [...this._listenerErrors];
+  }
+
   removeAllListeners(event) {
     if (event) this._listeners.delete(event);
     else this._listeners.clear();
@@ -59,10 +66,14 @@ export class EventEmitter {
   }
 
   _reportError(event, err, phase) {
+    this._listenerErrors.push({ event, error: err, phase, at: Date.now() });
+    if (this._listenerErrors.length > 20) this._listenerErrors.shift();
+    if (!this._errorReporter) return;
     try {
       this._errorReporter(err, { event, phase });
-    } catch {
-      // Error reporters must never destabilize event delivery.
+    } catch (reporterError) {
+      this._listenerErrors.push({ event, error: reporterError, phase: 'reporter', at: Date.now() });
+      if (this._listenerErrors.length > 20) this._listenerErrors.shift();
     }
   }
 }

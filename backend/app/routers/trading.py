@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
+from ..domain.errors import OrderRejectedError, StateInvariantError, TradingDomainError
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
 from ..services.session_manager import atomic_session, get_session
@@ -12,7 +13,6 @@ router = APIRouter()
 
 class EngineOrder(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     symbol: str = Field(min_length=1)
     side: Literal["buy", "sell"]
     quantity: float = Field(gt=0)
@@ -23,7 +23,6 @@ class EngineOrder(BaseModel):
 
 class RiskRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     symbol: str = Field(min_length=1)
     stopLoss: float | None = Field(default=None, gt=0)
     takeProfit: float | None = Field(default=None, gt=0)
@@ -31,14 +30,12 @@ class RiskRequest(BaseModel):
 
 class CloseRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     symbol: str = Field(min_length=1)
     quantity: float | None = Field(default=None, gt=0)
 
 
 class MarketCandleRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     symbol: str = Field(default="BTCUSDT", min_length=1)
     candle: Candle | None = None
     index: StrictInt | None = None
@@ -46,13 +43,11 @@ class MarketCandleRequest(BaseModel):
 
 class CapitalRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     balance: float = Field(gt=0)
 
 
 class FeeRateRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     rate: float = Field(ge=0, lt=1)
 
 
@@ -74,21 +69,39 @@ def normalize_candle(raw: dict):
         raise HTTPException(422, f"invalid candle: {exc.errors()[0]['msg']}") from exc
 
 
+def _domain_http_error(exc: TradingDomainError) -> HTTPException:
+    code = "ORDER_REJECTED" if isinstance(exc, OrderRejectedError) else "VALIDATION_ERROR"
+    return HTTPException(status_code=422, detail={"code": code, "message": str(exc)})
+
+
+def _internal_http_error(exc: StateInvariantError) -> HTTPException:
+    return HTTPException(status_code=500, detail={"code": "STATE_INVARIANT_VIOLATION", "message": "Trading state integrity failure"})
+
+
 @router.get("/state")
 def state(request: Request):
-    return snapshot(get_session(request).trading)
+    try:
+        return snapshot(get_session(request).trading)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.get("/orders")
 def orders(request: Request):
-    service = get_session(request).trading
-    snapshot_value = service.snapshot()
-    return {"orders": snapshot_value["orders"], "pendingOrders": snapshot_value["pendingOrders"]}
+    try:
+        service = get_session(request).trading
+        snapshot_value = service.snapshot()
+        return {"orders": snapshot_value["orders"], "pendingOrders": snapshot_value["pendingOrders"]}
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.get("/trades")
 def trades(request: Request):
-    return {"trades": get_session(request).trading.snapshot()["trades"]}
+    try:
+        return {"trades": get_session(request).trading.snapshot()["trades"]}
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/order")
@@ -97,11 +110,12 @@ def order(request: Request, command: EngineOrder):
         service = session.trading
         created = service.submit(command.symbol, command.side, command.quantity, command.type, command.limitPrice, command.stopPrice)
         return {"order": created, **snapshot(service)}
-
     try:
         return atomic_session(request, submit)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
+    except TradingDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/close")
@@ -115,11 +129,12 @@ def close(request: Request, command: CloseRequest):
         if not trade:
             raise HTTPException(422, "no open position")
         return {"trade": trade, **snapshot(session.trading)}
-
     try:
         return atomic_session(request, close_position)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
+    except TradingDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/orders/cancel-all")
@@ -132,74 +147,84 @@ def cancel_all(request: Request, reason: str | None = None):
                 order["cancelReason"] = str(reason)
                 service.orders[order["id"]]["cancelReason"] = str(reason)
         return {"orders": cancelled, **snapshot(service)}
-
     try:
         return atomic_session(request, cancel_pending)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
+    except TradingDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/orders/{order_id}/cancel")
 def cancel(request: Request, order_id: int):
     try:
         return atomic_session(request, lambda session: {"order": session.trading.cancel(order_id), **snapshot(session.trading)})
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
+    except TradingDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/risk")
 def risk(request: Request, command: RiskRequest):
     try:
         return atomic_session(request, lambda session: {"position": session.trading.set_risk(command.symbol, command.stopLoss, command.takeProfit), **snapshot(session.trading)})
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(422, str(exc))
+    except TradingDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/risk/clear")
 def clear_risk(request: Request, symbol: str, target: Literal["all", "stopLoss", "takeProfit"] = "all"):
     def clear(session):
-        if target == "stopLoss":
-            position = session.trading.clear_stop_loss(symbol)
-        elif target == "takeProfit":
-            position = session.trading.clear_take_profit(symbol)
-        else:
-            position = session.trading.clear_risk(symbol)
+        if target == "stopLoss": position = session.trading.clear_stop_loss(symbol)
+        elif target == "takeProfit": position = session.trading.clear_take_profit(symbol)
+        else: position = session.trading.clear_risk(symbol)
         return {"position": position, **snapshot(session.trading)}
-
     try:
         return atomic_session(request, clear)
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(422, str(exc))
+    except TradingDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/candle")
 def process(request: Request, command: MarketCandleRequest | None = None):
     command = command or MarketCandleRequest()
-
     def process_candle(session):
         raw = command.candle.model_dump() if command.candle is not None else replay_candle(session, command.symbol)
         candle = normalize_candle(raw)
         index = command.index if command.index is not None else session.replay.state()["index"]
         events = session.trading.on_candle(candle, index, command.symbol)
         return {"events": events, "candle": candle, **snapshot(session.trading)}
-
-    return atomic_session(request, process_candle)
+    try:
+        return atomic_session(request, process_candle)
+    except TradingDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/account/capital")
 def set_capital(request: Request, command: CapitalRequest):
     try:
         return atomic_session(request, lambda session: snapshot(session.trading.set_starting_balance(command.balance)))
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
+    except TradingDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/account/fee-rate")
 def set_fee_rate(request: Request, command: FeeRateRequest):
     try:
         return atomic_session(request, lambda session: snapshot(session.trading.set_fee_rate(command.rate)))
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
+    except TradingDomainError as exc:
+        raise _domain_http_error(exc) from exc
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/reset")
@@ -211,5 +236,7 @@ def reset(request: Request):
         maint_margin_rate = session.trading.maint_margin_rate
         session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate, margin_rate=margin_rate, maint_margin_rate=maint_margin_rate)
         return snapshot(session.trading)
-
-    return atomic_session(request, reset_engine)
+    try:
+        return atomic_session(request, reset_engine)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc

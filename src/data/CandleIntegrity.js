@@ -52,7 +52,7 @@ export class CandleIntegrity {
     try {
       normalized = CandleNormalizer.normalizeBatch(rawCandles, { timestampUnit });
     } catch (err) {
-      throw new Error(`Normalization failed: ${err.message}`);
+      throw new Error(`Normalization failed: ${err.message}`, { cause: err });
     }
 
     // 2. Sort ascending
@@ -92,6 +92,7 @@ export class CandleIntegrity {
       validCandles.push(...ohlcValid);
     }
     const invalidCount = errors.length;
+    const diagnosticErrorLimit = 5;
 
     // 6. Gap and boundary coverage detection
     const gaps = [];
@@ -258,7 +259,10 @@ export class CandleIntegrity {
         coverageType,
         integrityStatus,
         policy: effectivePolicy,
-        errors: errors.slice(0, 5),
+        errors: errors.slice(0, diagnosticErrorLimit),
+        errorsTotal: invalidCount,
+        errorsTruncated: invalidCount > diagnosticErrorLimit,
+        diagnosticErrorLimit,
       },
     };
   }

@@ -2,12 +2,28 @@ import { describe, expect, it, vi } from 'vitest';
 import { createReplayCapabilities } from '../../src/app/ReplayCapabilities.js';
 
 describe('createReplayCapabilities', () => {
-  it('is safe before a coordinator is attached', async () => {
+  it('reports explicit failures before a coordinator is attached', async () => {
     const runtime = createReplayCapabilities();
 
-    expect(await runtime.capabilities.load()).toBeUndefined();
-    expect(runtime.capabilities.preview(4)).toBeUndefined();
-    expect(runtime.capabilities.changeDataset('symbol', 'BTCUSDT')).toBeUndefined();
+    await expect(runtime.capabilities.load()).resolves.toMatchObject({
+      success: false,
+      code: 'REPLAY_CAPABILITY_UNAVAILABLE',
+    });
+    expect(runtime.capabilities.preview(4)).toMatchObject({
+      success: false,
+      code: 'REPLAY_CAPABILITY_UNAVAILABLE',
+    });
+    expect(runtime.capabilities.changeDataset('symbol', 'BTCUSDT')).toMatchObject({
+      success: false,
+      code: 'REPLAY_CAPABILITY_UNAVAILABLE',
+    });
+  });
+
+  it('rejects invalid or partial coordinator attachments', () => {
+    const runtime = createReplayCapabilities();
+    expect(() => runtime.attach(null)).toThrow(/coordinator must be an object/i);
+    expect(() => runtime.attach('invalid')).toThrow(/coordinator must be an object/i);
+    expect(() => runtime.attach({ updatePreviewWindow: vi.fn() })).toThrow(/requires loadAndPrepareReplay\(\)/i);
   });
 
   it('forwards the stable capability contract after attachment', async () => {
@@ -28,10 +44,15 @@ describe('createReplayCapabilities', () => {
     expect(coordinator.handleSymbolTimeframeChange).toHaveBeenCalledWith('timeframe', '15m', 'select');
   });
 
-  it('allows the coordinator to be replaced without changing the capability object', () => {
+  it('allows a complete coordinator to be replaced without changing the capability object', () => {
     const runtime = createReplayCapabilities();
-    const first = { updatePreviewWindow: vi.fn() };
-    const second = { updatePreviewWindow: vi.fn() };
+    const complete = () => ({
+      loadAndPrepareReplay: vi.fn(),
+      updatePreviewWindow: vi.fn(),
+      handleSymbolTimeframeChange: vi.fn(),
+    });
+    const first = complete();
+    const second = complete();
 
     runtime.attach(first);
     runtime.capabilities.preview(1);
