@@ -21,23 +21,23 @@ export class RemoteReplayEngine {
     this.state = { status: 'idle', currentIndex: -1, startIndex: -1, totalCandles: 0, speed: 1, candle: null, visibleCandles: [] };
   }
   on(event, handler) { return this._destroyed ? () => {} : this.events.on(event, handler); }
-  _sync(snapshot = {}) {
+  _sync(snapshot = {}, lifecycle = null) {
     if (this._destroyed) return;
     this.state = { ...this.state, status: snapshot.status ?? this.state.status, currentIndex: Number.isInteger(snapshot.index) ? snapshot.index : this.state.currentIndex, startIndex: Number.isInteger(snapshot.startIndex) ? snapshot.startIndex : this.state.startIndex, totalCandles: Number.isFinite(snapshot.total) ? snapshot.total : this.state.totalCandles, speed: Number.isFinite(snapshot.speed) ? snapshot.speed : this.state.speed, candle: clone(snapshot.candle), visibleCandles: Array.isArray(snapshot.visibleCandles) ? clone(snapshot.visibleCandles) : [] };
-    if (snapshot.trading && this.tradingEngine?.syncFromReplayStep) this.tradingEngine.syncFromReplayStep(clone(snapshot));
+    if (snapshot.trading && this.tradingEngine?.syncFromReplayLifecycle) this.tradingEngine.syncFromReplayLifecycle(clone(snapshot), lifecycle === 'step' ? 'candle' : 'reset');
     this.events.emit('stateChanged', this.getState());
   }
-  async _call(path, options = {}, generation = this._generation) {
+  async _call(path, options = {}, generation = this._generation, lifecycle = null) {
     const response = await this.api.request(path, options);
     if (this._destroyed || generation !== this._generation) return this.getState();
-    this._sync(response);
+    this._sync(response, lifecycle);
     return this.getState();
   }
   getState() { return { ...this.state, candle: clone(this.state.candle), total: this.state.totalCandles, totalCandles: this.state.totalCandles, visibleCandles: clone(this.state.visibleCandles) }; }
   getTotalCandles() { return this.state.totalCandles; }
   getVisibleCandles() { return clone(this.state.visibleCandles); }
-  async load(candles) { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; return this._call('/load', { method: 'POST', body: JSON.stringify({ candles: Array.isArray(candles) ? clone(candles) : [] }) }, generation); }
-  async start(index = 0) { if (this._destroyed) return this.getState(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay start index must be an integer'); const generation = ++this._generation; const result = await this._call(`/start/${numericIndex}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result }); return result; }
+  async load(candles) { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; return this._call('/load', { method: 'POST', body: JSON.stringify({ candles: Array.isArray(candles) ? clone(candles) : [] }) }, generation, 'load'); }
+  async start(index = 0) { if (this._destroyed) return this.getState(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay start index must be an integer'); const generation = ++this._generation; const result = await this._call(`/start/${numericIndex}`, { method: 'POST' }, generation, 'start'); if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result }); return result; }
   async stepForward() {
     if (this._destroyed || this._stepInFlight) return this.getState();
     if (this.state.currentIndex < 0 || this.state.currentIndex >= this.state.totalCandles - 1) { if (this.state.totalCandles > 0 && this.state.currentIndex >= this.state.totalCandles - 1) this.pause(); return this.getState(); }
@@ -45,15 +45,15 @@ export class RemoteReplayEngine {
     const generation = this._generation;
     const previousIndex = this.state.currentIndex;
     try {
-      const result = await this._call('/step', { method: 'POST' }, generation);
+      const result = await this._call('/step', { method: 'POST' }, generation, 'step');
       if (this._destroyed || generation !== this._generation) return result;
       this.events.emit('stepped', { index: this.state.currentIndex, previousIndex, state: result, candle: clone(this.state.candle) });
       if (this.state.status === 'ended' || this.state.currentIndex >= this.state.totalCandles - 1) this.pause();
       return result;
     } finally { this._stepInFlight = false; }
   }
-  async seek(index) { if (this._destroyed) return this.getState(); this.pause(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay seek index must be an integer'); const generation = ++this._generation; const result = await this._call(`/seek/${numericIndex}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('seeked', { index: this.state.currentIndex, state: result }); return result; }
-  async reset() { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; const result = await this._call('/reset', { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('reset', { index: this.state.currentIndex, state: result }); return result; }
+  async seek(index) { if (this._destroyed) return this.getState(); this.pause(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay seek index must be an integer'); const generation = ++this._generation; const result = await this._call(`/seek/${numericIndex}`, { method: 'POST' }, generation, 'seek'); if (!this._destroyed && generation === this._generation) this.events.emit('seeked', { index: this.state.currentIndex, state: result }); return result; }
+  async reset() { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; const result = await this._call('/reset', { method: 'POST' }, generation, 'reset'); if (!this._destroyed && generation === this._generation) this.events.emit('reset', { index: this.state.currentIndex, state: result }); return result; }
   async play() {
     if (this._destroyed) return this.getState();
     const playIntent = ++this._playIntent;
