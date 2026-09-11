@@ -11,6 +11,14 @@ def replay_snapshot(session):
     return {**session.replay.state(), "trading": session.trading.snapshot()}
 
 
+def require_pristine_trading(session, action):
+    trading = session.trading
+    if trading.has_open_position() or trading.pending_orders():
+        raise HTTPException(409, f"Close positions and cancel pending orders before {action}")
+    if trading.trades or trading.orders or trading.index >= 0:
+        raise HTTPException(409, f"Reset the simulation before {action} after trading activity")
+
+
 @router.get("/state")
 def state(request: Request):
     return get_session(request).replay.state()
@@ -41,8 +49,12 @@ def load(request: Request, batch: CandleBatch):
 
 @router.post("/start/{index}")
 def start(request: Request, index: int):
+    def position(session):
+        require_pristine_trading(session, "starting replay")
+        return session.replay.start(index)
+
     try:
-        return atomic_session(request, lambda session: session.replay.start(index))
+        return atomic_session(request, position)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -72,11 +84,7 @@ def step(request: Request, symbol: str = "BTCUSDT"):
 @router.post("/seek/{index}")
 def seek(request: Request, index: int):
     def reposition(session):
-        trading = session.trading
-        if trading.has_open_position() or trading.pending_orders():
-            raise HTTPException(409, "Close positions and cancel pending orders before seeking")
-        if trading.trades or trading.orders:
-            raise HTTPException(409, "Reset the simulation before seeking after trading activity")
+        require_pristine_trading(session, "seeking")
         return session.replay.seek(index)
 
     try:
