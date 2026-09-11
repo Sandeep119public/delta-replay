@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RemoteTradingEngine } from '../src/app/RemoteTradingEngine.js';
 import { RemoteReplayEngine } from '../src/app/RemoteReplayEngine.js';
+import { createChartTradingActions } from '../src/app/ChartTradingActions.js';
 
 const candle = { time: 1, open: 100, high: 101, low: 99, close: 100, volume: 1 };
 
@@ -54,9 +55,22 @@ describe('deep error handling contracts', () => {
     expect(errors.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('rejects unknown chart-independent replay mutations instead of pretending success', async () => {
-    const engine = new RemoteReplayEngine(resolvedApi({ '/load': { status: 'ready', index: -1, startIndex: -1, total: 1, speed: 1, visibleCandles: [] } }));
-    await engine.load([candle]);
-    expect(() => engine.setSpeed(0)).toThrow(/positive number/);
+  it('rejects unknown chart actions instead of returning success', async () => {
+    const reportError = vi.fn();
+    const actions = createChartTradingActions({
+      trading: { snapshot: () => ({ positions: [] }) },
+      executeTrade: vi.fn(),
+      reportError,
+    });
+    const result = await actions.execute({ action: 'DANGLE_FROM_NOWHERE' });
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('UNSUPPORTED_ACTION');
+  });
+
+  it('rejects non-array replay loads before sending a request', async () => {
+    const client = resolvedApi();
+    const engine = new RemoteReplayEngine(client);
+    await expect(engine.load(null)).rejects.toThrow(/must be an array/);
+    expect(client.request).not.toHaveBeenCalledWith('/load', expect.anything());
   });
 });
