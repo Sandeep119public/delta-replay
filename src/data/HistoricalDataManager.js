@@ -179,9 +179,21 @@ export class HistoricalDataManager extends EventEmitter {
     const fetchChunkWithRetry = async (chunk, attempt = 0) => {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       try {
-        if (typeof this.provider.fetchChunk === 'function') return await this.provider.fetchChunk({ symbol, timeframe, from: chunk.from, to: chunk.to, signal });
-        if (typeof this.provider.getCandles === 'function') return await this.provider.getCandles({ symbol, timeframe, from: chunk.from, to: chunk.to, signal });
-        throw new Error('Provider must implement fetchChunk or getCandles');
+        let raw;
+        if (typeof this.provider.fetchChunk === 'function') {
+          raw = await this.provider.fetchChunk({ symbol, timeframe, from: chunk.from, to: chunk.to, signal });
+        } else if (typeof this.provider.getCandles === 'function') {
+          raw = await this.provider.getCandles({ symbol, timeframe, from: chunk.from, to: chunk.to, signal });
+        } else {
+          throw new Error('Provider must implement fetchChunk or getCandles');
+        }
+        if (!Array.isArray(raw)) {
+          throw Object.assign(new Error('Provider returned a non-array candle chunk'), {
+            code: 'INVALID_RESPONSE',
+            details: { chunk: { ...chunk }, provider: this.provider.constructor?.name ?? 'unknown' },
+          });
+        }
+        return raw;
       } catch (err) {
         if (err?.name === 'AbortError') throw err;
         if (attempt < this.maxRetries && isRetryable(err)) {
@@ -203,10 +215,8 @@ export class HistoricalDataManager extends EventEmitter {
         const raw = await fetchChunkWithRetry(chunk);
         results[chunkIdx] = raw;
         completed++;
-        if (Array.isArray(raw)) {
-          rawCollected.push(...raw);
-          this.emit(DataEvents.CHUNK_RECEIVED, { index: chunkIdx, chunk, count: raw.length });
-        } else this.emit(DataEvents.CHUNK_RECEIVED, { index: chunkIdx, chunk, count: 0 });
+        rawCollected.push(...raw);
+        this.emit(DataEvents.CHUNK_RECEIVED, { index: chunkIdx, chunk, count: raw.length });
         emitProgress();
       }
     });
@@ -246,7 +256,7 @@ export class HistoricalDataManager extends EventEmitter {
       for (const rRange of metadata.repairRanges) {
         try {
           const freshRaw = await fetchChunkWithRetry(rRange);
-          if (!Array.isArray(freshRaw) || freshRaw.length === 0) throw Object.assign(new Error('Repair returned no candles'), { code: 'NO_DATA' });
+          if (freshRaw.length === 0) throw Object.assign(new Error('Repair returned no candles'), { code: 'NO_DATA' });
           const normalizedChunk = CandleNormalizer.normalizeBatch(freshRaw, { timestampUnit: 'seconds' });
           for (const c of normalizedChunk) {
             const v = CandleValidator.validate(c);
@@ -271,48 +281,25 @@ export class HistoricalDataManager extends EventEmitter {
 
       const repairTimes = new Set(metadata.repairRanges.map(r => r.from));
       const combined = allNormalized.filter(c => !repairTimes.has(c.time)).concat([...repairedMap.values()]);
-      let recheck;
-      try {
-        recheck = CandleIntegrity.process(combined, integrityOptions);
-      } catch (error) {
-        const recheckError = new Error(`Integrity recheck failed after repair: ${error?.message || String(error)}`);
-        recheckError.code = 'INTEGRITY_PROCESSING_FAILED';
-        recheckError.cause = error;
-        this.emit(DataEvents.ERROR, recheckError);
-        throw recheckError;
-      }
-
-      const repairSucceeded = repairRequested - repairFailures.length;
-      const repairFailed = repairFailures.length;
-      validCandles = recheck.validCandles;
-      metadata = { ...recheck.metadata, requestedFrom, requestedTo, effectiveFrom, effectiveTo, repairRequested, repairSucceeded, repairFailed, repairSuccess: repairFailed === 0 && recheck.metadata.invalidCount === 0, repairFailures, integrityStatus: repairFailed === 0 && recheck.metadata.invalidCount === 0 ? INTEGRITY_STATUS.VALID : INTEGRITY_STATUS.DEGRADED };
-      if (strict && !metadata.repairSuccess) {
-        const err = new Error(`Integrity repair failed for ${repairFailed} candle(s)`);
-        err.code = 'INTEGRITY_ERROR';
-        err.details = { repairRequested, repairSucceeded, repairFailed, repairFailures };
-        this.emit(DataEvents.ERROR, err);
-        throw err;
-      }
+      const finalIntegrity = CandleIntegrity.process(combined, integrityOptions);
+      validCandles = finalIntegrity.validCandles;
+      metadata = { ...finalIntegrity.metadata, repairRequested, repairSucceeded: repairedMap.size, repairFailed: repairFailures.length, repairFailures };
     }
 
-    if (validCandles.length === 0) {
-      const err = new Error('No valid candles after integrity');
-      err.code = 'NO_DATA';
-      this.emit(DataEvents.ERROR, err);
-      throw err;
-    }
-
-    const isDegraded = metadata.integrityStatus === INTEGRITY_STATUS.DEGRADED || metadata.repairSuccess === false;
-    if (!isDegraded) this.cache.set(symbol, timeframe, effectiveFrom, effectiveTo, validCandles, { timeframeSec: tfSec, venue: resolvedVenue, gridOrigin });
-    const quality = isDegraded ? 'DEGRADED' : 'VALID';
-    this.store.load(validCandles, { symbol, timeframe, requestedFrom, requestedTo, effectiveFrom, effectiveTo, venue: resolvedVenue, gridOrigin, quality, ...metadata });
-    this.emit(DataEvents.READY, { candles: validCandles, metadata: this.store.getMetadata(), quality });
-    if (isDegraded) this.emit(DataEvents.READY_DEGRADED, { candles: validCandles, metadata: this.store.getMetadata(), quality });
-    emitProgress();
-    return { candles: validCandles, metadata: this.store.getMetadata(), quality };
+    const quality = metadata.invalidCount > 0 || metadata.gaps.length > 0 || metadata.repairFailed > 0 ? 'DEGRADED' : 'VALID';
+    const result = { candles: validCandles, metadata: { ...metadata, quality }, quality };
+    this.store.load(validCandles, { symbol, timeframe, requestedFrom, requestedTo, effectiveFrom, effectiveTo, venue: resolvedVenue, gridOrigin, ...metadata });
+    this.cache.set(symbol, timeframe, validCandles, { timeframeSec: tfSec, venue: resolvedVenue, gridOrigin });
+    this.emit(quality === 'VALID' ? DataEvents.READY : DataEvents.READY_DEGRADED, result);
+    this.emit(DataEvents.PROGRESS, { loaded: validCandles.length, total: validCandles.length, pct: 100 });
+    return result;
   }
 
-  getStore() { return this.store; }
-  getCache() { return this.cache; }
-  clear() { this.store.clear(); this.cache.clear(); }
+  isRetryable(err) {
+    const category = err?.category ?? err?.code;
+    if (['INVALID_REQUEST', 'INVALID_RESPONSE', 'NO_DATA', 'CORS', 'CORS_ERROR', 'CACHE', 'CACHE_ERROR', 'CACHE_INTEGRITY_ERROR', 'INTEGRITY', 'INTEGRITY_ERROR', 'INTEGRITY_PROCESSING_FAILED'].includes(category)) return false;
+    if (category === 'TIMEOUT' || category === 'NETWORK' || category === 'NETWORK_ERROR') return true;
+    const status = err?.details?.status ?? err?.status;
+    return status === 408 || status === 429 || (typeof status === 'number' && status >= 500 && status < 600);
+  }
 }
