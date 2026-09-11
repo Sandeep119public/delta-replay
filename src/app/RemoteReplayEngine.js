@@ -1,34 +1,51 @@
 class Events {
   constructor() { this.map = new Map(); }
   on(event, handler) { const listeners = this.map.get(event) || new Set(); listeners.add(handler); this.map.set(event, listeners); return () => listeners.delete(handler); }
-  emit(event, payload) { for (const handler of this.map.get(event) || []) { try { handler(payload); } catch (error) { console.warn(`[RemoteReplayEngine] ${event} handler failed`, error); } } }
+  emit(event, payload, reportError) {
+    for (const handler of this.map.get(event) || []) {
+      try {
+        const result = handler(payload);
+        if (result && typeof result.then === 'function') result.catch((error) => reportError?.(error, { event, phase: 'async' }));
+      } catch (error) {
+        reportError?.(error, { event, phase: 'sync' });
+      }
+    }
+  }
 }
 
 const BASE_STEP_DELAY_MS = 500;
 const clone = (value) => value == null ? value : structuredClone(value);
 
 export class RemoteReplayEngine {
-  constructor(api, tradingEngine = null) {
+  constructor(api) {
     if (!api || typeof api.request !== 'function') throw new TypeError('RemoteReplayEngine requires API client');
     this.api = api;
-    this.tradingEngine = tradingEngine;
+    this.tradingEngine = null;
     this.events = new Events();
     this._playTimer = null;
     this._stepInFlight = false;
     this._generation = 0;
     this._playIntent = 0;
     this._destroyed = false;
+    this._listenerErrors = [];
     this.state = { status: 'idle', currentIndex: -1, startIndex: -1, totalCandles: 0, speed: 1, candle: null, visibleCandles: [] };
   }
   on(event, handler) { return this._destroyed ? () => {} : this.events.on(event, handler); }
+  _reportListenerError(error, context) {
+    this._listenerErrors.push({ error, ...context, at: Date.now() });
+    if (this._listenerErrors.length > 20) this._listenerErrors.shift();
+    try { this.api.onClientError?.(error, context); } catch {}
+  }
+  getLastListenerErrors() { return [...this._listenerErrors]; }
   _sync(snapshot = {}) {
     if (this._destroyed) return;
     this.state = { ...this.state, status: snapshot.status ?? this.state.status, currentIndex: Number.isInteger(snapshot.index) ? snapshot.index : this.state.currentIndex, startIndex: Number.isInteger(snapshot.startIndex) ? snapshot.startIndex : this.state.startIndex, totalCandles: Number.isFinite(snapshot.total) ? snapshot.total : this.state.totalCandles, speed: Number.isFinite(snapshot.speed) ? snapshot.speed : this.state.speed, candle: clone(snapshot.candle), visibleCandles: Array.isArray(snapshot.visibleCandles) ? clone(snapshot.visibleCandles) : [] };
     if (snapshot.trading && this.tradingEngine?.syncFromReplayStep) this.tradingEngine.syncFromReplayStep(clone(snapshot));
-    this.events.emit('stateChanged', this.getState());
+    this.events.emit('stateChanged', this.getState(), this._reportListenerError.bind(this));
   }
   async _call(path, options = {}, generation = this._generation) {
     const response = await this.api.request(path, options);
+    if (!response || typeof response !== 'object') throw new Error(`Invalid replay API response for ${path}`);
     if (this._destroyed || generation !== this._generation) return this.getState();
     this._sync(response);
     return this.getState();
@@ -36,8 +53,14 @@ export class RemoteReplayEngine {
   getState() { return { ...this.state, candle: clone(this.state.candle), total: this.state.totalCandles, totalCandles: this.state.totalCandles, visibleCandles: clone(this.state.visibleCandles) }; }
   getTotalCandles() { return this.state.totalCandles; }
   getVisibleCandles() { return clone(this.state.visibleCandles); }
-  async load(candles) { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; return this._call('/load', { method: 'POST', body: JSON.stringify({ candles: Array.isArray(candles) ? clone(candles) : [] }) }, generation); }
-  async start(index = 0) { if (this._destroyed) return this.getState(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay start index must be an integer'); const generation = ++this._generation; const result = await this._call(`/start/${numericIndex}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result }); return result; }
+  async load(candles) {
+    if (this._destroyed) return this.getState();
+    if (!Array.isArray(candles)) throw new TypeError('Replay load candles must be an array');
+    this.pause();
+    const generation = ++this._generation;
+    return this._call('/load', { method: 'POST', body: JSON.stringify({ candles: clone(candles) }) }, generation);
+  }
+  async start(index = 0) { if (this._destroyed) return this.getState(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay start index must be an integer'); const generation = ++this._generation; const result = await this._call(`/start/${numericIndex}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result }, this._reportListenerError.bind(this)); return result; }
   async stepForward() {
     if (this._destroyed || this._stepInFlight) return this.getState();
     if (this.state.currentIndex < 0 || this.state.currentIndex >= this.state.totalCandles - 1) { if (this.state.totalCandles > 0 && this.state.currentIndex >= this.state.totalCandles - 1) this.pause(); return this.getState(); }
@@ -47,13 +70,13 @@ export class RemoteReplayEngine {
     try {
       const result = await this._call('/step', { method: 'POST' }, generation);
       if (this._destroyed || generation !== this._generation) return result;
-      this.events.emit('stepped', { index: this.state.currentIndex, previousIndex, state: result, candle: clone(this.state.candle) });
+      this.events.emit('stepped', { index: this.state.currentIndex, previousIndex, state: result, candle: clone(this.state.candle) }, this._reportListenerError.bind(this));
       if (this.state.status === 'ended' || this.state.currentIndex >= this.state.totalCandles - 1) this.pause();
       return result;
     } finally { this._stepInFlight = false; }
   }
-  async seek(index) { if (this._destroyed) return this.getState(); this.pause(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay seek index must be an integer'); const generation = ++this._generation; const result = await this._call(`/seek/${numericIndex}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('seeked', { index: this.state.currentIndex, state: result }); return result; }
-  async reset() { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; const result = await this._call('/reset', { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('reset', { index: this.state.currentIndex, state: result }); return result; }
+  async seek(index) { if (this._destroyed) return this.getState(); this.pause(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay seek index must be an integer'); const generation = ++this._generation; const result = await this._call(`/seek/${numericIndex}`, { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('seeked', { index: this.state.currentIndex, state: result }, this._reportListenerError.bind(this)); return result; }
+  async reset() { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; const result = await this._call('/reset', { method: 'POST' }, generation); if (!this._destroyed && generation === this._generation) this.events.emit('reset', { index: this.state.currentIndex, state: result }, this._reportListenerError.bind(this)); return result; }
   async play() {
     if (this._destroyed) return this.getState();
     const playIntent = ++this._playIntent;
@@ -61,7 +84,7 @@ export class RemoteReplayEngine {
     if (this._destroyed || playIntent !== this._playIntent || !['paused', 'playing'].includes(this.state.status)) return this.getState();
     if (this._playTimer) return this.getState();
     this.state = { ...this.state, status: 'playing' };
-    this.events.emit('stateChanged', this.getState());
+    this.events.emit('stateChanged', this.getState(), this._reportListenerError.bind(this));
     this._scheduleStep();
     return this.getState();
   }
@@ -69,14 +92,11 @@ export class RemoteReplayEngine {
     this._playIntent++;
     if (this._playTimer) clearTimeout(this._playTimer);
     this._playTimer = null;
-    if (!this._destroyed && this.state.status === 'playing') {
-      this.state = { ...this.state, status: 'paused' };
-      this.events.emit('stateChanged', this.getState());
-    }
+    if (!this._destroyed && this.state.status === 'playing') { this.state = { ...this.state, status: 'paused' }; this.events.emit('stateChanged', this.getState(), this._reportListenerError.bind(this)); }
     return this.getState();
   }
-  _scheduleStep() { if (this._destroyed || this.state.status !== 'playing' || this._playTimer) return; const delay = Math.max(40, BASE_STEP_DELAY_MS / Number(this.state.speed || 1)); this._playTimer = setTimeout(async () => { this._playTimer = null; if (this._destroyed || this.state.status !== 'playing') return; try { await this.stepForward(); } catch (error) { this.pause(); if (!this._destroyed) this.events.emit('playbackError', error); return; } if (!this._destroyed && this.state.status === 'playing') this._scheduleStep(); }, delay); }
-  setSpeed(speed) { if (this._destroyed) return this.state.speed; const next = Number(speed); if (!Number.isFinite(next) || next <= 0) throw new TypeError('Replay speed must be a positive number'); this.state = { ...this.state, speed: next }; this.events.emit('speedChanged', { speed: next }); this.events.emit('stateChanged', this.getState()); if (this.state.status === 'playing') { if (this._playTimer) clearTimeout(this._playTimer); this._playTimer = null; this._scheduleStep(); } return next; }
+  _scheduleStep() { if (this._destroyed || this.state.status !== 'playing' || this._playTimer) return; const delay = Math.max(40, BASE_STEP_DELAY_MS / Number(this.state.speed || 1)); this._playTimer = setTimeout(async () => { this._playTimer = null; if (this._destroyed || this.state.status !== 'playing') return; try { await this.stepForward(); } catch (error) { this.pause(); if (!this._destroyed) this.events.emit('playbackError', error, this._reportListenerError.bind(this)); return; } if (!this._destroyed && this.state.status === 'playing') this._scheduleStep(); }, delay); }
+  setSpeed(speed) { if (this._destroyed) return this.state.speed; const next = Number(speed); if (!Number.isFinite(next) || next <= 0) throw new TypeError('Replay speed must be a positive number'); this.state = { ...this.state, speed: next }; this.events.emit('speedChanged', { speed: next }, this._reportListenerError.bind(this)); this.events.emit('stateChanged', this.getState(), this._reportListenerError.bind(this)); if (this.state.status === 'playing') { if (this._playTimer) clearTimeout(this._playTimer); this._playTimer = null; this._scheduleStep(); } return next; }
   registerActionGuard() { return () => {}; }
   destroy() { if (this._destroyed) return; this.pause(); this._destroyed = true; this._generation++; this.events = new Events(); this.tradingEngine = null; }
 }
