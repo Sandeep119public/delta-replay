@@ -29,6 +29,7 @@ def test_invalid_candle_index_is_a_domain_error_and_http_422():
 def test_paper_engine_rejects_expected_order_constraints_without_masking_invariants():
     engine = PaperTradingEngine()
     engine.submit("BTCUSDT", "buy", 1)
+    engine.on_candle(valid_candle(0), 0, "BTCUSDT")
     try:
         engine.submit("BTCUSDT", "buy", 1)
     except TradingDomainError:
@@ -36,6 +37,8 @@ def test_paper_engine_rejects_expected_order_constraints_without_masking_invaria
     else:
         raise AssertionError("expected a domain error")
 
+    engine = PaperTradingEngine()
+    engine.submit("BTCUSDT", "buy", 1)
     original = engine.account.validate_invariants
 
     def broken_invariants():
