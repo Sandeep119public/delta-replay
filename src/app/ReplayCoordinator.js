@@ -25,11 +25,8 @@ export class ReplayCoordinator {
     if (typeof tradingCapabilities.hasOpenPosition !== 'function') {
       throw new TypeError('ReplayCoordinator requires tradingCapabilities.hasOpenPosition()');
     }
-    if (typeof tradingCapabilities.notifyMarketCandle !== 'function') {
-      throw new TypeError('ReplayCoordinator requires tradingCapabilities.notifyMarketCandle()');
-    }
-    if (typeof tradingCapabilities.clearPendingOrders !== 'function') {
-      throw new TypeError('ReplayCoordinator requires tradingCapabilities.clearPendingOrders()');
+    if (typeof tradingCapabilities.hasPendingOrders !== 'function') {
+      throw new TypeError('ReplayCoordinator requires tradingCapabilities.hasPendingOrders()');
     }
     if (!statusView || typeof statusView.snapshot !== 'function') {
       throw new TypeError('ReplayCoordinator requires statusView.snapshot()');
@@ -45,7 +42,7 @@ export class ReplayCoordinator {
       appState,
       replayEngine,
       hasOpenPosition: tradingCapabilities.hasOpenPosition,
-      notifyMarketCandle: tradingCapabilities.notifyMarketCandle,
+      hasPendingOrders: tradingCapabilities.hasPendingOrders,
       statusView,
       timeline,
       controls,
@@ -81,31 +78,11 @@ export class ReplayCoordinator {
     });
   }
 
-  updateLoadButton() {
-    return this.loadService.updateLoadButton();
-  }
-
-  updatePreviewWindow(idx) {
-    this.previewService.updatePreviewWindow(idx);
-  }
-
-  applyWindowedChart(idx) {
-    this.previewService.applyWindowedChart(idx);
-  }
-
-  handleSymbolTimeframeChange(kind, newValue, selectElement) {
-    return this.datasetChangeService.handleSymbolTimeframeChange(kind, newValue, selectElement);
-  }
-
-  showTradingError(msg) {
-    this.tradingErrorView?.show(msg);
-  }
-
-  destroy() {
-    this.loadService.destroy();
-  }
-
-  async loadAndPrepareReplay(options = {}) {
-    return this.loadService.loadAndPrepareReplay(options);
-  }
+  updateLoadButton() { return this.loadService.updateLoadButton(); }
+  updatePreviewWindow(idx) { this.previewService.updatePreviewWindow(idx); }
+  applyWindowedChart(idx) { this.previewService.applyWindowedChart(idx); }
+  handleSymbolTimeframeChange(kind, newValue, selectElement) { return this.datasetChangeService.handleSymbolTimeframeChange(kind, newValue, selectElement); }
+  showTradingError(msg) { this.tradingErrorView?.show(msg); }
+  destroy() { this.loadService.destroy(); }
+  async loadAndPrepareReplay(options = {}) { return this.loadService.loadAndPrepareReplay(options); }
 }
