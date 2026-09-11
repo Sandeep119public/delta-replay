@@ -45,7 +45,6 @@ export function createApplication() {
     clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
   });
 
-  // Render the shell once before constructing chart handles.
   const mount = requireElement('app');
   renderPaperLayout(mount);
   const chartContainer = requireElement('chart-container');
@@ -115,16 +114,13 @@ export function createApplication() {
     onLoad: ({ autoStart }) => replayCapabilities.load({ autoStart }),
     onPreview: (index) => replayCapabilities.preview(index),
     canExecute: (action) => {
-      const hasPosition = tradingEngine.hasOpenPosition();
-      const hasPendingOrders = tradingEngine.getPendingOrders().length > 0;
       const hasTradingActivity = tradingEngine.hasTradingActivity();
-      if (action === 'reset' || action === 'restart') return { allowed: true };
+      if (action === 'reset' || action === 'restart' || action === 'stepForward' || action === 'resume') return { allowed: true };
       if (action === 'seek' && hasTradingActivity) {
         return { allowed: false, reason: 'Cannot seek after trading activity. Reset the simulation first.' };
       }
-      if (hasPosition || hasPendingOrders) {
-        const state = hasPosition ? 'an open position' : 'pending orders';
-        return { allowed: false, reason: `Cannot ${action} while ${state} exists. Close the position and cancel pending orders first.` };
+      if (action === 'start' && hasTradingActivity) {
+        return { allowed: false, reason: 'Cannot start a new replay position after trading activity. Reset the simulation first.' };
       }
       return { allowed: true };
     },
@@ -240,11 +236,5 @@ export function createApplication() {
     destroy,
   });
 
-  return {
-    start: lifecycle.start,
-    destroy: lifecycle.destroy,
-    services,
-    ui,
-    coordinator,
-  };
+  return { start: lifecycle.start, destroy: lifecycle.destroy, services, ui, coordinator };
 }
