@@ -12,7 +12,7 @@ function deps(load) {
     },
     replayEngine: { load: vi.fn(), getState: vi.fn(() => ({})), start: vi.fn() },
     hasOpenPosition: () => false,
-    notifyMarketCandle: vi.fn(),
+    hasPendingOrders: () => false,
     statusView: { snapshot: vi.fn(() => ({})) },
     timeline: { setTotal: vi.fn(), setPosition: vi.fn(), setEnabled: vi.fn() },
     controls: { setStartIndex: vi.fn() },
