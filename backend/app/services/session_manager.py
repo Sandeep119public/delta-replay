@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 
+from ..domain.errors import StateInvariantError
 from .paper_engine import PaperTradingEngine
 from .replay_service import ReplayService
 from .session_repository import InMemorySessionRepository, SessionRepository
@@ -73,8 +74,10 @@ class SessionManager:
     def _restore(document) -> SessionState:
         try:
             replay, trading = restore_session(document)
+        except StateInvariantError:
+            raise
         except (TypeError, ValueError, KeyError, RuntimeError) as exc:
-            raise RuntimeError(f"unable to restore session state: {exc}") from exc
+            raise StateInvariantError(f"unable to restore session state: {exc}") from exc
         return SessionState(replay=replay, trading=trading)
 
     def atomic(self, session_id: str, operation):
