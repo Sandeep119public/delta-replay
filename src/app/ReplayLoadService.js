@@ -6,7 +6,7 @@ import { isRetryableCategory as isRetryableErrorCategory } from '../ports/ErrorP
 const MAX_RETRIES = 3;
 
 export function createReplayLoadService({
-  dataManager, candleStore, appState, replayEngine, hasOpenPosition, notifyMarketCandle,
+  dataManager, candleStore, appState, replayEngine, hasOpenPosition, hasPendingOrders,
   statusView, timeline, controls, modeBanner, errorPanel, tradingErrorView = null,
   dataStatusEl = null, cacheBadgeEl = null, startReplayBtn = null, headerStartReplayBtn = null,
   loadBtn = null, fromDateEl = null, fromTimeEl = null, toDateEl = null, toTimeEl = null,
@@ -15,7 +15,7 @@ export function createReplayLoadService({
   const required = { dataManager, candleStore, appState, replayEngine, statusView, timeline, controls, modeBanner };
   for (const [name, value] of Object.entries(required)) if (!value) throw new TypeError(`createReplayLoadService requires ${name}`);
   if (typeof hasOpenPosition !== 'function') throw new TypeError('createReplayLoadService requires hasOpenPosition() capability');
-  if (typeof notifyMarketCandle !== 'function') throw new TypeError('createReplayLoadService requires notifyMarketCandle() capability');
+  if (typeof hasPendingOrders !== 'function') throw new TypeError('createReplayLoadService requires hasPendingOrders() capability');
   if (typeof statusView.snapshot !== 'function') throw new TypeError('createReplayLoadService requires statusView.snapshot()');
   if (typeof updatePreviewWindow !== 'function') throw new TypeError('createReplayLoadService requires updatePreviewWindow callback');
 
@@ -60,7 +60,10 @@ export function createReplayLoadService({
 
   async function loadAndPrepareReplay({ targetSec = null, autoStart = false, preserveRetryState = false } = {}) {
     if (destroyed) return;
-    if (hasOpenPosition()) { showTradingError('Cannot change replay date while a position is open. Close the position or reset the account first.'); return; }
+    if (hasOpenPosition() || hasPendingOrders()) {
+      showTradingError('Cannot change replay data while a position is open or a pending order exists. Close the position and cancel pending orders first.');
+      return;
+    }
     if (!preserveRetryState) resetRetryState();
 
     const token = ++loadToken;
@@ -110,7 +113,6 @@ export function createReplayLoadService({
       let replayIdx = findClosestCandleIndex(resolvedTarget, candleStore, candles);
       if (replayIdx < 0) replayIdx = Math.max(0, Math.floor(candles.length * 0.25));
       appState.setPendingStartIndex(replayIdx); controls?.setStartIndex(replayIdx); timeline?.setPosition(replayIdx); updatePreviewWindow(replayIdx);
-      const startCandle = candleStore.get(replayIdx); if (startCandle) notifyMarketCandle({ candle: startCandle, index: replayIdx });
       if (startReplayBtn) startReplayBtn.disabled = false; if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
       if (cacheBadgeEl) cacheBadgeEl.classList.toggle('hidden', !metadata?.cached);
       if (dataStatusEl) dataStatusEl.textContent = `Ready: ${symbol} ${timeframe} (${candles.length.toLocaleString()} candles)${metadata?.cached ? ' [Cached]' : ''}`;
