@@ -15,6 +15,7 @@ export class DeltaCandleProvider extends CandleProvider {
     super();
     if (!Number.isInteger(chunkSize) || chunkSize < 1) throw new Error('chunkSize must be a positive integer');
     if (!Number.isInteger(maxCandles) || maxCandles < 1) throw new Error('maxCandles must be a positive integer');
+    if (!Number.isInteger(cacheSize) || cacheSize < 0) throw new Error('cacheSize must be a non-negative integer');
     this.baseUrl = baseUrl;
     this.client = client ?? new DeltaClient({ baseUrl });
     this.maxCandles = maxCandles;
@@ -34,7 +35,7 @@ export class DeltaCandleProvider extends CandleProvider {
     while (this._cache.size > this.cacheSize) this._cache.delete(this._cache.keys().next().value);
   }
 
-  _validateParams({ symbol, timeframe, from, to }) {
+  _validateParams({ symbol, timeframe, from, to, limit }) {
     if (!symbol || typeof symbol !== 'string') throw new DeltaError('INVALID_REQUEST', 'symbol is required');
     if (!SUPPORTED_TIMEFRAMES.includes(timeframe)) {
       throw new DeltaError('INVALID_REQUEST', `Unsupported timeframe: ${timeframe}. Supported: ${SUPPORTED_TIMEFRAMES.join(', ')}`);
@@ -42,6 +43,8 @@ export class DeltaCandleProvider extends CandleProvider {
     if (from != null && !Number.isFinite(from)) throw new DeltaError('INVALID_REQUEST', 'from must be unix seconds');
     if (to != null && !Number.isFinite(to)) throw new DeltaError('INVALID_REQUEST', 'to must be unix seconds');
     if (from != null && to != null && from >= to) throw new DeltaError('INVALID_REQUEST', 'from must be < to');
+    if (limit != null && (!Number.isInteger(limit) || limit < 1)) throw new DeltaError('INVALID_REQUEST', 'limit must be a positive integer');
+    if (limit != null && limit > this.maxCandles) throw new DeltaError('INVALID_REQUEST', `limit must be <= ${this.maxCandles}`);
     if (from != null && to != null) {
       const estimated = Math.floor((to - from) / TIMEFRAME_SECONDS[timeframe]) + 1;
       if (estimated > this.maxCandles) {
@@ -63,7 +66,7 @@ export class DeltaCandleProvider extends CandleProvider {
     const now = Math.floor(Date.now() / 1000);
     const resolvedTo = to != null ? Math.floor(to) : now;
     const resolvedFrom = from != null ? Math.floor(from) : resolvedTo - 86400;
-    this._validateParams({ symbol, timeframe, from: resolvedFrom, to: resolvedTo });
+    this._validateParams({ symbol, timeframe, from: resolvedFrom, to: resolvedTo, limit });
 
     const key = this._cacheKey(symbol, timeframe, resolvedFrom, resolvedTo);
     if (this._cache.has(key)) {
