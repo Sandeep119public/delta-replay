@@ -113,4 +113,15 @@ describe('deep error handling contracts', () => {
     expect(delivered).toHaveBeenCalledTimes(1);
     expect(emitter.getLastListenerErrors().map(({ phase }) => phase)).toEqual(['sync', 'reporter']);
   });
+
+  it('contains async errors from once listeners inside the emitter boundary', async () => {
+    const emitter = new EventEmitter();
+    emitter.once('boom', async () => { throw new Error('once async boom'); });
+    emitter.emit('boom');
+    await Promise.resolve();
+    expect(emitter.listenerCount('boom')).toBe(0);
+    expect(emitter.getLastListenerErrors()).toHaveLength(1);
+    expect(emitter.getLastListenerErrors()[0].phase).toBe('async');
+    expect(emitter.getLastListenerErrors()[0].error.message).toBe('once async boom');
+  });
 });
