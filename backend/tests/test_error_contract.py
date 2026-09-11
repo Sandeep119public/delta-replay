@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from app.domain.errors import StateInvariantError, TradingDomainError
 from app.main import app
 from app.services.paper_engine import PaperTradingEngine
+from app.services.session_manager import SessionManager
+from app.services.session_repository import InMemorySessionRepository
 
 
 def headers(session):
@@ -74,3 +76,21 @@ def test_state_invariant_error_is_not_reported_as_order_rejection():
             raise AssertionError("expected invariant failure to escape order rejection handling")
     finally:
         engine.account.validate_invariants = original
+
+
+def test_corrupt_persisted_session_is_reported_as_state_invariant():
+    repository = InMemorySessionRepository()
+    session = str(uuid4())
+    repository.save(session, {
+        "version": 1,
+        "replay": {"index": -1, "candles": []},
+        "trading": {"account": {"starting_balance": 10000}},
+        "tradingMarket": {},
+    })
+    manager = SessionManager(repository=repository)
+    try:
+        manager.get(session)
+    except StateInvariantError as exc:
+        assert "unable to restore session state" in str(exc)
+    else:
+        raise AssertionError("expected corrupt persisted state to raise StateInvariantError")
