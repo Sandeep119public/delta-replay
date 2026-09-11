@@ -56,7 +56,13 @@ export class RemoteTradingEngine {
     this.events.emit(EVENT.ACCOUNT_UPDATED, this.getAccountSnapshot());
     this._emitStateTransitions(previous, action, response?.events || []);
   }
-  syncFromReplayStep(response = {}) { if (this._destroyed) return this.getStateSnapshot(); const previous = this.data; this._sync({ ...(response?.trading || {}), candle: response?.candle, events: response?.events || [] }, 'candle', previous); return this.getStateSnapshot(); }
+  syncFromReplayStep(response = {}) { return this.syncFromReplayLifecycle(response, 'candle'); }
+  syncFromReplayLifecycle(response = {}, action = 'reset') {
+    if (this._destroyed) return this.getStateSnapshot();
+    const previous = this.data;
+    this._sync({ ...(response?.trading || {}), candle: response?.candle, events: response?.events || [] }, action, previous);
+    return this.getStateSnapshot();
+  }
   getStateSnapshot() { return { account: this.getAccountSnapshot(), positions: this.getPositions(), orders: this.getOrders(), pendingOrders: this.getPendingOrders(), trades: this.getTrades() }; }
   _emitStateTransitions(previous, action, backendEvents) {
     const beforePositions = previous.positions || [], afterPositions = this.data.positions || [], beforeOrders = previous.orders || [], afterOrders = this.data.orders || [], beforeTrades = previous.trades || [];
@@ -81,8 +87,8 @@ export class RemoteTradingEngine {
   getPositions() { return clone(this.data.positions); }
   getOrders() { return clone(this.data.orders); }
   getPendingOrders() { return clone(this.data.pendingOrders); }
-  getTrades() { return clone(this.data.trades); }
   hasOpenPosition(symbol = null) { return symbol ? this.data.positions.some((p) => p.symbol === String(symbol).toUpperCase()) : this.data.positions.length > 0; }
+  hasTradingActivity() { return this.data.positions.length > 0 || this.data.orders.length > 0 || this.data.trades.length > 0; }
   getLatestCandle() { return clone(this.latestCandle); }
   getPerformanceStats() { const trades = this.data.trades; const wins = trades.filter((trade) => Number(trade.netPnL ?? 0) > 0); const grossWin = wins.reduce((sum, trade) => sum + Number(trade.netPnL || 0), 0); const grossLoss = Math.abs(trades.filter((trade) => Number(trade.netPnL ?? 0) < 0).reduce((sum, trade) => sum + Number(trade.netPnL || 0), 0)); const net = trades.reduce((sum, trade) => sum + Number(trade.netPnL || 0), 0); const starting = Number(this.data.account.startingBalance || 0); return { totalTrades: trades.length, winRate: trades.length ? (wins.length / trades.length) * 100 : 0, profitFactor: grossLoss ? grossWin / grossLoss : (grossWin ? Infinity : 0), netReturn: starting > 0 ? (net / starting) * 100 : 0 }; }
   async refresh() { if (this._destroyed) return this.getStateSnapshot(); const result = await this._request('/state', {}, 'refresh'); return result.response; }
@@ -96,7 +102,7 @@ export class RemoteTradingEngine {
   updateRisk({ symbol, stopLoss, takeProfit }) { return this._action('/risk', { method: 'POST', body: JSON.stringify({ symbol: String(symbol).toUpperCase(), stopLoss, takeProfit }) }, 'risk'); }
   setRisk({ symbol, stopLoss, takeProfit }) { return this.updateRisk({ symbol, stopLoss, takeProfit }); }
   setStopLoss(symbol, price) { const position = this.getPositions().find((candidate) => candidate.symbol === String(symbol).toUpperCase()); return this.updateRisk({ symbol, stopLoss: price, takeProfit: position?.takeProfitPrice ?? null }); }
-  setTakeProfit(symbol, price) { const position = this.getPositions().find((candidate) => candidate.symbol === String(symbol).toUpperCase()); return this.updateRisk({ symbol, stopLoss: position?.stopLossPrice ?? null, takeProfit: price }); }
+  setTakeProfit(symbol, price) { const position = this.getPositions().find((candidate) => candidate.symbol === String(symbol).toUpperCase()); return this.updateRisk({ symbol, stopLoss: position?.stopLossPrice ?? null, takeProfit: position?.stopLossPrice ?? null }); }
   clearRisk(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}`, { method: 'POST' }, 'risk'); }
   clearStopLoss(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}&target=stopLoss`, { method: 'POST' }, 'risk'); }
   clearTakeProfit(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}&target=takeProfit`, { method: 'POST' }, 'risk'); }
