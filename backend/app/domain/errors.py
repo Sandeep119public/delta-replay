@@ -10,7 +10,7 @@ class InsufficientMarginError(OrderRejectedError):
     """The account does not have enough available margin for the order."""
 
 
-class StateInvariantError(RuntimeError):
+class StateInvariantError(ValueError):
     """Internal state corruption or invariant failure; never treat as an order rejection."""
 
 
