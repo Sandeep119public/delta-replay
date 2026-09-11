@@ -8,7 +8,7 @@ router = APIRouter()
 
 
 def replay_snapshot(session):
-    return {"replay": session.replay.state(), "trading": session.trading.snapshot()}
+    return {**session.replay.state(), "trading": session.trading.snapshot()}
 
 
 @router.get("/state")
