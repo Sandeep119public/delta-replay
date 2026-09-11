@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { RemoteTradingEngine } from '../src/app/RemoteTradingEngine.js';
 import { RemoteReplayEngine } from '../src/app/RemoteReplayEngine.js';
 import { createChartTradingActions } from '../src/app/ChartTradingActions.js';
+import { CandleIntegrity } from '../src/data/CandleIntegrity.js';
 
 const candle = { time: 1, open: 100, high: 101, low: 99, close: 100, volume: 1 };
 
@@ -72,5 +73,22 @@ describe('deep error handling contracts', () => {
     const engine = new RemoteReplayEngine(client);
     await expect(engine.load(null)).rejects.toThrow(/must be an array/);
     expect(client.request).not.toHaveBeenCalledWith('/load', expect.anything());
+  });
+
+  it('exposes full integrity error counts when diagnostic details are capped', () => {
+    const candles = Array.from({ length: 6 }, (_, index) => ({
+      time: index + 1,
+      open: -1,
+      high: 101,
+      low: 99,
+      close: 100,
+      volume: 1,
+    }));
+    const result = CandleIntegrity.process(candles, { from: 1, to: 6, timeframeSec: 1, policy: 'LENIENT', timestampUnit: 'seconds' });
+    expect(result.metadata.invalidCount).toBe(6);
+    expect(result.metadata.errors).toHaveLength(5);
+    expect(result.metadata.errorsTotal).toBe(6);
+    expect(result.metadata.errorsTruncated).toBe(true);
+    expect(result.metadata.diagnosticErrorLimit).toBe(5);
   });
 });
