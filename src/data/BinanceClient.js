@@ -37,10 +37,14 @@ export class BinanceClient {
     if (!Number.isFinite(end)) throw providerError('INVALID_REQUEST', 'end must be unix seconds');
     if (start > end) throw providerError('INVALID_REQUEST', 'start must be <= end');
 
+    const tfSec = TIMEFRAME_SECONDS[resolution];
+    if (!Number.isFinite(tfSec) || tfSec <= 0) {
+      throw providerError('INVALID_REQUEST', `unsupported Binance resolution: ${resolution}`, { resolution });
+    }
+
     const isFutures = this.baseUrl.includes('fapi');
     const venue = isFutures ? VENUES.BINANCE_FUTURES : VENUES.BINANCE_SPOT;
     const mappedSymbol = resolveVenueSymbol(symbol, venue);
-    const tfSec = TIMEFRAME_SECONDS[resolution] ?? 60;
     const endpoint = isFutures ? '/fapi/v1/klines' : '/api/v3/klines';
     const limit = isFutures ? 1500 : 1000;
     let currentStartMs = Math.floor(start) * 1000;
