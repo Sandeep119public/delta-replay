@@ -3,6 +3,7 @@ import { RemoteTradingEngine } from '../src/app/RemoteTradingEngine.js';
 import { RemoteReplayEngine } from '../src/app/RemoteReplayEngine.js';
 import { createChartTradingActions } from '../src/app/ChartTradingActions.js';
 import { CandleIntegrity } from '../src/data/CandleIntegrity.js';
+import { EventEmitter } from '../src/core/EventEmitter.js';
 
 const candle = { time: 1, open: 100, high: 101, low: 99, close: 100, volume: 1 };
 
@@ -90,5 +91,26 @@ describe('deep error handling contracts', () => {
     expect(result.metadata.errorsTotal).toBe(6);
     expect(result.metadata.errorsTruncated).toBe(true);
     expect(result.metadata.diagnosticErrorLimit).toBe(5);
+  });
+
+  it('retains listener errors in the core emitter even without a reporter', async () => {
+    const emitter = new EventEmitter();
+    emitter.on('boom', () => { throw new Error('sync boom'); });
+    emitter.on('boom', async () => { throw new Error('async boom'); });
+    emitter.emit('boom', null);
+    await Promise.resolve();
+    const errors = emitter.getLastListenerErrors();
+    expect(errors).toHaveLength(2);
+    expect(errors.map(({ phase }) => phase).sort()).toEqual(['async', 'sync']);
+  });
+
+  it('retains reporter failures as diagnostics without interrupting event delivery', () => {
+    const delivered = vi.fn();
+    const emitter = new EventEmitter({ errorReporter: () => { throw new Error('reporter boom'); } });
+    emitter.on('boom', () => { throw new Error('listener boom'); });
+    emitter.on('boom', delivered);
+    expect(() => emitter.emit('boom')).not.toThrow();
+    expect(delivered).toHaveBeenCalledTimes(1);
+    expect(emitter.getLastListenerErrors().map(({ phase }) => phase)).toEqual(['sync', 'reporter']);
   });
 });
