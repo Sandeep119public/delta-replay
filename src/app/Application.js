@@ -40,7 +40,8 @@ export function createApplication() {
   const statusView = createReplayStatusView({ engine, appState, candleStore });
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
-    notifyMarketCandle: (payload) => tradingEngine.onMarketCandle(payload),
+    hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
+    hasTradingActivity: () => tradingEngine.hasTradingActivity(),
     clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
   });
 
@@ -86,7 +87,6 @@ export function createApplication() {
     callbacks,
   });
 
-  // PaperUI preserves the pre-rendered shell and owns the remaining UI bindings.
   coordinator = new ReplayCoordinator({
     dataManager,
     candleStore,
@@ -115,13 +115,18 @@ export function createApplication() {
     onLoad: ({ autoStart }) => replayCapabilities.load({ autoStart }),
     onPreview: (index) => replayCapabilities.preview(index),
     canExecute: (action) => {
-      if (!trading.actions.hasOpenPosition()) return { allowed: true };
-      const reason = action === 'start'
-        ? 'Cannot start replay while a position is open — close position first.'
-        : action === 'seek'
-          ? 'Cannot seek while a position is open — close position first.'
-          : `Cannot ${action} while a position is open — close position first.`;
-      return { allowed: false, reason };
+      const hasPosition = tradingEngine.hasOpenPosition();
+      const hasPendingOrders = tradingEngine.getPendingOrders().length > 0;
+      const hasTradingActivity = tradingEngine.hasTradingActivity();
+      if (action === 'reset' || action === 'restart') return { allowed: true };
+      if (action === 'seek' && hasTradingActivity) {
+        return { allowed: false, reason: 'Cannot seek after trading activity. Reset the simulation first.' };
+      }
+      if (hasPosition || hasPendingOrders) {
+        const state = hasPosition ? 'an open position' : 'pending orders';
+        return { allowed: false, reason: `Cannot ${action} while ${state} exists. Close the position and cancel pending orders first.` };
+      }
+      return { allowed: true };
     },
     onError: (msg) => coordinator?.showTradingError(msg),
   });
@@ -186,7 +191,7 @@ export function createApplication() {
     preview: replayCapabilities.preview,
     chartManager: ui.chartManager,
   });
-  const actionGuardUnsub = registerActionGuard(engine, () => trading.actions.hasOpenPosition(), (msg) => coordinator?.showTradingError(msg));
+  const actionGuardUnsub = registerActionGuard(engine, () => !tradingEngine.hasOpenPosition() && tradingEngine.getPendingOrders().length === 0, (msg) => coordinator?.showTradingError(msg));
   const loadBtn = coordinatorPorts.loadBtn;
   const onLoadClick = () => actions.load();
   loadBtn?.addEventListener('click', onLoadClick);
