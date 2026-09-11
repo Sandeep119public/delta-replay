@@ -54,6 +54,8 @@ const codeToCategory = Object.freeze({
   INTEGRITY_PROCESSING_FAILED: ErrorCategory.INTEGRITY,
 });
 
+const validCategories = new Set(Object.values(ErrorCategory));
+
 export class DataError extends Error {
   constructor({ category, technicalMessage, context = {}, cause = null }) {
     super(technicalMessage, cause ? { cause } : undefined);
@@ -107,6 +109,7 @@ export class DataError extends Error {
     if (err?.name === 'AbortError') return new DataError({ category: ErrorCategory.ABORTED, technicalMessage: err.message || 'Aborted', cause: err });
     const msg = (err?.message ?? String(err)).toLowerCase();
     if (err?.code && codeToCategory[err.code]) return new DataError({ category: codeToCategory[err.code], technicalMessage: err.message || String(err), context: err.context || {}, cause: err });
+    if (validCategories.has(err?.category)) return new DataError({ category: err.category, technicalMessage: err.message || String(err), context: err.context || {}, cause: err });
     if (msg.includes('illegal invocation')) return new DataError({ category: ErrorCategory.INVALID_REQUEST, technicalMessage: `Fetch binding error: ${err.message}`, context: { cause: err }, cause: err });
     if (msg.includes('timeout') || err?.name === 'TimeoutError') return new DataError({ category: ErrorCategory.TIMEOUT, technicalMessage: err.message || 'Request timed out', context: { cause: err }, cause: err });
     if (msg.includes('cors')) return new DataError({ category: ErrorCategory.CORS, technicalMessage: err.message || 'CORS error', context: { cause: err }, cause: err });
