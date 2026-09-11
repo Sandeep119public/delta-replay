@@ -22,6 +22,22 @@ describe('BinanceClient provider contract', () => {
     ]);
   });
 
+  it('rejects unsupported resolutions instead of assuming 1m pagination', async () => {
+    const fetchFn = async () => ({
+      ok: true,
+      json: async () => [],
+    });
+    const client = new BinanceClient({ fetchFn });
+
+    await expect(client.fetchCandles({
+      symbol: 'BTCUSDT',
+      resolution: '7m',
+      start: 1700000000,
+      end: 1700000060,
+    }))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST', resolution: '7m' });
+  });
+
   it('rejects malformed object candle payloads at the provider boundary', async () => {
     const client = new BinanceClient({
       fetchFn: async () => ({
