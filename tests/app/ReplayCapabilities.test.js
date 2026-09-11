@@ -19,10 +19,11 @@ describe('createReplayCapabilities', () => {
     });
   });
 
-  it('rejects invalid coordinator attachments', () => {
+  it('rejects invalid or partial coordinator attachments', () => {
     const runtime = createReplayCapabilities();
     expect(() => runtime.attach(null)).toThrow(/coordinator must be an object/i);
     expect(() => runtime.attach('invalid')).toThrow(/coordinator must be an object/i);
+    expect(() => runtime.attach({ updatePreviewWindow: vi.fn() })).toThrow(/requires loadAndPrepareReplay\(\)/i);
   });
 
   it('forwards the stable capability contract after attachment', async () => {
@@ -43,10 +44,15 @@ describe('createReplayCapabilities', () => {
     expect(coordinator.handleSymbolTimeframeChange).toHaveBeenCalledWith('timeframe', '15m', 'select');
   });
 
-  it('allows the coordinator to be replaced without changing the capability object', () => {
+  it('allows a complete coordinator to be replaced without changing the capability object', () => {
     const runtime = createReplayCapabilities();
-    const first = { updatePreviewWindow: vi.fn() };
-    const second = { updatePreviewWindow: vi.fn() };
+    const complete = () => ({
+      loadAndPrepareReplay: vi.fn(),
+      updatePreviewWindow: vi.fn(),
+      handleSymbolTimeframeChange: vi.fn(),
+    });
+    const first = complete();
+    const second = complete();
 
     runtime.attach(first);
     runtime.capabilities.preview(1);
