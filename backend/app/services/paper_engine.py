@@ -86,7 +86,7 @@ class PaperTradingEngine:
         market = self._market_by_symbol.get(symbol)
         if market is None:
             raise ValueError(f"no market price available for {symbol}")
-        market["candle"]["close"] = price
+        market["markPrice"] = price
         if symbol in self.positions:
             self.positions[symbol]["current_price"] = price
         self._recalc()
@@ -118,7 +118,10 @@ class PaperTradingEngine:
             market_index = self._integer(value.get("index"), "market index")
             if market_index < -1 or market_index > self.index:
                 raise ValueError("market index is outside trading timeline")
-            normalized[symbol] = {"candle": normalized_candle, "index": market_index}
+            mark_price = value.get("markPrice")
+            if mark_price is not None:
+                mark_price = self._positive_finite(mark_price, "market mark price")
+            normalized[symbol] = {"candle": normalized_candle, "index": market_index, "markPrice": mark_price}
         self._market_by_symbol = normalized
         return self
 
@@ -132,7 +135,7 @@ class PaperTradingEngine:
             raise ValueError("market candle must be an object")
         for field in ("open", "high", "low", "close"):
             self._positive_finite(normalized_candle.get(field), f"market candle {field}")
-        self._market_by_symbol[symbol] = {"candle": normalized_candle, "index": index}
+        self._market_by_symbol[symbol] = {"candle": normalized_candle, "index": index, "markPrice": None}
         return self
 
     def _recalc(self):
@@ -359,63 +362,73 @@ class PaperTradingEngine:
         if not position:
             raise ValueError("no open position")
         entry = position["entry_price"]
-        side = position["side"]
-        stop = None if stop_loss is None else self._positive_finite(stop_loss, "stop_loss")
-        target = None if take_profit is None else self._positive_finite(take_profit, "take_profit")
-        if stop is not None and ((side == "long" and stop >= entry) or (side == "short" and stop <= entry)):
-            raise ValueError("stop_loss must be below entry for long or above entry for short")
-        if target is not None and ((side == "long" and target <= entry) or (side == "short" and target >= entry)):
-            raise ValueError("take_profit must be above entry for long or below entry for short")
-        if stop is not None and target is not None and ((side == "long" and stop >= target) or (side == "short" and stop <= target)):
-            raise ValueError("stop loss and take profit are ordered incorrectly")
-        position["stop_loss"] = stop
-        position["take_profit"] = target
-        position["stop_loss_created_index"] = self.index if stop is not None else -1
-        position["take_profit_created_index"] = self.index if target is not None else -1
+        if stop_loss is not None:
+            stop_loss = self._positive_finite(stop_loss, "stop loss")
+            if (position["side"] == "long" and stop_loss >= entry) or (position["side"] == "short" and stop_loss <= entry):
+                raise ValueError("stop loss is invalid for position side")
+        if take_profit is not None:
+            take_profit = self._positive_finite(take_profit, "take profit")
+            if (position["side"] == "long" and take_profit <= entry) or (position["side"] == "short" and take_profit >= entry):
+                raise ValueError("take profit is invalid for position side")
+        if stop_loss is not None:
+            position["stop_loss"] = stop_loss
+            position["stop_loss_created_index"] = self.index
+        if take_profit is not None:
+            position["take_profit"] = take_profit
+            position["take_profit_created_index"] = self.index
         return deepcopy(position)
 
-    def clear_risk(self, symbol):
-        return self._clear_risk(symbol, stop_loss=True, take_profit=True)
-
     def clear_stop_loss(self, symbol):
-        return self._clear_risk(symbol, stop_loss=True, take_profit=False)
-
-    def clear_take_profit(self, symbol):
-        return self._clear_risk(symbol, stop_loss=False, take_profit=True)
-
-    def _clear_risk(self, symbol, *, stop_loss, take_profit):
         symbol = str(symbol).strip().upper()
         position = self.positions.get(symbol)
         if not position:
             raise ValueError("no open position")
-        if stop_loss:
-            position["stop_loss"], position["stop_loss_created_index"] = None, -1
-        if take_profit:
-            position["take_profit"], position["take_profit_created_index"] = None, -1
+        position["stop_loss"] = None
+        position["stop_loss_created_index"] = self.index
         return deepcopy(position)
 
-    def set_starting_balance(self, balance):
-        balance = self._positive_finite(balance, "starting balance")
-        if self.index >= 0 or self.positions or self.pending_orders() or self.orders or self.trades or self.funding:
-            raise ValueError("reset the simulation before changing starting balance")
-        self.account = TradingAccount(balance)
-        self.margin_engine = MarginEngine(self.margin_rate, self.maint_margin_rate)
+    def clear_take_profit(self, symbol):
+        symbol = str(symbol).strip().upper()
+        position = self.positions.get(symbol)
+        if not position:
+            raise ValueError("no open position")
+        position["take_profit"] = None
+        position["take_profit_created_index"] = self.index
+        return deepcopy(position)
+
+    def clear_risk(self, symbol):
+        symbol = str(symbol).strip().upper()
+        position = self.positions.get(symbol)
+        if not position:
+            raise ValueError("no open position")
+        position["stop_loss"] = None
+        position["take_profit"] = None
+        position["stop_loss_created_index"] = self.index
+        position["take_profit_created_index"] = self.index
+        return deepcopy(position)
+
+    def set_starting_balance(self, starting_balance):
+        starting_balance = self._positive_finite(starting_balance, "starting balance")
+        if self.index >= 0 or self.positions or self.orders or self.trades or self.funding:
+            raise ValueError("starting balance can only change before trading activity")
+        self.account = TradingAccount(starting_balance)
+        self._recalc()
         return self
 
-    def set_fee_rate(self, rate):
-        rate = float(rate)
-        if not isfinite(rate) or rate < 0 or rate >= 1:
-            raise ValueError("fee rate must be in [0, 1)")
-        self.fee_rate = rate
+    def set_fee_rate(self, fee_rate):
+        fee_rate = self._non_negative_finite(fee_rate, "fee rate")
+        if fee_rate >= 1:
+            raise ValueError("fee rate must be below 1")
+        if self.index >= 0 or self.positions or self.orders or self.trades:
+            raise ValueError("fee rate can only change before trading activity")
+        self.fee_rate = fee_rate
         return self
 
     def snapshot(self):
-        self._recalc()
         return {
             "account": self.account.snapshot(),
-            "positions": [deepcopy(p) for p in self.positions.values()],
-            "orders": [deepcopy(o) for o in self.orders.values()],
-            "pendingOrders": [deepcopy(o) for o in self.pending_orders()],
+            "positions": deepcopy(self.positions),
+            "orders": deepcopy(self.orders),
             "trades": deepcopy(self.trades),
             "funding": deepcopy(self.funding),
             "index": self.index,
@@ -492,9 +505,15 @@ class PaperTradingEngine:
             for field in ("quantity", "entry_price", "current_price"):
                 self._positive_finite(position.get(field), f"position {field}")
             self._non_negative_finite(position.get("entry_fee"), "position entry_fee")
-            for field in ("stop_loss", "take_profit"):
-                if position.get(field) is not None:
-                    self._positive_finite(position[field], field)
+            entry = position["entry_price"]
+            if position.get("stop_loss") is not None:
+                stop = self._positive_finite(position["stop_loss"], "stop loss")
+                if (position["side"] == "long" and stop >= entry) or (position["side"] == "short" and stop <= entry):
+                    raise ValueError("position stop loss is invalid")
+            if position.get("take_profit") is not None:
+                take = self._positive_finite(position["take_profit"], "take profit")
+                if (position["side"] == "long" and take <= entry) or (position["side"] == "short" and take >= entry):
+                    raise ValueError("position take profit is invalid")
             for field in ("stop_loss_created_index", "take_profit_created_index", "opened_index"):
                 if field in position and self._integer(position[field], f"position {field}") < -1:
                     raise ValueError(f"position {field} is invalid")
