@@ -328,10 +328,10 @@ def process(request: Request, command: MarketCandleRequest | None = None):
 
     def process_candle(session):
         replay_index = session.replay.state()["index"]
-        if command.index is not None and command.index != replay_index:
-            raise HTTPException(409, "candle index must match replay index for deterministic history")
         if replay_index < 0:
             raise HTTPException(409, "Load data and start replay before processing a market candle")
+        if command.index is not None and command.index != replay_index:
+            raise HTTPException(409, "candle index must match replay index for deterministic history")
         raw = command.candle.model_dump() if command.candle is not None else replay_candle(session, command.symbol)
         candle = normalize_candle(raw)
         index = replay_index
