@@ -100,16 +100,20 @@ class PaperTradingEngine:
         if side not in ("buy", "sell"):
             raise ValueError("side must be buy or sell")
         quantity = self._positive_finite(quantity, "quantity")
-        if type not in ("market", "limit", "stop_market"):
+        if not isinstance(type, str) or type not in ("market", "limit", "stop_market"):
             raise ValueError("unsupported order type")
-        if type == "limit" or limit_price is not None:
-            limit_price = self._positive_finite(limit_price, "limit_price") if limit_price is not None else None
-        if type == "stop_market" or stop_price is not None:
-            stop_price = self._positive_finite(stop_price, "stop_price") if stop_price is not None else None
-        if type == "limit" and limit_price is None:
-            raise ValueError("limit_price required")
-        if type == "stop_market" and stop_price is None:
-            raise ValueError("stop_price required")
+        if type == "market" and (limit_price is not None or stop_price is not None):
+            if limit_price is not None:
+                raise ValueError("limit_price is only valid for limit orders")
+            raise ValueError("stop_price is only valid for stop_market orders")
+        if type == "limit" and stop_price is not None:
+            raise ValueError("stop_price is only valid for stop_market orders")
+        if type == "stop_market" and limit_price is not None:
+            raise ValueError("limit_price is only valid for limit orders")
+        if type == "limit":
+            limit_price = self._positive_finite(limit_price, "limit_price")
+        if type == "stop_market":
+            stop_price = self._positive_finite(stop_price, "stop_price")
         if self.has_open_position(symbol):
             raise ValueError("position already open")
         order = {"id": self._next_order, "symbol": symbol, "side": side, "type": type, "quantity": quantity, "limitPrice": limit_price, "stopPrice": stop_price, "status": "PENDING", "createdIndex": self.index, "filledPrice": None}
@@ -285,8 +289,11 @@ class PaperTradingEngine:
             if order.get("side") not in ("buy", "sell") or order.get("type") not in ("market", "limit", "stop_market"): raise ValueError("invalid order contract")
             self._positive_finite(order.get("quantity"), "order quantity")
             if order.get("status") not in allowed: raise ValueError("order status is invalid")
+            if order["type"] == "market" and (order.get("limitPrice") is not None or order.get("stopPrice") is not None): raise ValueError("market order cannot have price fields")
             if order["type"] == "limit" and order.get("limitPrice") is None: raise ValueError("limit order requires limitPrice")
+            if order["type"] == "limit" and order.get("stopPrice") is not None: raise ValueError("limit order cannot have stopPrice")
             if order["type"] == "stop_market" and order.get("stopPrice") is None: raise ValueError("stop order requires stopPrice")
+            if order["type"] == "stop_market" and order.get("limitPrice") is not None: raise ValueError("stop order cannot have limitPrice")
             if order.get("limitPrice") is not None: self._positive_finite(order["limitPrice"], "limitPrice")
             if order.get("stopPrice") is not None: self._positive_finite(order["stopPrice"], "stopPrice")
             if order["status"] == "PENDING" and order.get("filledPrice") is not None: raise ValueError("pending order cannot have a filled price")
