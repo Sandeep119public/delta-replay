@@ -342,11 +342,7 @@ def process(request: Request, command: MarketCandleRequest | None = None):
 @router.post("/account/capital")
 def set_capital(request: Request, command: CapitalRequest):
     def change_capital(session):
-        before_index = session.trading.index
-        before_market = dict(session.trading._market_by_symbol)
         service = session.trading.set_starting_balance(command.balance)
-        service.index = before_index
-        service._market_by_symbol = before_market
         session.record("capital", session.replay.index, {"balance": command.balance})
         return snapshot(service)
 
