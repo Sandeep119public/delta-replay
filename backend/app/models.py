@@ -11,10 +11,10 @@ class Candle(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
     time: int = Field(ge=0)
-    open: float
-    high: float
-    low: float
-    close: float
+    open: float = Field(gt=0)
+    high: float = Field(gt=0)
+    low: float = Field(gt=0)
+    close: float = Field(gt=0)
     volume: float = Field(default=0, ge=0)
 
     @model_validator(mode="after")
