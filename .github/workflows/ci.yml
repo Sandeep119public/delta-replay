@@ -54,3 +54,5 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -r backend/requirements.txt
       - run: PYTHONPATH=backend pytest backend/tests -q
+      - name: Build backend container
+        run: docker build --file backend/Dockerfile --tag delta-replay-api:ci .
