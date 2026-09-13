@@ -76,6 +76,7 @@ class PostgresSessionRepository(SessionRepository):
         candles = replay.pop("candles", None)
         if candles is not None:
             dataset_id = cls._dataset_id(candles)
+            connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
             connection.execute(
                 """INSERT INTO replay_datasets (dataset_id, candles)
                    VALUES (%s, %s::jsonb)
