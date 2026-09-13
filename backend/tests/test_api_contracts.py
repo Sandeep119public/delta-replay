@@ -94,7 +94,7 @@ def test_replay_load_and_state_are_session_scoped():
     assert state.json()["index"] == -1
 
 
-def test_replay_seek_is_blocked_after_trade_activity():
+def test_replay_seek_reconstructs_trading_state_after_activity():
     session = headers()
     payload = {
         "candles": [
@@ -111,5 +111,14 @@ def test_replay_seek_is_blocked_after_trade_activity():
     )
     assert order.status_code == 200
     assert client.post("/api/v1/replay/step", headers=session).status_code == 200
+    assert client.get("/api/v1/trading/state", headers=session).json()["positions"]
+
     seek = client.post("/api/v1/replay/seek/0", headers=session)
-    assert seek.status_code == 409
+    assert seek.status_code == 200
+    rebuilt = seek.json()
+    assert rebuilt["index"] == 0
+    assert rebuilt["trading"]["positions"] == []
+
+    replayed = client.post("/api/v1/replay/step", headers=session)
+    assert replayed.status_code == 200
+    assert len(replayed.json()["trading"]["positions"]) == 1
