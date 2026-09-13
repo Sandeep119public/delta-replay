@@ -7,12 +7,6 @@ class ReplayDivergenceError(ValueError):
     """Raised when persisted user commands cannot be replayed deterministically."""
 
 
-def _prepare_command_context(engine: PaperTradingEngine, replay, replay_index: int) -> None:
-    engine.index = replay_index
-    if 0 <= replay_index < len(replay.candles):
-        engine.set_market_context("BTCUSDT", replay.candles[replay_index], replay_index)
-
-
 def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> None:
     kind = command["type"]
     payload = command["payload"]
@@ -24,12 +18,10 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
                 payload.get("type", "market"), payload.get("limitPrice"), payload.get("stopPrice"),
             )
         elif kind == "close":
-            trade = engine.close(
+            engine.close(
                 payload["symbol"], payload["price"], reason="MARKET",
                 timestamp=payload.get("timestamp"), quantity=payload.get("quantity"),
             )
-            if trade is None:
-                raise ReplayDivergenceError("close command found no open position")
         elif kind == "cancel":
             engine.cancel(payload["orderId"])
         elif kind == "cancel_all":
@@ -56,9 +48,14 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
         elif kind == "market_step":
             if replay is None:
                 raise ReplayDivergenceError("market_step requires replay data")
-            index = command["replayIndex"]
+            index = int(command["replayIndex"])
             if index < 0 or index >= len(replay.candles):
                 raise ReplayDivergenceError("market_step replay index is outside dataset")
+            expected_index = engine.index + 1
+            if index != expected_index:
+                raise ReplayDivergenceError(
+                    f"market_step index {index} is not the next executable index {expected_index}"
+                )
             engine.on_candle(replay.candles[index], index, payload["symbol"])
         elif kind == "candle":
             engine.on_candle(payload["candle"], payload["index"], payload["symbol"])
@@ -115,7 +112,6 @@ def rebuild_trading(replay, history, target_index: int) -> PaperTradingEngine:
         for command in commands_by_index.get(command_index, []):
             if command["type"] == "market_step":
                 continue
-            _prepare_command_context(engine, replay, command_index)
             _apply_command(engine, command, replay)
 
         market_step = next(
@@ -133,6 +129,5 @@ def rebuild_trading(replay, history, target_index: int) -> PaperTradingEngine:
     for command in commands_by_index.get(target_index, []):
         if command["type"] == "market_step":
             continue
-        _prepare_command_context(engine, replay, target_index)
         _apply_command(engine, command, replay)
     return engine
