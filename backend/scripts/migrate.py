@@ -4,17 +4,20 @@ from pathlib import Path
 import psycopg
 
 
-MIGRATION = Path(__file__).resolve().parents[1] / "migrations" / "001_create_replay_sessions.sql"
+MIGRATIONS = sorted(Path(__file__).resolve().parents[1].joinpath("migrations").glob("*.sql"))
 
 
 def main() -> None:
     dsn = os.getenv("DATABASE_URL", "").strip()
     if not dsn:
         raise SystemExit("DATABASE_URL is required")
-    sql = MIGRATION.read_text(encoding="utf-8")
+    if not MIGRATIONS:
+        raise SystemExit("No migration files found")
+
     with psycopg.connect(dsn) as connection:
-        connection.execute(sql)
-    print(f"Applied {MIGRATION.name}")
+        for migration in MIGRATIONS:
+            connection.execute(migration.read_text(encoding="utf-8"))
+            print(f"Applied {migration.name}")
 
 
 if __name__ == "__main__":

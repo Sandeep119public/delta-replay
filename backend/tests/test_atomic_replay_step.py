@@ -100,7 +100,7 @@ def test_replay_reset_clears_pending_orders():
     manager.delete(session_id)
 
 
-def test_seek_is_rejected_after_trading_history_exists():
+def test_seek_reconstructs_state_after_trading_history_exists():
     client = TestClient(app)
     session_id = str(uuid4())
     headers = {"X-Session-ID": session_id}
@@ -112,11 +112,16 @@ def test_seek_is_rejected_after_trading_history_exists():
     client.post("/api/v1/trading/close", json={"symbol": "BTCUSDT"}, headers=headers)
 
     response = client.post("/api/v1/replay/seek/0", headers=headers)
-    assert response.status_code == 409
-    assert "trading activity" in response.json()["detail"]
+    assert response.status_code == 200
+    body = response.json()
+    assert body["index"] == 0
+    assert body["trading"]["positions"] == []
+    assert len(body["trading"]["pendingOrders"]) == 1
 
-    state = client.get("/api/v1/replay/state", headers=headers).json()
-    assert state["index"] == 1
+    resumed = client.post("/api/v1/replay/step", headers=headers)
+    assert resumed.status_code == 200
+    assert len(resumed.json()["trading"]["positions"]) == 1
+
     manager.delete(session_id)
 
 

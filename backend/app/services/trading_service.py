@@ -1,96 +1,116 @@
+"""Compatibility facade over the canonical paper-trading engine.
+
+New code should use :class:`PaperTradingEngine` directly. This facade exists only
+for older integrations that still construct ``TradingService``.
+"""
+
 from ..models import OrderRequest
-from ..domain.margin import MarginEngine
-from ..domain.risk import evaluate_risk
+from .paper_engine import PaperTradingEngine
 
 TAKER_FEE_RATE = 0.0005
-DEFAULT_MARGIN_RATE = 1.0
-DEFAULT_MAINTENANCE_RATE = 0.5
+DEFAULT_MARGIN_RATE = 0.1
+DEFAULT_MAINTENANCE_RATE = 0.05
+
 
 class TradingService:
-    def __init__(self, starting_balance: float = 10000.0, fee_rate: float = TAKER_FEE_RATE, margin_rate: float = DEFAULT_MARGIN_RATE, maintenance_rate: float = DEFAULT_MAINTENANCE_RATE):
-        if not 0 <= fee_rate <= 1: raise ValueError('fee_rate must be in [0,1]')
-        if not 0 < margin_rate <= 1: raise ValueError('margin_rate must be in (0,1]')
-        if not 0 <= maintenance_rate <= margin_rate: raise ValueError('maintenance_rate must be <= margin_rate')
-        self.starting_balance = float(starting_balance)
-        self.balance = float(starting_balance)
-        self.fee_rate = float(fee_rate)
-        self.margin_rate = float(margin_rate)
-        self.maintenance_rate = float(maintenance_rate)
-        self.margin_engine = MarginEngine(self.margin_rate, self.maintenance_rate)
-        self.position = None
-        self.total_fees = 0.0
-        self.positions = {}
+    def __init__(
+        self,
+        starting_balance: float = 10000.0,
+        fee_rate: float = TAKER_FEE_RATE,
+        margin_rate: float = DEFAULT_MARGIN_RATE,
+        maintenance_rate: float = DEFAULT_MAINTENANCE_RATE,
+    ):
+        self.engine = PaperTradingEngine(
+            starting_balance=starting_balance,
+            fee_rate=fee_rate,
+            margin_rate=margin_rate,
+            maint_margin_rate=maintenance_rate,
+        )
 
-    def _fee(self, price: float, quantity: float) -> float:
-        return abs(price * quantity) * self.fee_rate
+    @property
+    def starting_balance(self):
+        return self.engine.account.starting_balance
+
+    @property
+    def balance(self):
+        return self.engine.account.wallet_balance
+
+    @property
+    def fee_rate(self):
+        return self.engine.fee_rate
+
+    @property
+    def margin_rate(self):
+        return self.engine.margin_rate
+
+    @property
+    def maintenance_rate(self):
+        return self.engine.maint_margin_rate
+
+    @property
+    def total_fees(self):
+        return self.engine.account.total_fees
+
+    @property
+    def position(self):
+        return next(iter(self.engine.positions.values()), None)
+
+    @property
+    def positions(self):
+        return self.engine.positions
 
     def snapshot(self, mark_price: float | None = None):
-        unrealized = 0.0
-        initial_margin = 0.0
-        maintenance_margin = 0.0
-        if self.position:
-            mark = mark_price if mark_price is not None else self.position['entry_price']
-            signed = 1 if self.position['side'] == 'long' else -1
-            unrealized = (mark - self.position['entry_price']) * self.position['quantity'] * signed
-            notional = mark * self.position['quantity']
-            initial_margin = notional * self.margin_rate
-            maintenance_margin = notional * self.maintenance_rate
+        position = self.position
+        if mark_price is not None and position:
+            self.engine.mark(position["symbol"], mark_price)
+        account = self.engine.snapshot()["account"]
         return {
-            'balance': self.balance,
-            'equity': self.balance + unrealized,
-            'unrealizedPnl': unrealized,
-            'initialMargin': initial_margin,
-            'maintenanceMargin': maintenance_margin,
-            'availableMargin': max(0.0, self.balance + unrealized - initial_margin),
-            'totalFees': self.total_fees,
-            'position': self.position,
+            "balance": account["walletBalance"],
+            "equity": account["equity"],
+            "unrealizedPnl": account["unrealizedPnL"],
+            "initialMargin": account["initialMargin"],
+            "maintenanceMargin": account["maintenanceMargin"],
+            "availableMargin": account["availableMargin"],
+            "totalFees": account["totalFees"],
+            "position": self.position,
         }
 
-    def open(self, order: OrderRequest, price: float):
-        if price <= 0: raise ValueError('price must be positive')
-        if self.position is not None: raise ValueError('position already open')
-        fee = self._fee(price, order.quantity)
-        required = self.margin_engine.required_entry_cash(price, order.quantity, fee)
-        if self.balance < required: raise ValueError('insufficient margin')
-        self.balance -= fee
-        self.total_fees += fee
-        self.position = {'side': 'long' if order.side == 'buy' else 'short', 'quantity': order.quantity, 'entry_price': price, 'current_price': price, 'stop_loss': None, 'take_profit': None}
-        self.positions['DEFAULT'] = self.position
+    def open(self, order: OrderRequest, price: float, symbol: str = "DEFAULT"):
+        self.engine.submit(symbol, order.side, order.quantity)
+        self.engine.on_candle(
+            {
+                "time": self.engine.index + 1,
+                "open": price,
+                "high": price,
+                "low": price,
+                "close": price,
+                "volume": 0,
+            },
+            self.engine.index + 1,
+            symbol,
+        )
         return self.snapshot(price)
 
     def open_order(self, order, price: float):
-        request = OrderRequest(side=order.side, quantity=order.quantity)
-        return self.open(request, price)
+        return self.open(OrderRequest(side=order.side, quantity=order.quantity), price, order.symbol)
 
-    def close(self, price: float):
-        if price <= 0: raise ValueError('price must be positive')
-        if self.position:
-            qty = self.position['quantity']; entry = self.position['entry_price']
-            pnl = (price - entry) * qty
-            if self.position['side'] == 'short': pnl = -pnl
-            fee = self._fee(price, qty)
-            self.balance += pnl - fee
-            self.total_fees += fee
-            self.positions.pop('DEFAULT',None)
-            self.position = None
+    def close(self, price: float, symbol: str = "DEFAULT"):
+        self.engine.close(symbol, price)
         return self.snapshot(price)
 
-    def set_risk(self, stop_loss=None, take_profit=None):
-        if not self.position: raise ValueError('no open position')
-        if stop_loss is not None: self.position['stop_loss']=float(stop_loss)
-        if take_profit is not None: self.position['take_profit']=float(take_profit)
-        return self.snapshot(self.position['current_price'])
+    def set_risk(self, stop_loss=None, take_profit=None, symbol: str = "DEFAULT"):
+        return self.engine.set_risk(symbol, stop_loss, take_profit)
 
-    def process_candle(self,candle,policy='conservative'):
-        if not self.position: return {'event':None,**self.snapshot(candle.get('close'))}
-        self.position['current_price']=float(candle['close'])
-        reason,price,ambiguous=evaluate_risk(self.position,candle,policy)
-        if reason:
-            result=self.close(float(price));return {'event':reason,'ambiguous':ambiguous,**result}
-        return {'event':None,**self.snapshot(float(candle['close']))}
+    def process_candle(self, candle, policy="conservative", symbol="DEFAULT"):
+        events = self.engine.on_candle(candle, self.engine.index + 1, symbol)
+        return {"event": events[-1] if events else None, **self.snapshot(candle.get("close"))}
 
     def reset(self):
-        self.balance = self.starting_balance
-        self.position = None
-        self.total_fees = 0.0
+        balance = self.engine.account.starting_balance
+        self.engine = PaperTradingEngine(
+            starting_balance=balance,
+            fee_rate=self.engine.fee_rate,
+            margin_rate=self.engine.margin_rate,
+            maint_margin_rate=self.engine.maint_margin_rate,
+        )
         return self.snapshot()

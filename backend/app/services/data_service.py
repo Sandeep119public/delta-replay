@@ -2,7 +2,7 @@ import csv
 import io
 import math
 
-from ..models import Candle
+from ..models import MAX_CANDLES, Candle
 
 
 class DataService:
@@ -32,6 +32,8 @@ class DataService:
 
         candles = []
         for row_number, row in enumerate(reader, start=2):
+            if len(candles) >= MAX_CANDLES:
+                raise ValueError(f"CSV cannot contain more than {MAX_CANDLES} candles")
             try:
                 timestamp = self._number(row.get("time"), "time")
                 if timestamp < 0 or timestamp != int(timestamp):

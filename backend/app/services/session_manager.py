@@ -8,7 +8,7 @@ from fastapi import HTTPException, Request
 from .paper_engine import PaperTradingEngine
 from .replay_service import ReplayService
 from .session_repository import InMemorySessionRepository, SessionRepository
-from .session_state import restore_session, serialize_session
+from .session_state import restore_session_bundle, serialize_session
 
 
 SESSION_HEADER = "X-Session-ID"
@@ -18,6 +18,21 @@ SESSION_HEADER = "X-Session-ID"
 class SessionState:
     replay: ReplayService = field(default_factory=ReplayService)
     trading: PaperTradingEngine = field(default_factory=PaperTradingEngine)
+    history: list[dict] = field(default_factory=list)
+
+    def record(self, command_type: str, replay_index: int, payload: dict):
+        self.truncate_future_history(replay_index)
+        self.history.append({
+            "type": command_type,
+            "replayIndex": int(replay_index),
+            "payload": dict(payload),
+        })
+
+    def truncate_future_history(self, replay_index: int):
+        self.history = [
+            item for item in self.history
+            if item.get("replayIndex", -1) <= replay_index
+        ]
 
 
 class SessionManager:
@@ -60,7 +75,10 @@ class SessionManager:
             document = self.repository.get(session_id)
             if document is None:
                 session = SessionState()
-                self.repository.save(session_id, serialize_session(session.replay, session.trading))
+                self.repository.save(
+                    session_id,
+                    serialize_session(session.replay, session.trading, session.history),
+                )
             else:
                 session = self._restore(document)
 
@@ -72,10 +90,10 @@ class SessionManager:
     @staticmethod
     def _restore(document) -> SessionState:
         try:
-            replay, trading = restore_session(document)
+            replay, trading, history = restore_session_bundle(document)
         except (TypeError, ValueError, KeyError, RuntimeError) as exc:
             raise RuntimeError(f"unable to restore session state: {exc}") from exc
-        return SessionState(replay=replay, trading=trading)
+        return SessionState(replay=replay, trading=trading, history=history)
 
     def atomic(self, session_id: str, operation):
         """Run a session mutation with one serialized repository commit."""
@@ -89,7 +107,11 @@ class SessionManager:
             def mutate(document):
                 session = self._restore(document)
                 result = operation(session)
-                return serialize_session(session.replay, session.trading), (result, session)
+                return serialize_session(
+                    session.replay,
+                    session.trading,
+                    session.history,
+                ), (result, session)
 
             result, session = self.repository.atomic_update(session_id, mutate)
             with self._lock:
@@ -100,7 +122,10 @@ class SessionManager:
     def _ensure_exists(self, session_id: str) -> None:
         if self.repository.get(session_id) is None:
             session = SessionState()
-            self.repository.save(session_id, serialize_session(session.replay, session.trading))
+            self.repository.save(
+                session_id,
+                serialize_session(session.replay, session.trading, session.history),
+            )
 
     def delete(self, session_id: str) -> None:
         self._validate_session_id(session_id)
@@ -108,9 +133,6 @@ class SessionManager:
         with session_lock:
             self._sessions.pop(session_id, None)
             self.repository.delete(session_id)
-        # Keep the lock object for this session. Removing it after releasing the
-        # lock creates a race where a concurrent caller can acquire the old lock
-        # while a later caller creates a new lock, allowing mutations to overlap.
 
     def clear_cache(self) -> None:
         """Drop in-process objects without touching the repository."""

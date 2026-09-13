@@ -4,6 +4,9 @@ from math import isfinite
 from ..models import Candle
 
 
+MAX_VISIBLE_CANDLES = 2000
+
+
 class ReplayService:
     VALID_STATUSES = {"idle", "ready", "paused", "ended"}
 
@@ -71,6 +74,12 @@ class ReplayService:
         return self.state()
 
     def state(self):
+        if self.index >= 0:
+            visible_start = max(0, self.index + 1 - MAX_VISIBLE_CANDLES)
+            visible = deepcopy(self.candles[visible_start : self.index + 1])
+        else:
+            visible_start = 0
+            visible = []
         return {
             "status": self.status,
             "index": self.index,
@@ -78,7 +87,8 @@ class ReplayService:
             "total": len(self.candles),
             "speed": self.speed,
             "candle": deepcopy(self.candles[self.index]) if self.index >= 0 else None,
-            "visibleCandles": deepcopy(self.candles[: self.index + 1]) if self.index >= 0 else [],
+            "visibleCandles": visible,
+            "visibleStartIndex": visible_start,
         }
 
     def export_state(self):
