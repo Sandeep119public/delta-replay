@@ -33,3 +33,14 @@ def test_restore_rejects_non_canonical_market_symbol():
 
     with pytest.raises(ValueError, match="market symbol"):
         restore_session(document)
+
+
+def test_restore_rejects_uninitialized_market_context_entry():
+    replay = ReplayService()
+    replay.load([candle(100, 101, 99, 100)])
+    trading = PaperTradingEngine()
+    document = serialize_session(replay, trading)
+    document["tradingMarket"] = {"BTCUSDT": {"index": -1}}
+
+    with pytest.raises(ValueError, match="outside trading timeline"):
+        restore_session(document)
