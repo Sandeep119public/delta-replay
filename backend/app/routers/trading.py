@@ -343,7 +343,7 @@ def process(request: Request, command: MarketCandleRequest | None = None):
 def set_capital(request: Request, command: CapitalRequest):
     def change_capital(session):
         service = session.trading.set_starting_balance(command.balance)
-        session.record("capital", session.replay.index, {"balance": command.balance})
+        session.record("capital", -1, {"balance": command.balance})
         return snapshot(service)
 
     try:
