@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from .postgres_session_repository import DATASET_GC_LOCK_KEY
+from .storage_locks import DATASET_GC_LOCK_KEY
 
 
 class SessionGarbageCollector:
