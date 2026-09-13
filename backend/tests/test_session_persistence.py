@@ -52,14 +52,14 @@ def test_session_round_trip_preserves_symbol_specific_close_price():
     replay = ReplayService()
     replay.load([
         candle(100, 101, 99, 100, 1),
-        candle(101, 103, 100, 102, 2),
+        candle(101, 110, 100, 110, 2),
         candle(102, 104, 101, 103, 3),
     ])
     replay.start(2)
     trading = PaperTradingEngine()
     trading.on_candle(candle(100, 101, 99, 100, 1), 0, "ETHUSDT")
     trading.submit("ETHUSDT", "buy", 1)
-    trading.on_candle(candle(100, 102, 99, 110, 2), 1, "ETHUSDT")
+    trading.on_candle(candle(100, 110, 99, 110, 2), 1, "ETHUSDT")
     trading.on_candle(candle(50000, 50100, 49900, 50000, 3), 2, "BTCUSDT")
 
     _, restored = restore_session(serialize_session(replay, trading))
