@@ -130,6 +130,12 @@ def reset(request: Request):
         )
         session.history = []
         replay = session.replay.reset()
-        return {**replay, "trading": session.trading.snapshot()}
+        if replay["index"] >= 0:
+            session.trading.on_candle(replay["candle"], replay["index"], "BTCUSDT")
+            session.record("market_step", replay["index"], {"symbol": "BTCUSDT"})
+        return replay_snapshot(session)
 
-    return atomic_session(request, reset_session)
+    try:
+        return atomic_session(request, reset_session)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
