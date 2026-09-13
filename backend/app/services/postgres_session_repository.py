@@ -69,11 +69,17 @@ class PostgresSessionRepository(SessionRepository):
             if fields - observed.get(table, set())
         }
         if missing_columns:
-            details = "; ".join(f"{table}: {', '.join(columns)}" for table, columns in missing_columns.items())
+            details = "; ".join(f"{table}: {', '.join(fields)}" for table, fields in missing_columns.items())
             raise RuntimeError(f"PostgreSQL schema is incomplete: {details}")
+
+        required_migrations = {
+            "000_schema_migrations",
+            "001_create_replay_sessions",
+            "002_add_replay_events",
+        }
         applied_versions = {str(row["version"]) for row in migration_rows}
-        if not {"000", "001", "002"}.issubset(applied_versions):
-            missing_versions = sorted({"000", "001", "002"} - applied_versions)
+        if not required_migrations.issubset(applied_versions):
+            missing_versions = sorted(required_migrations - applied_versions)
             raise RuntimeError(
                 "PostgreSQL migrations are incomplete; apply backend/migrations before starting the application. "
                 f"Missing versions: {', '.join(missing_versions)}"
@@ -109,9 +115,11 @@ class PostgresSessionRepository(SessionRepository):
         replay = dict(clean.get("replay", {}))
         candles = replay.pop("candles", None)
         if candles is not None:
-            dataset_id = replay.get("datasetId") or cls._dataset_id(candles)
-            if not isinstance(dataset_id, str) or not dataset_id:
-                raise ValueError("replay datasetId must be a non-empty string")
+            derived_dataset_id = cls._dataset_id(candles)
+            persisted_dataset_id = replay.get("datasetId")
+            if persisted_dataset_id is not None and persisted_dataset_id != derived_dataset_id:
+                raise ValueError("replay datasetId does not match candle data")
+            dataset_id = persisted_dataset_id or derived_dataset_id
             exists = connection.execute(
                 "SELECT 1 FROM replay_datasets WHERE dataset_id = %s",
                 (dataset_id,),
