@@ -1,9 +1,8 @@
 from copy import deepcopy
-import hashlib
-import json
 from math import isfinite
 
 from ..models import Candle
+from .dataset_identity import dataset_id
 
 
 MAX_VISIBLE_CANDLES = 2000
@@ -40,11 +39,7 @@ class ReplayService:
 
     @staticmethod
     def _dataset_id(candles):
-        try:
-            encoded = json.dumps(candles, separators=(",", ":"), sort_keys=True, allow_nan=False)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"replay dataset is not JSON-safe: {exc}") from exc
-        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return dataset_id(candles)
 
     def load(self, candles):
         validated = [Candle.model_validate(candle) for candle in candles]
