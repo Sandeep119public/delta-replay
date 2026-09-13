@@ -40,12 +40,17 @@ def test_restore_rejects_market_context_beyond_trading_timeline():
         restore_session_bundle(invalid)
 
 
-def test_restore_rejects_replay_trading_cursor_mismatch():
-    document = session_document()
-    invalid = copy.deepcopy(document)
-    invalid["trading"]["index"] = -1
+def test_restore_rejects_replay_trading_cursor_mismatch_with_trading_activity():
+    replay = ReplayService()
+    replay.load([candle(100, 101, 99, 100, 1)])
+    trading = PaperTradingEngine()
+    trading.on_candle(replay.candles[0], 0, "BTCUSDT")
+    document = serialize_session(replay, trading)
+    document["replay"]["index"] = -1
+    document["replay"]["startIndex"] = -1
+    document["replay"]["status"] = "ready"
     with pytest.raises(ValueError, match="replay and trading indexes must match"):
-        restore_session_bundle(invalid)
+        restore_session_bundle(document)
 
 
 def test_restore_rejects_market_candle_that_does_not_match_dataset():
@@ -64,6 +69,9 @@ def test_restore_rejects_unknown_or_out_of_order_history():
         restore_session_bundle(invalid)
 
     invalid = copy.deepcopy(document)
+    invalid["replay"]["index"] = 2
+    invalid["replay"]["startIndex"] = 0
+    invalid["replay"]["status"] = "paused"
     invalid["history"].extend([
         {"type": "order", "replayIndex": 1, "payload": {"symbol": "BTCUSDT"}},
         {"type": "order", "replayIndex": 0, "payload": {"symbol": "BTCUSDT"}},
