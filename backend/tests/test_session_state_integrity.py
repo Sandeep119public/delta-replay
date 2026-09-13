@@ -40,6 +40,22 @@ def test_restore_rejects_market_context_beyond_trading_timeline():
         restore_session_bundle(invalid)
 
 
+def test_restore_rejects_replay_trading_cursor_mismatch():
+    document = session_document()
+    invalid = copy.deepcopy(document)
+    invalid["trading"]["index"] = -1
+    with pytest.raises(ValueError, match="replay and trading indexes must match"):
+        restore_session_bundle(invalid)
+
+
+def test_restore_rejects_market_candle_that_does_not_match_dataset():
+    document = session_document()
+    invalid = copy.deepcopy(document)
+    invalid["tradingMarket"]["BTCUSDT"]["candle"]["close"] = 999
+    with pytest.raises(ValueError, match="does not match replay dataset"):
+        restore_session_bundle(invalid)
+
+
 def test_restore_rejects_unknown_or_out_of_order_history():
     document = session_document()
     invalid = copy.deepcopy(document)
