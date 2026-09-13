@@ -8,7 +8,7 @@ from fastapi import HTTPException, Request
 from .paper_engine import PaperTradingEngine
 from .replay_service import ReplayService
 from .session_repository import InMemorySessionRepository, SessionRepository
-from .session_state import restore_session, serialize_session
+from .session_state import extract_history, restore_session, serialize_session
 
 
 SESSION_HEADER = "X-Session-ID"
@@ -93,7 +93,8 @@ class SessionManager:
     @staticmethod
     def _restore(document) -> SessionState:
         try:
-            replay, trading, history = restore_session(document)
+            replay, trading = restore_session(document)
+            history = extract_history(document)
         except (TypeError, ValueError, KeyError, RuntimeError) as exc:
             raise RuntimeError(f"unable to restore session state: {exc}") from exc
         return SessionState(replay=replay, trading=trading, history=history)
