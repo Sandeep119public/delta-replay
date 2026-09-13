@@ -93,3 +93,40 @@ def test_same_index_conflicting_candle_is_rejected():
     engine.on_candle(candle(100, 105, 95, 101, 1), 0, "BTCUSDT")
     with pytest.raises(ValueError, match="same-index candle does not match existing market context"):
         engine.on_candle(candle(100, 106, 95, 101, 1), 0, "BTCUSDT")
+
+
+def test_from_state_rejects_fabricated_fee_total():
+    engine = PaperTradingEngine()
+    fill_long(engine)
+    state = engine.export_state()
+    state["account"]["totalFees"] += 1
+    state["account"]["walletBalance"] += 1
+    state["account"]["realizedPnL"] += 1
+
+    with pytest.raises(ValueError, match="totalFees is inconsistent"):
+        PaperTradingEngine.from_state(state)
+
+
+def test_from_state_rejects_fabricated_realized_pnl():
+    engine = PaperTradingEngine()
+    fill_long(engine)
+    engine.close("BTCUSDT", 115)
+    state = engine.export_state()
+    state["account"]["realizedPnL"] += 1
+    state["account"]["walletBalance"] += 1
+
+    with pytest.raises(ValueError, match="realizedPnL is inconsistent"):
+        PaperTradingEngine.from_state(state)
+
+
+def test_from_state_rejects_inconsistent_funding_aggregate():
+    engine = PaperTradingEngine()
+    fill_long(engine)
+    engine.apply_funding(0.01, symbol="BTCUSDT", mark_price=112)
+    state = engine.export_state()
+    state["account"]["totalFundingPaid"] += 1
+    state["account"]["netFunding"] -= 1
+    state["account"]["walletBalance"] += 0
+
+    with pytest.raises(ValueError, match="totalFundingPaid is inconsistent"):
+        PaperTradingEngine.from_state(state)
