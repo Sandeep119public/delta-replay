@@ -126,7 +126,7 @@ def test_from_state_rejects_inconsistent_funding_aggregate():
     state = engine.export_state()
     state["account"]["totalFundingPaid"] += 1
     state["account"]["netFunding"] -= 1
-    state["account"]["walletBalance"] += 0
+    state["account"]["walletBalance"] -= 1
 
     with pytest.raises(ValueError, match="totalFundingPaid is inconsistent"):
         PaperTradingEngine.from_state(state)
