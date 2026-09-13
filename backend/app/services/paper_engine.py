@@ -323,6 +323,14 @@ class PaperTradingEngine:
         if index < 0:
             raise ValueError("candle index must be non-negative")
         if index == self.index:
+            existing = self._market_by_symbol.get(symbol)
+            if existing is not None:
+                previous = existing["candle"]
+                for field in ("open", "high", "low", "close"):
+                    if float(previous[field]) != float(candle[field]):
+                        raise ValueError("same-index candle does not match existing market context")
+                if "time" in previous and "time" in candle and previous["time"] != candle["time"]:
+                    raise ValueError("same-index candle time does not match existing market context")
             return []
         if self.index == -1 and not (self.positions or self.orders or self.trades or self.funding):
             self.index = index
