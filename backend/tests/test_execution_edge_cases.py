@@ -99,7 +99,7 @@ def test_partial_close_preserves_fee_and_realized_pnl_invariants():
     assert isclose(trade["netPnL"], 3.958)
     assert isclose(engine.account.total_fees, 0.072)
     assert isclose(engine.account.realized_pnl, 3.928)
-    assert isclose(engine.account.wallet_balance, 10009.928)
+    assert isclose(engine.account.wallet_balance, 10003.928)
     assert isclose(engine.positions["BTCUSDT"]["quantity"], 0.6)
     assert isclose(engine.positions["BTCUSDT"]["entry_fee"], 0.03)
     engine.account.validate_invariants()
