@@ -222,11 +222,12 @@ class PaperTradingEngine:
     def apply_funding(self, rate, timestamp=None, symbol=None, mark_price=None):
         """Apply one deterministic funding event through the canonical account ledger."""
         rate = self._finite(rate, "funding rate")
+        normalized_symbol = str(symbol).strip().upper() if symbol else None
         selected = []
         for sym, position in self.positions.items():
-            if symbol and sym != str(symbol).strip().upper():
+            if normalized_symbol and sym != normalized_symbol:
                 continue
-            mark = mark_price if mark_price is not None and sym == str(symbol).strip().upper() if symbol else mark_price
+            mark = mark_price
             if mark is None:
                 mark = position.get("current_price", position["entry_price"])
             mark = self._positive_finite(mark, "funding mark price")
