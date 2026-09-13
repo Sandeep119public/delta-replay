@@ -15,6 +15,7 @@ export class ChartTradingController {
     limitPriceInput = null,
     stopPriceInput = null,
     orderTypeSelect = null,
+    getSymbol = () => null,
   }) {
     this.chartManager = chartManager;
     this.tradingEvents = tradingEvents;
@@ -29,6 +30,7 @@ export class ChartTradingController {
     this.limitPriceInput = limitPriceInput;
     this.stopPriceInput = stopPriceInput;
     this.orderTypeSelect = orderTypeSelect;
+    this.getSymbol = getSymbol;
     this._subscriptions = [];
     this._unsubscribeChartClick = null;
     this._destroyed = false;
@@ -78,9 +80,15 @@ export class ChartTradingController {
     this._unsubscribeChartClick = null;
   }
 
+  _activePosition(positions = []) {
+    if (!Array.isArray(positions) || positions.length === 0) return null;
+    const symbol = String(this.getSymbol?.() || '').trim().toUpperCase();
+    return positions.find((position) => String(position?.symbol || '').toUpperCase() === symbol) || positions[0];
+  }
+
   syncChartTradingLines() {
     const snapshot = this.trading?.snapshot() || { positions: [], pendingOrders: [] };
-    const position = snapshot.positions[0] || null;
+    const position = this._activePosition(snapshot.positions);
     this.chartManager?.updatePositionLines?.(position);
     this.chartManager?.updateOrderLines?.(snapshot.pendingOrders || []);
     this.floatingPosView?.render?.(position);
