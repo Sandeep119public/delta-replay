@@ -8,7 +8,7 @@ from app.services.session_state import restore_session_bundle, serialize_session
 
 
 def candle(o, h, l, c, t):
-    return {"time": t, "open": o, "high": h, "low": l, "close": c, "volume": 0}
+    return {"time": t, "open": o, "high": h, "low": l, "close": c}
 
 
 def session_document():
@@ -24,12 +24,28 @@ def session_document():
     }])
 
 
-def test_restore_preserves_independent_replay_and_trading_cursors():
+def test_restore_preserves_replay_and_trading_cursors():
     document = session_document()
     replay, trading, history = restore_session_bundle(document)
     assert replay.index == 0
     assert trading.index == 0
     assert history == document["history"]
+
+
+def test_restore_allows_trading_to_lag_replay_cursor():
+    document = session_document()
+    document["replay"]["index"] = 1
+    document["replay"]["status"] = "paused"
+    replay, trading, _ = restore_session_bundle(document)
+    assert replay.index == 1
+    assert trading.index == 0
+
+
+def test_restore_rejects_trading_cursor_ahead_of_replay():
+    document = session_document()
+    document["trading"]["index"] = 1
+    with pytest.raises(ValueError, match="trading index cannot be ahead of replay index"):
+        restore_session_bundle(document)
 
 
 def test_restore_rejects_market_context_beyond_trading_timeline():
@@ -43,21 +59,22 @@ def test_restore_rejects_market_context_beyond_trading_timeline():
 def test_restore_rejects_replay_trading_cursor_mismatch_with_trading_activity():
     replay = ReplayService()
     replay.load([candle(100, 101, 99, 100, 1)])
+    replay.start(0)
     trading = PaperTradingEngine()
     trading.on_candle(replay.candles[0], 0, "BTCUSDT")
     document = serialize_session(replay, trading)
     document["replay"]["index"] = -1
     document["replay"]["startIndex"] = -1
     document["replay"]["status"] = "ready"
-    with pytest.raises(ValueError, match="replay and trading indexes must match"):
+    with pytest.raises(ValueError, match="trading index cannot be ahead of replay index"):
         restore_session_bundle(document)
 
 
-def test_restore_rejects_market_candle_that_does_not_match_dataset():
+def test_restore_rejects_noncanonical_market_symbol():
     document = session_document()
     invalid = copy.deepcopy(document)
-    invalid["tradingMarket"]["BTCUSDT"]["candle"]["close"] = 999
-    with pytest.raises(ValueError, match="does not match replay dataset"):
+    invalid["tradingMarket"] = {"btcusdt": invalid["tradingMarket"]["BTCUSDT"]}
+    with pytest.raises(ValueError, match="invalid market symbol"):
         restore_session_bundle(invalid)
 
 
@@ -72,6 +89,7 @@ def test_restore_rejects_unknown_or_out_of_order_history():
     invalid["replay"]["index"] = 1
     invalid["replay"]["startIndex"] = 0
     invalid["replay"]["status"] = "paused"
+    invalid["trading"]["index"] = 1
     invalid["history"].extend([
         {"type": "order", "replayIndex": 1, "payload": {"symbol": "BTCUSDT"}},
         {"type": "order", "replayIndex": 0, "payload": {"symbol": "BTCUSDT"}},
