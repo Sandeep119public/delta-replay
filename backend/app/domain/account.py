@@ -1,5 +1,7 @@
 from math import isfinite, isclose
 
+from .errors import StateInvariantError
+
 
 class TradingAccount:
     def __init__(self, starting_balance=10000.0):
@@ -46,19 +48,19 @@ class TradingAccount:
             self.net_funding,
         )
         if not all(isfinite(value) for value in numeric):
-            raise ValueError("account fields must be finite")
+            raise StateInvariantError("account fields must be finite")
         if self.starting_balance <= 0:
-            raise ValueError("account startingBalance must be positive")
+            raise StateInvariantError("account startingBalance must be positive")
         if self.total_fees < 0 or self.used_margin < 0 or self.maintenance_margin < 0:
-            raise ValueError("account fees and margins must be non-negative")
+            raise StateInvariantError("account fees and margins must be non-negative")
         if self.total_funding_paid < 0 or self.total_funding_received < 0:
-            raise ValueError("funding totals must be non-negative")
+            raise StateInvariantError("funding totals must be non-negative")
         expected_net_funding = self.total_funding_received - self.total_funding_paid
         if not isclose(self.net_funding, expected_net_funding, rel_tol=1e-9, abs_tol=1e-9):
-            raise ValueError("account netFunding is inconsistent with funding totals")
+            raise StateInvariantError("account netFunding is inconsistent with funding totals")
         expected_wallet = self.starting_balance + self.realized_pnl + self.net_funding
         if not isclose(self.wallet_balance, expected_wallet, rel_tol=1e-9, abs_tol=1e-9):
-            raise ValueError("account walletBalance is inconsistent with realizedPnL and netFunding")
+            raise StateInvariantError("account walletBalance is inconsistent with realizedPnL and netFunding")
         return self
 
     def snapshot(self):
