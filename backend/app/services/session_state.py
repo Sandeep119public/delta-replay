@@ -1,5 +1,6 @@
 from copy import deepcopy
 import json
+from math import isclose
 from typing import Any, Dict
 
 from .paper_engine import PaperTradingEngine
@@ -30,7 +31,7 @@ def _validate_json_safety(document: Dict[str, Any]) -> None:
         raise ValueError(f"session document is not JSON-safe: {exc}") from exc
 
 
-def _validate_history(history) -> None:
+def _validate_history(history, *, replay_index=None) -> None:
     if not isinstance(history, list):
         raise ValueError("session history must be a list")
     last_replay_index = -1
@@ -41,29 +42,34 @@ def _validate_history(history) -> None:
         event_type = item.get("type")
         if not isinstance(event_type, str) or event_type not in VALID_HISTORY_TYPES:
             raise ValueError("unsupported session history event type")
-        replay_index = item.get("replayIndex")
-        if isinstance(replay_index, bool) or not isinstance(replay_index, int) or replay_index < -1:
+        index = item.get("replayIndex")
+        if isinstance(index, bool) or not isinstance(index, int) or index < -1:
             raise ValueError("session history replayIndex is invalid")
-        if replay_index < last_replay_index:
+        if replay_index is not None and index > replay_index:
+            raise ValueError("session history contains an event beyond replay index")
+        if index < last_replay_index:
             raise ValueError("session history must be ordered by replayIndex")
         payload = item.get("payload")
         if not isinstance(payload, dict):
             raise ValueError("session history payload must be an object")
         if event_type == "market_step":
-            if replay_index < 0:
+            if index < 0:
                 raise ValueError("market_step cannot use replayIndex -1")
-            if replay_index in market_indexes:
-                raise ValueError(f"multiple market_step events exist for replay index {replay_index}")
+            if index in market_indexes:
+                raise ValueError(f"multiple market_step events exist for replay index {index}")
             symbol = payload.get("symbol")
             if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
                 raise ValueError("market_step symbol is invalid")
-            market_indexes.add(replay_index)
-        last_replay_index = replay_index
+            market_indexes.add(index)
+        last_replay_index = index
 
 
-def _validate_market_state(trading: PaperTradingEngine, market_state: dict) -> None:
+def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, market_state: dict) -> None:
     if not isinstance(market_state, dict):
         raise ValueError("trading market state must be an object")
+    if replay.index != trading.index:
+        raise ValueError("replay and trading indexes must match")
+
     for symbol, market in market_state.items():
         if not isinstance(symbol, str) or symbol != symbol.strip().upper() or not symbol.strip():
             raise ValueError("invalid market symbol")
@@ -72,6 +78,24 @@ def _validate_market_state(trading: PaperTradingEngine, market_state: dict) -> N
         index = market.get("index")
         if isinstance(index, bool) or not isinstance(index, int) or index < -1 or index > trading.index:
             raise ValueError(f"market index for {symbol} is outside trading timeline")
+        if index < 0:
+            continue
+        if index >= len(replay.candles):
+            raise ValueError(f"market index for {symbol} is outside replay dataset")
+        replay_candle = replay.candles[index]
+        market_candle = market.get("candle")
+        if not isinstance(market_candle, dict):
+            raise ValueError("invalid market candle")
+        for field in ("open", "high", "low", "close"):
+            try:
+                market_value = float(market_candle[field])
+                replay_value = float(replay_candle[field])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f"invalid market candle {field}") from exc
+            if not isclose(market_value, replay_value, rel_tol=0.0, abs_tol=1e-12):
+                raise ValueError(f"market candle for {symbol} does not match replay dataset at index {index}")
+        if "time" in market_candle and "time" in replay_candle and market_candle["time"] != replay_candle["time"]:
+            raise ValueError(f"market candle time for {symbol} does not match replay dataset at index {index}")
 
 
 def serialize_session(
@@ -81,7 +105,7 @@ def serialize_session(
 ) -> Dict[str, Any]:
     """Return the canonical JSON-compatible session persistence document."""
     history = deepcopy(history or [])
-    _validate_history(history)
+    _validate_history(history, replay_index=replay.index)
     document = {
         "version": SESSION_STATE_VERSION,
         "replay": replay.export_state(),
@@ -89,6 +113,7 @@ def serialize_session(
         "tradingMarket": trading.export_market_state(),
         "history": history,
     }
+    _validate_market_state(replay, trading, document["tradingMarket"])
     _validate_json_safety(document)
     return document
 
@@ -106,13 +131,13 @@ def restore_session_bundle(document: Dict[str, Any]):
         replay = ReplayService.from_state(document.get("replay"))
         trading = PaperTradingEngine.from_state(document.get("trading"))
         market_state = document.get("tradingMarket", {})
-        _validate_market_state(trading, market_state)
+        _validate_market_state(replay, trading, market_state)
         trading.restore_market_state(market_state)
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"invalid session state: {exc}") from exc
 
     history = [] if version == 1 else deepcopy(document.get("history", []))
-    _validate_history(history)
+    _validate_history(history, replay_index=replay.index)
     return replay, trading, history
 
 
