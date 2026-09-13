@@ -1,14 +1,18 @@
 import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
+function defaultElement(id) {
+  return globalThis.document?.getElementById?.(id) ?? null;
+}
+
 export class PositionView {
   constructor({
     trading = null,
     posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
-    posSlEl = document.getElementById('pos-sl'),
-    posTpEl = document.getElementById('pos-tp'),
-    closeBtn, setRiskBtn = document.getElementById('btn-set-risk'),
-    clearRiskBtn = document.getElementById('btn-clear-risk'),
-    slInput = document.getElementById('sl-price'), tpInput = document.getElementById('tp-price'),
+    posSlEl = defaultElement('pos-sl'),
+    posTpEl = defaultElement('pos-tp'),
+    closeBtn, setRiskBtn = defaultElement('btn-set-risk'),
+    clearRiskBtn = defaultElement('btn-clear-risk'),
+    slInput = defaultElement('sl-price'), tpInput = defaultElement('tp-price'),
     getSymbol = () => null,
     onError = null, onSuccess = null, onRender = null,
   } = {}) {
