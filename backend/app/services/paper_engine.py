@@ -8,9 +8,9 @@ from ..domain.margin import MarginEngine
 
 class PaperTradingEngine:
     def __init__(self, starting_balance=10000.0, fee_rate=0.0005, margin_rate=0.1, maint_margin_rate=0.05):
+        self.fee_rate = float(fee_rate)
         self.margin_rate = float(margin_rate)
         self.maint_margin_rate = float(maint_margin_rate)
-        self.fee_rate = float(fee_rate)
         if not 0 < self.margin_rate <= 1:
             raise ValueError("margin rate must be in (0, 1]")
         if not 0 <= self.maint_margin_rate <= self.margin_rate:
@@ -70,80 +70,47 @@ class PaperTradingEngine:
         return int(numeric)
 
     def fee(self, price, quantity):
-        return abs(self._positive_finite(price, "price") * self._positive_finite(quantity, "quantity")) * self.fee_rate
-
-    def has_open_position(self, symbol=None):
-        return bool(self.positions) if symbol is None else str(symbol).strip().upper() in self.positions
+        return self._positive_finite(price, "price") * self._positive_finite(quantity, "quantity") * self.fee_rate
 
     def pending_orders(self):
-        return [o for o in self.orders.values() if o["status"] == "PENDING"]
+        return [order for order in self.orders.values() if order["status"] == "PENDING"]
+
+    def has_open_position(self, symbol=None):
+        if symbol is None:
+            return bool(self.positions)
+        return str(symbol).strip().upper() in self.positions
+
+    def mark(self, symbol, price):
+        symbol = str(symbol).strip().upper()
+        price = self._positive_finite(price, "mark price")
+        market = self._market_by_symbol.get(symbol)
+        if market is None:
+            raise ValueError(f"no market price available for {symbol}")
+        market["candle"]["close"] = price
+        if symbol in self.positions:
+            self.positions[symbol]["current_price"] = price
+        self._recalc()
+        return self.snapshot()
 
     def get_latest_market(self, symbol):
         symbol = str(symbol).strip().upper()
         market = self._market_by_symbol.get(symbol)
-        return deepcopy(market) if market else None
-
-    def mark(self, symbol, price):
-        symbol = str(symbol).strip().upper()
-        price = self._positive_finite(price, "price")
-        if symbol in self.positions:
-            self.positions[symbol]["current_price"] = price
-        self._market_by_symbol[symbol] = {"candle": {"close": price}, "index": self.index}
-        self._recalc()
-        return self.snapshot()
+        return deepcopy(market) if market is not None else None
 
     def _recalc(self):
-        unrealized = used = maintenance = 0.0
+        unrealized = 0.0
+        used_margin = 0.0
+        maintenance = 0.0
         for position in self.positions.values():
-            sign = 1 if position["side"] == "long" else -1
-            mark = position["current_price"]
-            unrealized += (mark - position["entry_price"]) * position["quantity"] * sign
-            used += position["entry_price"] * position["quantity"] * self.margin_rate
+            mark = self._positive_finite(position.get("current_price", position["entry_price"]), "position current price")
+            direction = 1 if position["side"] == "long" else -1
+            unrealized += (mark - position["entry_price"]) * position["quantity"] * direction
+            used_margin += position["entry_price"] * position["quantity"] * self.margin_rate
             maintenance += mark * position["quantity"] * self.maint_margin_rate
         self.account.unrealized_pnl = unrealized
-        self.account.used_margin = used
+        self.account.used_margin = used_margin
         self.account.maintenance_margin = maintenance
         self.account.validate_invariants()
-
-    def submit(self, symbol, side, quantity, type="market", limit_price=None, stop_price=None):
-        symbol = str(symbol).strip().upper()
-        if not symbol:
-            raise ValueError("symbol must be provided")
-        side = str(side).strip().lower()
-        if side not in ("buy", "sell"):
-            raise ValueError("side must be buy or sell")
-        quantity = self._positive_finite(quantity, "quantity")
-        if not isinstance(type, str) or type not in ("market", "limit", "stop_market"):
-            raise ValueError("unsupported order type")
-        if type == "market" and (limit_price is not None or stop_price is not None):
-            if limit_price is not None:
-                raise ValueError("limit_price is only valid for limit orders")
-            raise ValueError("stop_price is only valid for stop_market orders")
-        if type == "limit" and stop_price is not None:
-            raise ValueError("stop_price is only valid for stop_market orders")
-        if type == "stop_market" and limit_price is not None:
-            raise ValueError("limit_price is only valid for limit orders")
-        if type == "limit":
-            limit_price = self._positive_finite(limit_price, "limit_price")
-        if type == "stop_market":
-            stop_price = self._positive_finite(stop_price, "stop_price")
-        if self.has_open_position(symbol):
-            raise ValueError("position already open")
-        order = {
-            "id": self._next_order,
-            "symbol": symbol,
-            "side": side,
-            "type": type,
-            "quantity": quantity,
-            "limitPrice": limit_price,
-            "stopPrice": stop_price,
-            "status": "PENDING",
-            "createdIndex": self.index,
-            "filledPrice": None,
-        }
-        self.orders[order["id"]] = order
-        self._next_order += 1
-        return deepcopy(order)
 
     def _open(self, order, price, candle):
         symbol = order["symbol"]
@@ -154,7 +121,7 @@ class PaperTradingEngine:
         if symbol in self.positions:
             raise ValueError("position already open")
         if self.account.available_margin < required_margin:
-            raise ValueError("insufficient margin")
+            raise ValueError("insufficient available margin")
         self.account.wallet_balance -= fee
         self.account.realized_pnl -= fee
         self.account.total_fees += fee
@@ -175,20 +142,58 @@ class PaperTradingEngine:
         }
         self._recalc()
 
+    def submit(self, symbol, side, quantity, type="market", limit_price=None, stop_price=None, created_index=None):
+        symbol = str(symbol).strip().upper()
+        if side not in ("buy", "sell"):
+            raise ValueError("side must be buy or sell")
+        if type not in ("market", "limit", "stop_market"):
+            raise ValueError("unsupported order type")
+        quantity = self._positive_finite(quantity, "quantity")
+        if type == "market" and (limit_price is not None or stop_price is not None):
+            raise ValueError("market order cannot have price fields")
+        if type == "limit" and (limit_price is None or stop_price is not None):
+            raise ValueError("limit order requires only limit_price")
+        if type == "stop_market" and (stop_price is None or limit_price is not None):
+            raise ValueError("stop_market order requires only stop_price")
+        if self.has_open_position(symbol):
+            raise ValueError("position already open")
+        created_index = self.index if created_index is None else self._integer(created_index, "created index")
+        if created_index < -1 or created_index > self.index:
+            raise ValueError("created index must be between -1 and current index")
+        if limit_price is not None:
+            limit_price = self._positive_finite(limit_price, "limit_price")
+        if stop_price is not None:
+            stop_price = self._positive_finite(stop_price, "stop_price")
+        order = {
+            "id": self._next_order,
+            "symbol": symbol,
+            "side": side,
+            "type": type,
+            "quantity": quantity,
+            "limitPrice": limit_price,
+            "stopPrice": stop_price,
+            "status": "PENDING",
+            "createdIndex": created_index,
+            "filledPrice": None,
+        }
+        self.orders[order["id"]] = order
+        self._next_order += 1
+        return deepcopy(order)
+
     def close(self, symbol, price, reason="MARKET", ambiguity="NONE", timestamp=None, quantity=None):
         symbol = str(symbol).strip().upper()
         position = self.positions.get(symbol)
-        if not position:
-            return None
-        price = self._positive_finite(price, "price")
-        qty = position["quantity"] if quantity is None else self._positive_finite(quantity, "quantity")
+        if position is None:
+            raise ValueError("no open position")
+        price = self._positive_finite(price, "close price")
+        qty = position["quantity"] if quantity is None else self._positive_finite(quantity, "close quantity")
         if qty > position["quantity"]:
             raise ValueError("invalid close quantity")
-        gross = (price - position["entry_price"]) * qty * (1 if position["side"] == "long" else -1)
-        exit_fee = self.fee(price, qty)
+        direction = 1 if position["side"] == "long" else -1
+        gross = (price - position["entry_price"]) * qty * direction
         entry_fee = position["entry_fee"] * (qty / position["quantity"])
+        exit_fee = self.fee(price, qty)
         net = gross - entry_fee - exit_fee
-        self.account.wallet_balance += gross - exit_fee
         self.account.realized_pnl += gross - exit_fee
         self.account.total_fees += exit_fee
         self.account.validate_invariants()
@@ -220,16 +225,13 @@ class PaperTradingEngine:
         return trade
 
     def apply_funding(self, rate, timestamp=None, symbol=None, mark_price=None):
-        """Apply one deterministic funding event through the canonical account ledger."""
         rate = self._finite(rate, "funding rate")
         normalized_symbol = str(symbol).strip().upper() if symbol else None
         selected = []
         for sym, position in self.positions.items():
             if normalized_symbol and sym != normalized_symbol:
                 continue
-            mark = mark_price
-            if mark is None:
-                mark = position.get("current_price", position["entry_price"])
+            mark = mark_price if mark_price is not None else position.get("current_price", position["entry_price"])
             mark = self._positive_finite(mark, "funding mark price")
             payment = (-1 if position["side"] == "long" else 1) * mark * position["quantity"] * rate
             self.account.wallet_balance += payment
@@ -287,19 +289,8 @@ class PaperTradingEngine:
             position["current_price"] = candle["close"]
             result = risk_exit(position, candle, self.index)
             if result["triggered"]:
-                trade = self.close(
-                    symbol,
-                    result["exitPrice"],
-                    result["exitReason"],
-                    result["ambiguityResolution"],
-                    candle.get("time"),
-                )
-                events.append({
-                    "type": result["exitReason"],
-                    "trade": trade,
-                    "symbol": symbol,
-                    "price": result["exitPrice"],
-                })
+                trade = self.close(symbol, result["exitPrice"], result["exitReason"], result["ambiguityResolution"], candle.get("time"))
+                events.append({"type": result["exitReason"], "trade": trade, "symbol": symbol, "price": result["exitPrice"]})
         self._recalc()
         if self.account.equity <= self.account.maintenance_margin:
             for sym in list(self.positions):
@@ -307,18 +298,8 @@ class PaperTradingEngine:
                 if not market:
                     continue
                 market_candle = market["candle"]
-                trade = self.close(
-                    sym,
-                    market_candle["close"],
-                    "LIQUIDATION",
-                    timestamp=market_candle.get("time"),
-                )
-                events.append({
-                    "type": "LIQUIDATION",
-                    "trade": trade,
-                    "symbol": sym,
-                    "liquidationPrice": market_candle["close"],
-                })
+                trade = self.close(sym, market_candle["close"], "LIQUIDATION", timestamp=market_candle.get("time"))
+                events.append({"type": "LIQUIDATION", "trade": trade, "symbol": sym, "liquidationPrice": market_candle["close"]})
         return events
 
     def cancel(self, order_id):
@@ -373,10 +354,10 @@ class PaperTradingEngine:
 
     def set_starting_balance(self, balance):
         balance = self._positive_finite(balance, "starting balance")
-        if self.has_open_position() or self.pending_orders():
-            raise ValueError("close positions and cancel pending orders before changing starting balance")
-        fee_rate, margin_rate, maint_margin_rate = self.fee_rate, self.margin_rate, self.maint_margin_rate
-        self.__init__(balance, fee_rate, margin_rate, maint_margin_rate)
+        if self.index >= 0 or self.positions or self.pending_orders() or self.orders or self.trades or self.funding:
+            raise ValueError("reset the simulation before changing starting balance")
+        self.account = TradingAccount(balance)
+        self.margin_engine = MarginEngine(self.margin_rate, self.maint_margin_rate)
         return self
 
     def set_fee_rate(self, rate):
@@ -431,6 +412,9 @@ class PaperTradingEngine:
             if order.get("side") not in ("buy", "sell") or order.get("type") not in ("market", "limit", "stop_market"):
                 raise ValueError("invalid order contract")
             self._positive_finite(order.get("quantity"), "order quantity")
+            created_index = self._integer(order.get("createdIndex"), "order createdIndex")
+            if created_index < -1 or created_index > self.index:
+                raise ValueError("order createdIndex is invalid")
             if order.get("status") not in allowed:
                 raise ValueError("order status is invalid")
             if order["type"] == "market" and (order.get("limitPrice") is not None or order.get("stopPrice") is not None):
