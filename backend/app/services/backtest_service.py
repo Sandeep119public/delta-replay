@@ -1,15 +1,27 @@
 from math import isfinite
 
+from ..domain.execution import EXECUTION_MODEL, fill_price
 from ..models import Candle
 
 
 TAKER_FEE_RATE = 0.0005
 SMA_PERIOD = 3
-EXECUTION_MODEL = "NEXT_BAR_OPEN"
 
 
 class BacktestService:
-    """Deterministic backtest runner with causal next-bar-open execution."""
+    """Deterministic backtest runner using the canonical execution rules."""
+
+    @staticmethod
+    def _market_fill(side, created_index, candle, candle_index):
+        return fill_price(
+            {
+                "type": "market",
+                "side": side,
+                "createdIndex": created_index,
+            },
+            candle,
+            candle_index=candle_index,
+        )
 
     def run(self, candles, strategy="buy_and_hold", quantity=1.0, fee_rate=TAKER_FEE_RATE):
         try:
@@ -53,11 +65,16 @@ class BacktestService:
 
         for i, signal in enumerate(signals):
             if signal == "buy" and entry is None and i + 1 < len(candles):
-                entry = float(candles[i + 1]["open"])
+                entry = self._market_fill("buy", i, candles[i + 1], i + 1)
+                if entry is None:
+                    continue
                 entry_fee = abs(entry * quantity) * fee_rate
                 total_fees += entry_fee
             elif signal == "sell" and entry is not None:
-                exit_price = float(candles[i + 1]["open"]) if i + 1 < len(candles) else float(candles[i]["close"])
+                if i + 1 < len(candles):
+                    exit_price = self._market_fill("sell", i, candles[i + 1], i + 1)
+                else:
+                    exit_price = float(candles[i]["close"])
                 close_fee = abs(exit_price * quantity) * fee_rate
                 gross = (exit_price - entry) * quantity
                 net = gross - entry_fee - close_fee
