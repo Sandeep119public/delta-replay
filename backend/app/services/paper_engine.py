@@ -150,7 +150,7 @@ class PaperTradingEngine:
             raise ValueError("unsupported order type")
         quantity = self._positive_finite(quantity, "quantity")
         if type == "market" and (limit_price is not None or stop_price is not None):
-            raise ValueError("market order cannot have price fields")
+            raise ValueError("limit_price/stop_price is only valid for priced orders")
         if type == "limit" and (limit_price is None or stop_price is not None):
             raise ValueError("limit order requires only limit_price")
         if type == "stop_market" and (stop_price is None or limit_price is not None):
@@ -194,7 +194,9 @@ class PaperTradingEngine:
         entry_fee = position["entry_fee"] * (qty / position["quantity"])
         exit_fee = self.fee(price, qty)
         net = gross - entry_fee - exit_fee
-        self.account.realized_pnl += gross - exit_fee
+        cash_delta = gross - exit_fee
+        self.account.wallet_balance += cash_delta
+        self.account.realized_pnl += cash_delta
         self.account.total_fees += exit_fee
         self.account.validate_invariants()
         trade = {
