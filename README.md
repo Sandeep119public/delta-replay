@@ -22,17 +22,17 @@ CORS_ORIGINS=https://your-frontend.example.com
 SESSION_RETENTION_HOURS=168
 ```
 
-The persistence schema is defined in `backend/migrations/001_create_replay_sessions.sql` and `backend/migrations/002_add_replay_events.sql`. Apply all migrations with:
+The persistence schema is defined in `backend/migrations/001_create_replay_sessions.sql` and `backend/migrations/002_add_replay_events.sql`. Apply all migrations before starting a PostgreSQL-backed application:
 
 ```bash
 DATABASE_URL='postgresql://user:password@host:5432/delta_replay' python backend/scripts/migrate.py
 ```
 
-The application also performs safe `CREATE TABLE IF NOT EXISTS` bootstrap when the PostgreSQL repository is initialized. The checked-in migrations remain the canonical deployment artifacts.
+The runtime does not create or mutate database schema. Missing tables are reported as a startup configuration error so schema changes remain controlled by the migration path.
 
 Each browser session is keyed by the `X-Session-ID` UUID header. Mutable session state includes replay position and status plus account, positions, orders, trades, risk settings, fees, margin configuration, funding, engine index, next order sequence, and deterministic command history. Replay candle batches are stored separately in `replay_datasets` using a content-addressed ID; replay history is stored as ordered PostgreSQL event rows for durable sessions.
 
-Replay advancement and trading execution are committed atomically, with per-session in-process serialization and PostgreSQL row locking for cross-process serialization. Persisted state is rejected when its schema version, replay state, trading state, command history, or JSON numeric safety is invalid.
+Replay advancement and trading execution are committed atomically, with per-session serialization and PostgreSQL row locking for cross-process serialization. Dataset garbage collection is intentionally outside the request path, using the dedicated cleanup job and maintenance lock. Persisted state is rejected when its schema version, replay state, trading state, command history, or JSON numeric safety is invalid.
 
 ## Session cleanup
 
@@ -60,7 +60,6 @@ Useful commands:
 - `npm run check` — run the root application architecture, UI-contract, test, and build gate.
 - `npm run test:watch` — keep Vitest running while iterating.
 - `npm run dev:host` — expose Vite on the local network for device testing.
-- `cd frontend && npm install && npm run build` — build the standalone browser application.
 
 ### Architecture map
 
