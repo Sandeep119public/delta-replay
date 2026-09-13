@@ -3,13 +3,13 @@ import math
 import pytest
 from pydantic import ValidationError
 
-from app.models import Candle
+from app.models import MAX_CANDLES, Candle, CandleBatch
 from app.services.backtest_service import BacktestService
 from app.services.replay_service import ReplayService
 
 
-def valid_candle():
-    return {"time": 1, "open": 100, "high": 105, "low": 95, "close": 102, "volume": 10}
+def valid_candle(time=1):
+    return {"time": time, "open": 100, "high": 105, "low": 95, "close": 102, "volume": 10}
 
 
 def test_candle_accepts_valid_ohlcv():
@@ -33,6 +33,12 @@ def test_candle_rejects_invalid_market_data(patch):
     payload = {**valid_candle(), **patch}
     with pytest.raises(ValidationError):
         Candle.model_validate(payload)
+
+
+def test_candle_batch_rejects_excessive_candle_count():
+    candles = [valid_candle(index) for index in range(1, MAX_CANDLES + 2)]
+    with pytest.raises(ValidationError):
+        CandleBatch.model_validate({"candles": candles})
 
 
 def test_replay_load_enforces_same_candle_contract():
