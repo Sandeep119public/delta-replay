@@ -8,6 +8,19 @@ from .replay_service import ReplayService
 
 SESSION_STATE_VERSION = 2
 SUPPORTED_SESSION_STATE_VERSIONS = {1, SESSION_STATE_VERSION}
+VALID_HISTORY_TYPES = {
+    "order",
+    "close",
+    "cancel",
+    "cancel_all",
+    "risk",
+    "clear_risk",
+    "funding",
+    "market_step",
+    "candle",
+    "capital",
+    "fee_rate",
+}
 
 
 def _validate_json_safety(document: Dict[str, Any]) -> None:
@@ -20,16 +33,48 @@ def _validate_json_safety(document: Dict[str, Any]) -> None:
 def _validate_history(history) -> None:
     if not isinstance(history, list):
         raise ValueError("session history must be a list")
+    last_replay_index = -1
+    market_indexes = set()
     for item in history:
         if not isinstance(item, dict):
             raise ValueError("session history entries must be objects")
-        if not isinstance(item.get("type"), str) or not item["type"]:
-            raise ValueError("session history entry type is required")
+        event_type = item.get("type")
+        if not isinstance(event_type, str) or event_type not in VALID_HISTORY_TYPES:
+            raise ValueError("unsupported session history event type")
         replay_index = item.get("replayIndex")
         if isinstance(replay_index, bool) or not isinstance(replay_index, int) or replay_index < -1:
             raise ValueError("session history replayIndex is invalid")
-        if not isinstance(item.get("payload", {}), dict):
+        if replay_index < last_replay_index:
+            raise ValueError("session history must be ordered by replayIndex")
+        payload = item.get("payload")
+        if not isinstance(payload, dict):
             raise ValueError("session history payload must be an object")
+        if event_type == "market_step":
+            if replay_index < 0:
+                raise ValueError("market_step cannot use replayIndex -1")
+            if replay_index in market_indexes:
+                raise ValueError(f"multiple market_step events exist for replay index {replay_index}")
+            symbol = payload.get("symbol")
+            if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
+                raise ValueError("market_step symbol is invalid")
+            market_indexes.add(replay_index)
+        last_replay_index = replay_index
+
+
+def _validate_market_consistency(replay: ReplayService, trading: PaperTradingEngine, market_state: dict) -> None:
+    if trading.index != replay.index:
+        raise ValueError("replay and trading indices must match")
+    for symbol, market in market_state.items():
+        index = market["index"]
+        if index < 0:
+            continue
+        if index >= len(replay.candles):
+            raise ValueError(f"market index for {symbol} is outside replay data")
+        persisted = market["candle"]
+        expected = replay.candles[index]
+        for field in ("time", "open", "high", "low", "close"):
+            if persisted.get(field) != expected.get(field):
+                raise ValueError(f"market context for {symbol} does not match replay candle {index}")
 
 
 def serialize_session(
@@ -63,12 +108,17 @@ def restore_session_bundle(document: Dict[str, Any]):
     try:
         replay = ReplayService.from_state(document.get("replay"))
         trading = PaperTradingEngine.from_state(document.get("trading"))
-        trading.restore_market_state(document.get("tradingMarket", {}))
+        market_state = document.get("tradingMarket", {})
+        trading.restore_market_state(market_state)
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"invalid session state: {exc}") from exc
 
     history = [] if version == 1 else deepcopy(document.get("history", []))
     _validate_history(history)
+    try:
+        _validate_market_consistency(replay, trading, market_state)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"invalid session market state: {exc}") from exc
     return replay, trading, history
 
 
