@@ -26,14 +26,13 @@ export function createPaperUI({
 }) {
   if (!replayPort) throw new TypeError('createPaperUI requires replayPort');
   if (!dataset) throw new TypeError('createPaperUI requires dataset view');
-  if (!chart?.chartManager || !chart?.adapter) {
-    throw new TypeError('createPaperUI requires chart handles { chartManager, adapter }');
-  }
+  if (!chart?.chartManager || !chart?.adapter) throw new TypeError('createPaperUI requires chart handles { chartManager, adapter }');
   const { onRetry = null, onFollow = null } = callbacks;
   const mount = document.getElementById('app');
   if (!mount) throw new Error('Paper UI mount #app is missing');
   if (!mount.querySelector('#chart-container')) renderPaperLayout(mount);
   const el = (id) => document.getElementById(id);
+  const getSymbol = () => el('symbol-select')?.value || 'BTCUSDT';
   const ports = createPaperPorts(el);
   const chartManager = chart.chartManager;
   const adapter = chart.adapter;
@@ -91,13 +90,10 @@ export function createPaperUI({
     getReplayPorts: ports.replay,
     getOrderFormPorts: ports.orderForm,
     createTerminalViews(ctx) {
-      return createPaperTerminalViews({
-        ...ctx, replayPort, trading, tradingEvents, dataset, candles, el,
-        getSymbol: () => el('symbol-select')?.value || 'BTCUSDT',
-      });
+      return createPaperTerminalViews({ ...ctx, replayPort, trading, tradingEvents, dataset, candles, el, getSymbol });
     },
     createChartTradingController(ctx) {
-      return new ChartTradingController(ctx);
+      return new ChartTradingController({ ...ctx, getSymbol });
     },
   };
 }
@@ -132,7 +128,7 @@ function createPaperTerminalViews(ctx) {
     onSeek,
   });
   const toastView = new ToastNotificationView();
-  const floatingPosView = new FloatingPositionView({ trading });
+  const floatingPosView = new FloatingPositionView({ trading, getSymbol });
   const dateSelector = new ReplayDateSelector({
     dataset,
     candles,
