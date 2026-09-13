@@ -52,8 +52,7 @@ class ExecutionService:
         stop_price=None,
         index=-1,
     ):
-        # Preserve the historical explicit index parameter while using the
-        # canonical engine for validation and state mutation.
+        """Place an order through the canonical engine without partial mutation."""
         created_index = self.engine.index if index == -1 else index
         raw = self.engine.submit(
             symbol,
@@ -62,8 +61,8 @@ class ExecutionService:
             type,
             limit_price,
             stop_price,
+            created_index=created_index,
         )
-        self.engine.orders[raw["id"]]["createdIndex"] = self.engine._integer(created_index, "created index")
         self._sync()
         return self.orders[raw["id"]]
 
