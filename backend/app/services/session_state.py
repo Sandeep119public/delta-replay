@@ -1,5 +1,6 @@
 from copy import deepcopy
 import json
+from math import isfinite
 from typing import Any, Dict
 
 from .paper_engine import PaperTradingEngine
@@ -93,7 +94,7 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
             raise ValueError(f"market candle for {symbol} is invalid")
         for field in ("open", "high", "low", "close"):
             value = candle.get(field)
-            if isinstance(value, bool) or not isinstance(value, (int, float)) or not __import__("math").isfinite(value):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
                 raise ValueError(f"market candle {field} for {symbol} is invalid")
         if candle["high"] < max(candle["open"], candle["close"]) or candle["low"] > min(candle["open"], candle["close"]):
             raise ValueError(f"market candle range for {symbol} is invalid")
