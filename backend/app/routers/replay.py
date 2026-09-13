@@ -50,10 +50,19 @@ def load(request: Request, batch: CandleBatch):
 
 
 @router.post("/start/{index}")
-def start(request: Request, index: int):
+def start(request: Request, index: int, symbol: str = "BTCUSDT"):
+    symbol = str(symbol).strip().upper()
+    if not symbol:
+        raise HTTPException(422, "symbol must be provided")
+
     def position(session):
         require_pristine_trading(session, "starting replay")
-        return session.replay.start(index)
+        result = session.replay.start(index)
+        if result["index"] < 0:
+            return replay_snapshot(session)
+        session.trading.on_candle(result["candle"], result["index"], symbol)
+        session.record("market_step", result["index"], {"symbol": symbol})
+        return replay_snapshot(session)
 
     try:
         return atomic_session(request, position)
