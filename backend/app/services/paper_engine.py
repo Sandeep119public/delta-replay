@@ -322,9 +322,14 @@ class PaperTradingEngine:
             index = self._integer(index, "candle index")
         if index < 0:
             raise ValueError("candle index must be non-negative")
-        if index != self.index + 1:
+        if index == self.index:
+            return []
+        if self.index == -1 and not (self.positions or self.orders or self.trades or self.funding):
+            self.index = index
+        elif index != self.index + 1:
             raise ValueError("candle index must advance exactly one position")
-        self.index = index
+        else:
+            self.index = index
         self.set_market_context(symbol, candle, self.index)
         events = []
         for order_id in sorted(self.orders):
