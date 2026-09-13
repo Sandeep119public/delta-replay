@@ -7,7 +7,6 @@ for older integrations that still construct ``TradingService``.
 from copy import deepcopy
 from math import isfinite
 
-from ..domain.ambiguity import VALID_POLICIES
 from ..models import OrderRequest
 from .paper_engine import PaperTradingEngine
 
@@ -67,12 +66,11 @@ class TradingService:
         engine = self.engine
         if mark_price is not None and self.position:
             engine = deepcopy(self.engine)
-            position = engine.position if hasattr(engine, "position") else next(iter(engine.positions.values()), None)
+            position = next(iter(engine.positions.values()), None)
             if position:
                 engine.mark(position["symbol"], mark_price)
         account = engine.snapshot()["account"]
-        position_values = engine.snapshot()["positions"]
-        position = next(iter(position_values.values()), None)
+        position = next(iter(engine.snapshot()["positions"].values()), None)
         return {
             "balance": account["walletBalance"],
             "equity": account["equity"],
@@ -118,16 +116,11 @@ class TradingService:
         return self.engine.set_risk(symbol, stop_loss, take_profit)
 
     def process_candle(self, candle, policy="conservative", symbol="DEFAULT"):
-        normalized_policy = str(policy).strip().upper()
-        policy_aliases = {
-            "CONSERVATIVE": "CONSERVATIVE",
-            "TP_FIRST": "TP_FIRST",
-            "OPEN_PROXIMITY": "OPEN_PROXIMITY",
-        }
-        if normalized_policy not in policy_aliases:
+        normalized_policy = str(policy).strip().lower()
+        if normalized_policy != "conservative":
+            if normalized_policy in {"tp_first", "open_proximity"}:
+                raise ValueError("TradingService.process_candle supports only the canonical conservative ambiguity policy")
             raise ValueError(f"unsupported ambiguity policy: {policy}")
-        if normalized_policy != "CONSERVATIVE":
-            raise ValueError("TradingService.process_candle supports only the canonical conservative ambiguity policy")
         events = self.engine.on_candle(candle, self.engine.index + 1, symbol)
         return {"event": events[-1] if events else None, **self.snapshot(candle.get("close"))}
 
