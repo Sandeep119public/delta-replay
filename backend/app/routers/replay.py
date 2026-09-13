@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..models import CandleBatch
 from ..services.paper_engine import PaperTradingEngine
+from ..services.replay_timeline import ReplayDivergenceError, rebuild_trading
 from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
@@ -41,6 +42,7 @@ def load(request: Request, batch: CandleBatch):
             margin_rate=margin_rate,
             maint_margin_rate=maint_margin_rate,
         )
+        session.history = []
         session.replay.load(candles)
         return replay_snapshot(session)
 
@@ -84,8 +86,17 @@ def step(request: Request, symbol: str = "BTCUSDT"):
 @router.post("/seek/{index}")
 def seek(request: Request, index: int):
     def reposition(session):
-        require_pristine_trading(session, "seeking")
-        return session.replay.seek(index)
+        result = session.replay.seek(index)
+        filtered_history = [
+            item for item in session.history
+            if item.get("replayIndex", -1) <= result["index"]
+        ]
+        try:
+            session.trading = rebuild_trading(session.replay, filtered_history, result["index"])
+        except ReplayDivergenceError as exc:
+            raise HTTPException(409, f"Unable to deterministically replay this position: {exc}") from exc
+        session.history = filtered_history
+        return replay_snapshot(session)
 
     try:
         return atomic_session(request, reposition)
@@ -107,6 +118,7 @@ def reset(request: Request):
             margin_rate=margin_rate,
             maint_margin_rate=maint_margin_rate,
         )
+        session.history = []
         replay = session.replay.reset()
         return {**replay, "trading": session.trading.snapshot()}
 
