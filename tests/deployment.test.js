@@ -4,6 +4,7 @@ import fs from 'fs';
 const workflowPath = '.github/workflows/deploy.yml';
 const backendDockerfilePath = 'backend/Dockerfile';
 const composePath = 'docker-compose.v2.yml';
+const IMMUTABLE_ACTION_REF = '@[0-9a-f]{40}';
 
 describe('Deployment configuration', () => {
   it('gates Pages deployment on successful CI for the tested commit', () => {
@@ -16,8 +17,8 @@ describe('Deployment configuration', () => {
     expect(workflow).toMatch(/github\.event\.workflow_run\.conclusion == ['\"]success['\"]/);
     expect(workflow).toMatch(/ref:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}/);
     expect(workflow).toMatch(/npm run build/);
-    expect(workflow).toMatch(/actions\/upload-pages-artifact@v4/);
-    expect(workflow).toMatch(/actions\/deploy-pages@v4/);
+    expect(workflow).toMatch(new RegExp(`actions/upload-pages-artifact${IMMUTABLE_ACTION_REF}`));
+    expect(workflow).toMatch(new RegExp(`actions/deploy-pages${IMMUTABLE_ACTION_REF}`));
   });
 
   it('keeps the backend container non-root and health-checkable', () => {
