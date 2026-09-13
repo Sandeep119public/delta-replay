@@ -78,3 +78,18 @@ def test_candle_index_rejects_fractional_backward_and_forward_jumps():
     with pytest.raises(ValueError):
         engine.on_candle(candle(100, 101, 99, 100), 2, "BTCUSDT")
     assert engine.index == 0
+
+
+def test_same_index_identical_candle_is_idempotent():
+    engine = PaperTradingEngine()
+    bar = candle(100, 105, 95, 101, 1)
+    engine.on_candle(bar, 0, "BTCUSDT")
+    assert engine.on_candle(dict(bar), 0, "BTCUSDT") == []
+    assert engine.index == 0
+
+
+def test_same_index_conflicting_candle_is_rejected():
+    engine = PaperTradingEngine()
+    engine.on_candle(candle(100, 105, 95, 101, 1), 0, "BTCUSDT")
+    with pytest.raises(ValueError, match="same-index candle does not match existing market context"):
+        engine.on_candle(candle(100, 106, 95, 101, 1), 0, "BTCUSDT")
