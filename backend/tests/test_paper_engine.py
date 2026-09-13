@@ -130,3 +130,29 @@ def test_from_state_rejects_inconsistent_funding_aggregate():
 
     with pytest.raises(ValueError, match="totalFundingPaid is inconsistent"):
         PaperTradingEngine.from_state(state)
+
+
+def test_from_state_rejects_fabricated_trade_gross_pnl():
+    engine = PaperTradingEngine()
+    fill_long(engine)
+    engine.close("BTCUSDT", 115)
+    state = engine.export_state()
+    state["trades"][0]["grossPnL"] += 1
+    state["account"]["realizedPnL"] += 1
+    state["account"]["walletBalance"] += 1
+
+    with pytest.raises(ValueError, match="grossPnL is inconsistent"):
+        PaperTradingEngine.from_state(state)
+
+
+def test_from_state_rejects_fabricated_position_entry_fee():
+    engine = PaperTradingEngine()
+    fill_long(engine)
+    state = engine.export_state()
+    state["positions"]["BTCUSDT"]["entry_fee"] += 1
+    state["account"]["totalFees"] += 1
+    state["account"]["realizedPnL"] -= 1
+    state["account"]["walletBalance"] -= 1
+
+    with pytest.raises(ValueError, match="position entry_fee is inconsistent"):
+        PaperTradingEngine.from_state(state)
