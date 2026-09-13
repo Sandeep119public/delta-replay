@@ -69,7 +69,7 @@ def test_restore_rejects_unknown_or_out_of_order_history():
         restore_session_bundle(invalid)
 
     invalid = copy.deepcopy(document)
-    invalid["replay"]["index"] = 2
+    invalid["replay"]["index"] = 1
     invalid["replay"]["startIndex"] = 0
     invalid["replay"]["status"] = "paused"
     invalid["history"].extend([
