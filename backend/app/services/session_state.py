@@ -45,10 +45,10 @@ def _validate_history(history, *, replay_index=None) -> None:
         index = item.get("replayIndex")
         if isinstance(index, bool) or not isinstance(index, int) or index < -1:
             raise ValueError("session history replayIndex is invalid")
-        if replay_index is not None and index > replay_index:
-            raise ValueError("session history contains an event beyond replay index")
         if index < last_replay_index:
             raise ValueError("session history must be ordered by replayIndex")
+        if replay_index is not None and index > replay_index:
+            raise ValueError("session history contains an event beyond replay index")
         payload = item.get("payload")
         if not isinstance(payload, dict):
             raise ValueError("session history payload must be an object")
@@ -68,7 +68,12 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
     if not isinstance(market_state, dict):
         raise ValueError("trading market state must be an object")
     if replay.index != trading.index:
-        raise ValueError("replay and trading indexes must match")
+        if trading.index != -1 or replay.index < 0 or market_state:
+            raise ValueError("replay and trading indexes must match")
+        trading_state = trading.export_state()
+        if any(trading_state[key] for key in ("orders", "positions", "trades", "funding")):
+            raise ValueError("unadvanced trading timeline cannot contain trading activity")
+        return
 
     for symbol, market in market_state.items():
         if not isinstance(symbol, str) or symbol != symbol.strip().upper() or not symbol.strip():
