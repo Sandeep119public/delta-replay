@@ -539,7 +539,10 @@ class PaperTradingEngine:
                 raise ValueError("position side is invalid")
             for field in ("quantity", "entry_price", "current_price"):
                 self._positive_finite(position.get(field), f"position {field}")
-            self._non_negative_finite(position.get("entry_fee"), "position entry_fee")
+            position_entry_fee = self._non_negative_finite(position.get("entry_fee"), "position entry_fee")
+            expected_position_entry_fee = self.fee(position["entry_price"], position["quantity"])
+            if not isclose(position_entry_fee, expected_position_entry_fee, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError("position entry_fee is inconsistent with entry_price, quantity, and fee rate")
             entry = position["entry_price"]
             opened_index = self._integer(position.get("opened_index"), "position opened_index")
             if opened_index < 0 or opened_index > self.index:
@@ -608,19 +611,30 @@ class PaperTradingEngine:
                 raise ValueError("trade symbol is invalid")
             if trade.get("side") not in ("LONG", "SHORT"):
                 raise ValueError("trade side is invalid")
-            for field in ("quantity", "entryPrice", "exitPrice"):
-                self._positive_finite(trade.get(field), f"trade {field}")
+            quantity = self._positive_finite(trade.get("quantity"), "trade quantity")
+            entry_price = self._positive_finite(trade.get("entryPrice"), "trade entryPrice")
+            exit_price = self._positive_finite(trade.get("exitPrice"), "trade exitPrice")
             for field in ("entryFee", "exitFee", "totalFee"):
                 self._non_negative_finite(trade.get(field), f"trade {field}")
             for field in ("realizedPnL", "grossPnL", "netPnL"):
                 self._finite(trade.get(field), f"trade {field}")
+            direction = 1 if trade["side"] == "LONG" else -1
+            expected_gross = (exit_price - entry_price) * quantity * direction
+            expected_entry_fee = self.fee(entry_price, quantity)
+            expected_exit_fee = self.fee(exit_price, quantity)
+            if not isclose(trade["grossPnL"], expected_gross, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError("trade grossPnL is inconsistent with side, quantity, entryPrice, and exitPrice")
+            if not isclose(trade["entryFee"], expected_entry_fee, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError("trade entryFee is inconsistent with entryPrice, quantity, and fee rate")
+            if not isclose(trade["exitFee"], expected_exit_fee, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError("trade exitFee is inconsistent with exitPrice, quantity, and fee rate")
             expected_total_fee = trade["entryFee"] + trade["exitFee"]
-            if abs(trade["totalFee"] - expected_total_fee) > 1e-9 * max(1.0, abs(expected_total_fee)):
+            if not isclose(trade["totalFee"], expected_total_fee, rel_tol=1e-9, abs_tol=1e-9):
                 raise ValueError("trade totalFee is inconsistent with entryFee and exitFee")
             expected_net = trade["grossPnL"] - trade["totalFee"]
-            if abs(trade["netPnL"] - expected_net) > 1e-9 * max(1.0, abs(expected_net)):
+            if not isclose(trade["netPnL"], expected_net, rel_tol=1e-9, abs_tol=1e-9):
                 raise ValueError("trade netPnL is inconsistent with grossPnL and totalFee")
-            if trade["realizedPnL"] != trade["netPnL"]:
+            if not isclose(trade["realizedPnL"], trade["netPnL"], rel_tol=1e-9, abs_tol=1e-9):
                 raise ValueError("trade realizedPnL is inconsistent with netPnL")
             trade_total_fees += trade["totalFee"]
             trade_net_pnl += trade["netPnL"]
