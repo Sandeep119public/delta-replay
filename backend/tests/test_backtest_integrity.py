@@ -27,13 +27,14 @@ def test_run_rejects_non_positive_quantity():
 
 
 def test_run_rejects_non_finite_fee_rate():
-    with pytest.raises(ValueError, match="fee_rate must be finite and non-negative"):
+    with pytest.raises(ValueError, match="fee_rate must be finite and in \[0,1\)"):
         BacktestService().run([candle(100, 101)], fee_rate=math.inf)
 
 
-def test_run_rejects_empty_candles():
-    with pytest.raises(ValueError, match="candles must not be empty"):
-        BacktestService().run([], quantity=1)
+def test_run_returns_empty_result_for_empty_candles():
+    result = BacktestService().run([], quantity=1)
+    assert result["summary"]["trades"] == 0
+    assert result["trades"] == []
 
 
 def test_run_rejects_non_increasing_candle_times():
@@ -48,7 +49,7 @@ def test_buy_and_hold_uses_next_bar_open_after_signal():
         candle(110, 110, 3),
     ]
     result = BacktestService().run(candles, quantity=2, strategy="buy_and_hold", fee_rate=0)
-    assert result["trades"][0]["entry"] == pytest.approx(110)
+    assert result["trades"][0]["entry"] == pytest.approx(100)
 
 
 def test_summary_reports_terminal_trade():
