@@ -60,6 +60,14 @@ def test_rebuild_preserves_per_event_symbol_market_context():
     assert engine.get_latest_market("ETHUSDT")["candle"]["close"] == 102
 
 
+def test_rebuild_uses_default_symbol_before_first_explicit_market_symbol():
+    service = replay()
+    engine = rebuild_trading(service, [market_step(2, "ETHUSDT")], 2, default_symbol="BTCUSDT")
+    assert engine.index == 2
+    assert engine.get_latest_market("BTCUSDT")["candle"]["close"] == 102
+    assert engine.get_latest_market("ETHUSDT")["candle"]["close"] == 104
+
+
 def test_rebuild_applies_same_index_commands_in_persisted_order():
     service = replay()
     history = [
