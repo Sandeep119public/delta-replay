@@ -6,9 +6,9 @@ Delta Replay is a browser trading replay application backed by a FastAPI trading
 
 `PaperTradingEngine` is the single canonical paper-trading and execution engine. Replay and backtest paths share the same OHLC fill rules and ambiguity policy through `backend/app/domain/execution.py`.
 
-Replay sessions persist the immutable candle dataset separately from mutable session state. User trading commands and replay market-step symbols are stored as a deterministic history, allowing arbitrary seek and reconstruction instead of forbidding seek after trading activity.
+Replay sessions persist the immutable candle dataset separately from mutable session state. User trading commands and replay market-step symbols are stored as deterministic history, allowing arbitrary seek and reconstruction instead of forbidding seek after trading activity.
 
-The account ledger tracks wallet balance, realized and unrealized P&L, fees, margin, and funding with state invariants. Funding is available through the same trading API and participates in deterministic replay.
+The account ledger tracks wallet balance, realized and unrealized P&L, fees, margin, and funding with state invariants. Funding is available through the trading API and participates in deterministic replay.
 
 ## Durable session persistence
 
@@ -22,17 +22,27 @@ CORS_ORIGINS=https://your-frontend.example.com
 SESSION_RETENTION_HOURS=168
 ```
 
-The persistence schema is defined in `backend/migrations/001_create_replay_sessions.sql`. Apply it with:
+The persistence schema is defined in `backend/migrations/001_create_replay_sessions.sql` and `backend/migrations/002_add_replay_events.sql`. Apply all migrations with:
 
 ```bash
 DATABASE_URL='postgresql://user:password@host:5432/delta_replay' python backend/scripts/migrate.py
 ```
 
-The application also performs a safe `CREATE TABLE IF NOT EXISTS` bootstrap when the PostgreSQL repository is initialized. The checked-in migration remains the canonical deployment artifact.
+The application also performs safe `CREATE TABLE IF NOT EXISTS` bootstrap when the PostgreSQL repository is initialized. The checked-in migrations remain the canonical deployment artifacts.
 
-Each browser session is keyed by the `X-Session-ID` UUID header. Mutable session state includes replay position and status plus account, positions, orders, trades, risk settings, fees, margin configuration, funding, engine index, next order sequence, and deterministic command history. Replay candle batches are stored separately in `replay_datasets` using a content-addressed ID.
+Each browser session is keyed by the `X-Session-ID` UUID header. Mutable session state includes replay position and status plus account, positions, orders, trades, risk settings, fees, margin configuration, funding, engine index, next order sequence, and deterministic command history. Replay candle batches are stored separately in `replay_datasets` using a content-addressed ID; replay history is stored as ordered PostgreSQL event rows for durable sessions.
 
 Replay advancement and trading execution are committed atomically, with per-session in-process serialization and PostgreSQL row locking for cross-process serialization. Persisted state is rejected when its schema version, replay state, trading state, command history, or JSON numeric safety is invalid.
+
+## Session cleanup
+
+Durable sessions are retained according to `SESSION_RETENTION_HOURS`, defaulting to 168 hours (7 days). Cleanup is intentionally run as an operational job rather than during user requests:
+
+```bash
+DATABASE_URL='postgresql://user:password@host:5432/delta_replay' SESSION_RETENTION_HOURS=168 python backend/scripts/cleanup_sessions.py
+```
+
+The cleanup job uses a PostgreSQL transaction-scoped advisory lock so overlapping cleanup processes do not race. It deletes expired sessions first, then removes replay datasets that are no longer referenced by any session. Recently active sessions and referenced datasets are preserved.
 
 ## Scale behavior
 
@@ -47,7 +57,7 @@ npm run dev
 
 Useful commands:
 
-- `npm run check` — run the complete frontend regression gate.
+- `npm run check` — run the root application architecture, UI-contract, test, and build gate.
 - `npm run test:watch` — keep Vitest running while iterating.
 - `npm run dev:host` — expose Vite on the local network for device testing.
 - `cd frontend && npm install && npm run build` — build the standalone browser application.
