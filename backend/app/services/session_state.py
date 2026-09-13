@@ -71,14 +71,6 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
     if trading.index > replay.index:
         raise ValueError("trading index cannot be ahead of replay index")
 
-    trading_state = trading.export_state()
-    has_trading_activity = any(
-        trading_state[key]
-        for key in ("orders", "positions", "trades", "funding")
-    )
-    if trading.index < 0 and has_trading_activity:
-        raise ValueError("trading activity requires an active trading timeline")
-
     for symbol, market in market_state.items():
         if not isinstance(symbol, str) or symbol != symbol.strip().upper() or not symbol.strip():
             raise ValueError("invalid market symbol")
