@@ -48,8 +48,10 @@ class ReplayService:
         index = self._index(index)
         if not self.candles:
             return self.state()
-        self.start_index = max(0, min(index, len(self.candles) - 1))
-        self.index = self.start_index
+        if index < 0 or index >= len(self.candles):
+            raise ValueError("Invalid replay start index")
+        self.start_index = index
+        self.index = index
         self.status = "ended" if self.index == len(self.candles) - 1 else "paused"
         return self.state()
 
