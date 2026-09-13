@@ -67,13 +67,17 @@ def _validate_history(history, *, replay_index=None) -> None:
 def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, market_state: dict) -> None:
     if not isinstance(market_state, dict):
         raise ValueError("trading market state must be an object")
-    if replay.index != trading.index:
-        if trading.index != -1 or replay.index < 0 or market_state:
-            raise ValueError("replay and trading indexes must match")
-        trading_state = trading.export_state()
-        if any(trading_state[key] for key in ("orders", "positions", "trades", "funding")):
-            raise ValueError("unadvanced trading timeline cannot contain trading activity")
-        return
+
+    if trading.index > replay.index:
+        raise ValueError("trading index cannot be ahead of replay index")
+
+    trading_state = trading.export_state()
+    has_trading_activity = any(
+        trading_state[key]
+        for key in ("orders", "positions", "trades", "funding")
+    )
+    if trading.index < 0 and has_trading_activity:
+        raise ValueError("trading activity requires an active trading timeline")
 
     for symbol, market in market_state.items():
         if not isinstance(symbol, str) or symbol != symbol.strip().upper() or not symbol.strip():
