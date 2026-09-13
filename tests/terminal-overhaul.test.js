@@ -3,6 +3,8 @@ import { OrderFormView } from '../src/ui/OrderFormView.js';
 import { Timeline } from '../src/ui/Timeline.js';
 import { ErrorPanel } from '../src/ui/ErrorPanel.js';
 import { ModeBanner } from '../src/ui/ModeBanner.js';
+import { PositionView } from '../src/ui/PositionView.js';
+import { FloatingPositionView } from '../src/ui/FloatingPositionView.js';
 import { createTradingPresentation } from '../src/app/TradingPresentationAdapter.js';
 
 function mockEl(extra = {}) {
@@ -16,6 +18,7 @@ function mockEl(extra = {}) {
       contains: (c) => classes.has(c),
     },
     addEventListener: (ev, fn) => { (listeners[ev] = listeners[ev] || []).push(fn); },
+    removeEventListener: (ev, fn) => { listeners[ev] = (listeners[ev] || []).filter((handler) => handler !== fn); },
     dispatchEvent: (e) => { (listeners[e.type] || []).forEach((h) => h(e)); },
     setAttribute: () => {}, getAttribute: () => null, querySelectorAll: () => [],
     ...extra,
@@ -80,5 +83,24 @@ describe('terminal overhaul smoke', () => {
     banner.update({ total: 8640, status: 'paused', loadingState: 'IDLE', pendingStartIndex: 0, currentIndex: 1481, candleAt: () => ({ time: 1717685100 }) });
     expect(progressText.textContent).toMatch(/BAR 1,482 \/ 8,640/);
     expect(progressPct.textContent).toMatch(/%/);
+  });
+
+  it('position view selects the active symbol instead of the first position', () => {
+    const view = new PositionView({ getSymbol: () => 'ETHUSDT' });
+    const position = view._activePosition([
+      { symbol: 'BTCUSDT', side: 'LONG' },
+      { symbol: 'ETHUSDT', side: 'SHORT' },
+    ]);
+    expect(position.symbol).toBe('ETHUSDT');
+  });
+
+  it('floating position view selects the active symbol instead of the first position', () => {
+    const view = new FloatingPositionView({ trading: null, getSymbol: () => 'ETHUSDT', closeBtn: null });
+    const position = view._activePosition([
+      { symbol: 'BTCUSDT', side: 'LONG' },
+      { symbol: 'ETHUSDT', side: 'SHORT' },
+    ]);
+    expect(position.symbol).toBe('ETHUSDT');
+    view.destroy();
   });
 });

@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 from typing import Optional, TypeVar
@@ -6,6 +5,7 @@ from typing import Optional, TypeVar
 import psycopg
 from psycopg.rows import dict_row
 
+from .dataset_identity import dataset_id
 from .session_repository import SessionDocument, SessionMutation, SessionRepository
 from .storage_locks import DATASET_GC_LOCK_KEY
 
@@ -28,7 +28,7 @@ class PostgresSessionRepository(SessionRepository):
         return psycopg.connect(self.dsn, connect_timeout=self.connect_timeout, row_factory=dict_row)
 
     def _verify_schema(self) -> None:
-        required_tables = {"replay_datasets", "replay_sessions", "replay_events"}
+        required_tables = {"schema_migrations", "replay_datasets", "replay_sessions", "replay_events"}
         with self._connect() as connection:
             rows = connection.execute(
                 """SELECT table_name
@@ -37,6 +37,16 @@ class PostgresSessionRepository(SessionRepository):
                      AND table_name = ANY(%s)""",
                 (list(required_tables),),
             ).fetchall()
+            columns = connection.execute(
+                """SELECT table_name, column_name
+                   FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                     AND table_name = ANY(%s)""",
+                (list(required_tables),),
+            ).fetchall()
+            migration_rows = connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
         present = {row["table_name"] for row in rows}
         missing = sorted(required_tables - present)
         if missing:
@@ -44,12 +54,42 @@ class PostgresSessionRepository(SessionRepository):
                 "PostgreSQL schema is not initialized; apply backend/migrations before starting the application. "
                 f"Missing tables: {', '.join(missing)}"
             )
+        required_columns = {
+            "schema_migrations": {"version", "checksum", "applied_at"},
+            "replay_datasets": {"dataset_id", "candles"},
+            "replay_sessions": {"session_id", "state", "revision", "updated_at"},
+            "replay_events": {"session_id", "sequence", "replay_index", "event_type", "payload"},
+        }
+        observed = {}
+        for row in columns:
+            observed.setdefault(row["table_name"], set()).add(row["column_name"])
+        missing_columns = {
+            table: sorted(fields - observed.get(table, set()))
+            for table, fields in required_columns.items()
+            if fields - observed.get(table, set())
+        }
+        if missing_columns:
+            details = "; ".join(f"{table}: {', '.join(fields)}" for table, fields in missing_columns.items())
+            raise RuntimeError(f"PostgreSQL schema is incomplete: {details}")
+
+        required_migrations = {
+            "000_schema_migrations",
+            "001_create_replay_sessions",
+            "002_add_replay_events",
+        }
+        applied_versions = {str(row["version"]) for row in migration_rows}
+        if not required_migrations.issubset(applied_versions):
+            missing_versions = sorted(required_migrations - applied_versions)
+            raise RuntimeError(
+                "PostgreSQL migrations are incomplete; apply backend/migrations before starting the application. "
+                f"Missing versions: {', '.join(missing_versions)}"
+            )
 
     @staticmethod
     def _dataset_id_from_state(state) -> Optional[str]:
         replay = state.get("replay", {}) if isinstance(state, dict) else {}
-        dataset_id = replay.get("datasetId") if isinstance(replay, dict) else None
-        return str(dataset_id) if dataset_id else None
+        dataset_id_value = replay.get("datasetId") if isinstance(replay, dict) else None
+        return str(dataset_id_value) if dataset_id_value else None
 
     @staticmethod
     def _encode(document: SessionDocument) -> str:
@@ -63,11 +103,7 @@ class PostgresSessionRepository(SessionRepository):
 
     @staticmethod
     def _dataset_id(candles) -> str:
-        try:
-            encoded = json.dumps(candles, separators=(",", ":"), sort_keys=True, allow_nan=False)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"replay dataset is not JSON-safe: {exc}") from exc
-        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return dataset_id(candles)
 
     @classmethod
     def _prepare_storage_document(cls, connection, document: SessionDocument) -> SessionDocument:
@@ -75,15 +111,24 @@ class PostgresSessionRepository(SessionRepository):
         replay = dict(clean.get("replay", {}))
         candles = replay.pop("candles", None)
         if candles is not None:
-            dataset_id = cls._dataset_id(candles)
-            connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
-            connection.execute(
-                """INSERT INTO replay_datasets (dataset_id, candles)
-                   VALUES (%s, %s::jsonb)
-                   ON CONFLICT (dataset_id) DO NOTHING""",
-                (dataset_id, json.dumps(candles, separators=(",", ":"), allow_nan=False)),
-            )
-            replay["datasetId"] = dataset_id
+            derived_dataset_id = cls._dataset_id(candles)
+            persisted_dataset_id = replay.get("datasetId")
+            if persisted_dataset_id is not None and persisted_dataset_id != derived_dataset_id:
+                raise ValueError("replay datasetId does not match candle data")
+            dataset_id_value = persisted_dataset_id or derived_dataset_id
+            exists = connection.execute(
+                "SELECT 1 FROM replay_datasets WHERE dataset_id = %s",
+                (dataset_id_value,),
+            ).fetchone()
+            if exists is None:
+                connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
+                connection.execute(
+                    """INSERT INTO replay_datasets (dataset_id, candles)
+                       VALUES (%s, %s::jsonb)
+                       ON CONFLICT (dataset_id) DO NOTHING""",
+                    (dataset_id_value, json.dumps(candles, separators=(",", ":"), allow_nan=False)),
+                )
+            replay["datasetId"] = dataset_id_value
         clean["replay"] = replay
         clean.pop("history", None)
         return clean
@@ -151,8 +196,8 @@ class PostgresSessionRepository(SessionRepository):
             )
 
     @staticmethod
-    def _gc_dataset(connection, dataset_id: Optional[str]) -> None:
-        if not dataset_id:
+    def _gc_dataset(connection, dataset_id_value: Optional[str]) -> None:
+        if not dataset_id_value:
             return
         connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
         connection.execute(
@@ -163,7 +208,7 @@ class PostgresSessionRepository(SessionRepository):
                      FROM replay_sessions s
                      WHERE s.state->'replay'->>'datasetId' = d.dataset_id
                  )""",
-            (dataset_id,),
+            (dataset_id_value,),
         )
 
     def get(self, session_id: str) -> Optional[SessionDocument]:
@@ -213,9 +258,9 @@ class PostgresSessionRepository(SessionRepository):
             ).fetchone()
             if row is None:
                 return
-            dataset_id = self._dataset_id_from_state(row["state"])
+            dataset_id_value = self._dataset_id_from_state(row["state"])
             connection.execute("DELETE FROM replay_sessions WHERE session_id = %s", (session_id,))
-            self._gc_dataset(connection, dataset_id)
+            self._gc_dataset(connection, dataset_id_value)
 
     def save_if_revision(self, session_id: str, document: SessionDocument, expected_revision: int) -> int:
         with self._connect() as connection:

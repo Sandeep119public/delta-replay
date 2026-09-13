@@ -73,6 +73,31 @@ def test_market_candle_rejects_fractional_index():
     assert response.status_code == 422
 
 
+def test_market_candle_rejects_index_that_differs_from_replay_index():
+    client = TestClient(app)
+    session = uuid4()
+    assert client.post("/api/v1/replay/load", headers=h(session), json={"candles": CANDLES}).status_code == 200
+    assert client.post("/api/v1/replay/start/1", headers=h(session)).status_code == 200
+
+    response = client.post(
+        "/api/v1/trading/candle",
+        headers=h(session),
+        json={"symbol": "BTCUSDT", "candle": CANDLES[1], "index": 0},
+    )
+
+    assert response.status_code == 409
+    assert "must match replay index" in response.json()["detail"]
+
+
+def test_market_candle_requires_an_active_replay_index():
+    client = TestClient(app)
+    session = uuid4()
+    response = client.post("/api/v1/trading/candle", headers=h(session), json={"symbol": "BTCUSDT", "candle": CANDLES[0], "index": 0})
+
+    assert response.status_code == 409
+    assert "start replay" in response.json()["detail"]
+
+
 def test_cancel_all_clears_pending_orders():
     client = TestClient(app)
     session = uuid4()

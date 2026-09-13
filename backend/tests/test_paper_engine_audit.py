@@ -85,3 +85,74 @@ def test_mark_price_does_not_mutate_historical_candle():
     assert market["candle"]["low"] == 95
     assert market["candle"]["close"] == 102
     assert market["markPrice"] == pytest.approx(110)
+
+
+def test_restore_rejects_position_opened_after_current_index():
+    engine = PaperTradingEngine()
+    open_long(engine)
+    state = engine.export_state()
+    state["index"] = 0
+
+    with pytest.raises(ValueError, match="position opened_index is invalid"):
+        PaperTradingEngine.from_state(state)
+
+
+def test_restore_rejects_risk_created_before_position_opening():
+    engine = PaperTradingEngine()
+    open_long(engine)
+    state = engine.export_state()
+    state["positions"]["BTCUSDT"]["stop_loss"] = 95
+    state["positions"]["BTCUSDT"]["stop_loss_created_index"] = 0
+    state["positions"]["BTCUSDT"]["opened_index"] = 1
+
+    with pytest.raises(ValueError, match="stop_loss_created_index cannot precede position opening"):
+        PaperTradingEngine.from_state(state)
+
+
+def test_restore_rejects_cleared_risk_with_stale_creation_index():
+    engine = PaperTradingEngine()
+    open_long(engine)
+    engine.set_risk("BTCUSDT", 95, 105)
+    state = engine.export_state()
+    state["positions"]["BTCUSDT"]["stop_loss"] = None
+
+    with pytest.raises(ValueError, match="stop_loss_created_index must be -1 when risk is cleared"):
+        PaperTradingEngine.from_state(state)
+
+
+def test_apply_funding_rejects_blank_symbol_instead_of_broadcasting():
+    engine = PaperTradingEngine()
+    open_long(engine)
+
+    with pytest.raises(ValueError, match="symbol must be provided"):
+        engine.apply_funding(0.001, symbol="   ")
+
+
+def test_restore_rejects_malformed_funding_event():
+    engine = PaperTradingEngine()
+    open_long(engine)
+    state = engine.export_state()
+    state["funding"] = [{
+        "id": 1,
+        "timestamp": 2,
+        "symbol": "btcusdt",
+        "side": "long",
+        "quantity": 1,
+        "markPrice": 100,
+        "fundingRate": 0.001,
+        "payment": -0.1,
+    }]
+
+    with pytest.raises(ValueError, match="funding symbol is invalid"):
+        PaperTradingEngine.from_state(state)
+
+
+def test_restore_rejects_inconsistent_trade_accounting():
+    engine = PaperTradingEngine()
+    open_long(engine)
+    engine.close("BTCUSDT", 110, timestamp=3)
+    state = engine.export_state()
+    state["trades"][0]["netPnL"] += 1
+
+    with pytest.raises(ValueError, match="trade netPnL is inconsistent"):
+        PaperTradingEngine.from_state(state)

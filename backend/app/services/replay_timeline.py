@@ -13,23 +13,9 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
 
     try:
         if kind == "order":
-            engine.submit(
-                payload["symbol"],
-                payload["side"],
-                payload["quantity"],
-                payload.get("type", "market"),
-                payload.get("limitPrice"),
-                payload.get("stopPrice"),
-                created_index=command["replayIndex"],
-            )
+            engine.submit(payload["symbol"], payload["side"], payload["quantity"], payload.get("type", "market"), payload.get("limitPrice"), payload.get("stopPrice"), created_index=command["replayIndex"])
         elif kind == "close":
-            engine.close(
-                payload["symbol"],
-                payload["price"],
-                reason="MARKET",
-                timestamp=payload.get("timestamp"),
-                quantity=payload.get("quantity"),
-            )
+            engine.close(payload["symbol"], payload["price"], reason="MARKET", timestamp=payload.get("timestamp"), quantity=payload.get("quantity"))
         elif kind == "cancel":
             engine.cancel(payload["orderId"])
         elif kind == "cancel_all":
@@ -50,12 +36,7 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
             else:
                 engine.clear_risk(payload["symbol"])
         elif kind == "funding":
-            engine.apply_funding(
-                payload["rate"],
-                timestamp=payload.get("timestamp"),
-                symbol=payload.get("symbol"),
-                mark_price=payload.get("markPrice"),
-            )
+            engine.apply_funding(payload["rate"], timestamp=payload.get("timestamp"), symbol=payload.get("symbol"), mark_price=payload.get("markPrice"))
         elif kind == "market_step":
             if replay is None:
                 raise ReplayDivergenceError("market_step requires replay data")
@@ -63,9 +44,7 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
             if index < 0 or index >= len(replay.candles):
                 raise ReplayDivergenceError("market_step replay index is outside dataset")
             if index != engine.index + 1:
-                raise ReplayDivergenceError(
-                    f"market_step index {index} is not the next executable index {engine.index + 1}"
-                )
+                raise ReplayDivergenceError(f"market_step index {index} is not the next executable index {engine.index + 1}")
             engine.on_candle(replay.candles[index], index, payload["symbol"])
         elif kind == "candle":
             engine.on_candle(payload["candle"], payload["index"], payload["symbol"])
@@ -81,6 +60,26 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
         raise ReplayDivergenceError(f"replay command {kind} diverged: {exc}") from exc
 
 
+def _validate_history_order(history) -> None:
+    last_replay_index = -1
+    market_indexes = set()
+    for command in history:
+        if not isinstance(command, dict):
+            raise ReplayDivergenceError("replay history entry must be an object")
+        replay_index = command.get("replayIndex")
+        if isinstance(replay_index, bool) or not isinstance(replay_index, int) or replay_index < -1:
+            raise ReplayDivergenceError("command replayIndex is invalid")
+        if replay_index < last_replay_index:
+            raise ReplayDivergenceError("command history is not ordered by replay index")
+        if command.get("type") == "market_step":
+            if replay_index < 0:
+                raise ReplayDivergenceError("market_step replayIndex must be non-negative")
+            if replay_index in market_indexes:
+                raise ReplayDivergenceError(f"multiple market_step events exist for replay index {replay_index}")
+            market_indexes.add(replay_index)
+        last_replay_index = replay_index
+
+
 def rebuild_trading(replay, history, target_index: int, default_symbol: str = "BTCUSDT") -> PaperTradingEngine:
     """Replay persisted events exactly, with a pristine market baseline when safe."""
     if target_index < -1:
@@ -94,44 +93,25 @@ def rebuild_trading(replay, history, target_index: int, default_symbol: str = "B
 
     engine = PaperTradingEngine()
     history = list(history or [])
+    _validate_history_order(history)
+
     if target_index == -1:
         for command in history:
-            if int(command["replayIndex"]) == -1:
-                _apply_command(engine, command, replay)
+            if command["replayIndex"] != -1:
+                break
+            _apply_command(engine, command, replay)
         return engine
 
-    commands = []
-    last_replay_index = -1
-    non_market_commands = False
-    explicit_symbols = []
-    for command in history:
-        replay_index = int(command["replayIndex"])
-        if replay_index > target_index:
-            break
-        if replay_index < -1:
-            raise ReplayDivergenceError("command replayIndex cannot be below -1")
-        if replay_index < last_replay_index:
-            raise ReplayDivergenceError("command history is not ordered by replay index")
-        commands.append(command)
-        if command["type"] == "market_step":
-            explicit_symbols.append(str(command["payload"]["symbol"]).strip().upper())
-        else:
-            non_market_commands = True
-        last_replay_index = replay_index
+    commands = [command for command in history if command["replayIndex"] <= target_index]
+    non_market_commands = any(command["type"] != "market_step" for command in commands)
+    explicit_symbols = [str(command["payload"]["symbol"]).strip().upper() for command in commands if command["type"] == "market_step"]
+    market_commands = {command["replayIndex"]: command for command in commands if command["type"] == "market_step"}
 
     start_index = replay.start_index if replay.start_index >= 0 else 0
-    market_commands = {
-        int(command["replayIndex"]): command
-        for command in commands
-        if command["type"] == "market_step"
-    }
     required_indexes = set(range(start_index, target_index + 1))
     missing = sorted(required_indexes - set(market_commands))
-
     if missing and non_market_commands:
-        raise ReplayDivergenceError(
-            f"replay history is missing market events for indexes: {missing}"
-        )
+        raise ReplayDivergenceError(f"replay history is missing market events for indexes: {missing}")
 
     command_iter = iter(commands)
     current_symbol = explicit_symbols[-1] if explicit_symbols else default_symbol
@@ -142,12 +122,11 @@ def rebuild_trading(replay, history, target_index: int, default_symbol: str = "B
             while next_command is not None and int(next_command["replayIndex"]) < index:
                 _apply_command(engine, next_command, replay)
                 next_command = next(command_iter, None)
-            if next_command is not None and int(next_command["replayIndex"]) == index:
-                while next_command is not None and int(next_command["replayIndex"]) == index:
-                    if next_command["type"] == "market_step":
-                        current_symbol = str(next_command["payload"]["symbol"]).strip().upper()
-                    _apply_command(engine, next_command, replay)
-                    next_command = next(command_iter, None)
+            while next_command is not None and int(next_command["replayIndex"]) == index:
+                if next_command["type"] == "market_step":
+                    current_symbol = str(next_command["payload"]["symbol"]).strip().upper()
+                _apply_command(engine, next_command, replay)
+                next_command = next(command_iter, None)
         else:
             engine.on_candle(replay.candles[index], index, current_symbol)
 
@@ -156,7 +135,5 @@ def rebuild_trading(replay, history, target_index: int, default_symbol: str = "B
         next_command = next(command_iter, None)
 
     if engine.index != target_index:
-        raise ReplayDivergenceError(
-            f"reconstructed trading index {engine.index} does not match target {target_index}"
-        )
+        raise ReplayDivergenceError(f"reconstructed trading index {engine.index} does not match target {target_index}")
     return engine

@@ -1,19 +1,24 @@
 import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
+function defaultElement(id) {
+  return globalThis.document?.getElementById?.(id) ?? null;
+}
+
 export class PositionView {
   constructor({
     trading = null,
     posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
-    posSlEl = document.getElementById('pos-sl'),
-    posTpEl = document.getElementById('pos-tp'),
-    closeBtn, setRiskBtn = document.getElementById('btn-set-risk'),
-    clearRiskBtn = document.getElementById('btn-clear-risk'),
-    slInput = document.getElementById('sl-price'), tpInput = document.getElementById('tp-price'),
+    posSlEl = defaultElement('pos-sl'),
+    posTpEl = defaultElement('pos-tp'),
+    closeBtn, setRiskBtn = defaultElement('btn-set-risk'),
+    clearRiskBtn = defaultElement('btn-clear-risk'),
+    slInput = defaultElement('sl-price'), tpInput = defaultElement('tp-price'),
+    getSymbol = () => null,
     onError = null, onSuccess = null, onRender = null,
   } = {}) {
     this.trading = trading ? assertTradingPresentation(trading) : null;
     Object.assign(this, { posSymbolEl, posSideEl, posQtyEl, posEntryEl, posCurrentEl, posPnlEl,
-      posSlEl, posTpEl, closeBtn, setRiskBtn, clearRiskBtn, slInput, tpInput, onError, onSuccess, onRender });
+      posSlEl, posTpEl, closeBtn, setRiskBtn, clearRiskBtn, slInput, tpInput, getSymbol, onError, onSuccess, onRender });
     this.busy = false;
     this._listeners = [];
     this._listen(this.closeBtn, 'click', () => void this.closePosition());
@@ -28,6 +33,12 @@ export class PositionView {
 
   destroy() { this._listeners.splice(0).forEach(([el, type, handler]) => el.removeEventListener?.(type, handler)); }
   _fmt(v) { const n = Number(v); return Number.isFinite(n) ? `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}` : '—'; }
+
+  _activePosition(positions = this.trading?.snapshot()?.positions || []) {
+    if (!Array.isArray(positions) || positions.length === 0) return null;
+    const symbol = String(this.getSymbol?.() || '').trim().toUpperCase();
+    return positions.find((position) => String(position?.symbol || '').toUpperCase() === symbol) || positions[0];
+  }
 
   async _run(action) {
     if (this.busy) return { success: false, message: 'Trading request already in progress' };
@@ -49,13 +60,13 @@ export class PositionView {
   }
 
   closePosition() {
-    const position = this.trading?.snapshot().positions?.[0];
+    const position = this._activePosition();
     if (!position) { const message = 'No open position to close'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
     return this._run(() => this.trading.actions.flattenPosition(position.symbol));
   }
 
   setRisk() {
-    const position = this.trading?.snapshot().positions?.[0];
+    const position = this._activePosition();
     if (!position) { const message = 'No open position for SL/TP'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
     const sl = this.slInput?.value?.trim();
     const tp = this.tpInput?.value?.trim();
@@ -67,7 +78,7 @@ export class PositionView {
   }
 
   clearRisk() {
-    const position = this.trading?.snapshot().positions?.[0];
+    const position = this._activePosition();
     if (!position) { const message = 'No open position to clear'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
     if (this.slInput) this.slInput.value = '';
     if (this.tpInput) this.tpInput.value = '';
@@ -75,7 +86,7 @@ export class PositionView {
   }
 
   render(positions = []) {
-    const position = positions[0] || null;
+    const position = this._activePosition(positions);
     if (!position) {
       [this.posSymbolEl, this.posSideEl, this.posQtyEl, this.posEntryEl, this.posCurrentEl, this.posPnlEl, this.posSlEl, this.posTpEl]
         .forEach((el) => { if (el) el.textContent = '—'; });

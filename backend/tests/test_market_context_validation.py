@@ -10,9 +10,12 @@ def candle(o, h, l, c, t=1):
 
 
 def test_restore_rejects_future_market_context():
+    replay = ReplayService()
+    replay.load([candle(100, 101, 99, 100)])
+    replay.start(0)
     trading = PaperTradingEngine()
-    trading.on_candle(candle(100, 101, 99, 100), 0, "BTCUSDT")
-    document = serialize_session(ReplayService(), trading)
+    trading.on_candle(replay.candles[0], 0, "BTCUSDT")
+    document = serialize_session(replay, trading)
     document["tradingMarket"]["BTCUSDT"]["index"] = 1
 
     with pytest.raises(ValueError, match="outside trading timeline"):
@@ -20,9 +23,12 @@ def test_restore_rejects_future_market_context():
 
 
 def test_restore_rejects_non_canonical_market_symbol():
+    replay = ReplayService()
+    replay.load([candle(100, 101, 99, 100)])
+    replay.start(0)
     trading = PaperTradingEngine()
-    trading.on_candle(candle(100, 101, 99, 100), 0, "BTCUSDT")
-    document = serialize_session(ReplayService(), trading)
+    trading.on_candle(replay.candles[0], 0, "BTCUSDT")
+    document = serialize_session(replay, trading)
     document["tradingMarket"] = {"btcusdt": document["tradingMarket"]["BTCUSDT"]}
 
     with pytest.raises(ValueError, match="market symbol"):

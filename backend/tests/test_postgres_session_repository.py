@@ -38,7 +38,7 @@ def test_postgres_round_trip_and_revisioning():
         assert first["version"] == document["version"]
         assert first["revision"] == 1
         assert first["replay"]["candles"] == document["replay"]["candles"]
-        assert first["replay"]["datasetId"]
+        assert first["replay"]["datasetId"] == document["replay"]["datasetId"]
 
         second = dict(document)
         second["replay"] = dict(second["replay"])
@@ -67,6 +67,10 @@ def test_postgres_session_row_excludes_immutable_candle_payload():
             dataset = connection.execute("SELECT candles FROM replay_datasets WHERE dataset_id = %s", (row["state"]["replay"]["datasetId"],)).fetchone()
         assert "candles" not in row["state"]["replay"]
         assert dataset["candles"] == document["replay"]["candles"]
+
+        revision_before = repository.get(session_id)["revision"]
+        repository.save(session_id, document)
+        assert repository.get(session_id)["revision"] == revision_before + 1
     finally:
         repository.delete(session_id)
 
@@ -75,11 +79,9 @@ def test_postgres_identical_datasets_are_deduplicated():
     repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
     first_id = str(uuid4())
     second_id = str(uuid4())
-    document = serialize_session(
-        ReplayService(),
-        PaperTradingEngine(),
-    )
-    document["replay"]["candles"] = [candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)]
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
+    document = serialize_session(replay, PaperTradingEngine())
 
     try:
         repository.save(first_id, document)
@@ -98,8 +100,12 @@ def test_postgres_identical_datasets_are_deduplicated():
 def test_postgres_legacy_inline_dataset_is_migrated_on_next_write():
     repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
     session_id = str(uuid4())
-    document = serialize_session(ReplayService(), PaperTradingEngine())
-    document["replay"]["candles"] = [candle(100, 105, 95, 102)]
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102)])
+    document = serialize_session(replay, PaperTradingEngine())
+    legacy_replay = dict(document["replay"])
+    legacy_replay.pop("datasetId")
+    document["replay"] = legacy_replay
 
     try:
         with psycopg.connect(os.environ["DATABASE_URL"]) as connection:
@@ -187,8 +193,9 @@ def test_postgres_atomic_updates_serialize_concurrent_managers():
 def test_postgres_reclaims_dataset_after_session_delete():
     repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
     session_id = str(uuid4())
-    document = serialize_session(ReplayService(), PaperTradingEngine())
-    document["replay"]["candles"] = [candle(100, 105, 95, 102)]
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102)])
+    document = serialize_session(replay, PaperTradingEngine())
 
     try:
         repository.save(session_id, document)
@@ -205,16 +212,18 @@ def test_postgres_reclaims_replaced_dataset_but_keeps_shared_dataset():
     repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
     first_id = str(uuid4())
     second_id = str(uuid4())
-    first_document = serialize_session(ReplayService(), PaperTradingEngine())
-    first_document["replay"]["candles"] = [candle(100, 105, 95, 102)]
-    second_document = serialize_session(ReplayService(), PaperTradingEngine())
-    second_document["replay"]["candles"] = [candle(200, 205, 195, 202)]
+    first_replay = ReplayService()
+    first_replay.load([candle(100, 105, 95, 102)])
+    first_document = serialize_session(first_replay, PaperTradingEngine())
+    second_replay = ReplayService()
+    second_replay.load([candle(200, 205, 195, 202)])
+    second_document = serialize_session(second_replay, PaperTradingEngine())
 
     try:
         repository.save(first_id, first_document)
         repository.save(second_id, first_document)
         shared_dataset_id = repository.get(first_id)["replay"]["datasetId"]
-        replacement_dataset_id = repository._dataset_id(second_document["replay"]["candles"])
+        replacement_dataset_id = second_document["replay"]["datasetId"]
 
         repository.save(first_id, second_document)
 

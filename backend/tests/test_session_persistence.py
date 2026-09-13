@@ -50,11 +50,16 @@ def test_session_round_trip_preserves_replay_and_trading_state():
 
 def test_session_round_trip_preserves_symbol_specific_close_price():
     replay = ReplayService()
-    replay.load([candle(100, 101, 99, 100, 1)])
+    replay.load([
+        candle(100, 101, 99, 100, 1),
+        candle(101, 110, 100, 110, 2),
+        candle(102, 104, 101, 103, 3),
+    ])
+    replay.start(2)
     trading = PaperTradingEngine()
     trading.on_candle(candle(100, 101, 99, 100, 1), 0, "ETHUSDT")
     trading.submit("ETHUSDT", "buy", 1)
-    trading.on_candle(candle(100, 102, 99, 110, 2), 1, "ETHUSDT")
+    trading.on_candle(candle(100, 110, 99, 110, 2), 1, "ETHUSDT")
     trading.on_candle(candle(50000, 50100, 49900, 50000, 3), 2, "BTCUSDT")
 
     _, restored = restore_session(serialize_session(replay, trading))
@@ -68,11 +73,13 @@ def test_session_round_trip_preserves_symbol_specific_close_price():
 
 def test_restore_rejects_invalid_trading_market_context():
     replay = ReplayService()
+    replay.load([candle(100, 101, 99, 100)])
+    replay.start(0)
     trading = PaperTradingEngine()
     document = serialize_session(replay, trading)
     document["tradingMarket"] = {"BTCUSDT": {"candle": {"close": 0}, "index": -1}}
 
-    with pytest.raises(ValueError, match="market close"):
+    with pytest.raises(ValueError, match="market candle"):
         restore_session(document)
 
 

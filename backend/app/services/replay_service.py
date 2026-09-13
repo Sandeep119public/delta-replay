@@ -2,6 +2,7 @@ from copy import deepcopy
 from math import isfinite
 
 from ..models import Candle
+from .dataset_identity import dataset_id
 
 
 MAX_VISIBLE_CANDLES = 2000
@@ -12,6 +13,7 @@ class ReplayService:
 
     def __init__(self):
         self.candles = []
+        self.dataset_id = None
         self.index = -1
         self.start_index = -1
         self.speed = 1
@@ -35,10 +37,15 @@ class ReplayService:
         if any(current <= previous for previous, current in zip(times, times[1:])):
             raise ValueError("candles must be strictly ordered by increasing time")
 
+    @staticmethod
+    def _dataset_id(candles):
+        return dataset_id(candles)
+
     def load(self, candles):
         validated = [Candle.model_validate(candle) for candle in candles]
         self._validate_chronology(validated)
         self.candles = [candle.model_dump() for candle in validated]
+        self.dataset_id = self._dataset_id(self.candles)
         self.index = -1
         self.start_index = -1
         self.status = "ready" if self.candles else "idle"
@@ -72,7 +79,10 @@ class ReplayService:
 
     def reset(self):
         self.index = self.start_index if self.start_index >= 0 else -1
-        self.status = "paused" if self.index >= 0 else ("ready" if self.candles else "idle")
+        if self.index < 0:
+            self.status = "ready" if self.candles else "idle"
+        else:
+            self.status = "ended" if self.index == len(self.candles) - 1 else "paused"
         return self.state()
 
     def state(self):
@@ -97,6 +107,7 @@ class ReplayService:
         """Return all replay state required to reconstruct this service."""
         return {
             "candles": deepcopy(self.candles),
+            "datasetId": self.dataset_id or self._dataset_id(self.candles),
             "index": self.index,
             "startIndex": self.start_index,
             "speed": self.speed,
@@ -134,6 +145,14 @@ class ReplayService:
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid persisted candle data: {exc}") from exc
         replay._validate_chronology([Candle.model_validate(candle) for candle in replay.candles])
+        derived_dataset_id = replay._dataset_id(replay.candles)
+        persisted_dataset_id = state.get("datasetId")
+        if persisted_dataset_id is not None:
+            if not isinstance(persisted_dataset_id, str) or persisted_dataset_id != derived_dataset_id:
+                raise ValueError("persisted replay datasetId does not match candle data")
+            replay.dataset_id = persisted_dataset_id
+        else:
+            replay.dataset_id = derived_dataset_id
         replay.index = index
         replay.start_index = start_index
         replay.speed = speed
@@ -143,6 +162,8 @@ class ReplayService:
                 raise ValueError("replay index is outside candle range")
             if replay.start_index < -1 or replay.start_index >= len(replay.candles):
                 raise ValueError("replay start index is outside candle range")
+            if replay.start_index > replay.index:
+                raise ValueError("replay start index cannot exceed current index")
             if replay.status == "idle":
                 raise ValueError("non-empty replay cannot be idle")
             if replay.status == "ready" and (replay.index != -1 or replay.start_index != -1):

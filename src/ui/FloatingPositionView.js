@@ -10,6 +10,7 @@ import { assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 export class FloatingPositionView {
   constructor({
     trading = null,
+    getSymbol = () => null,
     container = (typeof document !== 'undefined' ? document.getElementById('chart-floating-bar') : null),
     symbolEl = (typeof document !== 'undefined' ? document.getElementById('chart-pos-symbol') : null),
     sideTextEl = (typeof document !== 'undefined' ? document.getElementById('chart-pos-side-text') : null),
@@ -19,10 +20,10 @@ export class FloatingPositionView {
     pnlEl = (typeof document !== 'undefined' ? document.getElementById('chart-pos-pnl') : null),
     iconEl = (typeof document !== 'undefined' ? document.getElementById('chart-pos-icon') : null),
     closeBtn = (typeof document !== 'undefined' ? document.getElementById('btn-chart-close') : null),
-    // Legacy badge element (pre-capsule layout) — kept for backwards compatibility.
     badgeEl = (typeof document !== 'undefined' ? document.getElementById('chart-pos-badge') : null),
   } = {}) {
     this.trading = trading ? assertTradingPresentation(trading) : null;
+    this.getSymbol = getSymbol;
     this.container = container;
     this.symbolEl = symbolEl;
     this.sideTextEl = sideTextEl;
@@ -36,15 +37,20 @@ export class FloatingPositionView {
 
     this._lastPnl = 0;
     this._boundClose = () => {
-      const positions = this.trading?.snapshot()?.positions || [];
-      if (positions.length > 0) this.trading.actions.flattenPosition(positions[0].symbol);
+      const position = this._activePosition();
+      if (position) this.trading.actions.flattenPosition(position.symbol);
     };
     this._bindCloseBtn();
   }
 
+  _activePosition(positions = this.trading?.snapshot()?.positions || []) {
+    if (!Array.isArray(positions) || positions.length === 0) return null;
+    const symbol = String(this.getSymbol?.() || '').trim().toUpperCase();
+    return positions.find((position) => String(position?.symbol || '').toUpperCase() === symbol) || positions[0];
+  }
+
   _bindCloseBtn() {
     if (!this.closeBtn) return;
-    // Guard against double-binding when view is re-instantiated on the same DOM node.
     if (this.closeBtn.__floatingPosBound) return;
     this.closeBtn.addEventListener('click', this._boundClose);
     this.closeBtn.__floatingPosBound = true;
@@ -95,14 +101,10 @@ export class FloatingPositionView {
     const fmt = (v) => `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     if (this.entryEl) {
-      // Legacy badge layout expects the exact "@ $..." + toFixed(2) format
-      // (no thousands separator) — preserve it when badgeEl is in use.
-      // New capsule layout uses locale-aware formatting with commas.
       this.entryEl.textContent = this.badgeEl ? `@ $${entry.toFixed(2)}` : fmt(entry);
     }
     if (this.markEl) this.markEl.textContent = fmt(mark);
 
-    // Legacy badge support (pre-capsule HTML): "LONG 0.5" + pos-long/pos-short.
     if (this.badgeEl) {
       this.badgeEl.textContent = `${position.side} ${position.quantity}`;
       this.badgeEl.className = `chart-pos-badge ${position.side === 'LONG' ? 'pos-long' : 'pos-short'}`;
@@ -113,20 +115,15 @@ export class FloatingPositionView {
       this.pnlEl.textContent = this.badgeEl
         ? `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`
         : `${isPos ? '+' : '-'}$${Math.abs(pnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      // Preserve legacy class hooks when rendering into the legacy layout so
-      // existing tests/selectors keep working; use capsule classes otherwise.
       const baseClass = this.badgeEl ? 'chart-pos-pnl' : 'capsule-pnl';
       const modifier = this.badgeEl ? (isPos ? 'pnl-pos' : 'pnl-neg') : (isPos ? 'pos' : 'neg');
       this.pnlEl.className = `${baseClass} ${modifier}`;
 
-      // Visual flash effect on PnL change to indicate live updates.
-      // Skipped for mock elements without offsetWidth/classList token support.
       const diff = pnl - this._lastPnl;
       if (Math.abs(diff) > 0.01 && typeof this.pnlEl.offsetWidth !== 'undefined') {
         try {
           const flashClass = diff >= 0 ? 'flash-up' : 'flash-down';
           this.pnlEl.classList.remove('flash-up', 'flash-down');
-          // Trigger reflow to restart animation
           void this.pnlEl.offsetWidth;
           this.pnlEl.classList.add(flashClass);
         } catch {}

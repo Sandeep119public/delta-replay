@@ -110,19 +110,9 @@ export function createApplication() {
     appState,
     candleStore,
     headerBtn: coordinatorPorts.headerStartReplayBtn,
+    tradingCapabilities: replayTradingCapabilities,
     onLoad: ({ autoStart }) => replayCapabilities.load({ autoStart }),
     onPreview: (index) => replayCapabilities.preview(index),
-    canExecute: (action) => {
-      const hasTradingActivity = tradingEngine.hasTradingActivity();
-      if (action === 'reset' || action === 'restart' || action === 'stepForward' || action === 'resume') return { allowed: true };
-      if (action === 'seek' && hasTradingActivity) {
-        return { allowed: false, reason: 'Cannot seek after trading activity. Reset the simulation first.' };
-      }
-      if (action === 'start' && hasTradingActivity) {
-        return { allowed: false, reason: 'Cannot start a new replay position after trading activity. Reset the simulation first.' };
-      }
-      return { allowed: true };
-    },
     onError: (msg) => coordinator?.showTradingError(msg),
   });
   const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
