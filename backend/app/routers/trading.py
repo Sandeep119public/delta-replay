@@ -76,7 +76,14 @@ class FundingRequest(BaseModel):
 
 
 def snapshot(service: PaperTradingEngine):
-    return service.snapshot()
+    state = service.snapshot()
+    orders = list(state["orders"].values())
+    return {
+        **state,
+        "positions": list(state["positions"].values()),
+        "orders": orders,
+        "pendingOrders": [order for order in orders if order["status"] == "PENDING"],
+    }
 
 
 def replay_candle(session, symbol: str):
@@ -112,7 +119,7 @@ def state(request: Request):
 def orders(request: Request):
     try:
         service = get_session(request).trading
-        snapshot_value = service.snapshot()
+        snapshot_value = snapshot(service)
         return {"orders": snapshot_value["orders"], "pendingOrders": snapshot_value["pendingOrders"]}
     except StateInvariantError as exc:
         raise _internal_http_error(exc) from exc
