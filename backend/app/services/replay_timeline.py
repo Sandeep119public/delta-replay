@@ -1,7 +1,5 @@
 """Deterministic reconstruction of a trading session at a replay index."""
 
-from copy import deepcopy
-
 from .paper_engine import PaperTradingEngine
 
 
@@ -12,10 +10,7 @@ class ReplayDivergenceError(ValueError):
 def _prepare_command_context(engine: PaperTradingEngine, replay, replay_index: int) -> None:
     engine.index = replay_index
     if 0 <= replay_index < len(replay.candles):
-        engine._market_by_symbol["BTCUSDT"] = {
-            "candle": deepcopy(replay.candles[replay_index]),
-            "index": replay_index,
-        }
+        engine.set_market_context("BTCUSDT", replay.candles[replay_index], replay_index)
 
 
 def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> None:
