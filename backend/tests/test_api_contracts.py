@@ -2,6 +2,8 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from app.domain.errors import StateInvariantError
+from app.domain.account import TradingAccount
 from app.main import app
 
 
@@ -52,6 +54,19 @@ def test_invalid_fee_rate_is_rejected():
         json={"rate": 1},
     )
     assert response.status_code == 422
+
+
+def test_state_invariant_failure_is_internal_error(monkeypatch):
+    def fail(_self):
+        raise StateInvariantError("corrupted account")
+
+    monkeypatch.setattr(TradingAccount, "validate_invariants", fail)
+    response = client.get("/api/v1/trading/state", headers=headers())
+    assert response.status_code == 500
+    assert response.json()["detail"] == {
+        "code": "STATE_INVARIANT_VIOLATION",
+        "message": "Trading state integrity failure",
+    }
 
 
 def test_oversized_csv_is_rejected():
