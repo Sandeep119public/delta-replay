@@ -3,6 +3,7 @@ from math import isclose
 import pytest
 
 from app.services.paper_engine import PaperTradingEngine
+from app.domain.execution import fill_price
 
 
 def candle(o, h, l, c, t=1):
@@ -11,6 +12,15 @@ def candle(o, h, l, c, t=1):
 
 def prime(engine):
     engine.on_candle(candle(100, 105, 95, 100), 0, "BTCUSDT")
+
+
+def test_creation_bar_never_fills_limit_or_stop_order():
+    limit = {"type": "limit", "side": "buy", "limitPrice": 101, "createdIndex": 1}
+    stop = {"type": "stop_market", "side": "buy", "stopPrice": 99, "createdIndex": 1}
+    bar = candle(100, 105, 95, 102, 2)
+
+    assert fill_price(limit, bar, candle_index=1) is None
+    assert fill_price(stop, bar, candle_index=1) is None
 
 
 def test_buy_limit_gap_down_gets_better_open():
