@@ -28,7 +28,7 @@ class PostgresSessionRepository(SessionRepository):
         return psycopg.connect(self.dsn, connect_timeout=self.connect_timeout, row_factory=dict_row)
 
     def _verify_schema(self) -> None:
-        required_tables = {"replay_datasets", "replay_sessions", "replay_events"}
+        required_tables = {"schema_migrations", "replay_datasets", "replay_sessions", "replay_events"}
         with self._connect() as connection:
             rows = connection.execute(
                 """SELECT table_name
@@ -37,12 +37,46 @@ class PostgresSessionRepository(SessionRepository):
                      AND table_name = ANY(%s)""",
                 (list(required_tables),),
             ).fetchall()
+            columns = connection.execute(
+                """SELECT table_name, column_name
+                   FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                     AND table_name = ANY(%s)""",
+                (list(required_tables),),
+            ).fetchall()
+            migration_rows = connection.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            ).fetchall()
         present = {row["table_name"] for row in rows}
         missing = sorted(required_tables - present)
         if missing:
             raise RuntimeError(
                 "PostgreSQL schema is not initialized; apply backend/migrations before starting the application. "
                 f"Missing tables: {', '.join(missing)}"
+            )
+        required_columns = {
+            "schema_migrations": {"version", "checksum", "applied_at"},
+            "replay_datasets": {"dataset_id", "candles"},
+            "replay_sessions": {"session_id", "state", "revision", "updated_at"},
+            "replay_events": {"session_id", "sequence", "replay_index", "event_type", "payload"},
+        }
+        observed = {}
+        for row in columns:
+            observed.setdefault(row["table_name"], set()).add(row["column_name"])
+        missing_columns = {
+            table: sorted(fields - observed.get(table, set()))
+            for table, fields in required_columns.items()
+            if fields - observed.get(table, set())
+        }
+        if missing_columns:
+            details = "; ".join(f"{table}: {', '.join(columns)}" for table, columns in missing_columns.items())
+            raise RuntimeError(f"PostgreSQL schema is incomplete: {details}")
+        applied_versions = {str(row["version"]) for row in migration_rows}
+        if not {"000", "001", "002"}.issubset(applied_versions):
+            missing_versions = sorted({"000", "001", "002"} - applied_versions)
+            raise RuntimeError(
+                "PostgreSQL migrations are incomplete; apply backend/migrations before starting the application. "
+                f"Missing versions: {', '.join(missing_versions)}"
             )
 
     @staticmethod
@@ -75,14 +109,21 @@ class PostgresSessionRepository(SessionRepository):
         replay = dict(clean.get("replay", {}))
         candles = replay.pop("candles", None)
         if candles is not None:
-            dataset_id = cls._dataset_id(candles)
-            connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
-            connection.execute(
-                """INSERT INTO replay_datasets (dataset_id, candles)
-                   VALUES (%s, %s::jsonb)
-                   ON CONFLICT (dataset_id) DO NOTHING""",
-                (dataset_id, json.dumps(candles, separators=(",", ":"), allow_nan=False)),
-            )
+            dataset_id = replay.get("datasetId") or cls._dataset_id(candles)
+            if not isinstance(dataset_id, str) or not dataset_id:
+                raise ValueError("replay datasetId must be a non-empty string")
+            exists = connection.execute(
+                "SELECT 1 FROM replay_datasets WHERE dataset_id = %s",
+                (dataset_id,),
+            ).fetchone()
+            if exists is None:
+                connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
+                connection.execute(
+                    """INSERT INTO replay_datasets (dataset_id, candles)
+                       VALUES (%s, %s::jsonb)
+                       ON CONFLICT (dataset_id) DO NOTHING""",
+                    (dataset_id, json.dumps(candles, separators=(",", ":"), allow_nan=False)),
+                )
             replay["datasetId"] = dataset_id
         clean["replay"] = replay
         clean.pop("history", None)

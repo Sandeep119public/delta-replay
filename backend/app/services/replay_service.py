@@ -1,4 +1,6 @@
 from copy import deepcopy
+import hashlib
+import json
 from math import isfinite
 
 from ..models import Candle
@@ -12,6 +14,7 @@ class ReplayService:
 
     def __init__(self):
         self.candles = []
+        self.dataset_id = None
         self.index = -1
         self.start_index = -1
         self.speed = 1
@@ -35,10 +38,19 @@ class ReplayService:
         if any(current <= previous for previous, current in zip(times, times[1:])):
             raise ValueError("candles must be strictly ordered by increasing time")
 
+    @staticmethod
+    def _dataset_id(candles):
+        try:
+            encoded = json.dumps(candles, separators=(",", ":"), sort_keys=True, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"replay dataset is not JSON-safe: {exc}") from exc
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
     def load(self, candles):
         validated = [Candle.model_validate(candle) for candle in candles]
         self._validate_chronology(validated)
         self.candles = [candle.model_dump() for candle in validated]
+        self.dataset_id = self._dataset_id(self.candles)
         self.index = -1
         self.start_index = -1
         self.status = "ready" if self.candles else "idle"
@@ -97,6 +109,7 @@ class ReplayService:
         """Return all replay state required to reconstruct this service."""
         return {
             "candles": deepcopy(self.candles),
+            "datasetId": self.dataset_id or self._dataset_id(self.candles),
             "index": self.index,
             "startIndex": self.start_index,
             "speed": self.speed,
@@ -134,6 +147,14 @@ class ReplayService:
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid persisted candle data: {exc}") from exc
         replay._validate_chronology([Candle.model_validate(candle) for candle in replay.candles])
+        derived_dataset_id = replay._dataset_id(replay.candles)
+        persisted_dataset_id = state.get("datasetId")
+        if persisted_dataset_id is not None:
+            if not isinstance(persisted_dataset_id, str) or persisted_dataset_id != derived_dataset_id:
+                raise ValueError("persisted replay datasetId does not match candle data")
+            replay.dataset_id = persisted_dataset_id
+        else:
+            replay.dataset_id = derived_dataset_id
         replay.index = index
         replay.start_index = start_index
         replay.speed = speed
