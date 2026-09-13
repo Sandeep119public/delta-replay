@@ -2,6 +2,7 @@ import math
 
 import pytest
 
+from app.models import MAX_CANDLES
 from app.services.data_service import DataService
 
 
@@ -53,3 +54,10 @@ def test_csv_import_rejects_non_finite_values():
 def test_csv_import_requires_headers_even_when_rows_are_empty():
     with pytest.raises(ValueError, match="Missing columns"):
         DataService().parse_csv("time,open,high\n")
+
+
+def test_csv_import_rejects_more_than_max_candles():
+    rows = ["time,open,high,low,close,volume"]
+    rows.extend(f"{index + 1},100,101,99,100,10" for index in range(MAX_CANDLES + 1))
+    with pytest.raises(ValueError, match=str(MAX_CANDLES)):
+        DataService().parse_csv("\n".join(rows))
