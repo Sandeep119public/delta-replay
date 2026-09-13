@@ -48,11 +48,15 @@ def test_restore_rejects_uninitialized_market_context_entry():
 
 def test_restore_rejects_open_position_without_market_context():
     replay = ReplayService()
-    replay.load([candle(100, 101, 99, 100), candle(100, 101, 99, 100, 2)])
+    replay.load([
+        candle(100, 101, 99, 100),
+        candle(100, 101, 99, 100, 2),
+    ])
     replay.start(0)
     trading = PaperTradingEngine()
     trading.on_candle(replay.candles[0], 0, "BTCUSDT")
     trading.submit("BTCUSDT", "buy", 1)
+    replay.step()
     trading.on_candle(replay.candles[1], 1, "BTCUSDT")
     document = serialize_session(replay, trading)
     del document["tradingMarket"]["BTCUSDT"]
@@ -71,6 +75,7 @@ def test_restore_rejects_market_context_predating_open_position():
     trading = PaperTradingEngine()
     trading.on_candle(replay.candles[0], 0, "BTCUSDT")
     trading.submit("BTCUSDT", "buy", 1)
+    replay.step()
     trading.on_candle(replay.candles[1], 1, "BTCUSDT")
     document = serialize_session(replay, trading)
     document["tradingMarket"]["BTCUSDT"]["index"] = 0
