@@ -104,7 +104,6 @@ def rebuild_trading(replay, history, target_index: int, default_symbol: str = "B
 
     commands = [command for command in history if command["replayIndex"] <= target_index]
     non_market_commands = any(command["type"] != "market_step" for command in commands)
-    explicit_symbols = [str(command["payload"]["symbol"]).strip().upper() for command in commands if command["type"] == "market_step"]
     market_commands = {command["replayIndex"]: command for command in commands if command["type"] == "market_step"}
 
     start_index = replay.start_index if replay.start_index >= 0 else 0
@@ -114,7 +113,7 @@ def rebuild_trading(replay, history, target_index: int, default_symbol: str = "B
         raise ReplayDivergenceError(f"replay history is missing market events for indexes: {missing}")
 
     command_iter = iter(commands)
-    current_symbol = explicit_symbols[-1] if explicit_symbols else default_symbol
+    current_symbol = default_symbol
     next_command = next(command_iter, None)
 
     for index in range(start_index, target_index + 1):
