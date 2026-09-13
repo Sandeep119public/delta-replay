@@ -25,7 +25,7 @@ def test_limit_order_fill_is_not_duplicated():
     assert engine.positions["BTCUSDT"]["entry_price"] == 95
 
 
-def test_market_order_never_fills_on_creation_index():
+def test_market_order_fills_on_next_bar_open_not_creation_index():
     engine = PaperTradingEngine(fee_rate=0)
     engine.on_candle(candle(100, 100, 100, 100, 1), 0)
     order = engine.submit("BTCUSDT", "buy", 1)
