@@ -26,7 +26,7 @@ describe('Deployment configuration', () => {
 
     expect(dockerfile).toMatch(/USER appuser/);
     expect(dockerfile).toMatch(/HEALTHCHECK/);
-    expect(dockerfile).toMatch(/127\.0\.0\.1:8000\/health\/health/);
+    expect(dockerfile).toMatch(/127\.0\.0\.1:8000\/health(?!\/)/);
     expect(dockerfile).toMatch(/PYTHONDONTWRITEBYTECODE=1/);
   });
 
