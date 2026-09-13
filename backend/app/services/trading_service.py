@@ -4,6 +4,8 @@ New code should use :class:`PaperTradingEngine` directly. This facade exists onl
 for older integrations that still construct ``TradingService``.
 """
 
+from math import isfinite
+
 from ..models import OrderRequest
 from .paper_engine import PaperTradingEngine
 
@@ -76,6 +78,13 @@ class TradingService:
         }
 
     def open(self, order: OrderRequest, price: float, symbol: str = "DEFAULT"):
+        try:
+            price = float(price)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("price must be finite and positive") from exc
+        if not isfinite(price) or price <= 0:
+            raise ValueError("price must be finite and positive")
+
         self.engine.submit(symbol, order.side, order.quantity)
         self.engine.on_candle(
             {
