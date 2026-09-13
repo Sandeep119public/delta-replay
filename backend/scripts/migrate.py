@@ -1,10 +1,16 @@
+import hashlib
 import os
 from pathlib import Path
 
 import psycopg
 
 
-MIGRATIONS = sorted(Path(__file__).resolve().parents[1].joinpath("migrations").glob("*.sql"))
+MIGRATION_DIR = Path(__file__).resolve().parents[1] / "migrations"
+MIGRATIONS = sorted(MIGRATION_DIR.glob("*.sql"))
+
+
+def _checksum(sql: str) -> str:
+    return hashlib.sha256(sql.encode("utf-8")).hexdigest()
 
 
 def main() -> None:
@@ -15,8 +21,33 @@ def main() -> None:
         raise SystemExit("No migration files found")
 
     with psycopg.connect(dsn) as connection:
-        for migration in MIGRATIONS:
-            connection.execute(migration.read_text(encoding="utf-8"))
+        connection.execute(MIGRATIONS[0].read_text(encoding="utf-8"))
+        connection.commit()
+
+        for migration in MIGRATIONS[1:]:
+            version = migration.stem
+            sql = migration.read_text(encoding="utf-8")
+            checksum = _checksum(sql)
+            row = connection.execute(
+                "SELECT checksum FROM schema_migrations WHERE version = %s",
+                (version,),
+            ).fetchone()
+
+            if row is not None:
+                stored_checksum = row[0] if not isinstance(row, dict) else row["checksum"]
+                if stored_checksum != checksum:
+                    raise SystemExit(
+                        f"Migration {version} was modified after being applied; "
+                        "restore the original file or create a new migration."
+                    )
+                continue
+
+            connection.execute(sql)
+            connection.execute(
+                "INSERT INTO schema_migrations (version, checksum) VALUES (%s, %s)",
+                (version, checksum),
+            )
+            connection.commit()
             print(f"Applied {migration.name}")
 
 
