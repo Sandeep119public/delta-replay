@@ -1,6 +1,5 @@
 from copy import deepcopy
 import json
-from math import isclose
 from typing import Any, Dict
 
 from .paper_engine import PaperTradingEngine
@@ -89,22 +88,17 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
             raise ValueError(f"market index for {symbol} is outside trading timeline")
         if index < 0:
             continue
+        candle = market.get("candle")
+        if not isinstance(candle, dict):
+            raise ValueError(f"market candle for {symbol} is invalid")
+        for field in ("open", "high", "low", "close"):
+            value = candle.get(field)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not __import__("math").isfinite(value):
+                raise ValueError(f"market candle {field} for {symbol} is invalid")
+        if candle["high"] < max(candle["open"], candle["close"]) or candle["low"] > min(candle["open"], candle["close"]):
+            raise ValueError(f"market candle range for {symbol} is invalid")
         if index >= len(replay.candles):
             raise ValueError(f"market index for {symbol} is outside replay dataset")
-        replay_candle = replay.candles[index]
-        market_candle = market.get("candle")
-        if not isinstance(market_candle, dict):
-            raise ValueError("invalid market candle")
-        for field in ("open", "high", "low", "close"):
-            try:
-                market_value = float(market_candle[field])
-                replay_value = float(replay_candle[field])
-            except (KeyError, TypeError, ValueError) as exc:
-                raise ValueError(f"invalid market candle {field}") from exc
-            if not isclose(market_value, replay_value, rel_tol=0.0, abs_tol=1e-12):
-                raise ValueError(f"market candle for {symbol} does not match replay dataset at index {index}")
-        if "time" in market_candle and "time" in replay_candle and market_candle["time"] != replay_candle["time"]:
-            raise ValueError(f"market candle time for {symbol} does not match replay dataset at index {index}")
 
 
 def serialize_session(
