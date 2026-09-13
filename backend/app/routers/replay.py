@@ -8,8 +8,19 @@ from ..services.session_manager import atomic_session, get_session
 router = APIRouter()
 
 
+def trading_api_snapshot(engine):
+    state = engine.snapshot()
+    orders = list(state["orders"].values())
+    return {
+        **state,
+        "positions": list(state["positions"].values()),
+        "orders": orders,
+        "pendingOrders": [order for order in orders if order["status"] == "PENDING"],
+    }
+
+
 def replay_snapshot(session):
-    return {**session.replay.state(), "trading": session.trading.snapshot()}
+    return {**session.replay.state(), "trading": trading_api_snapshot(session.trading)}
 
 
 def require_pristine_trading(session, action):
@@ -80,12 +91,12 @@ def step(request: Request, symbol: str = "BTCUSDT"):
         previous_index = session.replay.index
         result = session.replay.step()
         if result["index"] == previous_index or result["index"] < 0:
-            return {**result, "events": [], "trading": session.trading.snapshot()}
+            return {**result, "events": [], "trading": trading_api_snapshot(session.trading)}
 
         candle = result["candle"]
         events = session.trading.on_candle(candle, result["index"], symbol)
         session.record("market_step", result["index"], {"symbol": symbol})
-        return {**result, "events": events, "trading": session.trading.snapshot()}
+        return {**result, "events": events, "trading": trading_api_snapshot(session.trading)}
 
     try:
         return atomic_session(request, advance)
@@ -130,6 +141,6 @@ def reset(request: Request):
         )
         session.history = []
         replay = session.replay.reset()
-        return {**replay, "trading": session.trading.snapshot()}
+        return {**replay, "trading": trading_api_snapshot(session.trading)}
 
     return atomic_session(request, reset_session)
