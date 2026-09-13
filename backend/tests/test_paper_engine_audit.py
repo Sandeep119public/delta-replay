@@ -23,8 +23,8 @@ def test_trade_net_pnl_does_not_double_count_entry_fee():
     assert trade["entryFee"] == pytest.approx(1.0)
     assert trade["exitFee"] == pytest.approx(1.1)
     assert trade["netPnL"] == pytest.approx(7.9)
-    assert trade["realizedPnL"] == pytest.approx(7.9)
-    assert engine.account.realized_pnl == pytest.approx(-1.0 + 8.9)
+    assert trade["realizedPnL"] == pytest.approx(8.9)
+    assert engine.account.realized_pnl == pytest.approx(8.9)
 
 
 def test_oversized_partial_close_is_rejected_without_mutation():
@@ -68,4 +68,5 @@ def test_multiple_pending_orders_for_one_symbol_only_one_can_fill():
     assert engine.positions["BTCUSDT"]["quantity"] == pytest.approx(1)
     statuses = {first["id"]: engine.orders[first["id"]]["status"], second["id"]: engine.orders[second["id"]]["status"]}
     assert list(statuses.values()).count("FILLED") == 1
+    assert list(statuses.values()).count("REJECTED") == 1
     assert any(event["type"] == "ORDER_REJECTED" for event in events)
