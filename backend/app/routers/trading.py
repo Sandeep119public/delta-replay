@@ -66,6 +66,15 @@ class FeeRateRequest(BaseModel):
     rate: float = Field(ge=0, lt=1)
 
 
+class FundingRequest(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+    rate: float
+    timestamp: int | None = None
+    symbol: str | None = Field(default=None, min_length=1, max_length=32)
+    markPrice: float | None = Field(default=None, gt=0)
+
+
+
 def snapshot(service: PaperTradingEngine):
     return service.snapshot()
 
@@ -113,6 +122,14 @@ def orders(request: Request):
 def trades(request: Request):
     try:
         return {"trades": get_session(request).trading.snapshot()["trades"]}
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
+
+
+@router.get("/funding")
+def funding(request: Request):
+    try:
+        return {"funding": get_session(request).trading.snapshot()["funding"]}
     except StateInvariantError as exc:
         raise _internal_http_error(exc) from exc
 
@@ -181,6 +198,35 @@ def close(request: Request, command: CloseRequest):
 
     try:
         return atomic_session(request, close_position)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@router.post("/funding")
+def apply_funding(request: Request, command: FundingRequest):
+    def apply(session):
+        events = session.trading.apply_funding(
+            command.rate,
+            timestamp=command.timestamp,
+            symbol=command.symbol,
+            mark_price=command.markPrice,
+        )
+        session.record(
+            "funding",
+            session.replay.index,
+            {
+                "rate": command.rate,
+                "timestamp": command.timestamp,
+                "symbol": command.symbol,
+                "markPrice": command.markPrice,
+            },
+        )
+        return {"events": events, **snapshot(session.trading)}
+
+    try:
+        return atomic_session(request, apply)
     except StateInvariantError as exc:
         raise _internal_http_error(exc) from exc
     except ValueError as exc:
@@ -278,6 +324,11 @@ def process(request: Request, command: MarketCandleRequest | None = None):
         candle = normalize_candle(raw)
         index = command.index if command.index is not None else session.replay.state()["index"]
         events = session.trading.on_candle(candle, index, command.symbol)
+        session.record(
+            "candle",
+            session.replay.index,
+            {"candle": candle, "index": index, "symbol": command.symbol},
+        )
         return {"events": events, "candle": candle, **snapshot(session.trading)}
 
     try:
@@ -329,12 +380,7 @@ def reset(request: Request):
         fee_rate = session.trading.fee_rate
         margin_rate = session.trading.margin_rate
         maint_margin_rate = session.trading.maint_margin_rate
-        session.trading = PaperTradingEngine(
-            starting_balance=balance,
-            fee_rate=fee_rate,
-            margin_rate=margin_rate,
-            maint_margin_rate=maint_margin_rate,
-        )
+        session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate, margin_rate=margin_rate, maint_margin_rate=maint_margin_rate)
         session.history = []
         return snapshot(session.trading)
 
