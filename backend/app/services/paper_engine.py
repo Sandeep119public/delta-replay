@@ -1,5 +1,5 @@
 from copy import deepcopy
-from math import isfinite
+from math import isclose, isfinite
 
 from ..domain.account import TradingAccount
 from ..domain.execution import fill_price, risk_exit
@@ -539,7 +539,10 @@ class PaperTradingEngine:
                 raise ValueError("position side is invalid")
             for field in ("quantity", "entry_price", "current_price"):
                 self._positive_finite(position.get(field), f"position {field}")
-            self._non_negative_finite(position.get("entry_fee"), "position entry_fee")
+            position_entry_fee = self._non_negative_finite(position.get("entry_fee"), "position entry_fee")
+            expected_position_entry_fee = self.fee(position["entry_price"], position["quantity"])
+            if not isclose(position_entry_fee, expected_position_entry_fee, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError("position entry_fee is inconsistent with entry_price, quantity, and fee rate")
             entry = position["entry_price"]
             opened_index = self._integer(position.get("opened_index"), "position opened_index")
             if opened_index < 0 or opened_index > self.index:
@@ -563,6 +566,8 @@ class PaperTradingEngine:
         if not isinstance(self.funding, list):
             raise ValueError("funding must be a list")
         funding_ids = []
+        funding_paid = 0.0
+        funding_received = 0.0
         for event in self.funding:
             if not isinstance(event, dict):
                 raise ValueError("funding event must be a dict")
@@ -574,14 +579,27 @@ class PaperTradingEngine:
                 raise ValueError("funding symbol is invalid")
             if event.get("side") not in ("long", "short"):
                 raise ValueError("funding side is invalid")
-            self._positive_finite(event.get("quantity"), "funding quantity")
-            self._positive_finite(event.get("markPrice"), "funding markPrice")
-            self._finite(event.get("fundingRate"), "fundingRate")
-            self._finite(event.get("payment"), "funding payment")
+            quantity = self._positive_finite(event.get("quantity"), "funding quantity")
+            mark_price = self._positive_finite(event.get("markPrice"), "funding markPrice")
+            funding_rate = self._finite(event.get("fundingRate"), "fundingRate")
+            payment = self._finite(event.get("payment"), "funding payment")
+            expected_payment = (-1 if event["side"] == "long" else 1) * mark_price * quantity * funding_rate
+            if not isclose(payment, expected_payment, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError("funding payment is inconsistent with side, quantity, markPrice, and fundingRate")
+            if payment < 0:
+                funding_paid += -payment
+            else:
+                funding_received += payment
             funding_ids.append(event_id)
         if funding_ids != list(range(1, len(funding_ids) + 1)):
             raise ValueError("funding ids must be sequential")
+        if not isclose(self.account.total_funding_paid, funding_paid, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError("account totalFundingPaid is inconsistent with funding events")
+        if not isclose(self.account.total_funding_received, funding_received, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError("account totalFundingReceived is inconsistent with funding events")
         trade_ids = []
+        trade_total_fees = 0.0
+        trade_net_pnl = 0.0
         for trade in self.trades:
             if not isinstance(trade, dict):
                 raise ValueError("trade must be a dict")
@@ -593,23 +611,60 @@ class PaperTradingEngine:
                 raise ValueError("trade symbol is invalid")
             if trade.get("side") not in ("LONG", "SHORT"):
                 raise ValueError("trade side is invalid")
-            for field in ("quantity", "entryPrice", "exitPrice"):
-                self._positive_finite(trade.get(field), f"trade {field}")
+            quantity = self._positive_finite(trade.get("quantity"), "trade quantity")
+            entry_price = self._positive_finite(trade.get("entryPrice"), "trade entryPrice")
+            exit_price = self._positive_finite(trade.get("exitPrice"), "trade exitPrice")
             for field in ("entryFee", "exitFee", "totalFee"):
                 self._non_negative_finite(trade.get(field), f"trade {field}")
             for field in ("realizedPnL", "grossPnL", "netPnL"):
                 self._finite(trade.get(field), f"trade {field}")
+            direction = 1 if trade["side"] == "LONG" else -1
+            expected_gross = (exit_price - entry_price) * quantity * direction
+            expected_entry_fee = self.fee(entry_price, quantity)
+            expected_exit_fee = self.fee(exit_price, quantity)
+            if not isclose(trade["grossPnL"], expected_gross, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError("trade grossPnL is inconsistent with side, quantity, entryPrice, and exitPrice")
+            if not isclose(trade["entryFee"], expected_entry_fee, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError("trade entryFee is inconsistent with entryPrice, quantity, and fee rate")
+            if not isclose(trade["exitFee"], expected_exit_fee, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError("trade exitFee is inconsistent with exitPrice, quantity, and fee rate")
             expected_total_fee = trade["entryFee"] + trade["exitFee"]
-            if abs(trade["totalFee"] - expected_total_fee) > 1e-9 * max(1.0, abs(expected_total_fee)):
+            if not isclose(trade["totalFee"], expected_total_fee, rel_tol=1e-9, abs_tol=1e-9):
                 raise ValueError("trade totalFee is inconsistent with entryFee and exitFee")
             expected_net = trade["grossPnL"] - trade["totalFee"]
-            if abs(trade["netPnL"] - expected_net) > 1e-9 * max(1.0, abs(expected_net)):
+            if not isclose(trade["netPnL"], expected_net, rel_tol=1e-9, abs_tol=1e-9):
                 raise ValueError("trade netPnL is inconsistent with grossPnL and totalFee")
-            if trade["realizedPnL"] != trade["netPnL"]:
+            if not isclose(trade["realizedPnL"], trade["netPnL"], rel_tol=1e-9, abs_tol=1e-9):
                 raise ValueError("trade realizedPnL is inconsistent with netPnL")
+            trade_total_fees += trade["totalFee"]
+            trade_net_pnl += trade["netPnL"]
             trade_ids.append(trade_id)
         if trade_ids != list(range(1, len(trade_ids) + 1)):
             raise ValueError("trade ids must be sequential")
+
+        open_entry_fees = 0.0
+        expected_unrealized = 0.0
+        expected_used_margin = 0.0
+        expected_maintenance = 0.0
+        for position in self.positions.values():
+            open_entry_fees += position["entry_fee"]
+            direction = 1 if position["side"] == "long" else -1
+            expected_unrealized += (position["current_price"] - position["entry_price"]) * position["quantity"] * direction
+            expected_used_margin += position["entry_price"] * position["quantity"] * self.margin_rate
+            expected_maintenance += position["current_price"] * position["quantity"] * self.maint_margin_rate
+
+        expected_total_fees = trade_total_fees + open_entry_fees
+        expected_realized = trade_net_pnl - open_entry_fees
+        if not isclose(self.account.total_fees, expected_total_fees, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError("account totalFees is inconsistent with trades and open position fees")
+        if not isclose(self.account.realized_pnl, expected_realized, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError("account realizedPnL is inconsistent with trades and open position fees")
+        if not isclose(self.account.unrealized_pnl, expected_unrealized, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError("account unrealizedPnL is inconsistent with open positions")
+        if not isclose(self.account.used_margin, expected_used_margin, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError("account usedMargin is inconsistent with open positions")
+        if not isclose(self.account.maintenance_margin, expected_maintenance, rel_tol=1e-9, abs_tol=1e-9):
+            raise ValueError("account maintenanceMargin is inconsistent with open positions")
         return self
 
     @classmethod
