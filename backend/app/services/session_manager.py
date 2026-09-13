@@ -23,7 +23,7 @@ class SessionState:
     def record(self, command_type: str, replay_index: int, payload: dict):
         self.history = [
             item for item in self.history
-            if item.get("replayIndex", -1) <= replay_index
+            if item.get("replayIndex", -1) <= replay_index or item.get("replayIndex", -1) == replay_index
         ]
         self.history.append({
             "type": command_type,
