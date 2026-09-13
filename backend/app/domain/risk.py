@@ -21,7 +21,13 @@ def evaluate_risk(position, candle, policy="conservative"):
     resolved_policy = policy_map.get(str(policy).strip().lower())
     if resolved_policy is None:
         raise ValueError(f"unsupported risk policy: {policy}")
-    result = evaluate(normalized, candle, candle.get("index", 0), policy=resolved_policy)
+    result = evaluate(
+        normalized,
+        candle,
+        candle.get("index", 0),
+        policy=resolved_policy,
+        execution_policy="SIMPLIFIED",
+    )
     if not result["triggered"]:
         return None, None, result["isAmbiguous"]
     return result["exitReason"], result["exitPrice"], result["isAmbiguous"]
