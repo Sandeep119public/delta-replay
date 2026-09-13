@@ -40,13 +40,7 @@ def order(index, symbol="BTCUSDT"):
 
 def test_rebuild_replays_exact_event_order_and_market_timing():
     service = replay()
-    history = [
-        market_step(0),
-        market_step(1),
-        order(1),
-        market_step(2),
-    ]
-
+    history = [market_step(0), market_step(1), order(1), market_step(2)]
     engine = rebuild_trading(service, history, 1)
     assert engine.index == 1
     assert engine.positions == {}
@@ -60,13 +54,7 @@ def test_rebuild_replays_exact_event_order_and_market_timing():
 
 def test_rebuild_preserves_per_event_symbol_market_context():
     service = replay()
-    history = [
-        market_step(0, "BTCUSDT"),
-        market_step(1, "ETHUSDT"),
-    ]
-
-    engine = rebuild_trading(service, history, 1)
-
+    engine = rebuild_trading(service, [market_step(0, "BTCUSDT"), market_step(1, "ETHUSDT")], 1)
     assert engine.index == 1
     assert engine.get_latest_market("BTCUSDT")["candle"]["close"] == 100
     assert engine.get_latest_market("ETHUSDT")["candle"]["close"] == 102
@@ -79,13 +67,8 @@ def test_rebuild_applies_same_index_commands_in_persisted_order():
         market_step(1),
         order(1),
         market_step(2),
-        {
-            "type": "risk",
-            "replayIndex": 2,
-            "payload": {"symbol": "BTCUSDT", "stopLoss": 99, "takeProfit": 110},
-        },
+        {"type": "risk", "replayIndex": 2, "payload": {"symbol": "BTCUSDT", "stopLoss": 99, "takeProfit": 110}},
     ]
-
     engine = rebuild_trading(service, history, 2)
     position = engine.positions["BTCUSDT"]
     assert position["stop_loss"] == 99
@@ -101,13 +84,8 @@ def test_rebuild_reproduces_funding_accounting():
         market_step(1),
         order(1),
         market_step(2),
-        {
-            "type": "funding",
-            "replayIndex": 2,
-            "payload": {"rate": 0.01, "timestamp": 3, "symbol": "BTCUSDT", "markPrice": 104},
-        },
+        {"type": "funding", "replayIndex": 2, "payload": {"rate": 0.01, "timestamp": 3, "symbol": "BTCUSDT", "markPrice": 104}},
     ]
-
     rebuilt = rebuild_trading(service, history, 2)
     direct = PaperTradingEngine()
     direct.on_candle(service.candles[0], 0, "BTCUSDT")
@@ -120,10 +98,8 @@ def test_rebuild_reproduces_funding_accounting():
 
 def test_rebuild_rejects_incomplete_market_timeline_when_trading_commands_exist():
     service = replay()
-    history = [market_step(0), order(1)]
-
     try:
-        rebuild_trading(service, history, 1)
+        rebuild_trading(service, [market_step(0), order(1)], 1)
     except ReplayDivergenceError as exc:
         assert "missing market events" in str(exc)
     else:
@@ -132,9 +108,27 @@ def test_rebuild_rejects_incomplete_market_timeline_when_trading_commands_exist(
 
 def test_rebuild_can_create_a_pristine_market_baseline_for_forward_seek():
     service = replay()
-    history = [market_step(0)]
-
-    engine = rebuild_trading(service, history, 2)
+    engine = rebuild_trading(service, [market_step(0)], 2)
     assert engine.index == 2
     assert engine.positions == {}
     assert engine.get_latest_market("BTCUSDT")["candle"]["close"] == 104
+
+
+def test_rebuild_rejects_multiple_market_events_at_one_index():
+    service = replay()
+    try:
+        rebuild_trading(service, [market_step(0, "BTCUSDT"), market_step(0, "ETHUSDT")], 0)
+    except ReplayDivergenceError as exc:
+        assert "multiple market_step" in str(exc)
+    else:
+        raise AssertionError("multiple market events at one index must be rejected")
+
+
+def test_rebuild_rejects_out_of_order_history_even_after_target_boundary():
+    service = replay()
+    try:
+        rebuild_trading(service, [market_step(0), market_step(2), market_step(1)], 1)
+    except ReplayDivergenceError as exc:
+        assert "not ordered" in str(exc)
+    else:
+        raise AssertionError("out-of-order persisted history must be rejected")
