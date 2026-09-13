@@ -24,11 +24,12 @@ class SessionState:
         self.history = [
             item for item in self.history
             if item.get("replayIndex", -1) <= replay_index
-        ] + [{
+        ]
+        self.history.append({
             "type": command_type,
             "replayIndex": int(replay_index),
             "payload": dict(payload),
-        }]
+        })
 
     def truncate_future_history(self, replay_index: int):
         self.history = [
