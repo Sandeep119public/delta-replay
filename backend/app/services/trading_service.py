@@ -4,6 +4,7 @@ New code should use :class:`PaperTradingEngine` directly. This facade exists onl
 for older integrations that still construct ``TradingService``.
 """
 
+from copy import deepcopy
 from math import isfinite
 
 from ..models import OrderRequest
@@ -62,10 +63,14 @@ class TradingService:
         return self.engine.positions
 
     def snapshot(self, mark_price: float | None = None):
-        position = self.position
-        if mark_price is not None and position:
-            self.engine.mark(position["symbol"], mark_price)
-        account = self.engine.snapshot()["account"]
+        engine = self.engine
+        if mark_price is not None and self.position:
+            engine = deepcopy(self.engine)
+            position = next(iter(engine.positions.values()), None)
+            if position:
+                engine.mark(position["symbol"], mark_price)
+        account = engine.snapshot()["account"]
+        position = next(iter(engine.snapshot()["positions"].values()), None)
         return {
             "balance": account["walletBalance"],
             "equity": account["equity"],
@@ -74,7 +79,7 @@ class TradingService:
             "maintenanceMargin": account["maintenanceMargin"],
             "availableMargin": account["availableMargin"],
             "totalFees": account["totalFees"],
-            "position": self.position,
+            "position": position,
         }
 
     def open(self, order: OrderRequest, price: float, symbol: str = "DEFAULT"):
@@ -111,6 +116,11 @@ class TradingService:
         return self.engine.set_risk(symbol, stop_loss, take_profit)
 
     def process_candle(self, candle, policy="conservative", symbol="DEFAULT"):
+        normalized_policy = str(policy).strip().lower()
+        if normalized_policy != "conservative":
+            if normalized_policy in {"tp_first", "open_proximity"}:
+                raise ValueError("TradingService.process_candle supports only the canonical conservative ambiguity policy")
+            raise ValueError(f"unsupported ambiguity policy: {policy}")
         events = self.engine.on_candle(candle, self.engine.index + 1, symbol)
         return {"event": events[-1] if events else None, **self.snapshot(candle.get("close"))}
 
