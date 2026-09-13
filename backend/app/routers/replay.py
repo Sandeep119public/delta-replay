@@ -75,6 +75,7 @@ def step(request: Request, symbol: str = "BTCUSDT"):
 
         candle = result["candle"]
         events = session.trading.on_candle(candle, result["index"], symbol)
+        session.record("market_step", result["index"], {"symbol": symbol})
         return {**result, "events": events, "trading": session.trading.snapshot()}
 
     try:
