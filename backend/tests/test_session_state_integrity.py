@@ -24,18 +24,20 @@ def session_document():
     }])
 
 
-def test_restore_rejects_replay_and_trading_index_divergence():
+def test_restore_preserves_independent_replay_and_trading_cursors():
     document = session_document()
-    document["trading"]["index"] = -1
-    with pytest.raises(ValueError, match="indices must match"):
-        restore_session_bundle(document)
+    replay, trading, history = restore_session_bundle(document)
+    assert replay.index == 0
+    assert trading.index == 0
+    assert history == document["history"]
 
 
-def test_restore_rejects_market_context_not_from_replay_dataset():
+def test_restore_rejects_market_context_beyond_trading_timeline():
     document = session_document()
-    document["tradingMarket"]["BTCUSDT"]["candle"]["close"] = 999
-    with pytest.raises(ValueError, match="does not match replay candle"):
-        restore_session_bundle(document)
+    invalid = copy.deepcopy(document)
+    invalid["tradingMarket"]["BTCUSDT"]["index"] = invalid["trading"]["index"] + 1
+    with pytest.raises(ValueError, match="outside trading timeline"):
+        restore_session_bundle(invalid)
 
 
 def test_restore_rejects_unknown_or_out_of_order_history():
