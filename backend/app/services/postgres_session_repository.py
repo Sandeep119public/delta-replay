@@ -9,7 +9,6 @@ from psycopg.rows import dict_row
 from .session_repository import SessionDocument, SessionMutation, SessionRepository
 
 T = TypeVar("T")
-DATASET_GC_LOCK_KEY = 8443217
 
 
 class PostgresSessionRepository(SessionRepository):
@@ -22,73 +21,34 @@ class PostgresSessionRepository(SessionRepository):
         if not self.dsn:
             raise ValueError("DATABASE_URL is required for PostgreSQL session persistence")
         self.connect_timeout = connect_timeout
-        self._ensure_schema()
+        self._verify_schema()
 
     def _connect(self):
         return psycopg.connect(self.dsn, connect_timeout=self.connect_timeout, row_factory=dict_row)
 
-    @staticmethod
-    def _lock_dataset_gc(connection) -> None:
-        connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
+    def _verify_schema(self) -> None:
+        required_tables = {"replay_datasets", "replay_sessions", "replay_events"}
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT table_name
+                   FROM information_schema.tables
+                   WHERE table_schema = 'public'
+                     AND table_name = ANY(%s)""",
+                (list(required_tables),),
+            ).fetchall()
+        present = {row["table_name"] for row in rows}
+        missing = sorted(required_tables - present)
+        if missing:
+            raise RuntimeError(
+                "PostgreSQL schema is not initialized; apply backend/migrations before starting the application. "
+                f"Missing tables: {', '.join(missing)}"
+            )
 
     @staticmethod
     def _dataset_id_from_state(state) -> Optional[str]:
         replay = state.get("replay", {}) if isinstance(state, dict) else {}
         dataset_id = replay.get("datasetId") if isinstance(replay, dict) else None
         return str(dataset_id) if dataset_id else None
-
-    @staticmethod
-    def _gc_dataset(connection, dataset_id: Optional[str]) -> None:
-        if not dataset_id:
-            return
-        connection.execute(
-            """DELETE FROM replay_datasets d
-               WHERE d.dataset_id = %s
-                 AND NOT EXISTS (
-                   SELECT 1
-                   FROM replay_sessions s
-                   WHERE s.state->'replay'->>'datasetId' = d.dataset_id
-                 )""",
-            (dataset_id,),
-        )
-
-    def _ensure_schema(self) -> None:
-        with self._connect() as connection:
-            connection.execute(
-                """CREATE TABLE IF NOT EXISTS replay_datasets (
-                    dataset_id TEXT PRIMARY KEY,
-                    candles JSONB NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )"""
-            )
-            connection.execute(
-                """CREATE TABLE IF NOT EXISTS replay_sessions (
-                    session_id UUID PRIMARY KEY,
-                    state JSONB NOT NULL,
-                    revision BIGINT NOT NULL DEFAULT 1,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )"""
-            )
-            connection.execute(
-                """CREATE TABLE IF NOT EXISTS replay_events (
-                    session_id UUID NOT NULL REFERENCES replay_sessions(session_id) ON DELETE CASCADE,
-                    sequence BIGINT NOT NULL,
-                    replay_index INTEGER NOT NULL,
-                    event_type TEXT NOT NULL,
-                    payload JSONB NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    PRIMARY KEY (session_id, sequence)
-                )"""
-            )
-            connection.execute(
-                """CREATE INDEX IF NOT EXISTS replay_sessions_updated_at_idx
-                   ON replay_sessions (updated_at)"""
-            )
-            connection.execute(
-                """CREATE INDEX IF NOT EXISTS replay_events_session_index_idx
-                   ON replay_events (session_id, replay_index, sequence)"""
-            )
 
     @staticmethod
     def _encode(document: SessionDocument) -> str:
@@ -146,8 +106,8 @@ class PostgresSessionRepository(SessionRepository):
             ]
         return inline_history if inline_history is not None else []
 
-    @staticmethod
-    def _hydrate_document(connection, document: SessionDocument, session_id: str | None = None) -> SessionDocument:
+    @classmethod
+    def _hydrate_document(cls, connection, document: SessionDocument, session_id: str | None = None) -> SessionDocument:
         hydrated = dict(document)
         replay = dict(hydrated.get("replay", {}))
         if "candles" not in replay and replay.get("datasetId"):
@@ -160,9 +120,7 @@ class PostgresSessionRepository(SessionRepository):
             replay["candles"] = row["candles"]
         hydrated["replay"] = replay
         if session_id is not None:
-            hydrated["history"] = PostgresSessionRepository._hydrate_history(
-                connection, session_id, hydrated.get("history")
-            )
+            hydrated["history"] = cls._hydrate_history(connection, session_id, hydrated.get("history"))
         return hydrated
 
     @staticmethod
@@ -204,7 +162,6 @@ class PostgresSessionRepository(SessionRepository):
 
     def save(self, session_id: str, document: SessionDocument) -> None:
         with self._connect() as connection:
-            self._lock_dataset_gc(connection)
             current = connection.execute(
                 "SELECT state FROM replay_sessions WHERE session_id = %s FOR UPDATE",
                 (session_id,),
@@ -226,29 +183,19 @@ class PostgresSessionRepository(SessionRepository):
                 (session_id, encoded),
             )
             self._sync_history(connection, session_id, current_document.get("history", []), document.get("history", []))
-            self._gc_dataset(connection, old_dataset_id)
 
     def delete(self, session_id: str) -> None:
         with self._connect() as connection:
-            self._lock_dataset_gc(connection)
-            current = connection.execute(
-                "SELECT state FROM replay_sessions WHERE session_id = %s",
-                (session_id,),
-            ).fetchone()
-            old_dataset_id = self._dataset_id_from_state(current["state"]) if current else None
             connection.execute("DELETE FROM replay_sessions WHERE session_id = %s", (session_id,))
-            self._gc_dataset(connection, old_dataset_id)
 
     def save_if_revision(self, session_id: str, document: SessionDocument, expected_revision: int) -> int:
         with self._connect() as connection:
-            self._lock_dataset_gc(connection)
             current = connection.execute(
                 "SELECT state FROM replay_sessions WHERE session_id = %s FOR UPDATE",
                 (session_id,),
             ).fetchone()
             if current is None:
                 raise RuntimeError("session revision conflict")
-            old_dataset_id = self._dataset_id_from_state(current["state"])
             current_document = self._hydrate_document(connection, dict(current["state"]), session_id)
             storage_document = self._prepare_storage_document(connection, document)
             encoded = self._encode(storage_document)
@@ -262,19 +209,16 @@ class PostgresSessionRepository(SessionRepository):
             if row is None:
                 raise RuntimeError("session revision conflict")
             self._sync_history(connection, session_id, current_document.get("history", []), document.get("history", []))
-            self._gc_dataset(connection, old_dataset_id)
             return int(row["revision"])
 
     def atomic_update(self, session_id: str, mutation: SessionMutation[T]) -> T:
         with self._connect() as connection:
-            self._lock_dataset_gc(connection)
             row = connection.execute(
                 "SELECT state FROM replay_sessions WHERE session_id = %s FOR UPDATE",
                 (session_id,),
             ).fetchone()
             if row is None:
                 raise KeyError(f"session {session_id} not found")
-            old_dataset_id = self._dataset_id_from_state(row["state"])
             document = self._hydrate_document(connection, dict(row["state"]), session_id)
             old_history = document.get("history", [])
             updated, result = mutation(document)
@@ -284,5 +228,4 @@ class PostgresSessionRepository(SessionRepository):
                 (self._encode(storage_document), session_id),
             )
             self._sync_history(connection, session_id, old_history, updated.get("history", []))
-            self._gc_dataset(connection, old_dataset_id)
             return result
