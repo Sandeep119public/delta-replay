@@ -11,12 +11,20 @@ EXECUTION_MODEL = "NEXT_BAR_OPEN_WITH_OHLC_GAPS"
 
 
 def fill_price(order: dict, candle: dict, *, candle_index: int) -> float | None:
-    """Return the deterministic fill price for an eligible order on one candle."""
+    """Return the deterministic fill price for an eligible order on one candle.
+
+    All executable orders obey the same next-bar rule: an order created on a
+    candle cannot consume that candle's OHLC range. This keeps market, limit,
+    and stop-market orders on one temporal contract.
+    """
+    if candle_index <= order["createdIndex"]:
+        return None
+
     order_type = order["type"]
     side = order["side"]
 
     if order_type == "market":
-        return candle["open"] if candle_index > order["createdIndex"] else None
+        return candle["open"]
 
     if order_type == "limit":
         touched = (
