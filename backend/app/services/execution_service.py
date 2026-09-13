@@ -19,6 +19,7 @@ class ExecutionService:
         self.orders = {}
         self.pending = []
         self.next_id = 1
+        self._sync()
 
     def _sync(self):
         self.orders.clear()
@@ -51,6 +52,9 @@ class ExecutionService:
         stop_price=None,
         index=-1,
     ):
+        # Preserve the historical explicit index parameter while using the
+        # canonical engine for validation and state mutation.
+        created_index = self.engine.index if index == -1 else index
         raw = self.engine.submit(
             symbol,
             side,
@@ -59,11 +63,12 @@ class ExecutionService:
             limit_price,
             stop_price,
         )
+        self.engine.orders[raw["id"]]["createdIndex"] = self.engine._integer(created_index, "created index")
         self._sync()
         return self.orders[raw["id"]]
 
     def cancel(self, order_id):
-        raw = self.engine.cancel(order_id)
+        self.engine.cancel(order_id)
         self._sync()
         return self.orders[order_id]
 
