@@ -13,7 +13,7 @@ def headers():
 
 
 def test_health_contract():
-    response = client.get("/health/health")
+    response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
