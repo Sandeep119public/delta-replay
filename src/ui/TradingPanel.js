@@ -18,6 +18,7 @@ export class TradingPanel {
   }) {
     this.trading = assertTradingPresentation(trading);
     this.tradingEvents = tradingEvents;
+    this.getSymbol = getSymbol;
     const getEl = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
     this.errorEl = errorEl || getEl('trading-error');
     this.errorTimeout = null;
@@ -35,7 +36,7 @@ export class TradingPanel {
     const common = { trading: this.trading };
     this.accountSummaryView = new AccountSummaryView({ ...common, balanceEl: this.balanceEl, equityEl: this.equityEl, realizedEl: this.realizedEl, unrealizedEl: this.unrealizedEl, feesEl: this.feesEl, resetBtn: this.resetBtn, onError: (msg) => this.showError(msg), onRender: () => this.render() });
     this.orderFormView = new OrderFormView({ ...common, qtyInput: this.qtyInput, buyBtn: this.buyBtn, sellBtn: this.sellBtn, orderTypeSelect: this.orderTypeSelect, limitPriceInput: this.limitPriceInput, stopPriceInput: this.stopPriceInput, limitPriceRow: this.limitPriceRow, stopPriceRow: this.stopPriceRow, advancedToggle: this.advancedToggle, getSymbol, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
-    this.positionView = new PositionView({ ...common, posSymbolEl: this.posSymbolEl, posSideEl: this.posSideEl, posQtyEl: this.posQtyEl, posEntryEl: this.posEntryEl, posCurrentEl: this.posCurrentEl, posPnlEl: this.posPnlEl, posSlEl: this.posSlEl, posTpEl: this.posTpEl, closeBtn: this.closeBtn, setRiskBtn: this.setRiskBtn, clearRiskBtn: this.clearRiskBtn, slInput: this.slInput, tpInput: this.tpInput, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
+    this.positionView = new PositionView({ ...common, posSymbolEl: this.posSymbolEl, posSideEl: this.posSideEl, posQtyEl: this.posQtyEl, posEntryEl: this.posEntryEl, posCurrentEl: this.posCurrentEl, posPnlEl: this.posPnlEl, posSlEl: this.posSlEl, posTpEl: this.posTpEl, closeBtn: this.closeBtn, setRiskBtn: this.setRiskBtn, clearRiskBtn: this.clearRiskBtn, slInput: this.slInput, tpInput: this.tpInput, getSymbol, onError: (msg) => this.showError(msg), onSuccess: () => this.clearError(), onRender: () => this.render() });
     this.tradeLogView = new TradeLogView({ trading: this.trading, tradesListEl: this.tradesListEl, pendingListEl: this.pendingListEl, onError: (msg) => this.showError(msg), onRender: () => this.render() });
 
     this._bindSidebarTabs();
@@ -131,9 +132,16 @@ export class TradingPanel {
     this._renderTicketState(positions, trades);
   }
 
+  _activePosition(positions = []) {
+    if (!Array.isArray(positions) || positions.length === 0) return null;
+    const symbol = String(this.getSymbol?.() || '').trim().toUpperCase();
+    return positions.find((position) => String(position?.symbol || '').toUpperCase() === symbol) || positions[0];
+  }
+
   _renderTicketState(positions = [], trades = []) {
     try {
-      const inPos = positions.length > 0, p = positions[0];
+      const p = this._activePosition(positions);
+      const inPos = Boolean(p);
       const ticket = document.getElementById('order-ticket'), hint = document.getElementById('ticket-state-hint'), pill = document.getElementById('pos-state-pill');
       const flatSummary = document.getElementById('ticket-flatten-summary'), fEntry = document.getElementById('flatten-entry'), fMark = document.getElementById('flatten-mark'), fPnl = document.getElementById('flatten-pnl');
       if (ticket) { ticket.classList.toggle('is-flat', !inPos); ticket.classList.toggle('is-in-position', inPos); ticket.classList.remove('is-long', 'is-short'); if (inPos) ticket.classList.add(`is-${String(p.side || '').toLowerCase()}`); }
