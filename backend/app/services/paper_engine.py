@@ -97,6 +97,44 @@ class PaperTradingEngine:
         market = self._market_by_symbol.get(symbol)
         return deepcopy(market) if market is not None else None
 
+    def export_market_state(self):
+        return deepcopy(self._market_by_symbol)
+
+    def restore_market_state(self, market_state):
+        if not isinstance(market_state, dict):
+            raise ValueError("market state must be an object")
+        normalized = {}
+        for symbol, value in market_state.items():
+            if not isinstance(symbol, str) or symbol != symbol.strip().upper() or not symbol.strip():
+                raise ValueError("invalid market symbol")
+            if not isinstance(value, dict):
+                raise ValueError("invalid market context")
+            candle = value.get("candle")
+            if not isinstance(candle, dict):
+                raise ValueError("invalid market candle")
+            normalized_candle = deepcopy(candle)
+            for field in ("open", "high", "low", "close"):
+                self._positive_finite(normalized_candle.get(field), f"market candle {field}")
+            market_index = self._integer(value.get("index"), "market index")
+            if market_index < -1 or market_index > self.index:
+                raise ValueError("market index is outside trading timeline")
+            normalized[symbol] = {"candle": normalized_candle, "index": market_index}
+        self._market_by_symbol = normalized
+        return self
+
+    def set_market_context(self, symbol, candle, index):
+        symbol = str(symbol).strip().upper()
+        index = self._integer(index, "market index")
+        if index < 0 or index > self.index:
+            raise ValueError("market index is outside trading timeline")
+        normalized_candle = deepcopy(candle)
+        if not isinstance(normalized_candle, dict):
+            raise ValueError("market candle must be an object")
+        for field in ("open", "high", "low", "close"):
+            self._positive_finite(normalized_candle.get(field), f"market candle {field}")
+        self._market_by_symbol[symbol] = {"candle": normalized_candle, "index": index}
+        return self
+
     def _recalc(self):
         unrealized = 0.0
         used_margin = 0.0
@@ -149,8 +187,10 @@ class PaperTradingEngine:
         if type not in ("market", "limit", "stop_market"):
             raise ValueError("unsupported order type")
         quantity = self._positive_finite(quantity, "quantity")
-        if type == "market" and (limit_price is not None or stop_price is not None):
-            raise ValueError("limit_price/stop_price is only valid for priced orders")
+        if type == "market" and limit_price is not None:
+            raise ValueError("limit_price is only valid for limit orders")
+        if type == "market" and stop_price is not None:
+            raise ValueError("stop_price is only valid for stop_market orders")
         if type == "limit" and (limit_price is None or stop_price is not None):
             raise ValueError("limit order requires only limit_price")
         if type == "stop_market" and (stop_price is None or limit_price is not None):
@@ -271,7 +311,7 @@ class PaperTradingEngine:
             if index < self.index:
                 raise ValueError("candle index cannot move backward")
         self.index = self.index + 1 if index is None else index
-        self._market_by_symbol[symbol] = {"candle": deepcopy(candle), "index": self.index}
+        self.set_market_context(symbol, candle, self.index)
         events = []
         for order in list(self.orders.values()):
             if order["status"] != "PENDING" or order["symbol"] != symbol:
@@ -419,8 +459,10 @@ class PaperTradingEngine:
                 raise ValueError("order createdIndex is invalid")
             if order.get("status") not in allowed:
                 raise ValueError("order status is invalid")
-            if order["type"] == "market" and (order.get("limitPrice") is not None or order.get("stopPrice") is not None):
-                raise ValueError("market order cannot have price fields")
+            if order["type"] == "market" and order.get("limitPrice") is not None:
+                raise ValueError("market order cannot have limitPrice")
+            if order["type"] == "market" and order.get("stopPrice") is not None:
+                raise ValueError("market order cannot have stopPrice")
             if order["type"] == "limit" and order.get("limitPrice") is None:
                 raise ValueError("limit order requires limitPrice")
             if order["type"] == "limit" and order.get("stopPrice") is not None:
