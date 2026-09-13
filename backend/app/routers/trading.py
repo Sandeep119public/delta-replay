@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, model_validator
 
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
@@ -13,18 +13,32 @@ router = APIRouter()
 class EngineOrder(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
-    symbol: str = Field(min_length=1)
+    symbol: str = Field(min_length=1, max_length=32)
     side: Literal["buy", "sell"]
     quantity: float = Field(gt=0)
     type: Literal["market", "limit", "stop_market"] = "market"
     limitPrice: float | None = Field(default=None, gt=0)
     stopPrice: float | None = Field(default=None, gt=0)
 
+    @model_validator(mode="after")
+    def validate_price_fields(self):
+        if self.type == "market" and (self.limitPrice is not None or self.stopPrice is not None):
+            raise ValueError("market orders cannot specify limitPrice or stopPrice")
+        if self.type == "limit" and self.stopPrice is not None:
+            raise ValueError("limit orders cannot specify stopPrice")
+        if self.type == "limit" and self.limitPrice is None:
+            raise ValueError("limit orders require limitPrice")
+        if self.type == "stop_market" and self.limitPrice is not None:
+            raise ValueError("stop_market orders cannot specify limitPrice")
+        if self.type == "stop_market" and self.stopPrice is None:
+            raise ValueError("stop_market orders require stopPrice")
+        return self
+
 
 class RiskRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
-    symbol: str = Field(min_length=1)
+    symbol: str = Field(min_length=1, max_length=32)
     stopLoss: float | None = Field(default=None, gt=0)
     takeProfit: float | None = Field(default=None, gt=0)
 
@@ -32,14 +46,14 @@ class RiskRequest(BaseModel):
 class CloseRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
-    symbol: str = Field(min_length=1)
+    symbol: str = Field(min_length=1, max_length=32)
     quantity: float | None = Field(default=None, gt=0)
 
 
 class MarketCandleRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
-    symbol: str = Field(default="BTCUSDT", min_length=1)
+    symbol: str = Field(default="BTCUSDT", min_length=1, max_length=32)
     candle: Candle | None = None
     index: StrictInt | None = None
 
