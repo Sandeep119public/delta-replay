@@ -2,7 +2,8 @@ from copy import deepcopy
 from math import isfinite
 
 from ..domain.account import TradingAccount
-from ..domain.ambiguity import evaluate
+from ..domain.execution import fill_price, risk_exit
+from ..domain.margin import MarginEngine
 
 
 class PaperTradingEngine:
@@ -16,10 +17,12 @@ class PaperTradingEngine:
             raise ValueError("maintenance margin rate must be in [0, margin_rate]")
         if not 0 <= self.fee_rate < 1:
             raise ValueError("fee rate must be in [0, 1)")
+        self.margin_engine = MarginEngine(self.margin_rate, self.maint_margin_rate)
         self.account = TradingAccount(float(starting_balance))
         self.positions = {}
         self.orders = {}
         self.trades = []
+        self.funding = []
         self.index = -1
         self._next_order = 1
         self._market_by_symbol = {}
@@ -42,6 +45,16 @@ class PaperTradingEngine:
             raise ValueError(f"{name} must be numeric") from exc
         if not isfinite(value) or value < 0:
             raise ValueError(f"{name} must be finite and non-negative")
+        return value
+
+    @staticmethod
+    def _finite(value, name):
+        try:
+            value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be numeric") from exc
+        if not isfinite(value):
+            raise ValueError(f"{name} must be finite")
         return value
 
     @staticmethod
@@ -116,7 +129,18 @@ class PaperTradingEngine:
             stop_price = self._positive_finite(stop_price, "stop_price")
         if self.has_open_position(symbol):
             raise ValueError("position already open")
-        order = {"id": self._next_order, "symbol": symbol, "side": side, "type": type, "quantity": quantity, "limitPrice": limit_price, "stopPrice": stop_price, "status": "PENDING", "createdIndex": self.index, "filledPrice": None}
+        order = {
+            "id": self._next_order,
+            "symbol": symbol,
+            "side": side,
+            "type": type,
+            "quantity": quantity,
+            "limitPrice": limit_price,
+            "stopPrice": stop_price,
+            "status": "PENDING",
+            "createdIndex": self.index,
+            "filledPrice": None,
+        }
         self.orders[order["id"]] = order
         self._next_order += 1
         return deepcopy(order)
@@ -125,7 +149,7 @@ class PaperTradingEngine:
         symbol = order["symbol"]
         side = "long" if order["side"] == "buy" else "short"
         fee = self.fee(price, order["quantity"])
-        required_margin = price * order["quantity"] * self.margin_rate + fee
+        required_margin = self.margin_engine.required_entry_cash(price, order["quantity"], fee)
         self._recalc()
         if symbol in self.positions:
             raise ValueError("position already open")
@@ -135,7 +159,20 @@ class PaperTradingEngine:
         self.account.realized_pnl -= fee
         self.account.total_fees += fee
         self.account.validate_invariants()
-        self.positions[symbol] = {"symbol": symbol, "side": side, "quantity": order["quantity"], "entry_price": price, "current_price": price, "opened_at": candle.get("time"), "opened_index": self.index, "entry_fee": fee, "stop_loss": None, "take_profit": None, "stop_loss_created_index": -1, "take_profit_created_index": -1}
+        self.positions[symbol] = {
+            "symbol": symbol,
+            "side": side,
+            "quantity": order["quantity"],
+            "entry_price": price,
+            "current_price": price,
+            "opened_at": candle.get("time"),
+            "opened_index": self.index,
+            "entry_fee": fee,
+            "stop_loss": None,
+            "take_profit": None,
+            "stop_loss_created_index": -1,
+            "take_profit_created_index": -1,
+        }
         self._recalc()
 
     def close(self, symbol, price, reason="MARKET", ambiguity="NONE", timestamp=None, quantity=None):
@@ -155,7 +192,24 @@ class PaperTradingEngine:
         self.account.realized_pnl += gross - exit_fee
         self.account.total_fees += exit_fee
         self.account.validate_invariants()
-        trade = {"id": len(self.trades) + 1, "symbol": symbol, "side": position["side"].upper(), "quantity": qty, "entryPrice": position["entry_price"], "exitPrice": price, "openedAt": position["opened_at"], "closedAt": timestamp, "realizedPnL": net, "grossPnL": gross, "entryFee": entry_fee, "exitFee": exit_fee, "totalFee": entry_fee + exit_fee, "netPnL": net, "exitReason": reason, "ambiguityResolution": ambiguity}
+        trade = {
+            "id": len(self.trades) + 1,
+            "symbol": symbol,
+            "side": position["side"].upper(),
+            "quantity": qty,
+            "entryPrice": position["entry_price"],
+            "exitPrice": price,
+            "openedAt": position["opened_at"],
+            "closedAt": timestamp,
+            "realizedPnL": net,
+            "grossPnL": gross,
+            "entryFee": entry_fee,
+            "exitFee": exit_fee,
+            "totalFee": entry_fee + exit_fee,
+            "netPnL": net,
+            "exitReason": reason,
+            "ambiguityResolution": ambiguity,
+        }
         self.trades.append(trade)
         if qty == position["quantity"]:
             del self.positions[symbol]
@@ -164,6 +218,40 @@ class PaperTradingEngine:
             position["entry_fee"] -= entry_fee
         self._recalc()
         return trade
+
+    def apply_funding(self, rate, timestamp=None, symbol=None, mark_price=None):
+        """Apply one deterministic funding event through the canonical account ledger."""
+        rate = self._finite(rate, "funding rate")
+        selected = []
+        for sym, position in self.positions.items():
+            if symbol and sym != str(symbol).strip().upper():
+                continue
+            mark = mark_price if mark_price is not None and sym == str(symbol).strip().upper() if symbol else mark_price
+            if mark is None:
+                mark = position.get("current_price", position["entry_price"])
+            mark = self._positive_finite(mark, "funding mark price")
+            payment = (-1 if position["side"] == "long" else 1) * mark * position["quantity"] * rate
+            self.account.wallet_balance += payment
+            if payment < 0:
+                self.account.total_funding_paid += -payment
+            else:
+                self.account.total_funding_received += payment
+            self.account.net_funding = self.account.total_funding_received - self.account.total_funding_paid
+            event = {
+                "id": len(self.funding) + 1,
+                "timestamp": timestamp,
+                "symbol": sym,
+                "side": position["side"],
+                "quantity": position["quantity"],
+                "markPrice": mark,
+                "fundingRate": rate,
+                "payment": payment,
+            }
+            self.funding.append(event)
+            selected.append(deepcopy(event))
+        self.account.validate_invariants()
+        self._recalc()
+        return selected
 
     def on_candle(self, candle, index=None, symbol="BTCUSDT"):
         symbol = str(symbol).strip().upper()
@@ -183,17 +271,7 @@ class PaperTradingEngine:
         for order in list(self.orders.values()):
             if order["status"] != "PENDING" or order["symbol"] != symbol:
                 continue
-            price = None
-            if order["type"] == "market" and self.index > order["createdIndex"]:
-                price = candle["open"]
-            elif order["type"] == "limit":
-                touched = (order["side"] == "buy" and candle["low"] <= order["limitPrice"]) or (order["side"] == "sell" and candle["high"] >= order["limitPrice"])
-                if touched:
-                    price = min(order["limitPrice"], candle["open"]) if order["side"] == "buy" else max(order["limitPrice"], candle["open"])
-            elif order["type"] == "stop_market":
-                touched = (order["side"] == "buy" and candle["high"] >= order["stopPrice"]) or (order["side"] == "sell" and candle["low"] <= order["stopPrice"])
-                if touched:
-                    price = max(order["stopPrice"], candle["open"]) if order["side"] == "buy" else min(order["stopPrice"], candle["open"])
+            price = fill_price(order, candle, candle_index=self.index)
             if price is not None:
                 try:
                     self._open(order, price, candle)
@@ -206,10 +284,21 @@ class PaperTradingEngine:
         position = self.positions.get(symbol)
         if position is not None:
             position["current_price"] = candle["close"]
-            result = evaluate(position, candle, self.index)
+            result = risk_exit(position, candle, self.index)
             if result["triggered"]:
-                trade = self.close(symbol, result["exitPrice"], result["exitReason"], result["ambiguityResolution"], candle.get("time"))
-                events.append({"type": result["exitReason"], "trade": trade, "symbol": symbol, "price": result["exitPrice"]})
+                trade = self.close(
+                    symbol,
+                    result["exitPrice"],
+                    result["exitReason"],
+                    result["ambiguityResolution"],
+                    candle.get("time"),
+                )
+                events.append({
+                    "type": result["exitReason"],
+                    "trade": trade,
+                    "symbol": symbol,
+                    "price": result["exitPrice"],
+                })
         self._recalc()
         if self.account.equity <= self.account.maintenance_margin:
             for sym in list(self.positions):
@@ -217,8 +306,18 @@ class PaperTradingEngine:
                 if not market:
                     continue
                 market_candle = market["candle"]
-                trade = self.close(sym, market_candle["close"], "LIQUIDATION", timestamp=market_candle.get("time"))
-                events.append({"type": "LIQUIDATION", "trade": trade, "symbol": sym, "liquidationPrice": market_candle["close"]})
+                trade = self.close(
+                    sym,
+                    market_candle["close"],
+                    "LIQUIDATION",
+                    timestamp=market_candle.get("time"),
+                )
+                events.append({
+                    "type": "LIQUIDATION",
+                    "trade": trade,
+                    "symbol": sym,
+                    "liquidationPrice": market_candle["close"],
+                })
         return events
 
     def cancel(self, order_id):
@@ -288,11 +387,30 @@ class PaperTradingEngine:
 
     def snapshot(self):
         self._recalc()
-        return {"account": self.account.snapshot(), "positions": [deepcopy(p) for p in self.positions.values()], "orders": [deepcopy(o) for o in self.orders.values()], "pendingOrders": [deepcopy(o) for o in self.pending_orders()], "trades": deepcopy(self.trades), "index": self.index}
+        return {
+            "account": self.account.snapshot(),
+            "positions": [deepcopy(p) for p in self.positions.values()],
+            "orders": [deepcopy(o) for o in self.orders.values()],
+            "pendingOrders": [deepcopy(o) for o in self.pending_orders()],
+            "trades": deepcopy(self.trades),
+            "funding": deepcopy(self.funding),
+            "index": self.index,
+        }
 
     def export_state(self):
         self._validate_state()
-        return {"marginRate": self.margin_rate, "maintenanceMarginRate": self.maint_margin_rate, "feeRate": self.fee_rate, "account": self.account.export_state(), "positions": deepcopy(self.positions), "orders": deepcopy(self.orders), "trades": deepcopy(self.trades), "index": self.index, "nextOrder": self._next_order}
+        return {
+            "marginRate": self.margin_rate,
+            "maintenanceMarginRate": self.maint_margin_rate,
+            "feeRate": self.fee_rate,
+            "account": self.account.export_state(),
+            "positions": deepcopy(self.positions),
+            "orders": deepcopy(self.orders),
+            "trades": deepcopy(self.trades),
+            "funding": deepcopy(self.funding),
+            "index": self.index,
+            "nextOrder": self._next_order,
+        }
 
     def _validate_state(self):
         if not 0 < self.margin_rate <= 1 or not 0 <= self.maint_margin_rate <= self.margin_rate or not 0 <= self.fee_rate < 1:
@@ -351,6 +469,15 @@ class PaperTradingEngine:
             for field in ("stop_loss_created_index", "take_profit_created_index", "opened_index"):
                 if field in position and self._integer(position[field], f"position {field}") < -1:
                     raise ValueError(f"position {field} is invalid")
+        if not isinstance(self.funding, list):
+            raise ValueError("funding must be a list")
+        for event in self.funding:
+            if not isinstance(event, dict):
+                raise ValueError("funding event must be an object")
+            self._positive_finite(event.get("quantity"), "funding quantity")
+            self._positive_finite(event.get("markPrice"), "funding markPrice")
+            self._finite(event.get("fundingRate"), "fundingRate")
+            self._finite(event.get("payment"), "funding payment")
         for trade in self.trades:
             if not isinstance(trade, dict):
                 raise ValueError("trade must be an object")
@@ -385,11 +512,17 @@ class PaperTradingEngine:
                 raise ValueError("duplicate order id")
             normalized_orders[order_id] = deepcopy(value)
         try:
-            engine = cls(float(state["account"]["startingBalance"]), float(state["feeRate"]), float(state["marginRate"]), float(state["maintenanceMarginRate"]))
+            engine = cls(
+                float(state["account"]["startingBalance"]),
+                float(state["feeRate"]),
+                float(state["marginRate"]),
+                float(state["maintenanceMarginRate"]),
+            )
             engine.account = TradingAccount.from_state(state["account"])
             engine.positions = deepcopy(state["positions"])
             engine.orders = normalized_orders
             engine.trades = deepcopy(state["trades"])
+            engine.funding = deepcopy(state.get("funding", []))
             engine.index = engine._integer(state["index"], "trading index")
             engine._next_order = engine._integer(state["nextOrder"], "next order id")
         except (TypeError, ValueError, KeyError) as exc:
