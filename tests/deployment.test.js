@@ -30,11 +30,15 @@ describe('Deployment configuration', () => {
     expect(dockerfile).toMatch(/PYTHONDONTWRITEBYTECODE=1/);
   });
 
-  it('keeps local compose wiring aligned with the backend container', () => {
+  it('keeps local compose wiring aligned with durable backend persistence', () => {
     expect(fs.existsSync(composePath)).toBe(true);
     const compose = fs.readFileSync(composePath, 'utf8');
 
     expect(compose).toMatch(/dockerfile:\s*backend\/Dockerfile/);
     expect(compose).toMatch(/8000:8000/);
+    expect(compose).toMatch(/postgres:17/);
+    expect(compose).toMatch(/DATABASE_URL:\s*postgresql:\/\/postgres:postgres@postgres:5432\/delta_replay/);
+    expect(compose).toMatch(/condition:\s*service_healthy/);
+    expect(compose).toMatch(/delta-replay-postgres/);
   });
 });
