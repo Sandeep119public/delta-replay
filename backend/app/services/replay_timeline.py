@@ -106,7 +106,7 @@ def rebuild_trading(replay, history, target_index: int, default_symbol: str = "B
     non_market_commands = any(command["type"] != "market_step" for command in commands)
     market_commands = {command["replayIndex"]: command for command in commands if command["type"] == "market_step"}
 
-    start_index = replay.start_index if replay.start_index >= 0 else 0
+    start_index = replay.start_index if replay.start_index >= 0 and replay.start_index <= target_index else 0
     required_indexes = set(range(start_index, target_index + 1))
     missing = sorted(required_indexes - set(market_commands))
     if missing and non_market_commands:
