@@ -8,8 +8,8 @@ from ..models import OrderRequest
 from .paper_engine import PaperTradingEngine
 
 TAKER_FEE_RATE = 0.0005
-DEFAULT_MARGIN_RATE = 1.0
-DEFAULT_MAINTENANCE_RATE = 0.5
+DEFAULT_MARGIN_RATE = 0.1
+DEFAULT_MAINTENANCE_RATE = 0.05
 
 
 class TradingService:
@@ -76,7 +76,7 @@ class TradingService:
         }
 
     def open(self, order: OrderRequest, price: float, symbol: str = "DEFAULT"):
-        order_data = self.engine.submit(symbol, order.side, order.quantity)
+        self.engine.submit(symbol, order.side, order.quantity)
         self.engine.on_candle(
             {
                 "time": self.engine.index + 1,
