@@ -25,20 +25,13 @@ def _apply_command(engine: PaperTradingEngine, command: dict) -> None:
     try:
         if kind == "order":
             engine.submit(
-                payload["symbol"],
-                payload["side"],
-                payload["quantity"],
-                payload.get("type", "market"),
-                payload.get("limitPrice"),
-                payload.get("stopPrice"),
+                payload["symbol"], payload["side"], payload["quantity"],
+                payload.get("type", "market"), payload.get("limitPrice"), payload.get("stopPrice"),
             )
         elif kind == "close":
             trade = engine.close(
-                payload["symbol"],
-                payload["price"],
-                reason="MARKET",
-                timestamp=payload.get("timestamp"),
-                quantity=payload.get("quantity"),
+                payload["symbol"], payload["price"], reason="MARKET",
+                timestamp=payload.get("timestamp"), quantity=payload.get("quantity"),
             )
             if trade is None:
                 raise ReplayDivergenceError("close command found no open position")
@@ -60,6 +53,13 @@ def _apply_command(engine: PaperTradingEngine, command: dict) -> None:
                 engine.clear_take_profit(payload["symbol"])
             else:
                 engine.clear_risk(payload["symbol"])
+        elif kind == "funding":
+            engine.apply_funding(
+                payload["rate"], timestamp=payload.get("timestamp"),
+                symbol=payload.get("symbol"), mark_price=payload.get("markPrice"),
+            )
+        elif kind == "candle":
+            engine.on_candle(payload["candle"], payload["index"], payload["symbol"])
         elif kind == "capital":
             index = engine.index
             market = deepcopy(engine._market_by_symbol)
