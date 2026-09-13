@@ -4,6 +4,9 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+MAX_CANDLES = 100_000
+
+
 class Candle(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
@@ -29,7 +32,7 @@ class Candle(BaseModel):
 
 
 class CandleBatch(BaseModel):
-    candles: list[Candle] = Field(min_length=1)
+    candles: list[Candle] = Field(min_length=1, max_length=MAX_CANDLES)
 
     @model_validator(mode="after")
     def validate_chronology(self):
