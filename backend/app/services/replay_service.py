@@ -79,7 +79,10 @@ class ReplayService:
 
     def reset(self):
         self.index = self.start_index if self.start_index >= 0 else -1
-        self.status = "paused" if self.index >= 0 else ("ready" if self.candles else "idle")
+        if self.index < 0:
+            self.status = "ready" if self.candles else "idle"
+        else:
+            self.status = "ended" if self.index == len(self.candles) - 1 else "paused"
         return self.state()
 
     def state(self):
@@ -159,6 +162,8 @@ class ReplayService:
                 raise ValueError("replay index is outside candle range")
             if replay.start_index < -1 or replay.start_index >= len(replay.candles):
                 raise ValueError("replay start index is outside candle range")
+            if replay.start_index > replay.index:
+                raise ValueError("replay start index cannot exceed current index")
             if replay.status == "idle":
                 raise ValueError("non-empty replay cannot be idle")
             if replay.status == "ready" and (replay.index != -1 or replay.start_index != -1):
