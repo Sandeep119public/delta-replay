@@ -327,13 +327,18 @@ def process(request: Request, command: MarketCandleRequest | None = None):
     command = command or MarketCandleRequest()
 
     def process_candle(session):
+        replay_index = session.replay.state()["index"]
+        if command.index is not None and command.index != replay_index:
+            raise HTTPException(409, "candle index must match replay index for deterministic history")
+        if replay_index < 0:
+            raise HTTPException(409, "Load data and start replay before processing a market candle")
         raw = command.candle.model_dump() if command.candle is not None else replay_candle(session, command.symbol)
         candle = normalize_candle(raw)
-        index = command.index if command.index is not None else session.replay.state()["index"]
+        index = replay_index
         events = session.trading.on_candle(candle, index, command.symbol)
         session.record(
             "candle",
-            session.replay.index,
+            replay_index,
             {"candle": candle, "index": index, "symbol": command.symbol},
         )
         return {"events": events, "candle": candle, **snapshot(session.trading)}
@@ -391,3 +396,5 @@ def reset(request: Request):
         return atomic_session(request, reset_engine)
     except StateInvariantError as exc:
         raise _internal_http_error(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
