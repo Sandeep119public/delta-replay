@@ -534,6 +534,9 @@ class PaperTradingEngine:
                 self._positive_finite(position.get(field), f"position {field}")
             self._non_negative_finite(position.get("entry_fee"), "position entry_fee")
             entry = position["entry_price"]
+            opened_index = self._integer(position.get("opened_index"), "position opened_index")
+            if opened_index < 0 or opened_index > self.index:
+                raise ValueError("position opened_index is invalid")
             if position.get("stop_loss") is not None:
                 stop = self._positive_finite(position["stop_loss"], "stop loss")
                 if (position["side"] == "long" and stop >= entry) or (position["side"] == "short" and stop <= entry):
@@ -542,9 +545,14 @@ class PaperTradingEngine:
                 take = self._positive_finite(position["take_profit"], "take profit")
                 if (position["side"] == "long" and take <= entry) or (position["side"] == "short" and take >= entry):
                     raise ValueError("position take profit is invalid")
-            for field in ("stop_loss_created_index", "take_profit_created_index", "opened_index"):
-                if field in position and self._integer(position[field], f"position {field}") < -1:
+            for field, level in (("stop_loss_created_index", position.get("stop_loss")), ("take_profit_created_index", position.get("take_profit"))):
+                risk_index = self._integer(position.get(field), f"position {field}")
+                if risk_index < -1 or risk_index > self.index:
                     raise ValueError(f"position {field} is invalid")
+                if level is None and risk_index != -1:
+                    raise ValueError(f"position {field} must be -1 when risk is cleared")
+                if level is not None and risk_index < opened_index:
+                    raise ValueError(f"position {field} cannot precede position opening")
         if not isinstance(self.funding, list):
             raise ValueError("funding must be a list")
         for event in self.funding:

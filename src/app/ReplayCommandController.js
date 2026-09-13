@@ -1,9 +1,27 @@
 export const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 5, 10];
 
+export function createReplayCommandPolicy(tradingCapabilities = null) {
+  return Object.freeze({
+    canExecute(action) {
+      if (action === 'reset' || action === 'restart' || action === 'stepForward' || action === 'resume') {
+        return { allowed: true };
+      }
+      const hasTradingActivity = Boolean(tradingCapabilities?.hasTradingActivity?.());
+      if (action === 'seek' && hasTradingActivity) {
+        return { allowed: false, reason: 'Cannot seek after trading activity. Reset the simulation first.' };
+      }
+      if (action === 'start' && hasTradingActivity) {
+        return { allowed: false, reason: 'Cannot start a new replay position after trading activity. Reset the simulation first.' };
+      }
+      return { allowed: true };
+    },
+  });
+}
+
 export class ReplayCommandController {
-  constructor({ engine, appState, candleStore, onLoad = null, onPreview = null, canExecute = null, onError = null, headerBtn = null }) {
+  constructor({ engine, appState, candleStore, onLoad = null, onPreview = null, canExecute = null, tradingCapabilities = null, onError = null, headerBtn = null }) {
     this.engine = engine; this.appState = appState; this.candleStore = candleStore; this.onLoad = onLoad; this.onPreview = onPreview;
-    this.canExecute = canExecute || (() => true); this.onError = onError; this.headerBtn = headerBtn; this.busy = false; this.destroyed = false; this.subscriptions = [];
+    this.canExecute = canExecute || createReplayCommandPolicy(tradingCapabilities).canExecute; this.onError = onError; this.headerBtn = headerBtn; this.busy = false; this.destroyed = false; this.subscriptions = [];
     const on = engine?.on?.bind(engine);
     if (on) for (const event of ['stateChanged', 'reset']) { const off = on(event, () => this.renderHeaderBtn()); if (typeof off === 'function') this.subscriptions.push(off); }
     if (headerBtn) { this.onHeaderClick = () => { void this.togglePlayPause(); }; headerBtn.addEventListener('click', this.onHeaderClick); }

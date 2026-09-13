@@ -1,7 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ReplayCommandController } from '../../src/app/ReplayCommandController.js';
+import { createReplayCommandPolicy, ReplayCommandController } from '../../src/app/ReplayCommandController.js';
 
 describe('ReplayCommandController', () => {
+  it('rejects seek and start after trading activity through the default policy', () => {
+    const policy = createReplayCommandPolicy({ hasTradingActivity: () => true });
+
+    expect(policy.canExecute('seek')).toEqual({
+      allowed: false,
+      reason: 'Cannot seek after trading activity. Reset the simulation first.',
+    });
+    expect(policy.canExecute('start')).toEqual({
+      allowed: false,
+      reason: 'Cannot start a new replay position after trading activity. Reset the simulation first.',
+    });
+    expect(policy.canExecute('reset')).toEqual({ allowed: true });
+    expect(policy.canExecute('resume')).toEqual({ allowed: true });
+  });
+
   it('does not change speed after destroy', () => {
     const setSpeed = vi.fn();
     const controller = new ReplayCommandController({
