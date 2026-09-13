@@ -112,9 +112,10 @@ class PaperTradingEngine:
             candle = value.get("candle")
             if not isinstance(candle, dict):
                 raise ValueError("invalid market candle")
+            self._positive_finite(candle.get("close"), "market close")
+            for field in ("open", "high", "low"):
+                self._positive_finite(candle.get(field), f"market candle {field}")
             normalized_candle = deepcopy(candle)
-            for field in ("open", "high", "low", "close"):
-                self._positive_finite(normalized_candle.get(field), f"market candle {field}")
             market_index = self._integer(value.get("index"), "market index")
             if market_index < -1 or market_index > self.index:
                 raise ValueError("market index is outside trading timeline")
@@ -194,10 +195,14 @@ class PaperTradingEngine:
             raise ValueError("limit_price is only valid for limit orders")
         if type == "market" and stop_price is not None:
             raise ValueError("stop_price is only valid for stop_market orders")
-        if type == "limit" and (limit_price is None or stop_price is not None):
-            raise ValueError("limit order requires only limit_price")
-        if type == "stop_market" and (stop_price is None or limit_price is not None):
-            raise ValueError("stop_market order requires only stop_price")
+        if type == "limit" and stop_price is not None:
+            raise ValueError("stop_price is only valid for stop_market orders")
+        if type == "limit" and limit_price is None:
+            raise ValueError("limit order requires limit_price")
+        if type == "stop_market" and limit_price is not None:
+            raise ValueError("limit_price is only valid for limit orders")
+        if type == "stop_market" and stop_price is None:
+            raise ValueError("stop_market order requires stop_price")
         if self.has_open_position(symbol):
             raise ValueError("position already open")
         created_index = self.index if created_index is None else self._integer(created_index, "created index")
@@ -384,7 +389,6 @@ class PaperTradingEngine:
         if not position:
             raise ValueError("no open position")
         position["stop_loss"] = None
-        position["stop_loss_created_index"] = self.index
         return deepcopy(position)
 
     def clear_take_profit(self, symbol):
@@ -393,7 +397,6 @@ class PaperTradingEngine:
         if not position:
             raise ValueError("no open position")
         position["take_profit"] = None
-        position["take_profit_created_index"] = self.index
         return deepcopy(position)
 
     def clear_risk(self, symbol):
@@ -403,8 +406,6 @@ class PaperTradingEngine:
             raise ValueError("no open position")
         position["stop_loss"] = None
         position["take_profit"] = None
-        position["stop_loss_created_index"] = self.index
-        position["take_profit_created_index"] = self.index
         return deepcopy(position)
 
     def set_starting_balance(self, starting_balance):
@@ -521,14 +522,14 @@ class PaperTradingEngine:
             raise ValueError("funding must be a list")
         for event in self.funding:
             if not isinstance(event, dict):
-                raise ValueError("funding event must be an object")
+                raise ValueError("funding event must be a dict")
             self._positive_finite(event.get("quantity"), "funding quantity")
             self._positive_finite(event.get("markPrice"), "funding markPrice")
             self._finite(event.get("fundingRate"), "fundingRate")
             self._finite(event.get("payment"), "funding payment")
         for trade in self.trades:
             if not isinstance(trade, dict):
-                raise ValueError("trade must be an object")
+                raise ValueError("trade must be a dict")
             for field in ("quantity", "entryPrice", "exitPrice"):
                 self._positive_finite(trade.get(field), f"trade {field}")
         return self
