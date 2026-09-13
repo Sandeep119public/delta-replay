@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dataclasses import dataclass, field
 import os
 from threading import RLock
@@ -25,7 +26,7 @@ class SessionState:
         self.history.append({
             "type": command_type,
             "replayIndex": int(replay_index),
-            "payload": dict(payload),
+            "payload": deepcopy(payload),
         })
 
     def truncate_future_history(self, replay_index: int):
@@ -82,9 +83,10 @@ class SessionManager:
             else:
                 session = self._restore(document)
 
-            with self._lock:
-                if cache_generation == self._cache_generation:
-                    self._sessions[session_id] = session
+            if not self.repository.durable:
+                with self._lock:
+                    if cache_generation == self._cache_generation:
+                        self._sessions[session_id] = session
             return session
 
     @staticmethod
@@ -114,9 +116,10 @@ class SessionManager:
                 ), (result, session)
 
             result, session = self.repository.atomic_update(session_id, mutate)
-            with self._lock:
-                if cache_generation == self._cache_generation:
-                    self._sessions[session_id] = session
+            if not self.repository.durable:
+                with self._lock:
+                    if cache_generation == self._cache_generation:
+                        self._sessions[session_id] = session
             return result
 
     def _ensure_exists(self, session_id: str) -> None:
