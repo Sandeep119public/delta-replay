@@ -69,6 +69,15 @@ class PaperTradingEngine:
             raise ValueError(f"{name} must be an integer")
         return int(numeric)
 
+    @staticmethod
+    def _symbol(value, name="symbol"):
+        if not isinstance(value, str):
+            raise ValueError(f"{name} must be provided")
+        value = value.strip().upper()
+        if not value:
+            raise ValueError(f"{name} must be provided")
+        return value
+
     def fee(self, price, quantity):
         return self._positive_finite(price, "price") * self._positive_finite(quantity, "quantity") * self.fee_rate
 
@@ -78,10 +87,10 @@ class PaperTradingEngine:
     def has_open_position(self, symbol=None):
         if symbol is None:
             return bool(self.positions)
-        return str(symbol).strip().upper() in self.positions
+        return self._symbol(symbol) in self.positions
 
     def mark(self, symbol, price):
-        symbol = str(symbol).strip().upper()
+        symbol = self._symbol(symbol)
         price = self._positive_finite(price, "mark price")
         market = self._market_by_symbol.get(symbol)
         if market is None:
@@ -93,7 +102,7 @@ class PaperTradingEngine:
         return self.snapshot()
 
     def get_latest_market(self, symbol):
-        symbol = str(symbol).strip().upper()
+        symbol = self._symbol(symbol)
         market = self._market_by_symbol.get(symbol)
         return deepcopy(market) if market is not None else None
 
@@ -105,8 +114,7 @@ class PaperTradingEngine:
             raise ValueError("market state must be an object")
         normalized = {}
         for symbol, value in market_state.items():
-            if not isinstance(symbol, str) or symbol != symbol.strip().upper() or not symbol.strip():
-                raise ValueError("invalid market symbol")
+            symbol = self._symbol(symbol)
             if not isinstance(value, dict):
                 raise ValueError("invalid market context")
             candle = value.get("candle")
@@ -119,6 +127,9 @@ class PaperTradingEngine:
             market_index = self._integer(value.get("index"), "market index")
             if market_index < -1 or market_index > self.index:
                 raise ValueError("market index is outside trading timeline")
+            if market_index < 0:
+                if normalized_candle is not None:
+                    raise ValueError("market candle is invalid before the trading timeline")
             mark_price = value.get("markPrice")
             if mark_price is not None:
                 mark_price = self._positive_finite(mark_price, "market mark price")
@@ -127,7 +138,7 @@ class PaperTradingEngine:
         return self
 
     def set_market_context(self, symbol, candle, index):
-        symbol = str(symbol).strip().upper()
+        symbol = self._symbol(symbol)
         index = self._integer(index, "market index")
         if index < 0 or index > self.index:
             raise ValueError("market index is outside trading timeline")
@@ -185,9 +196,7 @@ class PaperTradingEngine:
         self._recalc()
 
     def submit(self, symbol, side, quantity, type="market", limit_price=None, stop_price=None, created_index=None):
-        symbol = str(symbol).strip().upper()
-        if not symbol:
-            raise ValueError("symbol must be provided")
+        symbol = self._symbol(symbol)
         if side not in ("buy", "sell"):
             raise ValueError("side must be buy or sell")
         if type not in ("market", "limit", "stop_market"):
@@ -231,7 +240,7 @@ class PaperTradingEngine:
         return deepcopy(order)
 
     def close(self, symbol, price, reason="MARKET", ambiguity="NONE", timestamp=None, quantity=None):
-        symbol = str(symbol).strip().upper()
+        symbol = self._symbol(symbol)
         position = self.positions.get(symbol)
         if position is None:
             raise ValueError("no open position")
@@ -278,7 +287,7 @@ class PaperTradingEngine:
 
     def apply_funding(self, rate, timestamp=None, symbol=None, mark_price=None):
         rate = self._finite(rate, "funding rate")
-        normalized_symbol = str(symbol).strip().upper() if symbol else None
+        normalized_symbol = None if symbol is None else self._symbol(symbol)
         selected = []
         for sym, position in self.positions.items():
             if normalized_symbol and sym != normalized_symbol:
@@ -309,9 +318,7 @@ class PaperTradingEngine:
         return selected
 
     def on_candle(self, candle, index=None, symbol="BTCUSDT"):
-        symbol = str(symbol).strip().upper()
-        if not symbol:
-            raise ValueError("symbol must be provided")
+        symbol = self._symbol(symbol)
         if not isinstance(candle, dict):
             raise ValueError("candle must be an object")
         for key in ("open", "high", "low", "close"):
@@ -382,7 +389,7 @@ class PaperTradingEngine:
         return deepcopy(order)
 
     def set_risk(self, symbol, stop_loss=None, take_profit=None):
-        symbol = str(symbol).strip().upper()
+        symbol = self._symbol(symbol)
         position = self.positions.get(symbol)
         if not position:
             raise ValueError("no open position")
@@ -404,7 +411,7 @@ class PaperTradingEngine:
         return deepcopy(position)
 
     def clear_stop_loss(self, symbol):
-        symbol = str(symbol).strip().upper()
+        symbol = self._symbol(symbol)
         position = self.positions.get(symbol)
         if not position:
             raise ValueError("no open position")
@@ -413,7 +420,7 @@ class PaperTradingEngine:
         return deepcopy(position)
 
     def clear_take_profit(self, symbol):
-        symbol = str(symbol).strip().upper()
+        symbol = self._symbol(symbol)
         position = self.positions.get(symbol)
         if not position:
             raise ValueError("no open position")
@@ -422,7 +429,7 @@ class PaperTradingEngine:
         return deepcopy(position)
 
     def clear_risk(self, symbol):
-        symbol = str(symbol).strip().upper()
+        symbol = self._symbol(symbol)
         position = self.positions.get(symbol)
         if not position:
             raise ValueError("no open position")
@@ -555,18 +562,54 @@ class PaperTradingEngine:
                     raise ValueError(f"position {field} cannot precede position opening")
         if not isinstance(self.funding, list):
             raise ValueError("funding must be a list")
+        funding_ids = []
         for event in self.funding:
             if not isinstance(event, dict):
                 raise ValueError("funding event must be a dict")
+            event_id = self._integer(event.get("id"), "funding id")
+            if event_id <= 0:
+                raise ValueError("funding id must be positive")
+            event_symbol = event.get("symbol")
+            if not isinstance(event_symbol, str) or not event_symbol.strip() or event_symbol != event_symbol.strip().upper():
+                raise ValueError("funding symbol is invalid")
+            if event.get("side") not in ("long", "short"):
+                raise ValueError("funding side is invalid")
             self._positive_finite(event.get("quantity"), "funding quantity")
             self._positive_finite(event.get("markPrice"), "funding markPrice")
             self._finite(event.get("fundingRate"), "fundingRate")
             self._finite(event.get("payment"), "funding payment")
+            funding_ids.append(event_id)
+        if funding_ids != list(range(1, len(funding_ids) + 1)):
+            raise ValueError("funding ids must be sequential")
+        trade_ids = []
         for trade in self.trades:
             if not isinstance(trade, dict):
                 raise ValueError("trade must be a dict")
+            trade_id = self._integer(trade.get("id"), "trade id")
+            if trade_id <= 0:
+                raise ValueError("trade id must be positive")
+            trade_symbol = trade.get("symbol")
+            if not isinstance(trade_symbol, str) or not trade_symbol.strip() or trade_symbol != trade_symbol.strip().upper():
+                raise ValueError("trade symbol is invalid")
+            if trade.get("side") not in ("LONG", "SHORT"):
+                raise ValueError("trade side is invalid")
             for field in ("quantity", "entryPrice", "exitPrice"):
                 self._positive_finite(trade.get(field), f"trade {field}")
+            for field in ("entryFee", "exitFee", "totalFee"):
+                self._non_negative_finite(trade.get(field), f"trade {field}")
+            for field in ("realizedPnL", "grossPnL", "netPnL"):
+                self._finite(trade.get(field), f"trade {field}")
+            expected_total_fee = trade["entryFee"] + trade["exitFee"]
+            if abs(trade["totalFee"] - expected_total_fee) > 1e-9 * max(1.0, abs(expected_total_fee)):
+                raise ValueError("trade totalFee is inconsistent with entryFee and exitFee")
+            expected_net = trade["grossPnL"] - trade["totalFee"]
+            if abs(trade["netPnL"] - expected_net) > 1e-9 * max(1.0, abs(expected_net)):
+                raise ValueError("trade netPnL is inconsistent with grossPnL and totalFee")
+            if trade["realizedPnL"] != trade["netPnL"]:
+                raise ValueError("trade realizedPnL is inconsistent with netPnL")
+            trade_ids.append(trade_id)
+        if trade_ids != list(range(1, len(trade_ids) + 1)):
+            raise ValueError("trade ids must be sequential")
         return self
 
     @classmethod
