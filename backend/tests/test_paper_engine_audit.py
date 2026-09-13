@@ -13,7 +13,7 @@ def open_long(engine, quantity=1):
     engine.on_candle(candle(100, 101, 99, 100, 2), 1, "BTCUSDT")
 
 
-def test_trade_net_pnl_and_account_realized_pnl_have_distinct_semantics():
+def test_trade_net_pnl_matches_account_realized_pnl_after_fees():
     engine = PaperTradingEngine(starting_balance=1000, fee_rate=0.01, margin_rate=0.1)
     open_long(engine)
 
@@ -24,7 +24,7 @@ def test_trade_net_pnl_and_account_realized_pnl_have_distinct_semantics():
     assert trade["exitFee"] == pytest.approx(1.1)
     assert trade["netPnL"] == pytest.approx(7.9)
     assert trade["realizedPnL"] == pytest.approx(7.9)
-    assert engine.account.realized_pnl == pytest.approx(8.9)
+    assert engine.account.realized_pnl == pytest.approx(7.9)
 
 
 def test_oversized_partial_close_is_rejected_without_mutation():
