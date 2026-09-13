@@ -68,15 +68,7 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
         elif kind == "candle":
             engine.on_candle(payload["candle"], payload["index"], payload["symbol"])
         elif kind == "capital":
-            index = engine.index
-            market = deepcopy(engine._market_by_symbol)
-            balance = payload["balance"]
-            fee_rate = engine.fee_rate
-            margin_rate = engine.margin_rate
-            maint_margin_rate = engine.maint_margin_rate
-            engine.__init__(balance, fee_rate, margin_rate, maint_margin_rate)
-            engine.index = index
-            engine._market_by_symbol = market
+            engine.set_starting_balance(payload["balance"])
         elif kind == "fee_rate":
             engine.set_fee_rate(payload["rate"])
         else:
@@ -114,6 +106,15 @@ def rebuild_trading(replay, history, target_index: int) -> PaperTradingEngine:
         _apply_command(engine, command, replay)
 
     current_symbol = "BTCUSDT"
+    start_market_step = next(
+        (command for command in commands_by_index.get(start_index, []) if command["type"] == "market_step"),
+        None,
+    )
+    if start_market_step is not None:
+        current_symbol = start_market_step["payload"]["symbol"]
+
+    engine.on_candle(replay.candles[start_index], start_index, current_symbol)
+
     for candle_index in range(start_index + 1, target_index + 1):
         command_index = candle_index - 1
         for command in commands_by_index.get(command_index, []):
