@@ -7,6 +7,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from .session_repository import SessionDocument, SessionMutation, SessionRepository
+from .storage_locks import DATASET_GC_LOCK_KEY
 
 T = TypeVar("T")
 
@@ -148,6 +149,22 @@ class PostgresSessionRepository(SessionRepository):
                 ),
             )
 
+    @staticmethod
+    def _gc_dataset(connection, dataset_id: Optional[str]) -> None:
+        if not dataset_id:
+            return
+        connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
+        connection.execute(
+            """DELETE FROM replay_datasets d
+               WHERE d.dataset_id = %s
+                 AND NOT EXISTS (
+                     SELECT 1
+                     FROM replay_sessions s
+                     WHERE s.state->'replay'->>'datasetId' = d.dataset_id
+                 )""",
+            (dataset_id,),
+        )
+
     def get(self, session_id: str) -> Optional[SessionDocument]:
         with self._connect() as connection:
             row = connection.execute(
@@ -183,10 +200,21 @@ class PostgresSessionRepository(SessionRepository):
                 (session_id, encoded),
             )
             self._sync_history(connection, session_id, current_document.get("history", []), document.get("history", []))
+            new_dataset_id = self._dataset_id_from_state(storage_document)
+            if old_dataset_id and old_dataset_id != new_dataset_id:
+                self._gc_dataset(connection, old_dataset_id)
 
     def delete(self, session_id: str) -> None:
         with self._connect() as connection:
+            row = connection.execute(
+                "SELECT state FROM replay_sessions WHERE session_id = %s FOR UPDATE",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return
+            dataset_id = self._dataset_id_from_state(row["state"])
             connection.execute("DELETE FROM replay_sessions WHERE session_id = %s", (session_id,))
+            self._gc_dataset(connection, dataset_id)
 
     def save_if_revision(self, session_id: str, document: SessionDocument, expected_revision: int) -> int:
         with self._connect() as connection:
@@ -197,6 +225,7 @@ class PostgresSessionRepository(SessionRepository):
             if current is None:
                 raise RuntimeError("session revision conflict")
             current_document = self._hydrate_document(connection, dict(current["state"]), session_id)
+            old_dataset_id = self._dataset_id_from_state(current["state"])
             storage_document = self._prepare_storage_document(connection, document)
             encoded = self._encode(storage_document)
             row = connection.execute(
@@ -209,6 +238,9 @@ class PostgresSessionRepository(SessionRepository):
             if row is None:
                 raise RuntimeError("session revision conflict")
             self._sync_history(connection, session_id, current_document.get("history", []), document.get("history", []))
+            new_dataset_id = self._dataset_id_from_state(storage_document)
+            if old_dataset_id and old_dataset_id != new_dataset_id:
+                self._gc_dataset(connection, old_dataset_id)
             return int(row["revision"])
 
     def atomic_update(self, session_id: str, mutation: SessionMutation[T]) -> T:
@@ -221,6 +253,7 @@ class PostgresSessionRepository(SessionRepository):
                 raise KeyError(f"session {session_id} not found")
             document = self._hydrate_document(connection, dict(row["state"]), session_id)
             old_history = document.get("history", [])
+            old_dataset_id = self._dataset_id_from_state(row["state"])
             updated, result = mutation(document)
             storage_document = self._prepare_storage_document(connection, updated)
             connection.execute(
@@ -228,4 +261,7 @@ class PostgresSessionRepository(SessionRepository):
                 (self._encode(storage_document), session_id),
             )
             self._sync_history(connection, session_id, old_history, updated.get("history", []))
+            new_dataset_id = self._dataset_id_from_state(storage_document)
+            if old_dataset_id and old_dataset_id != new_dataset_id:
+                self._gc_dataset(connection, old_dataset_id)
             return result
