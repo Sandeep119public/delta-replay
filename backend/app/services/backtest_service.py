@@ -1,27 +1,17 @@
 from math import isfinite
 
-from ..domain.execution import EXECUTION_MODEL, fill_price
+from ..domain.execution import EXECUTION_MODEL
 from ..models import Candle
+from .paper_engine import PaperTradingEngine
 
 
 TAKER_FEE_RATE = 0.0005
 SMA_PERIOD = 3
+_BACKTEST_STARTING_BALANCE = 1_000_000_000_000.0
 
 
 class BacktestService:
-    """Deterministic backtest runner using the canonical execution rules."""
-
-    @staticmethod
-    def _market_fill(side, created_index, candle, candle_index):
-        return fill_price(
-            {
-                "type": "market",
-                "side": side,
-                "createdIndex": created_index,
-            },
-            candle,
-            candle_index=candle_index,
-        )
+    """Deterministic backtest runner using the canonical trading ledger and execution rules."""
 
     def run(self, candles, strategy="buy_and_hold", quantity=1.0, fee_rate=TAKER_FEE_RATE):
         try:
@@ -56,61 +46,46 @@ class BacktestService:
 
         self._validate_chronology(candles)
         signals = self._signals(candles, strategy)
-        trades = []
-        total_net = 0.0
-        total_gross = 0.0
-        total_fees = 0.0
-        entry = None
-        entry_fee = 0.0
+        engine = PaperTradingEngine(
+            starting_balance=_BACKTEST_STARTING_BALANCE,
+            fee_rate=fee_rate,
+            margin_rate=1.0,
+            maint_margin_rate=0.0,
+        )
+        pending_exit = False
 
         for i, signal in enumerate(signals):
-            if signal == "buy" and entry is None and i + 1 < len(candles):
-                entry = self._market_fill("buy", i, candles[i + 1], i + 1)
-                if entry is None:
-                    continue
-                entry_fee = abs(entry * quantity) * fee_rate
-                total_fees += entry_fee
-            elif signal == "sell" and entry is not None:
-                if i + 1 < len(candles):
-                    exit_price = self._market_fill("sell", i, candles[i + 1], i + 1)
-                else:
-                    exit_price = float(candles[i]["close"])
-                close_fee = abs(exit_price * quantity) * fee_rate
-                gross = (exit_price - entry) * quantity
-                net = gross - entry_fee - close_fee
-                trades.append({
-                    "side": "long",
-                    "entry": entry,
-                    "exit": exit_price,
-                    "quantity": quantity,
-                    "pnl": gross,
-                    "fees": entry_fee + close_fee,
-                    "netPnl": net,
-                })
-                total_gross += gross
-                total_net += net
-                total_fees += close_fee
-                entry = None
-                entry_fee = 0.0
+            candle = candles[i]
+            if pending_exit and engine.has_open_position("BACKTEST"):
+                engine.close("BACKTEST", float(candle["open"]), reason="SIGNAL", timestamp=candle.get("time"))
+                pending_exit = False
 
-        if entry is not None:
-            exit_price = float(candles[-1]["close"])
-            close_fee = abs(exit_price * quantity) * fee_rate
-            gross = (exit_price - entry) * quantity
-            net = gross - entry_fee - close_fee
-            trades.append({
-                "side": "long",
-                "entry": entry,
-                "exit": exit_price,
-                "quantity": quantity,
-                "pnl": gross,
-                "fees": entry_fee + close_fee,
-                "netPnl": net,
-            })
-            total_gross += gross
-            total_net += net
-            total_fees += close_fee
+            engine.on_candle(candle, i, "BACKTEST")
 
+            if signal == "buy" and not engine.has_open_position("BACKTEST") and not engine.pending_orders():
+                engine.submit("BACKTEST", "buy", quantity, "market")
+            elif signal == "sell" and engine.has_open_position("BACKTEST"):
+                pending_exit = True
+
+        if engine.has_open_position("BACKTEST"):
+            final = candles[-1]
+            engine.close("BACKTEST", float(final["close"]), reason="BACKTEST_END", timestamp=final.get("time"))
+
+        trades = [
+            {
+                "side": trade["side"].lower(),
+                "entry": trade["entryPrice"],
+                "exit": trade["exitPrice"],
+                "quantity": trade["quantity"],
+                "pnl": trade["grossPnL"],
+                "fees": trade["totalFee"],
+                "netPnl": trade["netPnL"],
+            }
+            for trade in engine.trades
+        ]
+        total_gross = sum(trade["grossPnL"] for trade in engine.trades)
+        total_net = sum(trade["netPnL"] for trade in engine.trades)
+        total_fees = sum(trade["totalFee"] for trade in engine.trades)
         return {
             "summary": {
                 "strategy": strategy,
