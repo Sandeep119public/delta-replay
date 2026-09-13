@@ -8,6 +8,7 @@ on:
       - master
       - 'refactor/**'
       - 'fix/**'
+      - 'audit/**'
 
 permissions:
   contents: read
@@ -59,6 +60,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r backend/requirements.txt
+      - name: Apply database migrations
+        run: python backend/scripts/migrate.py
       - run: PYTHONPATH=backend pytest backend/tests -q
       - name: Build backend container
         run: docker build --file backend/Dockerfile --tag delta-replay-api:ci .
