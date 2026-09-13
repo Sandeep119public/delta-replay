@@ -3,7 +3,6 @@ import { ReplayCommandController } from './ReplayCommandController.js';
 import { createCoreServices } from './createCoreServices.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
-import { registerActionGuard } from './registerActionGuard.js';
 import { bindDatasetSelectors } from './bindDatasetSelectors.js';
 import { createPaperUI } from '../ui/PaperUI.js';
 import { renderPaperLayout } from '../ui/paper/PaperLayout.js';
@@ -187,7 +186,6 @@ export function createApplication() {
     preview: replayCapabilities.preview,
     chartManager: ui.chartManager,
   });
-  const actionGuardUnsub = registerActionGuard(engine, () => !tradingEngine.hasOpenPosition() && tradingEngine.getPendingOrders().length === 0, (msg) => coordinator?.showTradingError(msg));
   const loadBtn = coordinatorPorts.loadBtn;
   const onLoadClick = () => actions.load();
   loadBtn?.addEventListener('click', onLoadClick);
@@ -223,7 +221,7 @@ export function createApplication() {
       views.floatingPosView,
       views.toastView,
     ],
-    extraCleanup: [unbindAutoFollow, actionGuardUnsub],
+    extraCleanup: [unbindAutoFollow],
   });
 
   const lifecycle = createLifecycleGuard({
