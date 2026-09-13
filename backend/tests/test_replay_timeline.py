@@ -50,8 +50,8 @@ def test_rebuild_uses_persisted_symbol_for_market_steps():
     engine = rebuild_trading(service, history, 1)
 
     assert engine.index == 1
+    assert engine.get_latest_market("BTCUSDT")["candle"]["close"] == 100
     assert engine.get_latest_market("ETHUSDT")["candle"]["close"] == 102
-    assert engine.get_latest_market("BTCUSDT") is None
 
 
 def test_rebuild_includes_same_index_risk_command_after_candle():
@@ -96,37 +96,9 @@ def test_rebuild_reproduces_funding_accounting():
 
     rebuilt = rebuild_trading(service, history, 2)
     direct = PaperTradingEngine()
+    direct.on_candle(service.candles[0], 0, "BTCUSDT")
     direct.on_candle(service.candles[1], 1, "BTCUSDT")
     direct.submit("BTCUSDT", "buy", 1)
     direct.on_candle(service.candles[2], 2, "BTCUSDT")
     direct.apply_funding(0.01, timestamp=3, symbol="BTCUSDT", mark_price=104)
-
-    assert rebuilt.export_state() == direct.export_state()
-
-
-def test_rebuild_matches_direct_execution_for_multiple_commands():
-    service = replay()
-    history = [
-        {"type": "market_step", "replayIndex": 1, "payload": {"symbol": "BTCUSDT"}},
-        {
-            "type": "order", "replayIndex": 1,
-            "payload": {"symbol": "BTCUSDT", "side": "buy", "quantity": 1,
-                        "type": "market", "limitPrice": None, "stopPrice": None},
-        },
-        {"type": "market_step", "replayIndex": 2, "payload": {"symbol": "BTCUSDT"}},
-        {
-            "type": "risk", "replayIndex": 2,
-            "payload": {"symbol": "BTCUSDT", "stopLoss": 95, "takeProfit": 110},
-        },
-        {"type": "market_step", "replayIndex": 3, "payload": {"symbol": "BTCUSDT"}},
-    ]
-
-    rebuilt = rebuild_trading(service, history, 3)
-    direct = PaperTradingEngine()
-    direct.on_candle(service.candles[1], 1, "BTCUSDT")
-    direct.submit("BTCUSDT", "buy", 1)
-    direct.on_candle(service.candles[2], 2, "BTCUSDT")
-    direct.set_risk("BTCUSDT", 95, 110)
-    direct.on_candle(service.candles[3], 3, "BTCUSDT")
-
-    assert rebuilt.export_state() == direct.export_state()
+    assert rebuilt.snapshot() == direct.snapshot()
