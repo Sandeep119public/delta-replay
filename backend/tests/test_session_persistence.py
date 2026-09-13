@@ -79,7 +79,7 @@ def test_restore_rejects_invalid_trading_market_context():
     document = serialize_session(replay, trading)
     document["tradingMarket"] = {"BTCUSDT": {"candle": {"close": 0}, "index": -1}}
 
-    with pytest.raises(ValueError, match="market candle"):
+    with pytest.raises(ValueError, match="outside trading timeline"):
         restore_session(document)
 
 
