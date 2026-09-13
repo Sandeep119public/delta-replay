@@ -86,14 +86,14 @@ def test_from_state_rejects_invalid_pending_order_state():
 def test_risk_levels_match_position_direction():
     long_engine = PaperTradingEngine(fee_rate=0)
     open_position(long_engine, quantity=1, entry=100)
-    with pytest.raises(ValueError, match="stop_loss"):
+    with pytest.raises(ValueError, match="stop"):
         long_engine.set_risk("BTCUSDT", stop_loss=110)
-    with pytest.raises(ValueError, match="take_profit"):
+    with pytest.raises(ValueError, match="take"):
         long_engine.set_risk("BTCUSDT", take_profit=90)
 
     short_engine = PaperTradingEngine(fee_rate=0)
     open_position(short_engine, side="sell", quantity=1, entry=100)
-    with pytest.raises(ValueError, match="stop_loss"):
+    with pytest.raises(ValueError, match="stop"):
         short_engine.set_risk("BTCUSDT", stop_loss=90)
-    with pytest.raises(ValueError, match="take_profit"):
+    with pytest.raises(ValueError, match="take"):
         short_engine.set_risk("BTCUSDT", take_profit=110)

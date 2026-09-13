@@ -27,23 +27,51 @@ export class RemoteTradingEngine {
     if (!api || typeof api.request !== 'function') throw new TypeError('RemoteTradingEngine requires API client');
     this.api = api;
     this.events = new Events();
-    this.data = { account: normalizeAccount(), positions: [], orders: [], pendingOrders: [], trades: [] };
+    this.data = { account: normalizeAccount(), positions: [], orders: [], pendingOrders: [], trades: [], funding: [] };
     this.latestCandle = null;
     this._generation = 0;
     this._requestSequence = 0;
     this._lastAppliedRequest = 0;
+    this._pendingRequests = new Map();
     this._destroyed = false;
     this._refreshPromise = this.refresh().catch(() => null);
   }
   on(event, handler) { return this._destroyed ? () => {} : this.events.on(event, handler); }
-  async _request(path, options = {}, action = null, generation = this._generation) {
-    const requestSequence = ++this._requestSequence;
-    const response = await this.api.request(path, options);
-    if (this._destroyed || generation !== this._generation || requestSequence !== this._requestSequence) return { applied: false, response };
-    this._lastAppliedRequest = requestSequence;
+  _reconcilePendingRequests() {
+    if (this._destroyed) return;
+    const candidates = [...this._pendingRequests.values()].filter((request) => request.settled && !request.error && request.generation === this._generation && request.id > this._lastAppliedRequest);
+    if (!candidates.length) return;
+    candidates.sort((a, b) => b.id - a.id);
+    const next = candidates[0];
+    const higherPending = [...this._pendingRequests.values()].some((request) => request.generation === this._generation && request.id > next.id && !request.settled);
+    if (higherPending) return;
+    this._lastAppliedRequest = next.id;
     const previous = this.data;
-    this._sync(response, action, previous);
-    return { applied: true, response };
+    this._sync(next.response, next.action, previous);
+    for (const [id, request] of this._pendingRequests) {
+      if (request.settled && (request.error || id <= this._lastAppliedRequest)) this._pendingRequests.delete(id);
+    }
+  }
+  async _request(path, options = {}, action = null, generation = this._generation) {
+    const request = { id: ++this._requestSequence, generation, action, settled: false, error: null, response: null };
+    this._pendingRequests.set(request.id, request);
+    try {
+      request.response = await this.api.request(path, options);
+      request.settled = true;
+      if (this._destroyed || generation !== this._generation) {
+        this._pendingRequests.delete(request.id);
+        return { applied: false, response: request.response };
+      }
+      this._reconcilePendingRequests();
+      const applied = this._lastAppliedRequest === request.id;
+      return { applied, response: request.response };
+    } catch (error) {
+      request.error = error;
+      request.settled = true;
+      if (this._destroyed || generation !== this._generation) this._pendingRequests.delete(request.id);
+      else this._reconcilePendingRequests();
+      throw error;
+    }
   }
   _sync(response = {}, action = null, previous = this.data) {
     if (this._destroyed) return;
@@ -52,18 +80,19 @@ export class RemoteTradingEngine {
     if (Array.isArray(response.orders)) this.data.orders = clone(response.orders);
     if (Array.isArray(response.pendingOrders)) this.data.pendingOrders = clone(response.pendingOrders); else this.data.pendingOrders = this.data.orders.filter((order) => order.status === 'PENDING');
     if (Array.isArray(response.trades)) this.data.trades = clone(response.trades);
+    if (Array.isArray(response.funding)) this.data.funding = clone(response.funding);
     if (response.candle) this.latestCandle = clone(response.candle);
     this.events.emit(EVENT.ACCOUNT_UPDATED, this.getAccountSnapshot());
     this._emitStateTransitions(previous, action, response?.events || []);
   }
   syncFromReplayStep(response = {}) { return this.syncFromReplayLifecycle(response, 'candle'); }
-  syncFromReplayLifecycle(response = {}, action = 'reset') {
+  syncFromReplayLifecycle(response = {}, action = 'replay-sync') {
     if (this._destroyed) return this.getStateSnapshot();
     const previous = this.data;
     this._sync({ ...(response?.trading || {}), candle: response?.candle, events: response?.events || [] }, action, previous);
     return this.getStateSnapshot();
   }
-  getStateSnapshot() { return { account: this.getAccountSnapshot(), positions: this.getPositions(), orders: this.getOrders(), pendingOrders: this.getPendingOrders(), trades: this.getTrades() }; }
+  getStateSnapshot() { return { account: this.getAccountSnapshot(), positions: this.getPositions(), orders: this.getOrders(), pendingOrders: this.getPendingOrders(), trades: this.getTrades(), funding: this.getFunding() }; }
   _emitStateTransitions(previous, action, backendEvents) {
     const beforePositions = previous.positions || [], afterPositions = this.data.positions || [], beforeOrders = previous.orders || [], afterOrders = this.data.orders || [], beforeTrades = previous.trades || [];
     const backendOrderEvents = new Set(backendEvents.filter((event) => ['ORDER_FILLED', 'ORDER_REJECTED'].includes(String(event?.type || '').toUpperCase())).map((event) => String(event.order?.id ?? event.order ?? '')));
@@ -88,13 +117,13 @@ export class RemoteTradingEngine {
   getOrders() { return clone(this.data.orders); }
   getPendingOrders() { return clone(this.data.pendingOrders); }
   getTrades() { return clone(this.data.trades); }
+  getFunding() { return clone(this.data.funding); }
   hasOpenPosition(symbol = null) { return symbol ? this.data.positions.some((p) => p.symbol === String(symbol).toUpperCase()) : this.data.positions.length > 0; }
-  hasTradingActivity() { return this.data.positions.length > 0 || this.data.orders.length > 0 || this.data.trades.length > 0; }
+  hasTradingActivity() { return this.data.positions.length > 0 || this.data.orders.length > 0 || this.data.trades.length > 0 || this.data.funding.length > 0; }
   getLatestCandle() { return clone(this.latestCandle); }
   getPerformanceStats() { const trades = this.data.trades; const wins = trades.filter((trade) => Number(trade.netPnL ?? 0) > 0); const grossWin = wins.reduce((sum, trade) => sum + Number(trade.netPnL || 0), 0); const grossLoss = Math.abs(trades.filter((trade) => Number(trade.netPnL ?? 0) < 0).reduce((sum, trade) => sum + Number(trade.netPnL || 0), 0)); const net = trades.reduce((sum, trade) => sum + Number(trade.netPnL || 0), 0); const starting = Number(this.data.account.startingBalance || 0); return { totalTrades: trades.length, winRate: trades.length ? (wins.length / trades.length) * 100 : 0, profitFactor: grossLoss ? grossWin / grossLoss : (grossWin ? Infinity : 0), netReturn: starting > 0 ? (net / starting) * 100 : 0 }; }
   async refresh() { if (this._destroyed) return this.getStateSnapshot(); const result = await this._request('/state', {}, 'refresh'); return result.response; }
-  async _action(path, options, action) { if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; try { const requestSequence = this._requestSequence + 1; const result = await this._request(path, options, action); if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; if (!result.applied) return { success: true, ...this.getStateSnapshot(), stale: true }; if (this._lastAppliedRequest !== requestSequence) return { success: true, ...this.getStateSnapshot(), stale: true }; return { success: true, ...result.response }; } catch (error) { return { success: false, message: error?.message || 'Trading request failed', status: error?.status, error }; }
-  }
+  async _action(path, options, action) { if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; try { const result = await this._request(path, options, action); if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; if (!result.applied) return { success: true, ...this.getStateSnapshot(), stale: true }; return { success: true, ...result.response }; } catch (error) { return { success: false, message: error?.message || 'Trading request failed', status: error?.status, error }; } }
   submitMarketOrder(order) { return this._action('/order', { method: 'POST', body: JSON.stringify({ symbol: order.symbol, side: String(order.side).toLowerCase(), quantity: order.quantity, type: 'market' }) }, 'place'); }
   placeLimitOrder(order) { return this._action('/order', { method: 'POST', body: JSON.stringify({ symbol: order.symbol, side: String(order.side).toLowerCase(), quantity: order.quantity, type: 'limit', limitPrice: order.limitPrice }) }, 'place'); }
   placeStopOrder(order) { return this._action('/order', { method: 'POST', body: JSON.stringify({ symbol: order.symbol, side: String(order.side).toLowerCase(), quantity: order.quantity, type: 'stop_market', stopPrice: order.stopPrice }) }, 'place'); }
@@ -114,7 +143,7 @@ export class RemoteTradingEngine {
   setStartingBalance(balance) { return this._action('/account/capital', { method: 'POST', body: JSON.stringify({ balance }) }, 'capital'); }
   setCapital(balance) { return this.setStartingBalance(balance); }
   setFeeRate(rate) { return this._action('/account/fee-rate', { method: 'POST', body: JSON.stringify({ rate }) }, 'fee'); }
-  async onMarketCandle(payload = null) { if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; const candle = payload?.candle || null; const body = candle ? JSON.stringify({ symbol: String(payload.symbol || candle.symbol || 'BTCUSDT').toUpperCase(), candle, index: payload.index ?? null }) : undefined; try { const requestSequence = this._requestSequence + 1; const result = await this._request('/candle', { method: 'POST', ...(body ? { body } : {}) }, 'candle'); return this._destroyed ? { success: false, message: 'Trading engine is destroyed' } : result.applied && this._lastAppliedRequest === requestSequence ? result.response : { success: true, ...this.getStateSnapshot(), stale: true }; } catch (error) { return { success: false, message: error?.message || 'Trading request failed', error }; }
+  async onMarketCandle(payload = null) { if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; const candle = payload?.candle || null; const body = candle ? JSON.stringify({ symbol: String(payload.symbol || candle.symbol || 'BTCUSDT').toUpperCase(), candle, index: payload.index ?? null }) : undefined; try { const result = await this._request('/candle', { method: 'POST', ...(body ? { body } : {}) }, 'candle'); return this._destroyed ? { success: false, message: 'Trading engine is destroyed' } : result.applied ? result.response : { success: true, ...this.getStateSnapshot(), stale: true }; } catch (error) { return { success: false, message: error?.message || 'Trading request failed', error }; }
   }
-  destroy() { if (this._destroyed) return; this._destroyed = true; this._generation++; this.events = new Events(); this.latestCandle = null; }
+  destroy() { if (this._destroyed) return; this._destroyed = true; this._generation++; this._requestSequence++; this._pendingRequests.clear(); this.events = new Events(); this.latestCandle = null; }
 }

@@ -76,7 +76,14 @@ class FundingRequest(BaseModel):
 
 
 def snapshot(service: PaperTradingEngine):
-    return service.snapshot()
+    state = service.snapshot()
+    orders = list(state["orders"].values())
+    return {
+        **state,
+        "positions": list(state["positions"].values()),
+        "orders": orders,
+        "pendingOrders": [order for order in orders if order["status"] == "PENDING"],
+    }
 
 
 def replay_candle(session, symbol: str):
@@ -112,7 +119,7 @@ def state(request: Request):
 def orders(request: Request):
     try:
         service = get_session(request).trading
-        snapshot_value = service.snapshot()
+        snapshot_value = snapshot(service)
         return {"orders": snapshot_value["orders"], "pendingOrders": snapshot_value["pendingOrders"]}
     except StateInvariantError as exc:
         raise _internal_http_error(exc) from exc
@@ -342,12 +349,8 @@ def process(request: Request, command: MarketCandleRequest | None = None):
 @router.post("/account/capital")
 def set_capital(request: Request, command: CapitalRequest):
     def change_capital(session):
-        before_index = session.trading.index
-        before_market = dict(session.trading._market_by_symbol)
         service = session.trading.set_starting_balance(command.balance)
-        service.index = before_index
-        service._market_by_symbol = before_market
-        session.record("capital", session.replay.index, {"balance": command.balance})
+        session.record("capital", -1, {"balance": command.balance})
         return snapshot(service)
 
     try:

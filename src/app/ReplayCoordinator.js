@@ -4,13 +4,6 @@ import { createReplayLoadService } from './ReplayLoadService.js';
 
 export { VISIBLE_WINDOW };
 
-/**
- * ReplayCoordinator is the stable application-level facade for replay
- * lifecycle capabilities. Async loading/session state, chart preview, and
- * dataset switching are owned by focused services and delegated here.
- * DOM elements are injected by the composition root. Trading access is
- * supplied through explicit capabilities, never a raw trading engine.
- */
 export class ReplayCoordinator {
   constructor({
     dataManager, candleStore, appState, replayEngine, tradingCapabilities, statusView, chartManager,
@@ -22,11 +15,10 @@ export class ReplayCoordinator {
     if (!tradingCapabilities || typeof tradingCapabilities !== 'object') {
       throw new TypeError('ReplayCoordinator requires trading capabilities');
     }
-    if (typeof tradingCapabilities.hasOpenPosition !== 'function') {
-      throw new TypeError('ReplayCoordinator requires tradingCapabilities.hasOpenPosition()');
-    }
-    if (typeof tradingCapabilities.hasPendingOrders !== 'function') {
-      throw new TypeError('ReplayCoordinator requires tradingCapabilities.hasPendingOrders()');
+    for (const capability of ['hasOpenPosition', 'hasPendingOrders', 'hasTradingActivity']) {
+      if (typeof tradingCapabilities[capability] !== 'function') {
+        throw new TypeError(`ReplayCoordinator requires tradingCapabilities.${capability}()`);
+      }
     }
     if (!statusView || typeof statusView.snapshot !== 'function') {
       throw new TypeError('ReplayCoordinator requires statusView.snapshot()');
@@ -43,6 +35,7 @@ export class ReplayCoordinator {
       replayEngine,
       hasOpenPosition: tradingCapabilities.hasOpenPosition,
       hasPendingOrders: tradingCapabilities.hasPendingOrders,
+      hasTradingActivity: tradingCapabilities.hasTradingActivity,
       statusView,
       timeline,
       controls,

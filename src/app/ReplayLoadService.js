@@ -6,7 +6,7 @@ import { isRetryableCategory as isRetryableErrorCategory } from '../ports/ErrorP
 const MAX_RETRIES = 3;
 
 export function createReplayLoadService({
-  dataManager, candleStore, appState, replayEngine, hasOpenPosition, hasPendingOrders,
+  dataManager, candleStore, appState, replayEngine, hasOpenPosition, hasPendingOrders, hasTradingActivity,
   statusView, timeline, controls, modeBanner, errorPanel, tradingErrorView = null,
   dataStatusEl = null, cacheBadgeEl = null, startReplayBtn = null, headerStartReplayBtn = null,
   loadBtn = null, fromDateEl = null, fromTimeEl = null, toDateEl = null, toTimeEl = null,
@@ -16,6 +16,7 @@ export function createReplayLoadService({
   for (const [name, value] of Object.entries(required)) if (!value) throw new TypeError(`createReplayLoadService requires ${name}`);
   if (typeof hasOpenPosition !== 'function') throw new TypeError('createReplayLoadService requires hasOpenPosition() capability');
   if (typeof hasPendingOrders !== 'function') throw new TypeError('createReplayLoadService requires hasPendingOrders() capability');
+  if (typeof hasTradingActivity !== 'function') throw new TypeError('createReplayLoadService requires hasTradingActivity() capability');
   if (typeof statusView.snapshot !== 'function') throw new TypeError('createReplayLoadService requires statusView.snapshot()');
   if (typeof updatePreviewWindow !== 'function') throw new TypeError('createReplayLoadService requires updatePreviewWindow callback');
 
@@ -60,6 +61,10 @@ export function createReplayLoadService({
 
   async function loadAndPrepareReplay({ targetSec = null, autoStart = false, preserveRetryState = false } = {}) {
     if (destroyed) return;
+    if (hasTradingActivity()) {
+      showTradingError('Cannot replace replay data after trading activity. Reset the simulation first.');
+      return;
+    }
     if (hasOpenPosition() || hasPendingOrders()) {
       showTradingError('Cannot change replay data while a position is open or a pending order exists. Close the position and cancel pending orders first.');
       return;

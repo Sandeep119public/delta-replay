@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createReplayLoadService } from '../../src/app/ReplayLoadService.js';
 
-function deps(load) {
+function deps(load, overrides = {}) {
   return {
     dataManager: { on: vi.fn(() => vi.fn()), load },
     candleStore: { get: vi.fn((index) => ({ openTime: index + 1 })) },
@@ -13,16 +13,29 @@ function deps(load) {
     replayEngine: { load: vi.fn(), getState: vi.fn(() => ({})), start: vi.fn() },
     hasOpenPosition: () => false,
     hasPendingOrders: () => false,
+    hasTradingActivity: () => false,
     statusView: { snapshot: vi.fn(() => ({})) },
     timeline: { setTotal: vi.fn(), setPosition: vi.fn(), setEnabled: vi.fn() },
     controls: { setStartIndex: vi.fn() },
     modeBanner: { update: vi.fn() },
     errorPanel: { hide: vi.fn(), show: vi.fn() },
     updatePreviewWindow: vi.fn(),
+    ...overrides,
   };
 }
 
 describe('ReplayLoadService', () => {
+  it('rejects replacing replay data after trading activity', async () => {
+    const load = vi.fn();
+    const show = vi.fn();
+    const d = deps(load, { hasTradingActivity: () => true, tradingErrorView: { show } });
+
+    await createReplayLoadService(d).loadAndPrepareReplay({ targetSec: 1 });
+
+    expect(load).not.toHaveBeenCalled();
+    expect(show).toHaveBeenCalledWith('Cannot replace replay data after trading activity. Reset the simulation first.');
+  });
+
   it('does not let a stale load remove the current progress subscription', async () => {
     let resolveFirst;
     let resolveSecond;

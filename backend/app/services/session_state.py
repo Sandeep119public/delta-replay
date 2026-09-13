@@ -44,7 +44,7 @@ def serialize_session(
         "version": SESSION_STATE_VERSION,
         "replay": replay.export_state(),
         "trading": trading.export_state(),
-        "tradingMarket": deepcopy(trading._market_by_symbol),
+        "tradingMarket": trading.export_market_state(),
         "history": history,
     }
     _validate_json_safety(document)
@@ -63,22 +63,7 @@ def restore_session_bundle(document: Dict[str, Any]):
     try:
         replay = ReplayService.from_state(document.get("replay"))
         trading = PaperTradingEngine.from_state(document.get("trading"))
-        market = document.get("tradingMarket", {})
-        if not isinstance(market, dict):
-            raise ValueError("tradingMarket must be an object")
-        trading._market_by_symbol = deepcopy(market)
-        for symbol, value in trading._market_by_symbol.items():
-            if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
-                raise ValueError("invalid trading market symbol")
-            if not isinstance(value, dict):
-                raise ValueError("invalid trading market context")
-            candle = value.get("candle")
-            if not isinstance(candle, dict):
-                raise ValueError("invalid trading market candle")
-            trading._positive_finite(candle.get("close"), "market close")
-            market_index = trading._integer(value.get("index"), "market index")
-            if market_index < -1 or market_index > trading.index:
-                raise ValueError("market index is outside trading timeline")
+        trading.restore_market_state(document.get("tradingMarket", {}))
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"invalid session state: {exc}") from exc
 
@@ -89,11 +74,7 @@ def restore_session_bundle(document: Dict[str, Any]):
 
 def restore_session(document: Dict[str, Any]):
     """Rehydrate replay and trading services using the legacy two-value contract."""
-    try:
-        replay, trading, _ = restore_session_bundle(document)
-    except (KeyError, TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(f"invalid session state: {exc}") from exc
-    return replay, trading
+    return restore_session_bundle(document)[:2]
 
 
 def extract_history(document: Dict[str, Any]) -> list[dict]:
