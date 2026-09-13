@@ -113,6 +113,7 @@ def rebuild_trading(replay, history, target_index: int) -> PaperTradingEngine:
     for command in commands_by_index.get(-1, []):
         _apply_command(engine, command, replay)
 
+    current_symbol = "BTCUSDT"
     for candle_index in range(start_index + 1, target_index + 1):
         command_index = candle_index - 1
         for command in commands_by_index.get(command_index, []):
@@ -121,7 +122,6 @@ def rebuild_trading(replay, history, target_index: int) -> PaperTradingEngine:
             _prepare_command_context(engine, replay, command_index)
             _apply_command(engine, command, replay)
 
-        symbol = "BTCUSDT"
         market_step = next(
             (
                 command
@@ -131,8 +131,8 @@ def rebuild_trading(replay, history, target_index: int) -> PaperTradingEngine:
             None,
         )
         if market_step is not None:
-            symbol = market_step["payload"]["symbol"]
-        engine.on_candle(replay.candles[candle_index], candle_index, symbol)
+            current_symbol = market_step["payload"]["symbol"]
+        engine.on_candle(replay.candles[candle_index], candle_index, current_symbol)
 
     for command in commands_by_index.get(target_index, []):
         if command["type"] == "market_step":
