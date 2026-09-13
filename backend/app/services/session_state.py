@@ -74,11 +74,7 @@ def restore_session_bundle(document: Dict[str, Any]):
 
 def restore_session(document: Dict[str, Any]):
     """Rehydrate replay and trading services using the legacy two-value contract."""
-    try:
-        replay, trading, _ = restore_session_bundle(document)
-    except (KeyError, TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(f"invalid session state: {exc}") from exc
-    return replay, trading
+    return restore_session_bundle(document)[:2]
 
 
 def extract_history(document: Dict[str, Any]) -> list[dict]:
