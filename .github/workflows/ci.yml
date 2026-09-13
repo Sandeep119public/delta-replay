@@ -50,6 +50,10 @@ jobs:
       - run: npm run test:ui-contracts
       - run: npm test
       - run: npm run build
+      - name: Validate local Compose configuration
+        run: docker compose -f docker-compose.v2.yml config --quiet
+      - name: Build frontend container
+        run: docker build --file frontend/Dockerfile --tag delta-replay-web:ci .
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
