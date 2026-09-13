@@ -96,27 +96,37 @@ def rebuild_trading(replay, history, target_index: int, default_symbol: str = "B
     history = list(history or [])
     if target_index == -1:
         for command in history:
-            if int(command["replayIndex"]) == -1:
-                _apply_command(engine, command, replay)
+            replay_index = int(command["replayIndex"])
+            if replay_index < -1:
+                raise ReplayDivergenceError("command replayIndex cannot be below -1")
+            if replay_index > -1:
+                break
+            _apply_command(engine, command, replay)
         return engine
 
     commands = []
     last_replay_index = -1
     non_market_commands = False
     explicit_symbols = []
+    market_indexes = set()
     for command in history:
         replay_index = int(command["replayIndex"])
-        if replay_index > target_index:
-            break
         if replay_index < -1:
             raise ReplayDivergenceError("command replayIndex cannot be below -1")
         if replay_index < last_replay_index:
             raise ReplayDivergenceError("command history is not ordered by replay index")
-        commands.append(command)
+        if replay_index > target_index:
+            break
         if command["type"] == "market_step":
+            if replay_index in market_indexes:
+                raise ReplayDivergenceError(
+                    f"multiple market_step events exist for replay index {replay_index}"
+                )
+            market_indexes.add(replay_index)
             explicit_symbols.append(str(command["payload"]["symbol"]).strip().upper())
         else:
             non_market_commands = True
+        commands.append(command)
         last_replay_index = replay_index
 
     start_index = replay.start_index if replay.start_index >= 0 else 0
