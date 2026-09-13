@@ -18,7 +18,7 @@ def _prepare_command_context(engine: PaperTradingEngine, replay, replay_index: i
         }
 
 
-def _apply_command(engine: PaperTradingEngine, command: dict) -> None:
+def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> None:
     kind = command["type"]
     payload = command["payload"]
 
@@ -58,6 +58,13 @@ def _apply_command(engine: PaperTradingEngine, command: dict) -> None:
                 payload["rate"], timestamp=payload.get("timestamp"),
                 symbol=payload.get("symbol"), mark_price=payload.get("markPrice"),
             )
+        elif kind == "market_step":
+            if replay is None:
+                raise ReplayDivergenceError("market_step requires replay data")
+            index = command["replayIndex"]
+            if index < 0 or index >= len(replay.candles):
+                raise ReplayDivergenceError("market_step replay index is outside dataset")
+            engine.on_candle(replay.candles[index], index, payload["symbol"])
         elif kind == "candle":
             engine.on_candle(payload["candle"], payload["index"], payload["symbol"])
         elif kind == "capital":
@@ -85,7 +92,7 @@ def rebuild_trading(replay, history, target_index: int) -> PaperTradingEngine:
         engine = PaperTradingEngine()
         for command in history:
             if command["replayIndex"] == -1:
-                _apply_command(engine, command)
+                _apply_command(engine, command, replay)
         return engine
     if not replay.candles:
         return PaperTradingEngine()
@@ -104,17 +111,32 @@ def rebuild_trading(replay, history, target_index: int) -> PaperTradingEngine:
             commands_by_index.setdefault(replay_index, []).append(command)
 
     for command in commands_by_index.get(-1, []):
-        _apply_command(engine, command)
+        _apply_command(engine, command, replay)
 
     for candle_index in range(start_index + 1, target_index + 1):
         command_index = candle_index - 1
         for command in commands_by_index.get(command_index, []):
+            if command["type"] == "market_step":
+                continue
             _prepare_command_context(engine, replay, command_index)
-            _apply_command(engine, command)
-        candle = replay.candles[candle_index]
-        engine.on_candle(candle, candle_index, "BTCUSDT")
+            _apply_command(engine, command, replay)
+
+        symbol = "BTCUSDT"
+        market_step = next(
+            (
+                command
+                for command in commands_by_index.get(candle_index, [])
+                if command["type"] == "market_step"
+            ),
+            None,
+        )
+        if market_step is not None:
+            symbol = market_step["payload"]["symbol"]
+        engine.on_candle(replay.candles[candle_index], candle_index, symbol)
 
     for command in commands_by_index.get(target_index, []):
+        if command["type"] == "market_step":
+            continue
         _prepare_command_context(engine, replay, target_index)
-        _apply_command(engine, command)
+        _apply_command(engine, command, replay)
     return engine
