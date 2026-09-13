@@ -61,20 +61,17 @@ def _validate_history(history) -> None:
         last_replay_index = replay_index
 
 
-def _validate_market_consistency(replay: ReplayService, trading: PaperTradingEngine, market_state: dict) -> None:
-    if trading.index != replay.index:
-        raise ValueError("replay and trading indices must match")
+def _validate_market_state(trading: PaperTradingEngine, market_state: dict) -> None:
+    if not isinstance(market_state, dict):
+        raise ValueError("trading market state must be an object")
     for symbol, market in market_state.items():
-        index = market["index"]
-        if index < 0:
-            continue
-        if index >= len(replay.candles):
-            raise ValueError(f"market index for {symbol} is outside replay data")
-        persisted = market["candle"]
-        expected = replay.candles[index]
-        for field in ("time", "open", "high", "low", "close"):
-            if persisted.get(field) != expected.get(field):
-                raise ValueError(f"market context for {symbol} does not match replay candle {index}")
+        if not isinstance(symbol, str) or symbol != symbol.strip().upper() or not symbol.strip():
+            raise ValueError("invalid market symbol")
+        if not isinstance(market, dict):
+            raise ValueError("invalid market context")
+        index = market.get("index")
+        if isinstance(index, bool) or not isinstance(index, int) or index < -1 or index > trading.index:
+            raise ValueError(f"market index for {symbol} is outside trading timeline")
 
 
 def serialize_session(
@@ -109,16 +106,13 @@ def restore_session_bundle(document: Dict[str, Any]):
         replay = ReplayService.from_state(document.get("replay"))
         trading = PaperTradingEngine.from_state(document.get("trading"))
         market_state = document.get("tradingMarket", {})
+        _validate_market_state(trading, market_state)
         trading.restore_market_state(market_state)
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"invalid session state: {exc}") from exc
 
     history = [] if version == 1 else deepcopy(document.get("history", []))
     _validate_history(history)
-    try:
-        _validate_market_consistency(replay, trading, market_state)
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError(f"invalid session market state: {exc}") from exc
     return replay, trading, history
 
 
