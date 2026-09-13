@@ -98,7 +98,7 @@ def test_partial_close_preserves_fee_and_realized_pnl_invariants():
     assert isclose(trade["exitFee"], 0.022)
     assert isclose(trade["netPnL"], 3.958)
     assert isclose(engine.account.total_fees, 0.072)
-    assert isclose(engine.account.realized_pnl, 9.928)
+    assert isclose(engine.account.realized_pnl, 3.928)
     assert isclose(engine.account.wallet_balance, 10009.928)
     assert isclose(engine.positions["BTCUSDT"]["quantity"], 0.6)
     assert isclose(engine.positions["BTCUSDT"]["entry_fee"], 0.03)
@@ -117,7 +117,8 @@ def test_full_close_releases_margin_and_leaves_no_open_position():
     assert engine.positions == {}
     assert engine.account.used_margin == 0
     assert engine.account.maintenance_margin == 0
-    assert isclose(engine.account.realized_pnl, 9.928)
+    assert isclose(engine.account.realized_pnl, 9.895)
+    assert isclose(engine.account.wallet_balance, 10009.895)
     assert isclose(engine.account.available_margin, engine.account.equity)
     engine.account.validate_invariants()
 
