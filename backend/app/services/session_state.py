@@ -91,6 +91,17 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
         if index >= len(replay.candles):
             raise ValueError(f"market index for {symbol} is outside replay dataset")
 
+    missing_position_markets = sorted(set(trading.positions) - set(market_state))
+    if missing_position_markets:
+        raise ValueError(
+            "open positions require market context: " + ", ".join(missing_position_markets)
+        )
+    for symbol, position in trading.positions.items():
+        market_index = market_state[symbol]["index"]
+        opened_index = position["opened_index"]
+        if market_index < opened_index:
+            raise ValueError(f"market context for {symbol} predates its open position")
+
 
 def serialize_session(
     replay: ReplayService,
