@@ -73,7 +73,7 @@ class PaperTradingEngine:
         return self._positive_finite(price, "price") * self._positive_finite(quantity, "quantity") * self.fee_rate
 
     def pending_orders(self):
-        return [order for order in self.orders.values() if order["status"] == "PENDING"]
+        return [self.orders[order_id] for order_id in sorted(self.orders) if self.orders[order_id]["status"] == "PENDING"]
 
     def has_open_position(self, symbol=None):
         if symbol is None:
@@ -186,6 +186,8 @@ class PaperTradingEngine:
 
     def submit(self, symbol, side, quantity, type="market", limit_price=None, stop_price=None, created_index=None):
         symbol = str(symbol).strip().upper()
+        if not symbol:
+            raise ValueError("symbol must be provided")
         if side not in ("buy", "sell"):
             raise ValueError("side must be buy or sell")
         if type not in ("market", "limit", "stop_market"):
@@ -308,20 +310,25 @@ class PaperTradingEngine:
 
     def on_candle(self, candle, index=None, symbol="BTCUSDT"):
         symbol = str(symbol).strip().upper()
+        if not symbol:
+            raise ValueError("symbol must be provided")
         if not isinstance(candle, dict):
             raise ValueError("candle must be an object")
         for key in ("open", "high", "low", "close"):
             self._positive_finite(candle.get(key), f"candle {key}")
-        if index is not None:
+        if index is None:
+            index = self.index + 1
+        else:
             index = self._integer(index, "candle index")
-            if index < 0:
-                raise ValueError("candle index must be non-negative")
-            if index < self.index:
-                raise ValueError("candle index cannot move backward")
-        self.index = self.index + 1 if index is None else index
+        if index < 0:
+            raise ValueError("candle index must be non-negative")
+        if index != self.index + 1:
+            raise ValueError("candle index must advance exactly one position")
+        self.index = index
         self.set_market_context(symbol, candle, self.index)
         events = []
-        for order in list(self.orders.values()):
+        for order_id in sorted(self.orders):
+            order = self.orders[order_id]
             if order["status"] != "PENDING" or order["symbol"] != symbol:
                 continue
             price = fill_price(order, candle, candle_index=self.index)
@@ -432,8 +439,8 @@ class PaperTradingEngine:
     def snapshot(self):
         return {
             "account": self.account.snapshot(),
-            "positions": deepcopy(self.positions),
-            "orders": deepcopy(self.orders),
+            "positions": deepcopy(dict(sorted(self.positions.items()))),
+            "orders": deepcopy(dict(sorted(self.orders.items()))),
             "trades": deepcopy(self.trades),
             "funding": deepcopy(self.funding),
             "index": self.index,
@@ -471,6 +478,9 @@ class PaperTradingEngine:
                 raise ValueError("invalid order state")
             if order.get("side") not in ("buy", "sell") or order.get("type") not in ("market", "limit", "stop_market"):
                 raise ValueError("invalid order contract")
+            order_symbol = order.get("symbol")
+            if not isinstance(order_symbol, str) or not order_symbol.strip() or order_symbol != order_symbol.strip().upper():
+                raise ValueError("invalid order symbol")
             self._positive_finite(order.get("quantity"), "order quantity")
             created_index = self._integer(order.get("createdIndex"), "order createdIndex")
             if created_index < -1 or created_index > self.index:
@@ -503,7 +513,7 @@ class PaperTradingEngine:
         if ids and self._next_order <= max(ids):
             raise ValueError("next order id must exceed existing order ids")
         for symbol, position in self.positions.items():
-            if not isinstance(symbol, str) or not symbol.strip() or not isinstance(position, dict) or position.get("symbol") != symbol:
+            if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper() or not isinstance(position, dict) or position.get("symbol") != symbol:
                 raise ValueError("invalid position state")
             if position.get("side") not in ("long", "short"):
                 raise ValueError("position side is invalid")
