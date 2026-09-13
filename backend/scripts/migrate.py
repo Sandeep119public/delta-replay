@@ -21,10 +21,16 @@ def main() -> None:
         raise SystemExit("No migration files found")
 
     with psycopg.connect(dsn) as connection:
-        connection.execute(MIGRATIONS[0].read_text(encoding="utf-8"))
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS schema_migrations (
+                   version TEXT PRIMARY KEY,
+                   checksum TEXT NOT NULL,
+                   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+               )"""
+        )
         connection.commit()
 
-        for migration in MIGRATIONS[1:]:
+        for migration in MIGRATIONS:
             version = migration.stem
             sql = migration.read_text(encoding="utf-8")
             checksum = _checksum(sql)
