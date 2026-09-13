@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, model_validator
 
+from ..domain.errors import StateInvariantError
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
 from ..services.session_manager import atomic_session, get_session
@@ -37,7 +38,6 @@ class EngineOrder(BaseModel):
 
 class RiskRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     symbol: str = Field(min_length=1, max_length=32)
     stopLoss: float | None = Field(default=None, gt=0)
     takeProfit: float | None = Field(default=None, gt=0)
@@ -45,14 +45,12 @@ class RiskRequest(BaseModel):
 
 class CloseRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     symbol: str = Field(min_length=1, max_length=32)
     quantity: float | None = Field(default=None, gt=0)
 
 
 class MarketCandleRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     symbol: str = Field(default="BTCUSDT", min_length=1, max_length=32)
     candle: Candle | None = None
     index: StrictInt | None = None
@@ -60,13 +58,11 @@ class MarketCandleRequest(BaseModel):
 
 class CapitalRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     balance: float = Field(gt=0)
 
 
 class FeeRateRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-
     rate: float = Field(ge=0, lt=1)
 
 
@@ -88,21 +84,37 @@ def normalize_candle(raw: dict):
         raise HTTPException(422, f"invalid candle: {exc.errors()[0]['msg']}") from exc
 
 
+def _internal_http_error(exc: StateInvariantError) -> HTTPException:
+    return HTTPException(
+        status_code=500,
+        detail={"code": "STATE_INVARIANT_VIOLATION", "message": "Trading state integrity failure"},
+    )
+
+
 @router.get("/state")
 def state(request: Request):
-    return snapshot(get_session(request).trading)
+    try:
+        return snapshot(get_session(request).trading)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.get("/orders")
 def orders(request: Request):
-    service = get_session(request).trading
-    snapshot_value = service.snapshot()
-    return {"orders": snapshot_value["orders"], "pendingOrders": snapshot_value["pendingOrders"]}
+    try:
+        service = get_session(request).trading
+        snapshot_value = service.snapshot()
+        return {"orders": snapshot_value["orders"], "pendingOrders": snapshot_value["pendingOrders"]}
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.get("/trades")
 def trades(request: Request):
-    return {"trades": get_session(request).trading.snapshot()["trades"]}
+    try:
+        return {"trades": get_session(request).trading.snapshot()["trades"]}
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
 
 
 @router.post("/order")
@@ -114,6 +126,8 @@ def order(request: Request, command: EngineOrder):
 
     try:
         return atomic_session(request, submit)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -132,6 +146,8 @@ def close(request: Request, command: CloseRequest):
 
     try:
         return atomic_session(request, close_position)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -149,6 +165,8 @@ def cancel_all(request: Request, reason: str | None = None):
 
     try:
         return atomic_session(request, cancel_pending)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -157,6 +175,8 @@ def cancel_all(request: Request, reason: str | None = None):
 def cancel(request: Request, order_id: int):
     try:
         return atomic_session(request, lambda session: {"order": session.trading.cancel(order_id), **snapshot(session.trading)})
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -165,6 +185,8 @@ def cancel(request: Request, order_id: int):
 def risk(request: Request, command: RiskRequest):
     try:
         return atomic_session(request, lambda session: {"position": session.trading.set_risk(command.symbol, command.stopLoss, command.takeProfit), **snapshot(session.trading)})
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc))
 
@@ -182,6 +204,8 @@ def clear_risk(request: Request, symbol: str, target: Literal["all", "stopLoss",
 
     try:
         return atomic_session(request, clear)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc))
 
@@ -197,13 +221,20 @@ def process(request: Request, command: MarketCandleRequest | None = None):
         events = session.trading.on_candle(candle, index, command.symbol)
         return {"events": events, "candle": candle, **snapshot(session.trading)}
 
-    return atomic_session(request, process_candle)
+    try:
+        return atomic_session(request, process_candle)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
 
 
 @router.post("/account/capital")
 def set_capital(request: Request, command: CapitalRequest):
     try:
         return atomic_session(request, lambda session: snapshot(session.trading.set_starting_balance(command.balance)))
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -212,6 +243,8 @@ def set_capital(request: Request, command: CapitalRequest):
 def set_fee_rate(request: Request, command: FeeRateRequest):
     try:
         return atomic_session(request, lambda session: snapshot(session.trading.set_fee_rate(command.rate)))
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 
@@ -226,4 +259,7 @@ def reset(request: Request):
         session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate, margin_rate=margin_rate, maint_margin_rate=maint_margin_rate)
         return snapshot(session.trading)
 
-    return atomic_session(request, reset_engine)
+    try:
+        return atomic_session(request, reset_engine)
+    except StateInvariantError as exc:
+        raise _internal_http_error(exc) from exc
