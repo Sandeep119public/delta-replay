@@ -1,10 +1,31 @@
 services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: delta_replay
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d delta_replay"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - delta-replay-postgres:/var/lib/postgresql/data
+
   api:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/delta_replay
+      CORS_ORIGINS: http://localhost:4173,http://localhost:5173
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   web:
     build:
       context: .
@@ -15,3 +36,6 @@ services:
       - "4173:4173"
     depends_on:
       - api
+
+volumes:
+  delta-replay-postgres:
