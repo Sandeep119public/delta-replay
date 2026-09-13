@@ -88,6 +88,8 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
         if isinstance(index, bool) or not isinstance(index, int) or index < -1 or index > trading.index:
             raise ValueError(f"market index for {symbol} is outside trading timeline")
         if index < 0:
+            if "candle" in market and market["candle"] is not None:
+                raise ValueError(f"market candle for {symbol} is invalid before the trading timeline")
             continue
         candle = market.get("candle")
         if not isinstance(candle, dict):
