@@ -100,6 +100,8 @@ def test_replay_seek_reconstructs_trading_state_after_activity():
         "candles": [
             {"time": 1, "open": 100, "high": 101, "low": 99, "close": 100},
             {"time": 2, "open": 101, "high": 102, "low": 100, "close": 101},
+            {"time": 3, "open": 102, "high": 103, "low": 101, "close": 102},
+            {"time": 4, "open": 103, "high": 104, "low": 102, "close": 103},
         ]
     }
     assert client.post("/api/v1/replay/load", headers=session, json=payload).status_code == 200
@@ -120,8 +122,8 @@ def test_replay_seek_reconstructs_trading_state_after_activity():
     rebuilt = seek.json()
     assert rebuilt["index"] == 0
     assert rebuilt["trading"]["positions"] == []
-    assert len(rebuilt["trading"]["pendingOrders"]) == 1
+    assert rebuilt["trading"]["pendingOrders"] == []
 
     replayed = client.post("/api/v1/replay/step", headers=session)
     assert replayed.status_code == 200
-    assert len(replayed.json()["trading"]["positions"]) == 1
+    assert replayed.json()["trading"]["positions"] == []

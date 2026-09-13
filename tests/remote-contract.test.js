@@ -3,12 +3,40 @@ import { RemoteReplayEngine } from '../src/app/RemoteReplayEngine.js';
 import { RemoteTradingEngine } from '../src/app/RemoteTradingEngine.js';
 import { createTradingPresentation } from '../src/app/TradingPresentationAdapter.js';
 
-const candle = { time: 1, open: 100, high: 101, low: 99, close: 100, volume: 1 };
-function api(responses = {}) { return { request: vi.fn(async (path) => responses[path] ?? { status: 'paused', index: 0, startIndex: 0, total: 1, speed: 1, candle, visibleCandles: [candle] }) }; }
+const candle = {
+  time: 1,
+  open: 100,
+  high: 101,
+  low: 99,
+  close: 100,
+  volume: 1,
+};
+
+function api(responses = {}) {
+  return {
+    request: vi.fn(async (path) => {
+      const route = path.split('?')[0];
+      if (Object.prototype.hasOwnProperty.call(responses, path)) return responses[path];
+      if (Object.prototype.hasOwnProperty.call(responses, route)) return responses[route];
+      return {
+        status: 'paused',
+        index: 0,
+        startIndex: 0,
+        total: 1,
+        speed: 1,
+        candle,
+        visibleCandles: [candle],
+      };
+    }),
+  };
+}
 
 describe('remote contracts', () => {
   it('normalizes replay state names and lifecycle', async () => {
-    const client = api({ '/load': { status: 'ready', index: -1, startIndex: -1, total: 1, speed: 1, visibleCandles: [] }, '/start/0': { status: 'paused', index: 0, startIndex: 0, total: 1, speed: 1, candle, visibleCandles: [candle] } });
+    const client = api({
+      '/load': { status: 'ready', index: -1, startIndex: -1, total: 1, speed: 1, visibleCandles: [] },
+      '/start/0': { status: 'paused', index: 0, startIndex: 0, total: 1, speed: 1, candle, visibleCandles: [candle] },
+    });
     const engine = new RemoteReplayEngine(client);
     await engine.load([candle]);
     expect(engine.getState().totalCandles).toBe(1);
@@ -16,7 +44,8 @@ describe('remote contracts', () => {
     await engine.start(0);
     expect(engine.getState().currentIndex).toBe(0);
   });
-  it('rejects fractional remote replay indices before making requests', async () => {
+
+  it('rejects fractional replay indices before making requests', async () => {
     const client = api({ '/load': { status: 'ready', index: -1, startIndex: -1, total: 1, speed: 1, visibleCandles: [] } });
     const engine = new RemoteReplayEngine(client);
     await engine.load([candle]);
@@ -25,47 +54,65 @@ describe('remote contracts', () => {
     expect(client.request).not.toHaveBeenCalledWith('/start/0.5', expect.anything());
     expect(client.request).not.toHaveBeenCalledWith('/seek/0.5', expect.anything());
   });
+
   it('returns defensive replay snapshots', async () => {
-    const client = api({ '/load': { status: 'ready', index: -1, startIndex: -1, total: 1, speed: 1, visibleCandles: [] }, '/start/0': { status: 'paused', index: 0, startIndex: 0, total: 1, speed: 1, candle, visibleCandles: [candle] } });
+    const client = api({
+      '/load': { status: 'ready', index: -1, startIndex: -1, total: 1, speed: 1, visibleCandles: [] },
+      '/start/0': { status: 'paused', index: 0, startIndex: 0, total: 1, speed: 1, candle, visibleCandles: [candle] },
+    });
     const engine = new RemoteReplayEngine(client);
     await engine.load([candle]);
     await engine.start(0);
-    const snapshot = engine.getState();
-    snapshot.candle.close = 999;
-    snapshot.visibleCandles[0].open = 999;
+    const state = engine.getState();
+    state.candle.close = 999;
+    state.visibleCandles[0].open = 999;
     expect(engine.getState().candle.close).toBe(100);
     expect(engine.getVisibleCandles()[0].open).toBe(100);
   });
+
   it('ignores stale step responses after a newer replay operation', async () => {
     let resolveStep;
-    const step = new Promise((resolve) => { resolveStep = resolve; });
-    const client = api({ '/load': { status: 'ready', index: -1, startIndex: -1, total: 3, speed: 1, visibleCandles: [] }, '/start/0': { status: 'paused', index: 0, startIndex: 0, total: 3, speed: 1, candle, visibleCandles: [candle] }, '/step': step, '/seek/2': { status: 'paused', index: 2, startIndex: 0, total: 3, speed: 1, candle: { ...candle, time: 3 }, visibleCandles: [candle] } });
+    const pendingStep = new Promise((resolve) => { resolveStep = resolve; });
+    const client = api({
+      '/load': { status: 'ready', index: -1, startIndex: -1, total: 3, speed: 1, visibleCandles: [] },
+      '/start/0': { status: 'paused', index: 0, startIndex: 0, total: 3, speed: 1, candle, visibleCandles: [candle] },
+      '/step': pendingStep,
+      '/seek/2': { status: 'paused', index: 2, startIndex: 0, total: 3, speed: 1, candle: { ...candle, time: 3 }, visibleCandles: [candle] },
+    });
     const engine = new RemoteReplayEngine(client);
     await engine.load([candle, candle, candle]);
     await engine.start(0);
-    const pendingStep = engine.stepForward();
+    const step = engine.stepForward();
     await engine.seek(2);
     resolveStep({ status: 'paused', index: 1, startIndex: 0, total: 3, speed: 1, candle: { ...candle, time: 2 }, visibleCandles: [candle] });
-    await pendingStep;
+    await step;
     expect(engine.getState().currentIndex).toBe(2);
   });
+
   it('ignores stale concurrent start responses', async () => {
     let resolveOld;
     let resolveNew;
     const old = new Promise((resolve) => { resolveOld = resolve; });
     const newer = new Promise((resolve) => { resolveNew = resolve; });
     let requestCount = 0;
-    const client = { request: vi.fn((path) => path === '/load' ? { status: 'ready', index: -1, startIndex: -1, total: 3, speed: 1, visibleCandles: [] } : (++requestCount === 1 ? old : newer)) };
+    const client = {
+      request: vi.fn((path) => {
+        if (path === '/load') return { status: 'ready', index: -1, startIndex: -1, total: 3, speed: 1, visibleCandles: [] };
+        requestCount += 1;
+        return requestCount === 1 ? old : newer;
+      }),
+    };
     const engine = new RemoteReplayEngine(client);
     await engine.load([candle, candle, candle]);
     const first = engine.start(0);
     const second = engine.start(2);
-    resolveNew({ status: 'paused', index: 2, startIndex: 2, total: 3, speed: 1, candle: { ...candle, time: 3 }, visibleCandles: [] });
+    resolveNew({ status: 'paused', index: 2, startIndex: 2, total: 3, speed: 1, candle, visibleCandles: [] });
     await second;
     resolveOld({ status: 'paused', index: 0, startIndex: 0, total: 3, speed: 1, candle, visibleCandles: [] });
     await first;
     expect(engine.getState().currentIndex).toBe(2);
   });
+
   it('does not apply remote responses after destroy', async () => {
     let resolveLoad;
     const pending = new Promise((resolve) => { resolveLoad = resolve; });
@@ -78,6 +125,7 @@ describe('remote contracts', () => {
     expect(engine.getState().status).toBe('idle');
     expect(engine.getState().totalCandles).toBe(0);
   });
+
   it('does not publish stale trading state after destroy', async () => {
     let resolveState;
     const pending = new Promise((resolve) => { resolveState = resolve; });
@@ -91,7 +139,8 @@ describe('remote contracts', () => {
     expect(engine.getAccountSnapshot().equity).toBe(0);
     expect(updates).not.toHaveBeenCalled();
   });
-  it('ignores an older trading response when a newer request has completed', async () => {
+
+  it('keeps newer successful trading state over a late older response', async () => {
     let resolveOld;
     let resolveNew;
     const old = new Promise((resolve) => { resolveOld = resolve; });
@@ -107,13 +156,20 @@ describe('remote contracts', () => {
     await initialRefresh;
     expect(engine.getAccountSnapshot().equity).toBe(12000);
   });
+
   it('returns canonical state when an older action response arrives late', async () => {
     let resolveOld;
     let resolveNew;
     const old = new Promise((resolve) => { resolveOld = resolve; });
     const newer = new Promise((resolve) => { resolveNew = resolve; });
     let requestCount = 0;
-    const client = { request: vi.fn((path) => path === '/state' ? { account: { startingBalance: 10000, equity: 10000 }, positions: [], orders: [], trades: [] } : (++requestCount === 1 ? old : newer)) };
+    const client = {
+      request: vi.fn((path) => {
+        if (path === '/state') return { account: { startingBalance: 10000, equity: 10000 }, positions: [], orders: [], trades: [] };
+        requestCount += 1;
+        return requestCount === 1 ? old : newer;
+      }),
+    };
     const engine = new RemoteTradingEngine(client);
     await engine._refreshPromise;
     const first = engine.setStartingBalance(9000);
@@ -126,18 +182,27 @@ describe('remote contracts', () => {
     expect(stale.account.equity).toBe(12000);
     expect(engine.getAccountSnapshot().equity).toBe(12000);
   });
+
   it('returns defensive trading snapshots', async () => {
-    const client = api({ '/state': { account: { equity: 100 }, positions: [{ symbol: 'BTCUSDT', quantity: 1 }], orders: [{ id: 1, status: 'PENDING' }], trades: [] } });
+    const client = api({
+      '/state': {
+        account: { equity: 100 },
+        positions: [{ symbol: 'BTCUSDT', quantity: 1 }],
+        orders: [{ id: 1, status: 'PENDING' }],
+        trades: [],
+      },
+    });
     const engine = new RemoteTradingEngine(client);
     await engine._refreshPromise;
-    const snapshot = engine.getStateSnapshot();
-    snapshot.account.equity = 999;
-    snapshot.positions[0].quantity = 999;
-    snapshot.orders[0].status = 'FILLED';
+    const state = engine.getStateSnapshot();
+    state.account.equity = 999;
+    state.positions[0].quantity = 999;
+    state.orders[0].status = 'FILLED';
     expect(engine.getAccountSnapshot().equity).toBe(100);
     expect(engine.getPositions()[0].quantity).toBe(1);
     expect(engine.getOrders()[0].status).toBe('PENDING');
   });
+
   it('maps trading actions to canonical API payloads', async () => {
     const client = api({ '/order': { account: {}, positions: [], orders: [], trades: [] } });
     const engine = new RemoteTradingEngine(client);
@@ -145,8 +210,31 @@ describe('remote contracts', () => {
     expect(result.success).toBe(true);
     expect(client.request).toHaveBeenCalledWith('/order', expect.objectContaining({ method: 'POST', body: expect.stringContaining('BTCUSDT') }));
   });
+
   it('exposes the narrow presentation contract', () => {
-    const engine = { getAccountSnapshot: () => ({ equity: 100 }), getPositions: () => [], getPendingOrders: () => [], getOrders: () => [], getTrades: () => [], getPerformanceStats: () => ({ totalTrades: 0, winRate: 0, profitFactor: 0, netReturn: 0 }), getLatestCandle: () => candle, hasOpenPosition: () => false, on: () => () => {}, submitMarketOrder: vi.fn(), placeLimitOrder: vi.fn(), placeStopOrder: vi.fn(), flattenPosition: vi.fn(), updateRisk: vi.fn(), setStopLoss: vi.fn(), setTakeProfit: vi.fn(), clearRisk: vi.fn(), cancelOrder: vi.fn(), resetAccount: vi.fn(), setStartingBalance: vi.fn(), setFeeRate: vi.fn() };
+    const engine = {
+      getAccountSnapshot: () => ({ equity: 100 }),
+      getPositions: () => [],
+      getPendingOrders: () => [],
+      getOrders: () => [],
+      getTrades: () => [],
+      getPerformanceStats: () => ({ totalTrades: 0, winRate: 0, profitFactor: 0, netReturn: 0 }),
+      getLatestCandle: () => candle,
+      hasOpenPosition: () => false,
+      on: () => () => {},
+      submitMarketOrder: vi.fn(),
+      placeLimitOrder: vi.fn(),
+      placeStopOrder: vi.fn(),
+      flattenPosition: vi.fn(),
+      updateRisk: vi.fn(),
+      setStopLoss: vi.fn(),
+      setTakeProfit: vi.fn(),
+      clearRisk: vi.fn(),
+      cancelOrder: vi.fn(),
+      resetAccount: vi.fn(),
+      setStartingBalance: vi.fn(),
+      setFeeRate: vi.fn(),
+    };
     const trading = createTradingPresentation(engine);
     expect(Object.isFrozen(trading.actions)).toBe(true);
     expect(trading.snapshot().hasMarket).toBe(true);

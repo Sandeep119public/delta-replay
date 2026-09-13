@@ -8,15 +8,22 @@ from ..services.session_manager import atomic_session, get_session
 router = APIRouter()
 
 
-def replay_snapshot(session):
-    return {**session.replay.state(), "trading": session.trading.snapshot()}
+def trading_api_snapshot(engine):
+    state = engine.snapshot()
+    orders = list(state["orders"].values())
+    return {
+        **state,
+        "positions": list(state["positions"].values()),
+        "orders": orders,
+        "pendingOrders": [order for order in orders if order["status"] == "PENDING"],
+    }
 
 
 def require_pristine_trading(session, action):
     trading = session.trading
     if trading.has_open_position() or trading.pending_orders():
         raise HTTPException(409, f"Close positions and cancel pending orders before {action}")
-    if trading.trades or trading.orders or trading.index >= 0:
+    if trading.trades or trading.orders or trading.funding or trading.index >= 0:
         raise HTTPException(409, f"Reset the simulation before {action} after trading activity")
 
 
@@ -30,19 +37,7 @@ def load(request: Request, batch: CandleBatch):
     candles = [c.model_dump() for c in batch.candles]
 
     def replace(session):
-        if session.trading.has_open_position() or session.trading.pending_orders():
-            raise HTTPException(409, "Close positions and cancel pending orders before loading new data")
-        balance = session.trading.account.starting_balance
-        fee_rate = session.trading.fee_rate
-        margin_rate = session.trading.margin_rate
-        maint_margin_rate = session.trading.maint_margin_rate
-        session.trading = PaperTradingEngine(
-            starting_balance=balance,
-            fee_rate=fee_rate,
-            margin_rate=margin_rate,
-            maint_margin_rate=maint_margin_rate,
-        )
-        session.history = []
+        require_pristine_trading(session, "loading new data")
         session.replay.load(candles)
         return replay_snapshot(session)
 
@@ -50,10 +45,19 @@ def load(request: Request, batch: CandleBatch):
 
 
 @router.post("/start/{index}")
-def start(request: Request, index: int):
+def start(request: Request, index: int, symbol: str = "BTCUSDT"):
+    symbol = str(symbol).strip().upper()
+    if not symbol:
+        raise HTTPException(422, "symbol must be provided")
+
     def position(session):
         require_pristine_trading(session, "starting replay")
-        return session.replay.start(index)
+        result = session.replay.start(index)
+        if result["index"] < 0:
+            return replay_snapshot(session)
+        session.trading.on_candle(result["candle"], result["index"], symbol)
+        session.record("market_step", result["index"], {"symbol": symbol})
+        return replay_snapshot(session)
 
     try:
         return atomic_session(request, position)
@@ -71,12 +75,12 @@ def step(request: Request, symbol: str = "BTCUSDT"):
         previous_index = session.replay.index
         result = session.replay.step()
         if result["index"] == previous_index or result["index"] < 0:
-            return {**result, "events": [], "trading": session.trading.snapshot()}
+            return {**result, "events": [], "trading": trading_api_snapshot(session.trading)}
 
         candle = result["candle"]
         events = session.trading.on_candle(candle, result["index"], symbol)
         session.record("market_step", result["index"], {"symbol": symbol})
-        return {**result, "events": events, "trading": session.trading.snapshot()}
+        return {**result, "events": events, "trading": trading_api_snapshot(session.trading)}
 
     try:
         return atomic_session(request, advance)
@@ -85,15 +89,16 @@ def step(request: Request, symbol: str = "BTCUSDT"):
 
 
 @router.post("/seek/{index}")
-def seek(request: Request, index: int):
+def seek(request: Request, index: int, symbol: str = "BTCUSDT"):
+    symbol = str(symbol).strip().upper()
+    if not symbol:
+        raise HTTPException(422, "symbol must be provided")
+
     def reposition(session):
         result = session.replay.seek(index)
-        filtered_history = [
-            item for item in session.history
-            if item.get("replayIndex", -1) <= result["index"]
-        ]
+        filtered_history = [item for item in session.history if item.get("replayIndex", -1) <= result["index"]]
         try:
-            session.trading = rebuild_trading(session.replay, filtered_history, result["index"])
+            session.trading = rebuild_trading(session.replay, filtered_history, result["index"], default_symbol=symbol)
         except ReplayDivergenceError as exc:
             raise HTTPException(409, f"Unable to deterministically replay this position: {exc}") from exc
         session.history = filtered_history
@@ -121,6 +126,10 @@ def reset(request: Request):
         )
         session.history = []
         replay = session.replay.reset()
-        return {**replay, "trading": session.trading.snapshot()}
+        return {**replay, "trading": trading_api_snapshot(session.trading)}
 
     return atomic_session(request, reset_session)
+
+
+def replay_snapshot(session):
+    return {**session.replay.state(), "trading": trading_api_snapshot(session.trading)}

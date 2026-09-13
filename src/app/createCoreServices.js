@@ -35,12 +35,7 @@ function getSessionId() {
 
 export class SessionRequestQueue {
   constructor() { this.tail = Promise.resolve(); }
-
-  enqueue(task) {
-    const next = this.tail.then(task, task);
-    this.tail = next.catch(() => undefined);
-    return next;
-  }
+  enqueue(task) { const next = this.tail.then(task, task); this.tail = next.catch(() => undefined); return next; }
 }
 
 class BackendService {
@@ -49,7 +44,6 @@ class BackendService {
     this.sessionId = sessionId;
     this.requestQueue = requestQueue;
   }
-
   request(endpoint = '', options = {}) {
     return this.requestQueue.enqueue(async () => {
       const controller = options.signal ? null : new AbortController();
@@ -58,20 +52,13 @@ class BackendService {
         const response = await fetch(`${API_BASE}/api/v1/${this.path}${endpoint}`, {
           ...options,
           ...(controller ? { signal: controller.signal } : {}),
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Session-ID': this.sessionId,
-            ...(options.headers || {}),
-          },
+          headers: { 'Content-Type': 'application/json', 'X-Session-ID': this.sessionId, ...(options.headers || {}) },
         });
-
         let body = null;
-        if (response.status !== 204) {
-          try { body = await response.json(); } catch { body = null; }
-        }
+        if (response.status !== 204) { try { body = await response.json(); } catch { body = null; } }
         if (!response.ok) {
           const message = body?.detail || body?.message || `${this.path} API failed: ${response.status}`;
-          const error = new Error(message);
+          const error = new Error(typeof message === 'string' ? message : JSON.stringify(message));
           error.status = response.status;
           error.code = `HTTP_${response.status}`;
           error.details = body;
@@ -85,9 +72,7 @@ class BackendService {
           throw timeoutError;
         }
         throw error;
-      } finally {
-        if (timeout) clearTimeout(timeout);
-      }
+      } finally { if (timeout) clearTimeout(timeout); }
     });
   }
 }
@@ -98,30 +83,12 @@ export function createCoreServices() {
   const candleStore = new CandleStore();
   appState.setCandleStore(candleStore);
   const candleCache = new CandleCache({ dbName: 'delta-replay-futures-v2' });
-  const dataManager = new HistoricalDataManager({
-    provider: new BinanceCandleProvider(),
-    store: candleStore,
-    cache: candleCache,
-    concurrency: 2,
-    chunkSize: 1000,
-    strictMode: true,
-  });
+  const dataManager = new HistoricalDataManager({ provider: new BinanceCandleProvider(), store: candleStore, cache: candleCache, concurrency: 2, chunkSize: 1000, strictMode: true });
   const requestQueue = new SessionRequestQueue();
   const replayApi = new BackendService('replay', sessionId, requestQueue);
   const tradingApi = new BackendService('trading', sessionId, requestQueue);
   const backtestApi = new BackendService('backtest', sessionId, requestQueue);
   const tradingEngine = new RemoteTradingEngine(tradingApi);
-  const engine = new RemoteReplayEngine(replayApi, tradingEngine);
-  return {
-    tradingEngine,
-    engine,
-    appState,
-    candleStore,
-    candleCache,
-    dataManager,
-    replayApi,
-    tradingApi,
-    backtestApi,
-    sessionId,
-  };
+  const engine = new RemoteReplayEngine(replayApi, tradingEngine, () => appState.symbol);
+  return { tradingEngine, engine, appState, candleStore, candleCache, dataManager, replayApi, tradingApi, backtestApi, sessionId };
 }
