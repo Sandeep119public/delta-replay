@@ -18,10 +18,12 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
       - run: |
+          node --version
+          npm --version
           rm -f package-lock.json
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund --legacy-peer-deps
       - name: Commit regenerated lockfile
         run: |
           git config user.name 'github-actions[bot]'
