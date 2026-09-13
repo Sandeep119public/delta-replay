@@ -55,7 +55,8 @@ describe('Deployment configuration', () => {
     expect(compose).toMatch(/8000:8000/);
     expect(compose).toMatch(/4173:4173/);
     expect(compose).toMatch(/DATABASE_URL:\s*postgresql:\/\/postgres:postgres@postgres:5432\/delta_replay/);
-    expect(compose).toMatch(/condition:\s*service_healthy/);
+    expect(compose).toMatch(/postgres:\s*\n\s*condition:\s*service_healthy/);
+    expect(compose).toMatch(/web:\s*\n[\s\S]*depends_on:\s*\n\s*api:\s*\n\s*condition:\s*service_healthy/);
     expect(compose).toMatch(/delta-replay-postgres/);
   });
 });
