@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..models import Candle
+from ..models import MAX_CANDLES, Candle
 from ..services.backtest_service import BacktestService, TAKER_FEE_RATE
 
 router = APIRouter()
@@ -11,7 +11,7 @@ service = BacktestService()
 class BacktestRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
-    candles: list[Candle] = Field(min_length=1)
+    candles: list[Candle] = Field(min_length=1, max_length=MAX_CANDLES)
     strategy: str = "buy_and_hold"
     quantity: float = Field(default=1, gt=0)
     feeRate: float = Field(default=TAKER_FEE_RATE, ge=0, lt=1)
