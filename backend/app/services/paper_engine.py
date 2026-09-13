@@ -135,7 +135,7 @@ class PaperTradingEngine:
         if not isinstance(normalized_candle, dict):
             raise ValueError("market candle must be an object")
         for field in ("open", "high", "low", "close"):
-            self._positive_finite(normalized_candle.get(field), f"market candle {field}")
+            self._positive_finite(normalized_candle.get(field), f"candle {field}")
         self._market_by_symbol[symbol] = {"candle": normalized_candle, "index": index, "markPrice": None}
         return self
 
@@ -389,6 +389,7 @@ class PaperTradingEngine:
         if not position:
             raise ValueError("no open position")
         position["stop_loss"] = None
+        position["stop_loss_created_index"] = -1
         return deepcopy(position)
 
     def clear_take_profit(self, symbol):
@@ -397,6 +398,7 @@ class PaperTradingEngine:
         if not position:
             raise ValueError("no open position")
         position["take_profit"] = None
+        position["take_profit_created_index"] = -1
         return deepcopy(position)
 
     def clear_risk(self, symbol):
@@ -406,6 +408,8 @@ class PaperTradingEngine:
             raise ValueError("no open position")
         position["stop_loss"] = None
         position["take_profit"] = None
+        position["stop_loss_created_index"] = -1
+        position["take_profit_created_index"] = -1
         return deepcopy(position)
 
     def set_starting_balance(self, starting_balance):
