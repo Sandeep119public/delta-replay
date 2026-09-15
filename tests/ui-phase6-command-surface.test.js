@@ -18,10 +18,13 @@ describe('Phase 6 command surface', () => {
     expect(main).not.toContain("./ui/Navigation");
   });
 
-  it('provides a keyboard accessible command trigger and dialog', () => {
+  it('provides a keyboard accessible modal command dialog', () => {
     expect(commandSurface).toContain('aria-haspopup');
     expect(commandSurface).toContain('aria-expanded');
     expect(commandSurface).toContain('role="dialog"');
+    expect(commandSurface).toContain('aria-modal="true"');
+    expect(commandSurface).toContain('getFocusable()');
+    expect(commandSurface).toContain("event.key === 'Tab'");
     expect(commandSurface).toContain("event.key.toLowerCase() === 'k'");
     expect(commandSurface).toContain("event.key === 'Escape'");
   });
@@ -30,6 +33,13 @@ describe('Phase 6 command surface', () => {
     expect(commandSurface).toContain('focusTradePanel');
     expect(commandSurface).toContain("focusTradePanel('trade-qty')");
     expect(main).toContain('app.mobileDrawer?.focusTradingPanel');
+  });
+
+  it('reports command execution failure instead of silently succeeding', () => {
+    expect(commandSurface).toContain('function clickElement(id)');
+    expect(commandSurface).toContain("return clickElement('header-start-replay-btn')");
+    expect(commandSurface).toContain("return clickElement('btn-step')");
+    expect(commandSurface).toContain("return clickElement('btn-reset')");
   });
 
   it('exposes replay and trading actions without replacing existing bindings', () => {

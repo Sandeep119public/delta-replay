@@ -33,6 +33,13 @@ function focusElement(id) {
   return true;
 }
 
+function clickElement(id) {
+  const element = document.getElementById(id);
+  if (!element) return false;
+  element.click();
+  return true;
+}
+
 function runCommand(label, { focusTradePanel = null } = {}) {
   switch (label) {
     case 'Focus symbol':
@@ -40,21 +47,17 @@ function runCommand(label, { focusTradePanel = null } = {}) {
     case 'Focus replay date':
       return focusElement('replay-date');
     case 'Start replay':
-      document.getElementById('header-start-replay-btn')?.click();
-      return true;
+      return clickElement('header-start-replay-btn');
     case 'Focus timeline':
       return focusElement('timeline-slider');
-    case 'Play / pause':
-      document.getElementById('btn-play')?.classList.contains('hidden')
-        ? document.getElementById('btn-pause')?.click()
-        : document.getElementById('btn-play')?.click();
-      return true;
+    case 'Play / pause': {
+      const id = document.getElementById('btn-play')?.classList.contains('hidden') ? 'btn-pause' : 'btn-play';
+      return clickElement(id);
+    }
     case 'Step forward':
-      document.getElementById('btn-step')?.click();
-      return true;
+      return clickElement('btn-step');
     case 'Reset replay':
-      document.getElementById('btn-reset')?.click();
-      return true;
+      return clickElement('btn-reset');
     case 'Focus quantity':
       return focusElement('trade-qty');
     case 'Focus trade panel':
@@ -109,6 +112,11 @@ export function createCommandSurface({ focusTradePanel = null } = {}) {
     return query
       ? commands.filter(({ label, hint, group }) => `${label} ${hint} ${group}`.toLowerCase().includes(query))
       : commands;
+  }
+
+  function getFocusable() {
+    return [...backdrop.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.closest('[hidden], .hidden'));
   }
 
   function render() {
@@ -172,7 +180,9 @@ export function createCommandSurface({ focusTradePanel = null } = {}) {
     backdrop.classList.add('hidden');
     backdrop.setAttribute('aria-hidden', 'true');
     trigger.setAttribute('aria-expanded', 'false');
-    previousFocus?.focus?.();
+    const focusTarget = previousFocus;
+    previousFocus = null;
+    focusTarget?.focus?.();
   }
 
   function onTrigger() {
@@ -196,6 +206,20 @@ export function createCommandSurface({ focusTradePanel = null } = {}) {
     if (event.key === 'Escape') {
       event.preventDefault();
       closeMenu();
+      return;
+    }
+    if (event.key === 'Tab') {
+      const focusable = getFocusable();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
       return;
     }
 
