@@ -199,17 +199,37 @@
 
 @media (max-width: 640px) {
   :root {
-    --phase1-header: 54px;
+    --phase1-header: 96px;
     --phase1-timeline: 108px;
   }
 
   .topbar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 40px 44px;
+    gap: 4px 8px;
+    padding-block: 4px;
   }
+
+  .topbar-left {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .topbar-right {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .topbar-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+    overflow: visible;
+  }
+
   .logo { font-size: 15px; }
-  .topbar-center { justify-content: flex-end; }
-  .topbar-center .symbol-group,
-  .topbar-center .tf-group { display: none; }
 
   /* Closed mobile state is removed from the layout. The existing drawer is
      the only mobile presentation for the trading desk. */
@@ -227,7 +247,7 @@
     width: 100%;
     max-width: none;
     height: min(78dvh, 680px);
-    max-height: calc(100dvh - 54px);
+    max-height: calc(100dvh - 96px);
     margin: 0;
     border-radius: 18px 18px 0 0;
     border: 1px solid var(--phase1-border);
@@ -244,9 +264,9 @@
 }
 
 @media (max-width: 420px) {
-  :root { --phase1-header: 52px; }
+  :root { --phase1-header: 92px; }
   body.drawer-open .trading-section {
-    max-height: calc(100dvh - 52px);
+    max-height: calc(100dvh - 92px);
   }
 }
 
@@ -255,6 +275,30 @@
     --phase1-header: 50px;
     --phase1-timeline: 84px;
   }
+
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: 1fr;
+    gap: 8px;
+    padding-block: 0;
+  }
+
+  .topbar-left,
+  .topbar-center,
+  .topbar-right {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .topbar-center {
+    width: auto;
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+
+  .topbar-center .symbol-group,
+  .topbar-center .tf-group { display: none; }
+
   body.drawer-open .trading-section {
     height: min(92dvh, 620px);
     max-height: calc(100dvh - 50px);

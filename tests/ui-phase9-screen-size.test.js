@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const css = fs.readFileSync('src/ui/phase9-screen-size-optimization.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
+const shell = fs.readFileSync('src/ui/phase1-chart-shell.css', 'utf8');
 
 describe('Phase 9 screen-size optimization', () => {
   it('loads after the previous responsive layers', () => {
@@ -35,11 +36,20 @@ describe('Phase 9 screen-size optimization', () => {
     expect(css).toMatch(/\.controls-row button,[\s\S]*min-height:\s*var\(--phase9-touch\)/);
   });
 
-  it('keeps the mobile replay setup in one bounded header row', () => {
-    expect(css).toMatch(/@media \(max-width: 640px\)[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto auto/);
-    expect(css).toMatch(/\.topbar-center[\s\S]*max-width:\s*min\(232px, 64vw\)/);
-    expect(css).toMatch(/#header-start-replay-btn[\s\S]*width:\s*var\(--phase9-touch\)/);
-    expect(css).toMatch(/\.topbar-right \.paper-badge,\s*\n\s*\.topbar-right #data-status \{\s*display:\s*none/);
+  it('uses a dedicated two-row portrait mobile header instead of clipping setup controls', () => {
+    expect(shell).toMatch(/@media \(max-width: 640px\)[\s\S]*--phase1-header:\s*96px/);
+    expect(shell).toMatch(/\.topbar\s*\{[\s\S]*grid-template-rows:\s*40px 44px/);
+    expect(shell).toMatch(/\.topbar-center\s*\{[\s\S]*grid-column:\s*1 \/ -1[\s\S]*grid-row:\s*2/);
+    expect(css).toMatch(/\.topbar-center\s*\{[\s\S]*max-width:\s*none[\s\S]*overflow:\s*visible/);
+    expect(css).toMatch(/\.topbar-center \.symbol-group select\s*\{\s*width:\s*68px/);
+    expect(css).toMatch(/\.topbar-center \.tf-group select\s*\{\s*width:\s*56px/);
+    expect(css).toMatch(/\.date-group input\s*\{\s*width:\s*80px/);
+    expect(css).toMatch(/\.date-group input\[type="time"\]\s*\{\s*width:\s*64px/);
+  });
+
+  it('keeps a compact landscape header without inheriting the portrait rows', () => {
+    expect(shell).toMatch(/@media \(orientation: landscape\) and \(max-width: 840px\)[\s\S]*--phase1-header:\s*50px/);
+    expect(shell).toMatch(/@media \(orientation: landscape\) and \(max-width: 840px\)[\s\S]*grid-template-rows:\s*1fr/);
   });
 
   it('does not hide replay secondary transport controls', () => {
