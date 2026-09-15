@@ -50,7 +50,7 @@ class CloseRequest(BaseModel):
 
 class MarketCandleRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-    symbol: str = Field(default="BTCUSDT", min_length=1, max_length=32)
+    symbol: str | None = Field(default=None, min_length=1, max_length=32)
     candle: Candle | None = None
     index: StrictInt | None = None
 
@@ -108,6 +108,29 @@ def _internal_http_error(exc: StateInvariantError) -> HTTPException:
     return HTTPException(
         status_code=500,
         detail={"code": "STATE_INVARIANT_VIOLATION", "message": "Trading state integrity failure"},
+    )
+
+
+def _active_symbol(session, requested_symbol):
+    if requested_symbol is not None:
+        symbol = str(requested_symbol).strip().upper()
+        if not symbol:
+            raise HTTPException(422, "symbol must be provided")
+        return symbol
+    for command in reversed(session.history):
+        if command.get("type") not in {"market_step", "candle"}:
+            continue
+        symbol = command.get("payload", {}).get("symbol")
+        if isinstance(symbol, str) and symbol.strip():
+            return symbol.strip().upper()
+    raise HTTPException(409, "Start the replay before processing a market candle")
+
+
+def _has_market_event(session, replay_index):
+    return any(
+        command.get("replayIndex") == replay_index
+        and command.get("type") in {"market_step", "candle"}
+        for command in session.history
     )
 
 
@@ -281,13 +304,16 @@ def process(request: Request, command: MarketCandleRequest | None = None):
         replay_index = session.replay.state()["index"]
         if replay_index < 0:
             raise HTTPException(409, "Load data and start replay before processing a market candle")
+        symbol = _active_symbol(session, command.symbol)
         if command.index is not None and command.index != replay_index:
             raise HTTPException(409, "candle index must match replay index for deterministic history")
-        raw = command.candle.model_dump() if command.candle is not None else replay_candle(session, command.symbol)
+        if _has_market_event(session, replay_index):
+            raise HTTPException(409, "a market event already exists at the current replay index")
+        raw = command.candle.model_dump() if command.candle is not None else replay_candle(session, symbol)
         candle = normalize_candle(raw)
         index = replay_index
-        events = session.trading.on_candle(candle, index, command.symbol)
-        session.record("candle", replay_index, {"candle": candle, "index": index, "symbol": command.symbol})
+        events = session.trading.on_candle(candle, index, symbol)
+        session.record("candle", replay_index, {"candle": candle, "index": index, "symbol": symbol})
         return {"events": events, "candle": candle, **snapshot(session.trading)}
     try:
         return atomic_session(request, process_candle)

@@ -3,6 +3,9 @@
 from .paper_engine import PaperTradingEngine
 
 
+MARKET_EVENT_TYPES = {"market_step", "candle"}
+
+
 class ReplayDivergenceError(ValueError):
     """Raised when persisted commands cannot reproduce the trading state."""
 
@@ -75,11 +78,11 @@ def _validate_history_order(history) -> None:
             raise ReplayDivergenceError("command replayIndex is invalid")
         if replay_index < last_replay_index:
             raise ReplayDivergenceError("command history is not ordered by replay index")
-        if command.get("type") == "market_step":
+        if command.get("type") in MARKET_EVENT_TYPES:
             if replay_index < 0:
-                raise ReplayDivergenceError("market_step replayIndex must be non-negative")
+                raise ReplayDivergenceError(f"{command['type']} replayIndex must be non-negative")
             if replay_index in market_indexes:
-                raise ReplayDivergenceError(f"multiple market_step events exist for replay index {replay_index}")
+                raise ReplayDivergenceError(f"multiple market events exist for replay index {replay_index}")
             market_indexes.add(replay_index)
         last_replay_index = replay_index
 
@@ -122,8 +125,12 @@ def rebuild_trading(
         return engine
 
     commands = [command for command in history if command["replayIndex"] <= target_index]
-    non_market_commands = any(command["type"] != "market_step" for command in commands)
-    market_commands = {command["replayIndex"]: command for command in commands if command["type"] == "market_step"}
+    non_market_commands = any(command["type"] not in MARKET_EVENT_TYPES for command in commands)
+    market_commands = {
+        command["replayIndex"]: command
+        for command in commands
+        if command["type"] in MARKET_EVENT_TYPES
+    }
 
     start_index = replay.start_index if replay.start_index >= 0 and replay.start_index <= target_index else 0
     required_indexes = set(range(start_index, target_index + 1))
@@ -141,7 +148,7 @@ def rebuild_trading(
                 _apply_command(engine, next_command, replay)
                 next_command = next(command_iter, None)
             while next_command is not None and int(next_command["replayIndex"]) == index:
-                if next_command["type"] == "market_step":
+                if next_command["type"] in MARKET_EVENT_TYPES:
                     current_symbol = str(next_command["payload"]["symbol"]).strip().upper()
                 _apply_command(engine, next_command, replay)
                 next_command = next(command_iter, None)
