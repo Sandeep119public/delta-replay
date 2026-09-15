@@ -48,4 +48,11 @@ describe('Phase 2 unified replay rail', () => {
     expect(css).toMatch(/\.timeline-section\s*\{[\s\S]*grid-template-columns:/);
     expect(css).toMatch(/\.controls-section\s*\{[\s\S]*position:\s*absolute/);
   });
+
+  it('keeps step and reset available on narrow touch screens', () => {
+    expect(css).toMatch(/@media\s*\(max-width:\s*640px\)[\s\S]*\.replay-secondary button\s*\{[\s\S]*min-width:\s*40px/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*360px\)[\s\S]*\.replay-secondary button\s*\{[\s\S]*min-width:\s*36px/);
+    expect(css).toMatch(/\.replay-follow\s*\{\s*display:\s*none/);
+    expect(css).not.toMatch(/\.replay-secondary[^{}]*\{[^}]*display:\s*none/);
+  });
 });
