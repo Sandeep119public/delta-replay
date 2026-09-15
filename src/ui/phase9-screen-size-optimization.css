@@ -56,20 +56,22 @@
 
 @media (max-width: 640px) {
   .topbar {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     padding-inline: 8px;
   }
   .topbar-center {
-    max-width: min(232px, 64vw);
-    overflow: hidden;
-    justify-content: flex-end;
-    gap: 6px;
+    max-width: none;
+    overflow: visible;
+    justify-content: space-between;
+    gap: 4px;
   }
   .topbar-center .selector-group { flex: 0 0 auto; }
-  .topbar-center .date-group { gap: 5px; }
-  .date-group input { width: 92px; min-width: 0; padding-inline: 7px; }
-  .date-group input[type="time"] { width: 72px; }
+  .topbar-center .symbol-group select { width: 68px; }
+  .topbar-center .tf-group select { width: 56px; }
+  .topbar-center .date-group { gap: 4px; }
+  .date-group input { width: 80px; min-width: 0; padding-inline: 6px; }
+  .date-group input[type="time"] { width: 64px; }
   #header-start-replay-btn {
     width: var(--phase9-touch);
     min-width: var(--phase9-touch);
@@ -119,6 +121,11 @@
 @media (max-width: 420px) {
   .topbar { padding-inline: 6px; }
   .logo { font-size: 14px; letter-spacing: 0.12em; }
+  .topbar-center { gap: 3px; }
+  .topbar-center .symbol-group select { width: 64px; }
+  .topbar-center .tf-group select { width: 52px; }
+  .date-group input { width: 76px; }
+  .date-group input[type="time"] { width: 62px; }
   .timeline-section {
     grid-template-columns: minmax(84px, 0.72fr) minmax(0, 1.6fr);
     padding-inline: 6px;
@@ -130,6 +137,15 @@
     padding-bottom: calc(6px + env(safe-area-inset-bottom));
   }
   .phase6-command { border-radius: 16px; }
+}
+
+@media (max-width: 340px) {
+  .topbar-center { gap: 2px; }
+  .topbar-center .symbol-group select { width: 58px; }
+  .topbar-center .tf-group select { width: 50px; }
+  .date-group { gap: 2px; }
+  .date-group input { width: 74px; }
+  .date-group input[type="time"] { width: 60px; }
 }
 
 @media (max-width: 360px) {
