@@ -130,6 +130,44 @@ def test_replay_reset_clears_pending_orders():
     manager.delete(session_id)
 
 
+def test_replay_step_uses_started_symbol_when_symbol_is_omitted():
+    client = TestClient(app)
+    session_id = str(uuid4())
+    headers = {"X-Session-ID": session_id}
+
+    client.post("/api/v1/replay/load", json=candles(), headers=headers)
+    client.post("/api/v1/replay/start/0", params={"symbol": "ETHUSDT"}, headers=headers)
+    client.post("/api/v1/trading/order", json={"symbol": "ETHUSDT", "side": "buy", "quantity": 1}, headers=headers)
+
+    response = client.post("/api/v1/replay/step", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["trading"]["positions"][0]["symbol"] == "ETHUSDT"
+
+    manager.delete(session_id)
+
+
+def test_seek_uses_started_symbol_when_symbol_is_omitted():
+    client = TestClient(app)
+    session_id = str(uuid4())
+    headers = {"X-Session-ID": session_id}
+
+    client.post("/api/v1/replay/load", json=candles(), headers=headers)
+    client.post("/api/v1/replay/start/0", params={"symbol": "ETHUSDT"}, headers=headers)
+    client.post("/api/v1/trading/order", json={"symbol": "ETHUSDT", "side": "buy", "quantity": 1}, headers=headers)
+    client.post("/api/v1/replay/step", headers=headers)
+
+    response = client.post("/api/v1/replay/seek/0", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["index"] == 0
+    assert response.json()["trading"]["positions"] == []
+
+    resumed = client.post("/api/v1/replay/step", headers=headers)
+    assert resumed.status_code == 200
+    assert resumed.json()["trading"]["positions"][0]["symbol"] == "ETHUSDT"
+
+    manager.delete(session_id)
+
+
 def test_seek_reconstructs_state_after_trading_history_exists():
     client = TestClient(app)
     session_id = str(uuid4())

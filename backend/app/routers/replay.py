@@ -36,13 +36,26 @@ def _replay_symbol(session, fallback="BTCUSDT"):
     return fallback
 
 
-def _initialize_trading_at_replay_start(session, symbol):
-    result = session.replay.state()
-    if result["index"] < 0:
-        return result
-    session.trading.on_candle(result["candle"], result["index"], symbol)
-    session.record("market_step", result["index"], {"symbol": symbol})
-    return result
+def _active_replay_symbol(session, requested_symbol=None):
+    if requested_symbol is not None:
+        requested = str(requested_symbol).strip().upper()
+        if not requested:
+            raise HTTPException(422, "symbol must be provided")
+        return requested
+
+    symbols = set()
+    for command in session.history:
+        if command.get("type") != "market_step":
+            continue
+        symbol = command.get("payload", {}).get("symbol")
+        if isinstance(symbol, str) and symbol.strip():
+            symbols.add(symbol.strip().upper())
+
+    if not symbols:
+        raise HTTPException(409, "Start the replay before advancing or seeking it")
+    if len(symbols) != 1:
+        raise HTTPException(409, "Replay history contains conflicting symbols")
+    return next(iter(symbols))
 
 
 @router.get("/state")
@@ -92,20 +105,17 @@ def start(request: Request, index: int, symbol: str = "BTCUSDT"):
 
 
 @router.post("/step")
-def step(request: Request, symbol: str = "BTCUSDT"):
-    symbol = str(symbol).strip().upper()
-    if not symbol:
-        raise HTTPException(422, "symbol must be provided")
-
+def step(request: Request, symbol: str | None = None):
     def advance(session):
+        active_symbol = _active_replay_symbol(session, symbol)
         previous_index = session.replay.index
         result = session.replay.step()
         if result["index"] == previous_index or result["index"] < 0:
             return {**result, "events": [], "trading": trading_api_snapshot(session.trading)}
 
         candle = result["candle"]
-        events = session.trading.on_candle(candle, result["index"], symbol)
-        session.record("market_step", result["index"], {"symbol": symbol})
+        events = session.trading.on_candle(candle, result["index"], active_symbol)
+        session.record("market_step", result["index"], {"symbol": active_symbol})
         return {**result, "events": events, "trading": trading_api_snapshot(session.trading)}
 
     try:
@@ -115,12 +125,9 @@ def step(request: Request, symbol: str = "BTCUSDT"):
 
 
 @router.post("/seek/{index}")
-def seek(request: Request, index: int, symbol: str = "BTCUSDT"):
-    symbol = str(symbol).strip().upper()
-    if not symbol:
-        raise HTTPException(422, "symbol must be provided")
-
+def seek(request: Request, index: int, symbol: str | None = None):
     def reposition(session):
+        active_symbol = _active_replay_symbol(session, symbol)
         result = session.replay.seek(index)
         filtered_history = [item for item in session.history if item.get("replayIndex", -1) <= result["index"]]
         trading = session.trading
@@ -129,7 +136,7 @@ def seek(request: Request, index: int, symbol: str = "BTCUSDT"):
                 session.replay,
                 filtered_history,
                 result["index"],
-                default_symbol=symbol,
+                default_symbol=active_symbol,
                 starting_balance=trading.account.starting_balance,
                 fee_rate=trading.fee_rate,
                 margin_rate=trading.margin_rate,
