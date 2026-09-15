@@ -19,6 +19,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  security:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository for secrets
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   frontend:
     name: Frontend verification
     runs-on: ubuntu-latest
@@ -99,6 +114,9 @@ jobs:
       - name: Install backend dependencies
         run: python -m pip install -r backend/requirements.txt
 
+      - name: Verify installed dependency consistency
+        run: python -m pip check
+
       - name: Apply database migrations
         run: python backend/scripts/migrate.py
 
@@ -147,7 +165,7 @@ jobs:
   deploy:
     name: Deploy validated frontend
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-    needs: [frontend, backend, integration]
+    needs: [security, frontend, backend, integration]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
