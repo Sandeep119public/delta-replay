@@ -13,7 +13,21 @@ services:
     volumes:
       - delta-replay-postgres:/var/lib/postgresql/data
 
+  migrate:
+    image: delta-replay-api:local
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "backend/scripts/migrate.py"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/delta_replay
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
+    image: delta-replay-api:local
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -23,10 +37,11 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   web:
+    image: delta-replay-web:local
     build:
       context: .
       dockerfile: frontend/Dockerfile
