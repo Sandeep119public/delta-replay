@@ -42,11 +42,14 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Activate repository npm toolchain
+        run: corepack enable npm && corepack install
 
       - name: Verify configured npm toolchain
         run: npm --version | grep -Fx '10.8.2'
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Check architecture graph
         run: npm run test:architecture:graph
@@ -167,7 +170,16 @@ jobs:
           exit 1
 
       - name: Verify frontend is reachable
-        run: curl --fail --silent --show-error http://127.0.0.1:4173/ >/dev/null
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
 
       - name: Show service state on failure
         if: ${{ failure() }}
