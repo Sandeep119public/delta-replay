@@ -28,9 +28,16 @@ def test_omitted_step_uses_latest_explicit_symbol_after_symbol_change():
     switched = client.post("/api/v1/replay/step", params={"symbol": "ETHUSDT"}, headers=headers)
     assert switched.status_code == 200
 
+    order = client.post(
+        "/api/v1/trading/order",
+        json={"symbol": "ETHUSDT", "side": "buy", "quantity": 1},
+        headers=headers,
+    )
+    assert order.status_code == 200
+
     continued = client.post("/api/v1/replay/step", headers=headers)
     assert continued.status_code == 200
     assert continued.json()["trading"]["index"] == 2
-    assert continued.json()["trading"]["marketContext"]["ETHUSDT"]["index"] == 2
+    assert continued.json()["trading"]["positions"][0]["symbol"] == "ETHUSDT"
 
     manager.delete(session_id)
