@@ -23,6 +23,8 @@ describe('Deployment configuration', () => {
     expect(workflow).toMatch(new RegExp(`actions/upload-pages-artifact${IMMUTABLE_ACTION_REF}`));
     expect(workflow).toMatch(new RegExp(`actions/deploy-pages${IMMUTABLE_ACTION_REF}`));
     expect(workflow).toMatch(/path:\s*\.\/dist/);
+    expect(workflow).toMatch(/pages:\s*write/);
+    expect(workflow).toMatch(/id-token:\s*write/);
   });
 
   it('keeps one reusable security implementation for CI and scheduled scans', () => {
@@ -49,13 +51,16 @@ describe('Deployment configuration', () => {
     expect(dockerfile).toMatch(/PYTHONDONTWRITEBYTECODE=1/);
   });
 
-  it('ships the frontend container that compose references', () => {
+  it('ships the frontend container with the declared toolchain and runtime ownership', () => {
     expect(fs.existsSync(frontendDockerfilePath)).toBe(true);
     const dockerfile = fs.readFileSync(frontendDockerfilePath, 'utf8');
 
     expect(dockerfile).toMatch(new RegExp(`^FROM\\s+node:[^@\\n]+${IMMUTABLE_IMAGE_REF}$`, 'm'));
+    expect(dockerfile).toMatch(/corepack enable npm/);
+    expect(dockerfile).toMatch(/corepack install/);
     expect(dockerfile).toMatch(/npm ci/);
     expect(dockerfile).toMatch(/npm run build/);
+    expect(dockerfile).toMatch(/chown -R node:node \/app/);
     expect(dockerfile).toMatch(/USER node/);
     expect(dockerfile).toMatch(/npm.*run.*preview/);
   });
@@ -69,6 +74,8 @@ describe('Deployment configuration', () => {
     expect(compose).toMatch(/migrate:\s*\n[\s\S]*postgres:\s*\n\s*condition:\s*service_healthy/);
     expect(compose).toMatch(/api:\s*\n[\s\S]*migrate:\s*\n\s*condition:\s*service_completed_successfully/);
     expect(compose).toMatch(/web:\s*\n[\s\S]*api:\s*\n\s*condition:\s*service_healthy/);
+    expect(compose).toMatch(/image:\s*delta-replay-api:local/);
+    expect(compose).toMatch(/image:\s*delta-replay-web:local/);
     expect(compose).toMatch(/dockerfile:\s*backend\/Dockerfile/);
     expect(compose).toMatch(/dockerfile:\s*frontend\/Dockerfile/);
     expect(compose).toMatch(/8000:8000/);
