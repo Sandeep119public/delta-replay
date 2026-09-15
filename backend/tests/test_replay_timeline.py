@@ -68,6 +68,18 @@ def test_rebuild_uses_default_symbol_before_first_explicit_market_symbol():
     assert engine.get_latest_market("ETHUSDT")["candle"]["close"] == 104
 
 
+def test_rebuild_handles_market_history_before_configured_start_index():
+    service = replay()
+    service.start(2)
+    history = [market_step(1), order(1), market_step(2)]
+
+    engine = rebuild_trading(service, history, 2)
+
+    assert engine.index == 2
+    assert engine.orders[1]["status"] == "FILLED"
+    assert engine.positions["BTCUSDT"]["entry_price"] == 102
+
+
 def test_rebuild_applies_same_index_commands_in_persisted_order():
     service = replay()
     history = [
