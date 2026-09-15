@@ -43,19 +43,14 @@ def _active_replay_symbol(session, requested_symbol=None):
             raise HTTPException(422, "symbol must be provided")
         return requested
 
-    symbols = set()
-    for command in session.history:
+    for command in reversed(session.history):
         if command.get("type") != "market_step":
             continue
         symbol = command.get("payload", {}).get("symbol")
         if isinstance(symbol, str) and symbol.strip():
-            symbols.add(symbol.strip().upper())
+            return symbol.strip().upper()
 
-    if not symbols:
-        raise HTTPException(409, "Start the replay before advancing or seeking it")
-    if len(symbols) != 1:
-        raise HTTPException(409, "Replay history contains conflicting symbols")
-    return next(iter(symbols))
+    raise HTTPException(409, "Start the replay before advancing or seeking it")
 
 
 @router.get("/state")
