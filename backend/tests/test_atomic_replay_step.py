@@ -130,34 +130,36 @@ def test_replay_reset_clears_pending_orders():
     manager.delete(session_id)
 
 
-def test_replay_step_rejects_symbol_switch():
+def test_replay_step_uses_started_symbol_when_symbol_is_omitted():
     client = TestClient(app)
     session_id = str(uuid4())
     headers = {"X-Session-ID": session_id}
 
     client.post("/api/v1/replay/load", json=candles(), headers=headers)
     client.post("/api/v1/replay/start/0", params={"symbol": "ETHUSDT"}, headers=headers)
+    client.post("/api/v1/trading/order", json={"symbol": "ETHUSDT", "side": "buy", "quantity": 1}, headers=headers)
 
-    response = client.post("/api/v1/replay/step", params={"symbol": "BTCUSDT"}, headers=headers)
-    assert response.status_code == 409
-    assert "fixed to ETHUSDT" in response.json()["detail"]
-    assert client.get("/api/v1/replay/state", headers=headers).json()["index"] == 0
+    response = client.post("/api/v1/replay/step", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["trading"]["positions"][0]["symbol"] == "ETHUSDT"
 
     manager.delete(session_id)
 
 
-def test_replay_seek_rejects_symbol_switch():
+def test_seek_uses_started_symbol_when_symbol_is_omitted():
     client = TestClient(app)
     session_id = str(uuid4())
     headers = {"X-Session-ID": session_id}
 
     client.post("/api/v1/replay/load", json=candles(), headers=headers)
     client.post("/api/v1/replay/start/0", params={"symbol": "ETHUSDT"}, headers=headers)
+    client.post("/api/v1/trading/order", json={"symbol": "ETHUSDT", "side": "buy", "quantity": 1}, headers=headers)
+    client.post("/api/v1/replay/step", headers=headers)
 
-    response = client.post("/api/v1/replay/seek/1", params={"symbol": "BTCUSDT"}, headers=headers)
-    assert response.status_code == 409
-    assert "fixed to ETHUSDT" in response.json()["detail"]
-    assert client.get("/api/v1/replay/state", headers=headers).json()["index"] == 0
+    response = client.post("/api/v1/replay/seek/0", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["trading"]["index"] == 0
+    assert response.json()["trading"]["market"]["ETHUSDT"]["index"] == 0
 
     manager.delete(session_id)
 
