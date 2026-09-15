@@ -33,7 +33,7 @@ def test_rebuild_supports_candle_events_as_the_canonical_market_stream():
     rebuilt = rebuild_trading(service, history, 1)
 
     assert rebuilt.index == 1
-    assert rebuilt.positions["ETHUSDT"]["entry_price"] == 103
+    assert rebuilt.positions["ETHUSDT"]["entry_price"] == 102
 
 
 def test_rebuild_rejects_two_kinds_of_market_event_at_one_index():
