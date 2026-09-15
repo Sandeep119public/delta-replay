@@ -5,9 +5,11 @@ import os
 import sys
 import urllib.error
 import urllib.request
+import uuid
 
 
 BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+SESSION_ID = str(uuid.uuid4())
 
 CANDLES = [
     {"time": 1, "open": 100, "high": 102, "low": 99, "close": 101, "volume": 10},
@@ -18,11 +20,11 @@ CANDLES = [
 
 def request(path: str, method: str = "GET", payload: dict | None = None) -> dict:
     data = None if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {"X-Session-ID": SESSION_ID}
+    if data:
+        headers["Content-Type"] = "application/json"
     request_obj = urllib.request.Request(
-        f"{BASE_URL}{path}",
-        data=data,
-        method=method,
-        headers={"Content-Type": "application/json"} if data else {},
+        f"{BASE_URL}{path}", data=data, method=method, headers=headers
     )
     try:
         with urllib.request.urlopen(request_obj, timeout=10) as response:
@@ -37,8 +39,9 @@ def main() -> None:
     assert health == {"status": "ok", "service": "delta-replay-api"}, health
 
     loaded = request("/api/v1/replay/load", "POST", {"candles": CANDLES})
-    assert loaded["count"] if "count" in loaded else True
-    assert loaded["candles"] if "candles" in loaded else loaded["index"] == -1
+    assert loaded["total"] == 3, loaded
+    assert loaded["status"] == "ready", loaded
+    assert loaded["index"] == -1, loaded
 
     started = request("/api/v1/replay/start/0", "POST")
     assert started["index"] == 0, started
@@ -49,7 +52,7 @@ def main() -> None:
     assert stepped["candle"]["close"] == 103, stepped
 
     reset = request("/api/v1/replay/reset", "POST")
-    assert reset["index"] == -1, reset
+    assert reset["index"] == 0, reset
     assert reset["trading"]["orders"] == [], reset
 
     print("API smoke test passed")
