@@ -45,7 +45,7 @@ def _active_replay_symbol(session, requested_symbol=None):
         return requested
 
     for command in reversed(session.history):
-        if command.get("type") != "market_step":
+        if command.get("type") not in {"market_step", "candle"}:
             continue
         symbol = command.get("payload", {}).get("symbol")
         if isinstance(symbol, str) and symbol.strip():
