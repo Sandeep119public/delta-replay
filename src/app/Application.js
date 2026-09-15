@@ -224,5 +224,5 @@ export function createApplication() {
     destroy,
   });
 
-  return { start: lifecycle.start, destroy: lifecycle.destroy, services, ui, coordinator };
+  return { start: lifecycle.start, destroy: lifecycle.destroy, services, ui, coordinator, mobileDrawer };
 }
