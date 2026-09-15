@@ -56,6 +56,7 @@ export class ReplayCoordinator {
 
     this.datasetChangeService = createDatasetChangeService({
       hasOpenPosition: tradingCapabilities.hasOpenPosition,
+      hasTradingActivity: tradingCapabilities.hasTradingActivity,
       clearPendingOrders: tradingCapabilities.clearPendingOrders,
       appState,
       candleStore,
