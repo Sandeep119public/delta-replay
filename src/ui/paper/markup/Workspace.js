@@ -68,8 +68,8 @@ export const workspaceMarkup = () => `<div class="main-layout">
 
     <div id="tab-view-account" class="tab-panel" role="tabpanel" aria-labelledby="account-tab" tabindex="0">
       <section class="account-card"><div class="account-stat"><span>Cash balance</span><strong id="acct-balance">—</strong></div><div class="account-stat"><span>Realized P&amp;L</span><strong id="acct-realized">—</strong></div><div class="account-stat"><span>Fees paid</span><strong id="acct-fees">—</strong></div></section>
-      <button id="btn-reset-acct" class="btn btn-danger" type="button">Reset paper account &amp; replay</button>
-      <p class="account-reset-help">Clears trading history and returns the replay to its prepared start position. Use this before changing symbol or timeframe.</p>
+      <button id="btn-reset-acct" class="btn btn-danger" type="button">Reset paper account</button>
+      <p class="account-reset-help">Resets trading balance, positions, orders, and fills. The replay candle position is unchanged.</p>
     </div>
   </aside>
 </div>`;
