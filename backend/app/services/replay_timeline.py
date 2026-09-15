@@ -132,7 +132,9 @@ def rebuild_trading(
         if command["type"] in MARKET_EVENT_TYPES
     }
 
-    start_index = replay.start_index if replay.start_index >= 0 and replay.start_index <= target_index else 0
+    configured_start_index = replay.start_index if replay.start_index >= 0 and replay.start_index <= target_index else 0
+    earliest_market_index = min(market_commands, default=configured_start_index)
+    start_index = min(configured_start_index, earliest_market_index)
     required_indexes = set(range(start_index, target_index + 1))
     missing = sorted(required_indexes - set(market_commands))
     if missing and non_market_commands:
