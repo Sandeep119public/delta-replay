@@ -43,6 +43,10 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
             index = int(command["replayIndex"])
             if index < 0 or index >= len(replay.candles):
                 raise ReplayDivergenceError("market_step replay index is outside dataset")
+            first_executable_index = replay.start_index if replay.start_index >= 0 else 0
+            if engine.index == -1 and index == first_executable_index:
+                engine.on_candle(replay.candles[index], index, payload["symbol"])
+                return
             if index != engine.index + 1:
                 raise ReplayDivergenceError(f"market_step index {index} is not the next executable index {engine.index + 1}")
             engine.on_candle(replay.candles[index], index, payload["symbol"])
@@ -80,7 +84,17 @@ def _validate_history_order(history) -> None:
         last_replay_index = replay_index
 
 
-def rebuild_trading(replay, history, target_index: int, default_symbol: str = "BTCUSDT") -> PaperTradingEngine:
+def rebuild_trading(
+    replay,
+    history,
+    target_index: int,
+    default_symbol: str = "BTCUSDT",
+    *,
+    starting_balance: float = 10000.0,
+    fee_rate: float = 0.0005,
+    margin_rate: float = 0.1,
+    maint_margin_rate: float = 0.05,
+) -> PaperTradingEngine:
     """Replay persisted events exactly, with a pristine market baseline when safe."""
     if target_index < -1:
         raise ValueError("replay target must be -1 or greater")
@@ -91,7 +105,12 @@ def rebuild_trading(replay, history, target_index: int, default_symbol: str = "B
     if not default_symbol:
         raise ValueError("default replay symbol must be provided")
 
-    engine = PaperTradingEngine()
+    engine = PaperTradingEngine(
+        starting_balance=starting_balance,
+        fee_rate=fee_rate,
+        margin_rate=margin_rate,
+        maint_margin_rate=maint_margin_rate,
+    )
     history = list(history or [])
     _validate_history_order(history)
 

@@ -105,8 +105,18 @@ def seek(request: Request, index: int, symbol: str = "BTCUSDT"):
     def reposition(session):
         result = session.replay.seek(index)
         filtered_history = [item for item in session.history if item.get("replayIndex", -1) <= result["index"]]
+        trading = session.trading
         try:
-            session.trading = rebuild_trading(session.replay, filtered_history, result["index"], default_symbol=symbol)
+            session.trading = rebuild_trading(
+                session.replay,
+                filtered_history,
+                result["index"],
+                default_symbol=symbol,
+                starting_balance=trading.account.starting_balance,
+                fee_rate=trading.fee_rate,
+                margin_rate=trading.margin_rate,
+                maint_margin_rate=trading.maint_margin_rate,
+            )
         except ReplayDivergenceError as exc:
             raise HTTPException(409, f"Unable to deterministically replay this position: {exc}") from exc
         session.history = filtered_history
