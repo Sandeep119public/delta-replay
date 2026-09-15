@@ -307,42 +307,76 @@
 
   .controls-row {
     justify-content: flex-end;
+    gap: 3px;
   }
 
   .replay-primary .replay-play {
-    min-width: 70px;
+    min-width: 64px;
     min-height: 36px;
+    padding-inline: 7px;
   }
 
   .replay-secondary {
     gap: 2px;
   }
 
-  .replay-secondary button:first-child {
-    min-width: 44px;
-    padding-inline: 6px;
+  .replay-secondary button {
+    min-width: 40px;
+    min-height: 36px;
+    padding-inline: 5px;
   }
 
-  .replay-secondary button:nth-child(2),
   .replay-follow {
     display: none;
   }
 
   #speed-select {
-    min-width: 50px;
-    min-height: 34px;
+    min-width: 48px;
+    min-height: 36px;
+    padding-inline: 5px 16px;
   }
 }
 
 @media (max-width: 420px) {
   .controls-section {
-    width: min(70vw, 250px);
+    width: min(72vw, 250px);
+    padding-inline: 6px;
   }
 
   .replay-primary .replay-play {
-    min-width: 64px;
-    padding-inline: 8px;
+    min-width: 60px;
+    padding-inline: 6px;
     font-size: 10px;
+  }
+
+  .replay-secondary button {
+    min-width: 38px;
+    padding-inline: 4px;
+  }
+
+  #speed-select {
+    min-width: 46px;
+  }
+}
+
+@media (max-width: 360px) {
+  .controls-section {
+    width: min(76vw, 250px);
+  }
+
+  .replay-primary .replay-play {
+    min-width: 58px;
+    padding-inline: 5px;
+  }
+
+  .replay-secondary button {
+    min-width: 36px;
+    padding-inline: 3px;
+  }
+
+  #speed-select {
+    min-width: 44px;
+    padding-inline: 4px 14px;
   }
 }
 
