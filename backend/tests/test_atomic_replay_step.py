@@ -78,7 +78,37 @@ def test_replay_reset_resets_trading_and_replay_atomically():
     assert body["trading"]["pendingOrders"] == []
     assert body["trading"]["orders"] == []
     assert body["trading"]["trades"] == []
-    assert body["trading"]["index"] == -1
+    assert body["trading"]["index"] == 0
+
+    manager.delete(session_id)
+
+
+def test_replay_reset_reconstructs_nonzero_start_index():
+    client = TestClient(app)
+    session_id = str(uuid4())
+    headers = {"X-Session-ID": session_id}
+
+    client.post("/api/v1/replay/load", json=candles(), headers=headers)
+    started = client.post("/api/v1/replay/start/1", params={"symbol": "ETHUSDT"}, headers=headers)
+    assert started.status_code == 200
+    assert started.json()["trading"]["index"] == 1
+
+    client.post("/api/v1/trading/order", json={"symbol": "ETHUSDT", "side": "buy", "quantity": 1}, headers=headers)
+    client.post("/api/v1/replay/step", params={"symbol": "ETHUSDT"}, headers=headers)
+    client.post("/api/v1/trading/close", json={"symbol": "ETHUSDT"}, headers=headers)
+
+    response = client.post("/api/v1/replay/reset", headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["index"] == 1
+    assert body["trading"]["index"] == 1
+    assert body["trading"]["positions"] == []
+
+    resumed = client.post("/api/v1/trading/order", json={"symbol": "ETHUSDT", "side": "buy", "quantity": 1}, headers=headers)
+    assert resumed.status_code == 200
+    stepped = client.post("/api/v1/replay/step", params={"symbol": "ETHUSDT"}, headers=headers)
+    assert stepped.status_code == 200
+    assert stepped.json()["trading"]["positions"][0]["symbol"] == "ETHUSDT"
 
     manager.delete(session_id)
 

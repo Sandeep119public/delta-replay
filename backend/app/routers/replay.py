@@ -27,6 +27,24 @@ def require_pristine_trading(session, action, *, allow_replay_progress=False):
         raise HTTPException(409, f"Reset the simulation before {action} after trading activity")
 
 
+def _replay_symbol(session, fallback="BTCUSDT"):
+    for command in session.history:
+        if command.get("type") == "market_step" and command.get("replayIndex") == session.replay.start_index:
+            symbol = command.get("payload", {}).get("symbol")
+            if isinstance(symbol, str) and symbol.strip():
+                return symbol.strip().upper()
+    return fallback
+
+
+def _initialize_trading_at_replay_start(session, symbol):
+    result = session.replay.state()
+    if result["index"] < 0:
+        return result
+    session.trading.on_candle(result["candle"], result["index"], symbol)
+    session.record("market_step", result["index"], {"symbol": symbol})
+    return result
+
+
 @router.get("/state")
 def state(request: Request):
     return get_session(request).replay.state()
@@ -136,6 +154,7 @@ def reset(request: Request):
         fee_rate = trading.fee_rate
         margin_rate = trading.margin_rate
         maint_margin_rate = trading.maint_margin_rate
+        symbol = _replay_symbol(session)
         session.trading = PaperTradingEngine(
             starting_balance=balance,
             fee_rate=fee_rate,
@@ -144,6 +163,9 @@ def reset(request: Request):
         )
         session.history = []
         replay = session.replay.reset()
+        if replay["index"] >= 0:
+            session.trading.on_candle(replay["candle"], replay["index"], symbol)
+            session.record("market_step", replay["index"], {"symbol": symbol})
         return {**replay, "trading": trading_api_snapshot(session.trading)}
 
     return atomic_session(request, reset_session)
