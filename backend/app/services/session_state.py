@@ -22,6 +22,7 @@ VALID_HISTORY_TYPES = {
     "capital",
     "fee_rate",
 }
+MARKET_EVENT_TYPES = {"market_step", "candle"}
 
 
 def _validate_json_safety(document: Dict[str, Any]) -> None:
@@ -52,14 +53,18 @@ def _validate_history(history, *, replay_index=None) -> None:
         payload = item.get("payload")
         if not isinstance(payload, dict):
             raise ValueError("session history payload must be an object")
-        if event_type == "market_step":
+        if event_type in MARKET_EVENT_TYPES:
             if index < 0:
-                raise ValueError("market_step cannot use replayIndex -1")
+                raise ValueError(f"{event_type} cannot use replayIndex -1")
             if index in market_indexes:
-                raise ValueError(f"multiple market_step events exist for replay index {index}")
+                raise ValueError(f"multiple market events exist for replay index {index}")
             symbol = payload.get("symbol")
             if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
-                raise ValueError("market_step symbol is invalid")
+                raise ValueError(f"{event_type} symbol is invalid")
+            if event_type == "candle":
+                candle_index = payload.get("index")
+                if isinstance(candle_index, bool) or not isinstance(candle_index, int) or candle_index != index:
+                    raise ValueError("candle index must match replayIndex")
             market_indexes.add(index)
         last_replay_index = index
 
