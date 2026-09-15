@@ -133,6 +133,14 @@ def rebuild_trading(
     }
 
     start_index = replay.start_index if replay.start_index >= 0 and replay.start_index <= target_index else 0
+    historical_indexes = [
+        command["replayIndex"]
+        for command in commands
+        if command["replayIndex"] >= 0
+    ]
+    if historical_indexes:
+        start_index = min(start_index, min(historical_indexes))
+
     required_indexes = set(range(start_index, target_index + 1))
     missing = sorted(required_indexes - set(market_commands))
     if missing and non_market_commands:
