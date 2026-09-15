@@ -181,6 +181,9 @@ jobs:
           done
           exit 1
 
+      - name: Exercise replay API end to end
+        run: python backend/scripts/smoke_api.py
+
       - name: Show service state on failure
         if: ${{ failure() }}
         run: docker compose -f docker-compose.v2.yml ps -a && docker compose -f docker-compose.v2.yml logs --no-color
@@ -206,3 +209,19 @@ jobs:
       - name: Deploy validated Pages artifact
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
+
+      - name: Verify deployed site
+        shell: bash
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          test -n "$PAGE_URL"
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --location "$PAGE_URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Deployed Pages site did not become reachable: $PAGE_URL" >&2
+          exit 1
