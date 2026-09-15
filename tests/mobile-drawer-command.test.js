@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { bindMobileDrawer } from '../src/ui/bindMobileDrawer.js';
 
@@ -33,6 +32,9 @@ class FakeElement {
   closest() { return null; }
   querySelectorAll() { return this.id === 'trading-panel' ? [this.document.elements.get('trade-qty')] : []; }
 }
+
+let restoreDom = () => {};
+afterEach(() => restoreDom());
 
 function installFakeDom({ mobile = true } = {}) {
   const previous = {
@@ -68,39 +70,37 @@ function installFakeDom({ mobile = true } = {}) {
   };
   globalThis.requestAnimationFrame = (callback) => callback();
 
-  return {
-    document,
-    elements,
-    restore() {
-      globalThis.document = previous.document;
-      globalThis.window = previous.window;
-      globalThis.requestAnimationFrame = previous.requestAnimationFrame;
-    },
+  restoreDom = () => {
+    globalThis.document = previous.document;
+    globalThis.window = previous.window;
+    globalThis.requestAnimationFrame = previous.requestAnimationFrame;
   };
+
+  return { document, elements };
 }
 
-test('mobile trading focus opens the authoritative drawer and focuses order quantity', () => {
-  const dom = installFakeDom();
-  const drawer = bindMobileDrawer();
+describe('mobile trading drawer focus capability', () => {
+  it('opens the authoritative drawer and focuses order quantity on mobile', () => {
+    const dom = installFakeDom();
+    const drawer = bindMobileDrawer();
 
-  assert.equal(drawer.focusTradingPanel(), true);
-  assert.equal(dom.document.body.classList.contains('drawer-open'), true);
-  assert.equal(dom.elements.get('btn-trading-drawer').getAttribute('aria-expanded'), 'true');
-  assert.equal(dom.elements.get('trading-panel').getAttribute('aria-hidden'), 'false');
-  assert.equal(dom.document.activeElement, dom.elements.get('trade-qty'));
+    expect(drawer.focusTradingPanel()).toBe(true);
+    expect(dom.document.body.classList.contains('drawer-open')).toBe(true);
+    expect(dom.elements.get('btn-trading-drawer').getAttribute('aria-expanded')).toBe('true');
+    expect(dom.elements.get('trading-panel').getAttribute('aria-hidden')).toBe('false');
+    expect(dom.document.activeElement).toBe(dom.elements.get('trade-qty'));
 
-  drawer.destroy();
-  dom.restore();
-});
+    drawer.destroy();
+  });
 
-test('desktop trading focus does not open the mobile drawer', () => {
-  const dom = installFakeDom({ mobile: false });
-  const drawer = bindMobileDrawer();
+  it('does not open the mobile drawer on desktop', () => {
+    const dom = installFakeDom({ mobile: false });
+    const drawer = bindMobileDrawer();
 
-  assert.equal(drawer.focusTradingPanel(), true);
-  assert.equal(dom.document.body.classList.contains('drawer-open'), false);
-  assert.equal(dom.document.activeElement, dom.elements.get('trade-qty'));
+    expect(drawer.focusTradingPanel()).toBe(true);
+    expect(dom.document.body.classList.contains('drawer-open')).toBe(false);
+    expect(dom.document.activeElement).toBe(dom.elements.get('trade-qty'));
 
-  drawer.destroy();
-  dom.restore();
+    drawer.destroy();
+  });
 });
