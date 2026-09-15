@@ -2,16 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { createReplayCommandPolicy, ReplayCommandController } from '../../src/app/ReplayCommandController.js';
 
 describe('ReplayCommandController', () => {
-  it('rejects seek and start after trading activity through the default policy', () => {
+  it('allows deterministic seek but rejects a fresh start after trading activity', () => {
     const policy = createReplayCommandPolicy({ hasTradingActivity: () => true });
 
-    expect(policy.canExecute('seek')).toEqual({
-      allowed: false,
-      reason: 'Cannot seek after trading activity. Reset the simulation first.',
-    });
+    expect(policy.canExecute('seek')).toEqual({ allowed: true });
     expect(policy.canExecute('start')).toEqual({
       allowed: false,
-      reason: 'Cannot start a new replay position after trading activity. Reset the simulation first.',
+      reason: 'Cannot start a new replay position after trading activity. Seek to the desired candle or reset the simulation first.',
     });
     expect(policy.canExecute('reset')).toEqual({ allowed: true });
     expect(policy.canExecute('resume')).toEqual({ allowed: true });

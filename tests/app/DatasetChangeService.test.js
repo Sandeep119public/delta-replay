@@ -12,6 +12,7 @@ function deps(overrides = {}) {
   };
   return {
     hasOpenPosition: () => false,
+    hasTradingActivity: () => false,
     clearPendingOrders: vi.fn(async () => ({ success: true })),
     appState,
     candleStore: { clear: vi.fn() },
@@ -42,6 +43,22 @@ describe('DatasetChangeService', () => {
     expect(dependencies.reload).toHaveBeenCalled();
     expect(dependencies.appState.symbol).toBe('ETHUSDT');
     expect(dependencies.appState.transitionLoading).toHaveBeenCalledWith(LoadingState.IDLE);
+  });
+
+  it('rejects dataset changes before mutation when trading history exists', async () => {
+    const dependencies = deps({ hasTradingActivity: () => true });
+    const service = createDatasetChangeService(dependencies);
+    const select = { value: 'ETHUSDT' };
+
+    await expect(service.handleSymbolTimeframeChange('symbol', 'ETHUSDT', select)).resolves.toBe(false);
+
+    expect(dependencies.appState.symbol).toBe('BTCUSDT');
+    expect(select.value).toBe('BTCUSDT');
+    expect(dependencies.clearPendingOrders).not.toHaveBeenCalled();
+    expect(dependencies.invalidateLoad).not.toHaveBeenCalled();
+    expect(dependencies.candleStore.clear).not.toHaveBeenCalled();
+    expect(dependencies.reload).not.toHaveBeenCalled();
+    expect(dependencies.reportError).toHaveBeenCalledWith('Cannot change symbol after trading activity. Reset the simulation first.');
   });
 
   it('rolls back the selector and app state when pending-order cleanup fails', async () => {
