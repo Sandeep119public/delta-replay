@@ -42,6 +42,10 @@ describe('Phase 9 screen-size optimization', () => {
     expect(css).toMatch(/\.topbar-right \.paper-badge,\s*\n\s*\.topbar-right #data-status \{\s*display:\s*none/);
   });
 
+  it('does not hide replay secondary transport controls', () => {
+    expect(css).not.toMatch(/\.controls-row \.replay-secondary\s*\{\s*display:\s*none/);
+  });
+
   it('handles landscape mobile separately', () => {
     expect(css).toContain('@media (orientation: landscape) and (max-width: 840px)');
   });

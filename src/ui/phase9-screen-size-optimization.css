@@ -144,7 +144,6 @@
     line-height: 1;
   }
   .timeline-meta { gap: 4px; font-size: 8px; }
-  .controls-row .replay-secondary { display: none; }
   .replay-speed { margin-left: 0; }
   #speed-select { min-width: 48px; }
 }
