@@ -126,6 +126,14 @@ def _active_symbol(session, requested_symbol):
     raise HTTPException(409, "Start the replay before processing a market candle")
 
 
+def _has_market_event(session, replay_index):
+    return any(
+        command.get("replayIndex") == replay_index
+        and command.get("type") in {"market_step", "candle"}
+        for command in session.history
+    )
+
+
 @router.get("/state")
 def state(request: Request):
     try:
@@ -299,6 +307,8 @@ def process(request: Request, command: MarketCandleRequest | None = None):
         symbol = _active_symbol(session, command.symbol)
         if command.index is not None and command.index != replay_index:
             raise HTTPException(409, "candle index must match replay index for deterministic history")
+        if _has_market_event(session, replay_index):
+            raise HTTPException(409, "a market event already exists at the current replay index")
         raw = command.candle.model_dump() if command.candle is not None else replay_candle(session, symbol)
         candle = normalize_candle(raw)
         index = replay_index
