@@ -3,6 +3,7 @@ import fs from 'fs';
 
 const workflowPath = '.github/workflows/ci.yml';
 const legacyDeployWorkflowPath = '.github/workflows/deploy.yml';
+const securityWorkflowPath = '.github/workflows/security.yml';
 const backendDockerfilePath = 'backend/Dockerfile';
 const frontendDockerfilePath = 'frontend/Dockerfile';
 const composePath = 'docker-compose.v2.yml';
@@ -16,11 +17,24 @@ describe('Deployment configuration', () => {
     const workflow = fs.readFileSync(workflowPath, 'utf8');
 
     expect(workflow).not.toMatch(/workflow_run:/);
-    expect(workflow).toMatch(/needs:\s*\[frontend, backend, integration\]/);
+    expect(workflow).toMatch(/needs:\s*\[security, frontend, backend, integration\]/);
     expect(workflow).toMatch(/github\.event_name == ['"]push['"] && github\.ref == ['"]refs\/heads\/master['"]/);
     expect(workflow).toMatch(new RegExp(`actions/upload-pages-artifact${IMMUTABLE_ACTION_REF}`));
     expect(workflow).toMatch(new RegExp(`actions/deploy-pages${IMMUTABLE_ACTION_REF}`));
     expect(workflow).toMatch(/path:\s*\.\/dist/);
+  });
+
+  it('keeps pull-request security scanning in the deployment gate and scheduled scanning independent', () => {
+    const workflow = fs.readFileSync(workflowPath, 'utf8');
+    const security = fs.readFileSync(securityWorkflowPath, 'utf8');
+
+    expect(workflow).toMatch(/name: Secret scan/);
+    expect(workflow).toMatch(new RegExp(`gitleaks\/gitleaks-action${IMMUTABLE_ACTION_REF}`));
+    expect(security).not.toMatch(/pull_request:/);
+    expect(security).not.toMatch(/push:/);
+    expect(security).toMatch(/schedule:/);
+    expect(security).toMatch(/workflow_dispatch:/);
+    expect(security).toMatch(new RegExp(`gitleaks\/gitleaks-action${IMMUTABLE_ACTION_REF}`));
   });
 
   it('keeps the backend container non-root, pinned, and health-checkable', () => {
