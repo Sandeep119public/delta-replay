@@ -60,3 +60,25 @@ def test_rebuild_preserves_session_trading_configuration():
     assert rebuilt.fee_rate == 0.002
     assert rebuilt.margin_rate == 0.25
     assert rebuilt.maint_margin_rate == 0.1
+
+
+def test_rebuild_supports_nonzero_replay_start_index():
+    replay = ReplayService()
+    replay.load([
+        candle(100, 101, 99, 100, 1),
+        candle(101, 103, 100, 102, 2),
+        candle(102, 105, 101, 104, 3),
+        candle(104, 106, 103, 105, 4),
+    ])
+    replay.start(2)
+
+    history = [
+        {"type": "market_step", "replayIndex": 2, "payload": {"symbol": "ETHUSDT"}},
+        {"type": "market_step", "replayIndex": 3, "payload": {"symbol": "ETHUSDT"}},
+    ]
+
+    rebuilt = rebuild_trading(replay, history, 3, default_symbol="BTCUSDT")
+
+    assert rebuilt.index == 3
+    assert rebuilt.get_latest_market("ETHUSDT")["candle"]["close"] == 105
+    assert rebuilt.get_latest_market("BTCUSDT") is None
