@@ -46,8 +46,7 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
             index = int(command["replayIndex"])
             if index < 0 or index >= len(replay.candles):
                 raise ReplayDivergenceError("market_step replay index is outside dataset")
-            first_executable_index = replay.start_index if replay.start_index >= 0 else 0
-            if engine.index == -1 and index == first_executable_index:
+            if engine.index == -1:
                 engine.on_candle(replay.candles[index], index, payload["symbol"])
                 return
             if index != engine.index + 1:
@@ -132,7 +131,9 @@ def rebuild_trading(
         if command["type"] in MARKET_EVENT_TYPES
     }
 
-    start_index = replay.start_index if replay.start_index >= 0 and replay.start_index <= target_index else 0
+    configured_start_index = replay.start_index if replay.start_index >= 0 and replay.start_index <= target_index else 0
+    earliest_market_index = min(market_commands, default=configured_start_index)
+    start_index = min(configured_start_index, earliest_market_index)
     required_indexes = set(range(start_index, target_index + 1))
     missing = sorted(required_indexes - set(market_commands))
     if missing and non_market_commands:
