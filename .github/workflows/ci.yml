@@ -32,12 +32,15 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: 22
+          node-version: 22.23.2
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify configured npm toolchain
+        run: npm --version | grep -Fx '10.8.2'
 
       - name: Check architecture graph
         run: npm run test:architecture:graph
@@ -119,37 +122,23 @@ jobs:
         run: docker compose -f docker-compose.v2.yml config --quiet
 
       - name: Build and start the complete stack
-        run: docker compose -f docker-compose.v2.yml up --build -d
+        run: docker compose -f docker-compose.v2.yml up --build -d --wait
 
-      - name: Apply migrations inside the real API container
-        run: docker compose -f docker-compose.v2.yml exec -T api python backend/scripts/migrate.py
+      - name: Verify migration service completed successfully
+        run: test "$(docker compose -f docker-compose.v2.yml ps -q migrate | xargs docker inspect -f '{{.State.ExitCode}}')" = "0"
 
       - name: Verify migrations are idempotent in the real stack
-        run: docker compose -f docker-compose.v2.yml exec -T api python backend/scripts/migrate.py
+        run: docker compose -f docker-compose.v2.yml run --rm migrate
 
       - name: Verify API health
-        run: |
-          for attempt in {1..30}; do
-            if curl --fail --silent --show-error http://127.0.0.1:8000/health; then
-              exit 0
-            fi
-            sleep 2
-          done
-          exit 1
+        run: curl --fail --silent --show-error http://127.0.0.1:8000/health
 
       - name: Verify frontend is reachable
-        run: |
-          for attempt in {1..30}; do
-            if curl --fail --silent --show-error http://127.0.0.1:4173/ >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          exit 1
+        run: curl --fail --silent --show-error http://127.0.0.1:4173/ >/dev/null
 
       - name: Show service state on failure
         if: ${{ failure() }}
-        run: docker compose -f docker-compose.v2.yml ps && docker compose -f docker-compose.v2.yml logs --no-color
+        run: docker compose -f docker-compose.v2.yml ps -a && docker compose -f docker-compose.v2.yml logs --no-color
 
       - name: Tear down integration stack
         if: ${{ always() }}
