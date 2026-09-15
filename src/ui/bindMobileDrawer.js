@@ -59,16 +59,32 @@ export function bindMobileDrawer() {
   mobileQuery?.addEventListener?.('change', onViewportChange);
 
   let swipeStartY = null;
+  let swipeStartScrollTop = 0;
+  let swipeStartFromTop = false;
   const onTouchStart = (e) => {
     const touch = e.touches?.[0];
     swipeStartY = Number.isFinite(touch?.clientY) ? touch.clientY : null;
+    swipeStartScrollTop = Number.isFinite(tradingPanelEl?.scrollTop) ? tradingPanelEl.scrollTop : 0;
+    const panelTop = tradingPanelEl?.getBoundingClientRect?.().top ?? 0;
+    swipeStartFromTop = swipeStartY !== null && swipeStartY - panelTop <= 72;
   };
   const onTouchEnd = (e) => {
     const touch = e.changedTouches?.[0];
     const endY = Number.isFinite(touch?.clientY) ? touch.clientY : null;
     const startY = swipeStartY;
+    const startScrollTop = swipeStartScrollTop;
+    const startedAtTopEdge = swipeStartFromTop;
     swipeStartY = null;
-    if (endY !== null && startY !== null && endY - startY > 80 && document.body.classList.contains('drawer-open')) {
+    swipeStartScrollTop = 0;
+    swipeStartFromTop = false;
+    if (
+      endY !== null &&
+      startY !== null &&
+      endY - startY > 80 &&
+      startScrollTop <= 0 &&
+      startedAtTopEdge &&
+      document.body.classList.contains('drawer-open')
+    ) {
       setDrawer(false);
     }
   };
