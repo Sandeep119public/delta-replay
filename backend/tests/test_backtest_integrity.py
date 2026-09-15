@@ -72,7 +72,7 @@ def test_sma_cross_closes_on_next_bar_open():
         candle(80, 80, 7),
     ]
 
-    result = BacktestService().run(candles, quantity=1, fee_rate=0)
+    result = BacktestService().run(candles, quantity=1, strategy="sma_cross", fee_rate=0)
 
     assert result["summary"]["trades"] == 1
     assert result["trades"][0]["entry"] == pytest.approx(103)
