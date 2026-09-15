@@ -21,6 +21,7 @@ class FakeElement {
     this.attributes = new Map();
     this.classList = new FakeClassList();
     this.listeners = new Map();
+    this.scrollTop = 0;
   }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   removeAttribute(name) { this.attributes.delete(name); }
@@ -29,6 +30,7 @@ class FakeElement {
   removeEventListener(type) { this.listeners.delete(type); }
   focus() { this.document.activeElement = this; }
   scrollIntoView() {}
+  getBoundingClientRect() { return { top: 100 }; }
   closest() { return null; }
   querySelectorAll() { return this.id === 'trading-panel' ? [this.document.elements.get('trade-qty')] : []; }
 }
@@ -101,6 +103,34 @@ describe('mobile trading drawer focus capability', () => {
     expect(dom.document.body.classList.contains('drawer-open')).toBe(false);
     expect(dom.document.activeElement).toBe(dom.elements.get('trade-qty'));
 
+    drawer.destroy();
+  });
+
+  it('does not close while a downward gesture starts inside scrolled drawer content', () => {
+    const dom = installFakeDom();
+    const drawer = bindMobileDrawer();
+    const panel = dom.elements.get('trading-panel');
+    drawer.setDrawer(true);
+    panel.scrollTop = 120;
+
+    panel.listeners.get('touchstart')({ touches: [{ clientY: 240 }] });
+    panel.listeners.get('touchend')({ changedTouches: [{ clientY: 340 }] });
+
+    expect(dom.document.body.classList.contains('drawer-open')).toBe(true);
+    drawer.destroy();
+  });
+
+  it('closes when a downward gesture starts at the sheet top edge while scrolled to the top', () => {
+    const dom = installFakeDom();
+    const drawer = bindMobileDrawer();
+    const panel = dom.elements.get('trading-panel');
+    drawer.setDrawer(true);
+    panel.scrollTop = 0;
+
+    panel.listeners.get('touchstart')({ touches: [{ clientY: 120 }] });
+    panel.listeners.get('touchend')({ changedTouches: [{ clientY: 220 }] });
+
+    expect(dom.document.body.classList.contains('drawer-open')).toBe(false);
     drawer.destroy();
   });
 });
