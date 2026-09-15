@@ -10,6 +10,14 @@ export function bindMobileDrawer() {
   const announce = (message) => { const live = document.getElementById('accessibility-live'); if (live) live.textContent = message; };
   const getFocusable = () => [...tradingPanelEl?.querySelectorAll?.('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || []].filter((el) => !el.closest('[hidden], .hidden, .compat-control'));
 
+  const focusElement = (id) => {
+    const element = document.getElementById(id);
+    if (!element) return false;
+    element.focus({ preventScroll: false });
+    element.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    return true;
+  };
+
   const setDrawer = (open) => {
     if (!isMobileDrawer()) {
       document.body.classList.remove('drawer-open');
@@ -26,6 +34,15 @@ export function bindMobileDrawer() {
     tradingPanelEl?.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
     if (isOpen) { requestAnimationFrame(() => getFocusable()[0]?.focus?.()); announce('Trading panel opened'); }
     else { announce('Trading panel closed'); if (previousFocus?.focus) requestAnimationFrame(() => previousFocus.focus()); previousFocus = null; }
+  };
+
+  const focusTradingPanel = (targetId = 'trade-qty') => {
+    if (!isMobileDrawer()) return focusElement(targetId);
+    setDrawer(true);
+    requestAnimationFrame(() => {
+      if (document.body.classList.contains('drawer-open')) focusElement(targetId);
+    });
+    return true;
   };
 
   const onDrawerClick = () => { if (isMobileDrawer()) setDrawer(!document.body.classList.contains('drawer-open')); };
@@ -63,6 +80,7 @@ export function bindMobileDrawer() {
 
   return {
     setDrawer,
+    focusTradingPanel,
     destroy() {
       drawerBtn?.removeEventListener('click', onDrawerClick);
       scrim?.removeEventListener('click', onScrimClick);

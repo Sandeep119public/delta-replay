@@ -26,6 +26,12 @@ describe('Phase 6 command surface', () => {
     expect(commandSurface).toContain("event.key === 'Escape'");
   });
 
+  it('routes trade-panel focus through the authoritative mobile drawer controller', () => {
+    expect(commandSurface).toContain('focusTradePanel');
+    expect(commandSurface).toContain("focusTradePanel('trade-qty')");
+    expect(main).toContain('app.mobileDrawer?.focusTradingPanel');
+  });
+
   it('exposes replay and trading actions without replacing existing bindings', () => {
     for (const id of ['symbol-select', 'replay-date', 'header-start-replay-btn', 'timeline-slider', 'btn-play', 'btn-step', 'btn-reset', 'trade-qty']) {
       expect(commandSurface).toContain(`'${id}'`);

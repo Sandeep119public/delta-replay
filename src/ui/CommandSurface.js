@@ -33,7 +33,7 @@ function focusElement(id) {
   return true;
 }
 
-function runCommand(label) {
+function runCommand(label, { focusTradePanel = null } = {}) {
   switch (label) {
     case 'Focus symbol':
       return focusElement('symbol-select');
@@ -58,7 +58,7 @@ function runCommand(label) {
     case 'Focus quantity':
       return focusElement('trade-qty');
     case 'Focus trade panel':
-      return focusElement('trade-qty');
+      return focusTradePanel ? focusTradePanel('trade-qty') : focusElement('trade-qty');
     default:
       return false;
   }
@@ -68,7 +68,7 @@ function flattenCommands() {
   return COMMANDS.flatMap(({ group, items }) => items.map(([label, hint, shortcut]) => ({ group, label, hint, shortcut })));
 }
 
-export function createCommandSurface() {
+export function createCommandSurface({ focusTradePanel = null } = {}) {
   if (typeof document === 'undefined') return { destroy() {} };
   if (document.querySelector('.phase6-command-trigger')) return { destroy() {} };
 
@@ -148,7 +148,7 @@ export function createCommandSurface() {
         render();
       });
       item.addEventListener('click', () => {
-        runCommand(command.label);
+        runCommand(command.label, { focusTradePanel });
         closeMenu();
       });
       list.appendChild(item);
@@ -211,7 +211,7 @@ export function createCommandSurface() {
       render();
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      runCommand(visible[activeIndex].label);
+      runCommand(visible[activeIndex].label, { focusTradePanel });
       closeMenu();
     }
   }
