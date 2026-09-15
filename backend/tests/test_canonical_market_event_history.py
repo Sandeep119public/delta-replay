@@ -4,7 +4,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.paper_engine import PaperTradingEngine
 from app.services.replay_service import ReplayService
 from app.services.replay_timeline import ReplayDivergenceError, rebuild_trading
 
@@ -48,7 +47,7 @@ def test_rebuild_rejects_two_kinds_of_market_event_at_one_index():
         rebuild_trading(service, history, 0)
 
 
-def test_manual_candle_without_symbol_uses_latest_replay_symbol():
+def test_manual_candle_cannot_create_a_second_market_event_at_current_index():
     session_id = str(uuid4())
     headers = {"X-Session-ID": session_id}
     payload = {"candles": [candle(1, 100), candle(2, 102)]}
