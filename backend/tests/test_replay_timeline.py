@@ -127,7 +127,7 @@ def test_rebuild_rejects_multiple_market_events_at_one_index():
     try:
         rebuild_trading(service, [market_step(0, "BTCUSDT"), market_step(0, "ETHUSDT")], 0)
     except ReplayDivergenceError as exc:
-        assert "multiple market_step" in str(exc)
+        assert "multiple market events" in str(exc)
     else:
         raise AssertionError("multiple market events at one index must be rejected")
 
