@@ -43,6 +43,10 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
             index = int(command["replayIndex"])
             if index < 0 or index >= len(replay.candles):
                 raise ReplayDivergenceError("market_step replay index is outside dataset")
+            first_executable_index = replay.start_index if replay.start_index >= 0 else 0
+            if engine.index == -1 and index == first_executable_index:
+                engine.on_candle(replay.candles[index], index, payload["symbol"])
+                return
             if index != engine.index + 1:
                 raise ReplayDivergenceError(f"market_step index {index} is not the next executable index {engine.index + 1}")
             engine.on_candle(replay.candles[index], index, payload["symbol"])
