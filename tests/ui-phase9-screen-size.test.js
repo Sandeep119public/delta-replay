@@ -39,7 +39,7 @@ describe('Phase 9 screen-size optimization', () => {
     expect(css).toMatch(/@media \(max-width: 640px\)[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto auto/);
     expect(css).toMatch(/\.topbar-center[\s\S]*max-width:\s*min\(232px, 64vw\)/);
     expect(css).toMatch(/#header-start-replay-btn[\s\S]*width:\s*var\(--phase9-touch\)/);
-    expect(css).toMatch(/\.topbar-right \.paper-badge,[\s\S]*#data-status\}\s*\{\s*display:\s*none/);
+    expect(css).toMatch(/\.topbar-right \.paper-badge,\s*\n\s*\.topbar-right #data-status \{\s*display:\s*none/);
   });
 
   it('handles landscape mobile separately', () => {
