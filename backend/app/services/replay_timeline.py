@@ -80,7 +80,17 @@ def _validate_history_order(history) -> None:
         last_replay_index = replay_index
 
 
-def rebuild_trading(replay, history, target_index: int, default_symbol: str = "BTCUSDT") -> PaperTradingEngine:
+def rebuild_trading(
+    replay,
+    history,
+    target_index: int,
+    default_symbol: str = "BTCUSDT",
+    *,
+    starting_balance: float = 10000.0,
+    fee_rate: float = 0.0005,
+    margin_rate: float = 0.1,
+    maint_margin_rate: float = 0.05,
+) -> PaperTradingEngine:
     """Replay persisted events exactly, with a pristine market baseline when safe."""
     if target_index < -1:
         raise ValueError("replay target must be -1 or greater")
@@ -91,7 +101,12 @@ def rebuild_trading(replay, history, target_index: int, default_symbol: str = "B
     if not default_symbol:
         raise ValueError("default replay symbol must be provided")
 
-    engine = PaperTradingEngine()
+    engine = PaperTradingEngine(
+        starting_balance=starting_balance,
+        fee_rate=fee_rate,
+        margin_rate=margin_rate,
+        maint_margin_rate=maint_margin_rate,
+    )
     history = list(history or [])
     _validate_history_order(history)
 
