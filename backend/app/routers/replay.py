@@ -28,11 +28,12 @@ def require_pristine_trading(session, action, *, allow_replay_progress=False):
 
 
 def _replay_symbol(session, fallback="BTCUSDT"):
-    for command in session.history:
-        if command.get("type") == "market_step" and command.get("replayIndex") == session.replay.start_index:
-            symbol = command.get("payload", {}).get("symbol")
-            if isinstance(symbol, str) and symbol.strip():
-                return symbol.strip().upper()
+    for command in reversed(session.history):
+        if command.get("type") != "market_step":
+            continue
+        symbol = command.get("payload", {}).get("symbol")
+        if isinstance(symbol, str) and symbol.strip():
+            return symbol.strip().upper()
     return fallback
 
 
