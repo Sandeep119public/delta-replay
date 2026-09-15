@@ -158,8 +158,12 @@ def test_seek_uses_started_symbol_when_symbol_is_omitted():
 
     response = client.post("/api/v1/replay/seek/0", headers=headers)
     assert response.status_code == 200
-    assert response.json()["trading"]["index"] == 0
-    assert response.json()["trading"]["market"]["ETHUSDT"]["index"] == 0
+    assert response.json()["index"] == 0
+    assert response.json()["trading"]["positions"] == []
+
+    resumed = client.post("/api/v1/replay/step", headers=headers)
+    assert resumed.status_code == 200
+    assert resumed.json()["trading"]["positions"][0]["symbol"] == "ETHUSDT"
 
     manager.delete(session_id)
 
