@@ -126,6 +126,31 @@ def test_funding_requires_an_open_position():
     assert manager.get(str(session)).trading.funding == []
 
 
+def test_dataset_load_after_replay_only_progress_resets_trading_cursor_and_history():
+    client = TestClient(app)
+    session = uuid4()
+    replacement = [
+        {"time": 10, "open": 200, "high": 201, "low": 199, "close": 200, "volume": 1},
+        {"time": 11, "open": 200, "high": 202, "low": 198, "close": 201, "volume": 1},
+    ]
+    h_session = h(session)
+
+    assert client.post("/api/v1/replay/load", headers=h_session, json={"candles": CANDLES}).status_code == 200
+    assert client.post("/api/v1/replay/start/0", headers=h_session).status_code == 200
+    assert client.post("/api/v1/replay/step", headers=h_session).status_code == 200
+
+    response = client.post("/api/v1/replay/load", headers=h_session, json={"candles": replacement})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["index"] == -1
+    assert body["total"] == 2
+    assert body["trading"]["index"] == -1
+    assert body["trading"]["orders"] == []
+    assert manager.get(str(session)).history == []
+    assert client.post("/api/v1/replay/start/0", headers=h_session).status_code == 200
+
+
 def test_cancel_all_clears_pending_orders():
     client = TestClient(app)
     session = uuid4()
