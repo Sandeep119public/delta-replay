@@ -19,11 +19,11 @@ def trading_api_snapshot(engine):
     }
 
 
-def require_pristine_trading(session, action):
+def require_pristine_trading(session, action, *, allow_replay_progress=False):
     trading = session.trading
     if trading.has_open_position() or trading.pending_orders():
         raise HTTPException(409, f"Close positions and cancel pending orders before {action}")
-    if trading.trades or trading.orders or trading.funding or trading.index >= 0:
+    if trading.trades or trading.orders or trading.funding or (trading.index >= 0 and not allow_replay_progress):
         raise HTTPException(409, f"Reset the simulation before {action} after trading activity")
 
 
@@ -37,8 +37,16 @@ def load(request: Request, batch: CandleBatch):
     candles = [c.model_dump() for c in batch.candles]
 
     def replace(session):
-        require_pristine_trading(session, "loading new data")
+        require_pristine_trading(session, "loading new data", allow_replay_progress=True)
+        trading = session.trading
         session.replay.load(candles)
+        session.trading = PaperTradingEngine(
+            starting_balance=trading.account.starting_balance,
+            fee_rate=trading.fee_rate,
+            margin_rate=trading.margin_rate,
+            maint_margin_rate=trading.maint_margin_rate,
+        )
+        session.history = []
         return replay_snapshot(session)
 
     return atomic_session(request, replace)

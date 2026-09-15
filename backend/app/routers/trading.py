@@ -93,6 +93,11 @@ def replay_candle(session, symbol: str):
     return candle
 
 
+def require_active_replay(session, action: str):
+    if session.replay.index < 0:
+        raise HTTPException(409, f"Load data and start replay before {action}")
+
+
 def normalize_candle(raw: dict):
     try:
         return Candle.model_validate(raw).model_dump()
@@ -144,6 +149,7 @@ def funding(request: Request):
 @router.post("/order")
 def order(request: Request, command: EngineOrder):
     def submit(session):
+        require_active_replay(session, "placing an order")
         service = session.trading
         created = service.submit(
             command.symbol,
@@ -178,6 +184,7 @@ def order(request: Request, command: EngineOrder):
 @router.post("/close")
 def close(request: Request, command: CloseRequest):
     def close_position(session):
+        require_active_replay(session, "closing a position")
         market = session.trading.get_latest_market(command.symbol)
         if not market or not market.get("candle", {}).get("close"):
             raise HTTPException(409, f"No market price available for {command.symbol}")
@@ -214,12 +221,20 @@ def close(request: Request, command: CloseRequest):
 @router.post("/funding")
 def apply_funding(request: Request, command: FundingRequest):
     def apply(session):
+        require_active_replay(session, "applying funding")
+        if not session.trading.has_open_position(command.symbol):
+            if command.symbol is None and session.trading.has_open_position():
+                pass
+            else:
+                raise HTTPException(409, "Funding requires an open position")
         events = session.trading.apply_funding(
             command.rate,
             timestamp=command.timestamp,
             symbol=command.symbol,
             mark_price=command.markPrice,
         )
+        if not events:
+            raise HTTPException(409, "Funding requires an open position")
         session.record(
             "funding",
             session.replay.index,
