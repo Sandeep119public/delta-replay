@@ -3,15 +3,10 @@ export const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 5, 10];
 export function createReplayCommandPolicy(tradingCapabilities = null) {
   return Object.freeze({
     canExecute(action) {
-      if (action === 'reset' || action === 'restart' || action === 'stepForward' || action === 'resume') {
-        return { allowed: true };
-      }
+      if (action === 'reset' || action === 'restart' || action === 'stepForward' || action === 'resume' || action === 'seek') return { allowed: true };
       const hasTradingActivity = Boolean(tradingCapabilities?.hasTradingActivity?.());
-      if (action === 'seek' && hasTradingActivity) {
-        return { allowed: false, reason: 'Cannot seek after trading activity. Reset the simulation first.' };
-      }
       if (action === 'start' && hasTradingActivity) {
-        return { allowed: false, reason: 'Cannot start a new replay position after trading activity. Reset the simulation first.' };
+        return { allowed: false, reason: 'Cannot start a new replay position after trading activity. Seek to the desired candle or reset the simulation first.' };
       }
       return { allowed: true };
     },
