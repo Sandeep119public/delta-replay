@@ -37,6 +37,12 @@ def _replay_symbol(session, fallback="BTCUSDT"):
 
 
 def _active_replay_symbol(session, requested_symbol=None):
+    if requested_symbol is not None:
+        requested = str(requested_symbol).strip().upper()
+        if not requested:
+            raise HTTPException(422, "symbol must be provided")
+        return requested
+
     symbols = set()
     for command in session.history:
         if command.get("type") != "market_step":
@@ -49,15 +55,7 @@ def _active_replay_symbol(session, requested_symbol=None):
         raise HTTPException(409, "Start the replay before advancing or seeking it")
     if len(symbols) != 1:
         raise HTTPException(409, "Replay history contains conflicting symbols")
-
-    active_symbol = next(iter(symbols))
-    if requested_symbol is not None:
-        requested = str(requested_symbol).strip().upper()
-        if not requested:
-            raise HTTPException(422, "symbol must be provided")
-        if requested != active_symbol:
-            raise HTTPException(409, f"Replay is fixed to {active_symbol}; cannot switch to {requested}")
-    return active_symbol
+    return next(iter(symbols))
 
 
 @router.get("/state")
