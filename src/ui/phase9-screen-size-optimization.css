@@ -56,17 +56,40 @@
 
 @media (max-width: 640px) {
   .topbar {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px;
     padding-inline: 8px;
   }
+  .topbar-center {
+    max-width: min(232px, 64vw);
+    overflow: hidden;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .topbar-center .selector-group { flex: 0 0 auto; }
+  .topbar-center .date-group { gap: 5px; }
+  .date-group input { width: 92px; min-width: 0; padding-inline: 7px; }
+  .date-group input[type="time"] { width: 72px; }
+  #header-start-replay-btn {
+    width: var(--phase9-touch);
+    min-width: var(--phase9-touch);
+    min-height: var(--phase9-touch);
+    padding: 0;
+    font-size: 0;
+  }
+  #header-start-replay-btn::before {
+    content: '▶';
+    font-size: 13px;
+    line-height: 1;
+  }
+  .topbar-right .paper-badge,
+  .topbar-right #data-status { display: none; }
   .logo {
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .topbar-right { justify-content: flex-end; gap: 6px; }
   .phase6-command-trigger {
     min-width: var(--phase9-touch);
     min-height: var(--phase9-touch);
