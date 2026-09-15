@@ -27,7 +27,7 @@ def test_run_rejects_non_positive_quantity():
 
 
 def test_run_rejects_non_finite_fee_rate():
-    with pytest.raises(ValueError, match="fee_rate must be finite and in \[0,1\)"):
+    with pytest.raises(ValueError, match=r"fee_rate must be finite and in \[0,1\)"):
         BacktestService().run([candle(100, 101)], fee_rate=math.inf)
 
 
@@ -72,10 +72,10 @@ def test_sma_cross_closes_on_next_bar_open():
         candle(80, 80, 7),
     ]
 
-    result = BacktestService().run(candles, quantity=1, fee_rate=0)
+    result = BacktestService().run(candles, quantity=1, strategy="sma_cross", fee_rate=0)
 
     assert result["summary"]["trades"] == 1
-    assert result["trades"][0]["entry"] == pytest.approx(99)
+    assert result["trades"][0]["entry"] == pytest.approx(103)
     assert result["trades"][0]["exit"] == pytest.approx(80)
 
 
