@@ -7,7 +7,6 @@ import {
   FORBIDDEN_LEGACY_FILES,
   INTEGRATION_LAYERS,
   LAYERS,
-  PRESENTATION_COMPAT_FILE,
 } from './architecture-policy.mjs';
 
 const ROOT = process.cwd();
@@ -85,7 +84,7 @@ for (const layer of LAYERS) {
       if ((layer === 'ui' || layer === 'pages') && imported === 'trading') violations.push(`${relative}: presentation layer must use application trading ports, not trading domain imports`);
     }
     if (!INTEGRATION_LAYERS.has(layer) && BROWSER_GLOBALS.test(code)) violations.push(`${relative}: browser global access is forbidden outside presentation/integration layers`);
-    if ((layer === 'ui' || layer === 'pages') && relative.replaceAll(path.sep, '/') !== PRESENTATION_COMPAT_FILE) {
+    if (layer === 'ui' || layer === 'pages') {
       for (const pattern of BANNED_PRESENTATION_TOKENS) {
         const match = code.match(pattern);
         if (match) violations.push(`${relative}: presentation boundary leak — capability token '${match[0]}' must not appear in src/${layer} (use a *PresentationPort contract instead)`);
