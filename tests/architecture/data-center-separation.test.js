@@ -35,4 +35,10 @@ describe('data feature separation of concerns', () => {
     expect(application).toContain('router.register(page, dataPages.get(page))');
     expect(application).toContain('router.destroy(); dataWorkspaceSession.destroy();');
   });
+
+  it('does not retain the retired page-controller implementations', () => {
+    for (const file of ['src/pages/DashboardPage.js', 'src/pages/StrategiesPage.js', 'src/pages/JournalPage.js']) {
+      expect(fs.existsSync(file)).toBe(false);
+    }
+  });
 });
