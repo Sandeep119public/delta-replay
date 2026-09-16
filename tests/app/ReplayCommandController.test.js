@@ -14,6 +14,33 @@ describe('ReplayCommandController', () => {
     expect(policy.canExecute('resume')).toEqual({ allowed: true });
   });
 
+  it('replays again by seeking after reset instead of starting a new replay position', async () => {
+    const reset = vi.fn(async () => ({ status: 'paused', currentIndex: 2 }));
+    const seek = vi.fn(async () => ({ status: 'paused', currentIndex: 5 }));
+    const play = vi.fn(async () => ({ status: 'playing', currentIndex: 5 }));
+    const start = vi.fn();
+    const engine = {
+      getState: vi.fn(() => ({ status: 'ended', currentIndex: 9, speed: 1 })),
+      getTotalCandles: () => 10,
+      reset,
+      seek,
+      play,
+      start,
+    };
+    const controller = new ReplayCommandController({
+      engine,
+      appState: { pendingStartIndex: 5 },
+      candleStore: { getCount: () => 10 },
+    });
+
+    await expect(controller.togglePlayPause()).resolves.toBe(true);
+
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(seek).toHaveBeenCalledWith(5);
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it('does not change speed after destroy', () => {
     const setSpeed = vi.fn();
     const controller = new ReplayCommandController({
