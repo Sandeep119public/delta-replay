@@ -73,8 +73,8 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
     if not isinstance(market_state, dict):
         raise ValueError("trading market state must be an object")
 
-    if trading.index > replay.index:
-        raise ValueError("trading index cannot be ahead of replay index")
+    if trading.index != replay.index:
+        raise ValueError("trading index must equal replay index")
 
     for symbol, market in market_state.items():
         if not isinstance(symbol, str) or symbol != symbol.strip().upper() or not symbol.strip():
@@ -82,8 +82,8 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
         if not isinstance(market, dict):
             raise ValueError("invalid market context")
         index = market.get("index")
-        if isinstance(index, bool) or not isinstance(index, int) or index < 0 or index > trading.index:
-            raise ValueError(f"market index for {symbol} is outside trading timeline")
+        if isinstance(index, bool) or not isinstance(index, int) or index < 0 or index != trading.index:
+            raise ValueError(f"market index for {symbol} must equal trading index")
         if index >= len(replay.candles):
             raise ValueError(f"market index for {symbol} is outside replay dataset")
         candle = market.get("candle")
