@@ -1,5 +1,4 @@
 import { TRADING_PRESENTATION_EVENTS, assertTradingPresentation } from '../ports/TradingPresentationPort.js';
-import { normalizeCandleSource } from './presentationCompat.js';
 
 /**
  * TimelineSparkline renders a contextual mini price scrubber above the
@@ -25,7 +24,7 @@ export class TimelineSparkline {
     palette = null,
   } = {}) {
     this.canvas = canvasEl;
-    this.candles = candles ? normalizeCandleSource(candles) : null;
+    this.candles = candles;
     this.replayPort = replay ?? replayPort;
     this.trading = trading ? assertTradingPresentation(trading) : null;
     this.tradingEvents = tradingEvents;
