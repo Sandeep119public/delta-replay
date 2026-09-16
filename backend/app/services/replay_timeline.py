@@ -131,8 +131,12 @@ def rebuild_trading(
     }
 
     configured_start_index = replay.start_index if replay.start_index >= 0 and replay.start_index <= target_index else 0
+    earliest_command_index = min(
+        (command["replayIndex"] for command in commands if command["replayIndex"] >= 0),
+        default=configured_start_index,
+    )
     earliest_market_index = min(market_commands, default=configured_start_index)
-    start_index = min(configured_start_index, earliest_market_index)
+    start_index = min(configured_start_index, earliest_command_index, earliest_market_index)
 
     command_iter = iter(commands)
     current_symbol = default_symbol
