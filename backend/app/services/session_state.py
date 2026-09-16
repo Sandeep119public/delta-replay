@@ -32,7 +32,7 @@ def _validate_json_safety(document: Dict[str, Any]) -> None:
         raise ValueError(f"session document is not JSON-safe: {exc}") from exc
 
 
-def _validate_history(history, *, replay_index=None) -> None:
+def _validate_history(history, *, replay_index=None, replay=None) -> None:
     if not isinstance(history, list):
         raise ValueError("session history must be a list")
     last_replay_index = -1
@@ -61,6 +61,15 @@ def _validate_history(history, *, replay_index=None) -> None:
             symbol = payload.get("symbol")
             if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
                 raise ValueError(f"{event_type} symbol is invalid")
+            if replay is not None:
+                if index >= len(replay.candles):
+                    raise ValueError(f"{event_type} replayIndex is outside replay dataset")
+                if event_type == "candle":
+                    candle = payload.get("candle")
+                    if not isinstance(candle, dict):
+                        raise ValueError("candle event must contain a candle")
+                    if candle != replay.candles[index]:
+                        raise ValueError(f"candle event at replay index {index} does not match replay dataset")
             if event_type == "candle":
                 candle_index = payload.get("index")
                 if isinstance(candle_index, bool) or not isinstance(candle_index, int) or candle_index != index:
@@ -84,17 +93,20 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
         index = market.get("index")
         if isinstance(index, bool) or not isinstance(index, int) or index < 0 or index > trading.index:
             raise ValueError(f"market index for {symbol} is outside trading timeline")
+        if index >= len(replay.candles):
+            raise ValueError(f"market index for {symbol} is outside replay dataset")
         candle = market.get("candle")
         if not isinstance(candle, dict):
             raise ValueError(f"market candle for {symbol} is invalid")
+        canonical_candle = replay.candles[index]
+        if candle != canonical_candle:
+            raise ValueError(f"market candle for {symbol} does not match replay dataset at index {index}")
         for field in ("open", "high", "low", "close"):
             value = candle.get(field)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
                 raise ValueError(f"market candle {field} for {symbol} is invalid")
         if candle["high"] < max(candle["open"], candle["close"]) or candle["low"] > min(candle["open"], candle["close"]):
             raise ValueError(f"market candle range for {symbol} is invalid")
-        if index >= len(replay.candles):
-            raise ValueError(f"market index for {symbol} is outside replay dataset")
 
     missing_position_markets = sorted(set(trading.positions) - set(market_state))
     if missing_position_markets:
@@ -112,13 +124,23 @@ def serialize_session(
     replay: ReplayService,
     trading: PaperTradingEngine,
     history: list[dict] | None = None,
+    *,
+    include_candles: bool = True,
 ) -> Dict[str, Any]:
-    """Return the canonical JSON-compatible session persistence document."""
+    """Return the canonical JSON-compatible session persistence document.
+
+    Durable repositories can omit candle payloads for ordinary mutations because
+    the dataset is content-addressed and stored separately. They must include
+    candles when introducing a dataset that the repository may not yet own.
+    """
     history = deepcopy(history or [])
-    _validate_history(history, replay_index=replay.index)
+    _validate_history(history, replay_index=replay.index, replay=replay)
+    replay_state = replay.export_state()
+    if not include_candles:
+        replay_state.pop("candles", None)
     document = {
         "version": SESSION_STATE_VERSION,
-        "replay": replay.export_state(),
+        "replay": replay_state,
         "trading": trading.export_state(),
         "tradingMarket": trading.export_market_state(),
         "history": history,
@@ -147,7 +169,7 @@ def restore_session_bundle(document: Dict[str, Any]):
         raise ValueError(f"invalid session state: {exc}") from exc
 
     history = [] if version == 1 else deepcopy(document.get("history", []))
-    _validate_history(history, replay_index=replay.index)
+    _validate_history(history, replay_index=replay.index, replay=replay)
     return replay, trading, history
 
 

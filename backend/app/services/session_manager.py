@@ -108,12 +108,16 @@ class SessionManager:
 
             def mutate(document):
                 session = self._restore(document)
+                previous_dataset_id = session.replay.dataset_id
                 result = operation(session)
-                return serialize_session(
+                dataset_changed = session.replay.dataset_id != previous_dataset_id
+                persisted = serialize_session(
                     session.replay,
                     session.trading,
                     session.history,
-                ), (result, session)
+                    include_candles=(not self.repository.durable or dataset_changed),
+                )
+                return persisted, (result, session)
 
             result, session = self.repository.atomic_update(session_id, mutate)
             if not self.repository.durable:
