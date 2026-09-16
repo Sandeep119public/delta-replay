@@ -5,6 +5,7 @@ import { createDataFeature } from './createDataFeature.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
 import { bindDatasetSelectors } from './bindDatasetSelectors.js';
+import { bindMobileNavigation } from './bindMobileNavigation.js';
 import { createPaperUI } from '../ui/PaperUI.js';
 import { renderPaperLayout } from '../ui/paper/PaperLayout.js';
 import { ChartManager } from '../chart/ChartManager.js';
@@ -46,15 +47,7 @@ export function createApplication() {
   router.register('replay');
   const dataFeature = createDataFeature({ services, router });
   router.init();
-
-  const mobileNavToggle = document.getElementById('mobile-nav-toggle');
-  const mobileNavScrim = document.getElementById('mobile-nav-scrim');
-  const setMobileNavOpen = (open) => { document.body.classList.toggle('nav-open', open); mobileNavToggle?.setAttribute('aria-expanded', String(open)); mobileNavToggle?.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation'); };
-  const onMobileNavToggle = () => setMobileNavOpen(!document.body.classList.contains('nav-open'));
-  const onMobileNavScrim = () => setMobileNavOpen(false);
-  const onPageChange = () => setMobileNavOpen(false);
-  mobileNavToggle?.addEventListener('click', onMobileNavToggle); mobileNavScrim?.addEventListener('click', onMobileNavScrim); window.addEventListener('pagechange', onPageChange);
-  const mobileNavBinding = { destroy() { mobileNavToggle?.removeEventListener('click', onMobileNavToggle); mobileNavScrim?.removeEventListener('click', onMobileNavScrim); window.removeEventListener('pagechange', onPageChange); setMobileNavOpen(false); } };
+  const mobileNavBinding = bindMobileNavigation();
 
   let coordinator = null;
   let commandController = null;
