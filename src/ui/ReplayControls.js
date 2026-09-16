@@ -13,23 +13,19 @@ export class ReplayControls {
     this.onFollowClick = onFollowClick;
     this._listeners = [];
     this._subscriptions = [];
-    this._pending = new Set();
     this._listen = (el, type, handler) => {
       el?.addEventListener?.(type, handler);
       if (el?.removeEventListener) this._listeners.push([el, type, handler]);
     };
 
-    this._listen(this.playBtn, 'click', () => { void this._safeAction(() => { const state = this.replayPort.getState(); if (state.status === 'ready' || state.status === 'ended') { const candidate = Number(state.startIndex); const total = Number(state.totalCandles ?? state.total ?? 0); const startIndex = Number.isInteger(candidate) && candidate >= 0 && (total <= 0 || candidate < total) ? candidate : 0; return this.replayPort.start(startIndex); } return this.replayPort.play(); }); });
+    this._listen(this.playBtn, 'click', () => { void this._safeAction(() => this._runPlayCommand()); });
     this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.replayPort.pause()); });
     this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.replayPort.stepForward()); });
     this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.replayPort.reset()); });
-    this._listen(this.startReplayBtn, 'click', () => {
-      const idx = Number(this.startReplayBtn.dataset.startIndex ?? '0');
-      void this._safeAction(() => this.replayPort.start(idx));
-    });
+    this._listen(this.startReplayBtn, 'click', () => { void this._safeAction(() => this._runHeaderCommand()); });
     this._listen(this.speedSelect, 'change', () => {
       void this._safeAction(() => this.replayPort.setSpeed(this.speedSelect.value), () => {
-        this.speedSelect.value = String(this.replayPort.getState().speed);
+        if (this.speedSelect) this.speedSelect.value = String(this.replayPort.getState().speed);
       });
     });
 
@@ -46,6 +42,30 @@ export class ReplayControls {
     if (typeof stateUnsubscribe === 'function') this._subscriptions.push(stateUnsubscribe);
     if (typeof speedUnsubscribe === 'function') this._subscriptions.push(speedUnsubscribe);
     this.render(this.replayPort.getState());
+  }
+
+  _runPlayCommand() {
+    const state = this.replayPort.getState();
+    if (state.status === 'playing') return this.replayPort.pause();
+    if (state.status === 'paused') return this.replayPort.play();
+    if (state.status === 'ended') {
+      const candidate = Number(state.startIndex);
+      const total = Number(state.totalCandles ?? state.total ?? 0);
+      const startIndex = Number.isInteger(candidate) && candidate >= 0 && (total <= 0 || candidate < total) ? candidate : 0;
+      return this.replayPort.start(startIndex);
+    }
+    return this.replayPort.play();
+  }
+
+  _runHeaderCommand() {
+    const state = this.replayPort.getState();
+    if (state.status === 'playing') return this.replayPort.pause();
+    if (state.status === 'paused') return this.replayPort.play();
+    const idx = Number(this.startReplayBtn?.dataset.startIndex ?? state.startIndex ?? 0);
+    const total = Number(state.totalCandles ?? state.total ?? 0);
+    const startIndex = Number.isInteger(idx) && idx >= 0 && (total <= 0 || idx < total) ? idx : 0;
+    if (state.status === 'ready' || state.status === 'ended') return this.replayPort.start(startIndex);
+    return this.replayPort.play();
   }
 
   destroy() {
@@ -99,39 +119,39 @@ export class ReplayControls {
       document.body?.classList?.toggle('velocity-boost', Number(state.speed) >= 5);
     } catch {}
 
-    if (this.startReplayBtn) this.startReplayBtn.disabled = !hasData || !isReady || Number.isNaN(Number(this.startReplayBtn.dataset.startIndex));
-    if (this.startReplayBtn) this.startReplayBtn.textContent = isReady ? 'START REPLAY' : (isPlaying ? 'PAUSE' : isPaused ? 'RESUME' : isEnded ? 'REPLAY AGAIN' : 'START REPLAY');
-
-    if (isPlaying) {
-      this.playBtn.classList.add('hidden');
-      this.pauseBtn.classList.remove('hidden');
-      this.playBtn.disabled = true;
-      this.pauseBtn.disabled = false;
-    } else {
-      this.playBtn.classList.remove('hidden');
-      this.pauseBtn.classList.add('hidden');
-      this.pauseBtn.disabled = true;
-      this.playBtn.disabled = !hasData || isIdle;
+    if (this.startReplayBtn) {
+      const text = isReady ? 'START REPLAY' : (isPlaying ? 'PAUSE' : isPaused ? 'RESUME' : isEnded ? 'REPLAY AGAIN' : 'START REPLAY');
+      const label = isReady ? 'Start replay' : (isPlaying ? 'Pause replay' : isPaused ? 'Resume replay' : isEnded ? 'Replay again' : 'Start replay');
+      this.startReplayBtn.textContent = text;
+      this.startReplayBtn.setAttribute?.('aria-label', label);
+      this.startReplayBtn.disabled = !hasData || isIdle || (isReady && Number.isNaN(Number(this.startReplayBtn.dataset.startIndex)));
     }
 
-    this.stepBtn.disabled = !(isPaused && index < total - 1);
-    this.resetBtn.disabled = !hasData || isIdle || isReady;
-    this.speedSelect.disabled = !hasData || isIdle;
-
-    if (isReady) {
-      this.playBtn.disabled = !hasData;
-      this.pauseBtn.disabled = true;
-      this.stepBtn.disabled = true;
+    if (this.playBtn) {
+      this.playBtn.classList.toggle('hidden', isPlaying);
+      this.playBtn.disabled = isPlaying || !hasData || isIdle;
     }
+    if (this.pauseBtn) {
+      this.pauseBtn.classList.toggle('hidden', !isPlaying);
+      this.pauseBtn.disabled = !isPlaying;
+    }
+    if (this.stepBtn) this.stepBtn.disabled = !(isPaused && index < total - 1);
+    if (this.resetBtn) this.resetBtn.disabled = !hasData || isIdle || isReady;
+    if (this.speedSelect) this.speedSelect.disabled = !hasData || isIdle;
+
     if (isEnded) {
-      this.playBtn.disabled = !hasData;
-      this.pauseBtn.disabled = true;
-      this.stepBtn.disabled = true;
-      this.resetBtn.disabled = state.startIndex < 0;
+      if (this.playBtn) this.playBtn.disabled = !hasData;
+      if (this.pauseBtn) this.pauseBtn.disabled = true;
+      if (this.stepBtn) this.stepBtn.disabled = true;
+      if (this.resetBtn) this.resetBtn.disabled = state.startIndex < 0;
     }
   }
 
-  setEnabledForPreview() {}
+  setEnabledForPreview(enabled = true) {
+    const disabled = !enabled;
+    [this.playBtn, this.pauseBtn, this.stepBtn, this.resetBtn, this.startReplayBtn, this.speedSelect]
+      .forEach((element) => { if (element) element.disabled = disabled; });
+  }
 
   setAutoFollow(isFollowing) {
     this.followBtn?.classList.toggle('hidden', isFollowing);
