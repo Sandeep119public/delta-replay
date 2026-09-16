@@ -26,13 +26,13 @@ describe('RemoteReplayEngine', () => {
     const seekRequest = engine.seek(2);
 
     await Promise.resolve();
-    expect(requests).toEqual(['/step?symbol=BTCUSDT']);
+    expect(requests).toEqual(['/step']);
 
     step.resolve({ status: 'paused', index: 1, startIndex: 0, total: 3, candle: null, visibleCandles: [] });
     await stepRequest;
     await Promise.resolve();
 
-    expect(requests).toEqual(['/step?symbol=BTCUSDT', '/seek/2?symbol=BTCUSDT']);
+    expect(requests).toEqual(['/step', '/seek/2?symbol=BTCUSDT']);
 
     await seekRequest;
     expect(engine.getState().currentIndex).toBe(2);
@@ -68,5 +68,30 @@ describe('RemoteReplayEngine', () => {
     await resetRequest;
     expect(engine.getState().currentIndex).toBe(-1);
     expect(stateEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not execute queued replay mutations after destroy', async () => {
+    const first = deferred();
+    const requests = [];
+    const api = {
+      request: vi.fn((path) => {
+        requests.push(path);
+        if (path === '/step') return first.promise;
+        return Promise.resolve({ status: 'paused', index: 0, startIndex: 0, total: 3, candle: null, visibleCandles: [] });
+      }),
+    };
+    const engine = new RemoteReplayEngine(api, null, () => 'BTCUSDT');
+    engine.state = { status: 'paused', currentIndex: 0, startIndex: 0, totalCandles: 3, speed: 1, candle: null, visibleCandles: [] };
+
+    const stepRequest = engine.stepForward();
+    const resetRequest = engine.reset();
+    engine.destroy();
+
+    first.resolve({ status: 'paused', index: 1, startIndex: 0, total: 3, candle: null, visibleCandles: [] });
+    await stepRequest;
+    await resetRequest;
+
+    expect(requests).toEqual(['/step']);
+    expect(engine.getState().status).toBe('paused');
   });
 });
