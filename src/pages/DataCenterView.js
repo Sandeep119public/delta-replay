@@ -1,5 +1,5 @@
 function escapeText(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  return String(value ?? '').replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function setPage(documentRef, name, html) {
@@ -69,18 +69,23 @@ function coming(title, detail) {
   return `<div class="data-page">${header('RESEARCH',title,detail)}<section class="data-panel empty-page"><strong>Workspace reserved</strong><p>The navigation is established now so future research features can attach to the same shell and job contracts.</p></section></div>`;
 }
 
-export function renderDataCenterPages({ documentRef = globalThis.document, snapshot, storageEstimate, download, jobsState, validationState }) {
+export function renderDataCenterPage({ documentRef = globalThis.document, page, snapshot, storageEstimate, download, jobsState = [], validationState }) {
   const end = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
   const start = new Date(end.getTime() - 30 * 86400000);
   const dates = { start: start.toISOString().slice(0,16), end: end.toISOString().slice(0,16) };
-  setPage(documentRef, 'dashboard', dashboard(snapshot, storageEstimate));
-  setPage(documentRef, 'downloads', downloads(snapshot, download, dates));
-  setPage(documentRef, 'datasets', datasets(snapshot));
-  setPage(documentRef, 'validation', validation(snapshot, validationState));
-  setPage(documentRef, 'storage', storage(snapshot, storageEstimate));
-  setPage(documentRef, 'experiments', coming('Experiments','Experiment orchestration will consume the dataset and job contracts created here.'));
-  setPage(documentRef, 'strategies', coming('Strategies','Strategy definitions and walk-forward results will live here.'));
-  setPage(documentRef, 'journal', coming('Journal','Replay notes and research observations will be added here.'));
-  setPage(documentRef, 'jobs', jobs(jobsState));
-  setPage(documentRef, 'system', system(snapshot));
+  const renderers = {
+    dashboard: () => dashboard(snapshot, storageEstimate),
+    downloads: () => downloads(snapshot, download, dates),
+    datasets: () => datasets(snapshot),
+    validation: () => validation(snapshot, validationState),
+    storage: () => storage(snapshot, storageEstimate),
+    experiments: () => coming('Experiments','Experiment orchestration will consume the dataset and job contracts created here.'),
+    strategies: () => coming('Strategies','Strategy definitions and walk-forward results will live here.'),
+    journal: () => coming('Journal','Replay notes and research observations will be added here.'),
+    jobs: () => jobs(jobsState),
+    system: () => system(snapshot),
+  };
+  const render = renderers[page];
+  if (!render) throw new Error(`Unknown data page: ${page}`);
+  setPage(documentRef, page, render());
 }
