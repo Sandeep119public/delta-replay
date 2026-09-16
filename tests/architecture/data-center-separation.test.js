@@ -4,8 +4,13 @@ import fs from 'node:fs';
 const page = fs.readFileSync('src/pages/DataCenterPage.js', 'utf8');
 const session = fs.readFileSync('src/pages/DataWorkspaceSession.js', 'utf8');
 const view = fs.readFileSync('src/pages/DataCenterView.js', 'utf8');
+const operational = fs.readFileSync('src/pages/data-center/operational.js', 'utf8');
+const research = fs.readFileSync('src/pages/data-center/research.js', 'utf8');
+const shared = fs.readFileSync('src/pages/data-center/shared.js', 'utf8');
 const feature = fs.readFileSync('src/app/createDataFeature.js', 'utf8');
 const application = fs.readFileSync('src/app/Application.js', 'utf8');
+const paperUi = fs.readFileSync('src/ui/PaperUI.js', 'utf8');
+const terminalViews = fs.readFileSync('src/ui/createPaperTerminalViews.js', 'utf8');
 
 
 describe('data feature separation of concerns', () => {
@@ -24,11 +29,18 @@ describe('data feature separation of concerns', () => {
     expect(page).not.toContain('DATA_WORKSPACE_EVENTS');
   });
 
-  it('renders only the routed page instead of rebuilding every page', () => {
-    expect(view).toContain('renderDataCenterPage');
+  it('keeps the data view as a thin renderer registry', () => {
     expect(view).toContain('const renderers = {');
     expect(view).toContain('setPage(documentRef, page, render());');
-    expect(view).not.toContain('renderDataCenterPages');
+    expect(view).not.toContain('function dashboard(');
+    expect(view).not.toContain('function downloads(');
+    expect(view).not.toContain('function datasets(');
+  });
+
+  it('separates shared markup helpers from operational and research renderers', () => {
+    expect(shared).toContain('export function escapeText');
+    for (const renderer of ['dashboard', 'downloads', 'datasets', 'validation', 'storage', 'jobs', 'system']) expect(operational).toContain(`export function ${renderer}`);
+    for (const pageName of ['experiments', 'strategies', 'journal']) expect(research).toContain(`${pageName}:`);
   });
 
   it('isolates data feature composition from the application root', () => {
@@ -38,6 +50,15 @@ describe('data feature separation of concerns', () => {
     expect(application).toContain('createDataFeature({ services, router })');
     expect(application).not.toContain('new DataWorkspaceSession(');
     expect(application).not.toContain('new DataCenterPage(');
+  });
+
+  it('keeps PaperUI focused on terminal wiring rather than terminal construction details', () => {
+    expect(paperUi).toContain("import { createPaperTerminalViews } from './createPaperTerminalViews.js';");
+    expect(paperUi).toContain('return createPaperTerminalViews(');
+    expect(paperUi).not.toContain('new TradingPanel(');
+    expect(paperUi).not.toContain('new ReplayDateSelector(');
+    expect(terminalViews).toContain('new TradingPanel(');
+    expect(terminalViews).toContain('new ReplayDateSelector(');
   });
 
   it('does not retain the retired page-controller implementations', () => {
