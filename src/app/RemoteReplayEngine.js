@@ -39,7 +39,10 @@ export class RemoteReplayEngine {
     this.events.emit('stateChanged', this.getState());
   }
   _enqueue(operation) {
-    const run = this._operationTail.then(operation, operation);
+    const run = this._operationTail.then(
+      () => this._destroyed ? this.getState() : operation(),
+      () => this._destroyed ? this.getState() : operation(),
+    );
     this._operationTail = run.catch(() => {});
     return run;
   }
