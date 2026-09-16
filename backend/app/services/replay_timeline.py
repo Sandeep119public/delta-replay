@@ -53,7 +53,17 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
                 raise ReplayDivergenceError(f"market_step index {index} is not the next executable index {engine.index + 1}")
             engine.on_candle(replay.candles[index], index, payload["symbol"])
         elif kind == "candle":
-            engine.on_candle(payload["candle"], payload["index"], payload["symbol"])
+            if replay is None:
+                raise ReplayDivergenceError("candle requires replay data")
+            index = int(command["replayIndex"])
+            if index < 0 or index >= len(replay.candles):
+                raise ReplayDivergenceError("candle replay index is outside dataset")
+            if payload.get("index") != index:
+                raise ReplayDivergenceError("candle payload index does not match replay index")
+            canonical_candle = replay.candles[index]
+            if payload.get("candle") != canonical_candle:
+                raise ReplayDivergenceError("candle payload does not match canonical replay candle")
+            engine.on_candle(canonical_candle, index, payload["symbol"])
         elif kind == "capital":
             engine.set_starting_balance(payload["balance"])
         elif kind == "fee_rate":
@@ -66,7 +76,7 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
         raise ReplayDivergenceError(f"replay command {kind} diverged: {exc}") from exc
 
 
-def _validate_history_order(history) -> None:
+def _validate_history_order(history, replay=None) -> None:
     last_replay_index = -1
     market_indexes = set()
     for command in history:
@@ -82,6 +92,21 @@ def _validate_history_order(history) -> None:
                 raise ReplayDivergenceError(f"{command['type']} replayIndex must be non-negative")
             if replay_index in market_indexes:
                 raise ReplayDivergenceError(f"multiple market events exist for replay index {replay_index}")
+            payload = command.get("payload")
+            if not isinstance(payload, dict):
+                raise ReplayDivergenceError("market event payload must be an object")
+            symbol = payload.get("symbol")
+            if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
+                raise ReplayDivergenceError("market event symbol is invalid")
+            if command["type"] == "candle":
+                if replay is None:
+                    raise ReplayDivergenceError("candle history validation requires replay data")
+                if replay_index >= len(replay.candles):
+                    raise ReplayDivergenceError("candle replay index is outside dataset")
+                if payload.get("index") != replay_index:
+                    raise ReplayDivergenceError("candle payload index does not match replay index")
+                if payload.get("candle") != replay.candles[replay_index]:
+                    raise ReplayDivergenceError("candle payload does not match canonical replay candle")
             market_indexes.add(replay_index)
         last_replay_index = replay_index
 
@@ -114,7 +139,7 @@ def rebuild_trading(
         maint_margin_rate=maint_margin_rate,
     )
     history = list(history or [])
-    _validate_history_order(history)
+    _validate_history_order(history, replay)
 
     if target_index == -1:
         for command in history:
