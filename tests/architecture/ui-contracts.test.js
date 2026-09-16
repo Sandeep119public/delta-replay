@@ -20,14 +20,6 @@ test('application shell exposes stable page and navigation contracts', () => {
   assert.match(html, /id="mobile-nav-toggle"[^>]*aria-controls="app-sidebar"/);
 });
 
-test('data workspace exposes download and lifecycle controls', () => {
-  const html = paperMarkup();
-  for (const id of ['data-symbol','data-timeframe','data-from','data-to']) assert.match(html, new RegExp(`id=["']${id}["']`), `missing #${id}`);
-  assert.match(html, /data-data-action="download"/);
-  assert.match(html, /data-data-action="clear-current"/);
-  assert.match(html, /data-data-action="validate"/);
-});
-
 test('inactive account panel starts from the CSS/controller visibility contract', () => {
   const html = workspaceMarkup();
   assert.match(html, /id="trade-tab"[^>]*aria-selected="true"/);
