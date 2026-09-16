@@ -2,16 +2,10 @@ import { ReplayCoordinator } from './ReplayCoordinator.js';
 import { ReplayCommandController } from './ReplayCommandController.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { createApplicationActions } from './ApplicationActions.js';
-import { createReplayUIPort } from './ReplayUIPort.js';
 import { createReplayCapabilities } from './ReplayCapabilities.js';
 
-export function createReplayRuntime({
-  services,
-  ui,
-  callbacks,
-}) {
+export function createReplayRuntime({ services, ui, replayPort }) {
   const { appState, candleStore, engine, dataManager, tradingEngine } = services;
-  const replayPort = createReplayUIPort(engine);
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
     hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
@@ -22,9 +16,9 @@ export function createReplayRuntime({
   const replayRuntime = createReplayCapabilities();
   const replayCapabilities = replayRuntime.capabilities;
   let coordinator = null;
+  let commandController = null;
 
-  const replayCallbacks = {
-    ...callbacks,
+  const callbacks = {
     onRetry: () => replayCapabilities.load({ autoStart: false }),
     onFollow: () => {
       const idx = replayPort.getState().currentIndex;
@@ -35,12 +29,12 @@ export function createReplayRuntime({
       if (!candle) return;
 
       ui.chartManager.setRevealedMax(candle.time);
-      coordinator?.applyWindowedChart(idx);
+      coordinator.applyWindowedChart(idx);
       ui.chartManager.followCurrent();
     },
     onLoadReplay: ({ targetSec } = {}) => replayCapabilities.load({ targetSec, autoStart: false }),
     onPreviewWindow: (idx) => replayCapabilities.preview(idx),
-    onSeek: (idx) => commandController?.trySeek(idx),
+    onSeek: (idx) => commandController.trySeek(idx),
     onTimeframeChange: (timeframe) => { appState.timeframe = timeframe; },
   };
 
@@ -62,52 +56,44 @@ export function createReplayRuntime({
   });
   replayRuntime.attach(coordinator);
 
-  const coordinatorPorts = ui.getReplayPorts();
-  let commandController = null;
   commandController = new ReplayCommandController({
     engine,
     appState,
     candleStore,
-    headerBtn: coordinatorPorts.headerStartReplayBtn,
+    headerBtn: ui.getReplayPorts().headerStartReplayBtn,
     tradingCapabilities: replayTradingCapabilities,
     onLoad: ({ autoStart }) => replayCapabilities.load({ autoStart }),
     onPreview: (index) => replayCapabilities.preview(index),
-    onError: (msg) => coordinator?.showTradingError(msg),
-  });
-  const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
-
-  const actions = createApplicationActions({
-    replay: replayCapabilities,
-    commandController,
-    replayPort,
-    appState,
-    statusView: ui.statusView,
-    modeBanner: ui.modeBanner,
-    timeline: ui.timeline,
-    controls: ui.controls,
-    errorPanel: ui.errorPanel,
-  });
-
-  const replayLifecycle = bindReplayLifecycle({
-    engine,
-    appState,
-    candleStore,
-    statusView: ui.statusView,
-    timeline: ui.timeline,
-    modeBanner: ui.modeBanner,
-    preview: replayCapabilities.preview,
-    chartManager: ui.chartManager,
+    onError: (msg) => coordinator.showTradingError(msg),
   });
 
   return {
-    replayPort,
     replayCapabilities,
     replayTradingCapabilities,
     coordinator,
     commandController,
-    actions,
-    replayLifecycle,
-    unbindKeyboardShortcuts,
-    callbacks: replayCallbacks,
+    actions: createApplicationActions({
+      replay: replayCapabilities,
+      commandController,
+      replayPort,
+      appState,
+      statusView: ui.statusView,
+      modeBanner: ui.modeBanner,
+      timeline: ui.timeline,
+      controls: ui.controls,
+      errorPanel: ui.errorPanel,
+    }),
+    replayLifecycle: bindReplayLifecycle({
+      engine,
+      appState,
+      candleStore,
+      statusView: ui.statusView,
+      timeline: ui.timeline,
+      modeBanner: ui.modeBanner,
+      preview: replayCapabilities.preview,
+      chartManager: ui.chartManager,
+    }),
+    unbindKeyboardShortcuts: commandController.bindKeyboardShortcuts(),
+    callbacks,
   };
 }
