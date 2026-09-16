@@ -2,31 +2,37 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 
 const page = fs.readFileSync('src/pages/DataCenterPage.js', 'utf8');
+const session = fs.readFileSync('src/pages/DataWorkspaceSession.js', 'utf8');
 const view = fs.readFileSync('src/pages/DataCenterView.js', 'utf8');
+const application = fs.readFileSync('src/app/Application.js', 'utf8');
 
 
-describe('Data center separation of concerns', () => {
-  it('keeps the page controller focused on data intent and lifecycle', () => {
-    expect(page).toContain("from './DataCenterView.js'");
-    expect(page).toContain('this._initialized');
-    expect(page).toContain("this.document.addEventListener('click'");
-    expect(page).not.toContain('template.innerHTML');
-    expect(page).not.toContain('function header(');
-    expect(page).not.toContain('function card(');
-    expect(page).not.toContain('<section class="data-panel">');
+describe('data feature separation of concerns', () => {
+  it('keeps a routed page controller scoped to its own element', () => {
+    expect(page).toContain('mount(element)');
+    expect(page).toContain('this._element.addEventListener(\'click\', this._onClick)');
+    expect(page).toContain('this._element.removeEventListener(\'click\', this._onClick)');
+    expect(page).not.toContain("this.document.addEventListener('click'");
+    expect(page).not.toContain('renderDataCenterPages');
   });
 
-  it('keeps the view free of data-service and application imports', () => {
-    const importLines = view.split('\n').filter((line) => /^\s*import\s/.test(line));
-    expect(importLines).toEqual([]);
-    expect(view).not.toContain('createCoreServices');
-    expect(view).toContain('renderDataCenterPages');
+  it('keeps workspace state and data subscriptions outside page controllers', () => {
+    expect(session).toContain('this.data.on(event, handler)');
+    expect(session).toContain('this._listeners');
+    expect(session).toContain('destroy()');
+    expect(page).not.toContain('DATA_WORKSPACE_EVENTS');
   });
 
-  it('makes rendering synchronous and model-driven', () => {
-    expect(view).not.toContain('await ');
-    expect(view).toContain('snapshot');
-    expect(view).toContain('storageEstimate');
-    expect(view).toContain('validationState');
+  it('renders only the routed page instead of rebuilding every page', () => {
+    expect(view).toContain('renderDataCenterPage');
+    expect(view).toContain('const renderers = {');
+    expect(view).toContain('setPage(documentRef, page, render());');
+    expect(view).not.toContain('renderDataCenterPages');
+  });
+
+  it('composes data pages through the router', () => {
+    expect(application).toContain('new DataWorkspaceSession(dataWorkspace).init()');
+    expect(application).toContain('router.register(page, dataPages.get(page))');
+    expect(application).toContain('router.destroy(); dataWorkspaceSession.destroy();');
   });
 });
