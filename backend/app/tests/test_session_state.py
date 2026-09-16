@@ -78,8 +78,15 @@ def test_session_restore_rejects_stale_market_context_index():
         restore_session_bundle(document)
 
 
-def test_session_serialization_rejects_noncanonical_candle_event():
+def build_history_at_index_one():
     replay, trading = build_active_session()
+    replay.step()
+    trading.on_candle(CANDLES[1], 1, "BTCUSDT")
+    return replay, trading
+
+
+def test_session_serialization_rejects_noncanonical_candle_event():
+    replay, trading = build_history_at_index_one()
     history = [
         {
             "type": "market_step",
@@ -102,7 +109,7 @@ def test_session_serialization_rejects_noncanonical_candle_event():
 
 
 def test_session_serialization_accepts_canonical_candle_event():
-    replay, trading = build_active_session()
+    replay, trading = build_history_at_index_one()
     history = [
         {
             "type": "market_step",
