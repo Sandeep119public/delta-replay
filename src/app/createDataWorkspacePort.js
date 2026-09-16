@@ -23,7 +23,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
     async clearCurrent() {
       const symbol = candleStore.getSymbol() || appState.symbol;
       const timeframe = candleStore.getTimeframe() || appState.timeframe;
-      if (symbol && timeframe) candleCache.invalidate(symbol, timeframe);
+      if (symbol && timeframe) { candleCache.invalidate(symbol, timeframe); await candleCache.persist(); }
       candleStore.clear();
     },
     validateCurrent() {
