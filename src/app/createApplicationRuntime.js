@@ -20,7 +20,7 @@ import { bindTradingState } from '../ui/TradingStateBridge.js';
 import { createLifecycleGuard } from './createLifecycleGuard.js';
 import { createReplayCapabilities } from './ReplayCapabilities.js';
 
-export function createApplicationRuntime({ services, mount, router, requireElement }) {
+export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
   const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
@@ -122,7 +122,10 @@ export function createApplicationRuntime({ services, mount, router, requireEleme
   const commandSurface = createCommandSurface({ focusTradePanel: mobileDrawer?.focusTradingPanel });
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts,
-    onDestroy: () => router.destroy(),
+    onDestroy: () => {
+      onDestroy?.();
+      router.destroy();
+    },
     engine,
     candleCache,
     resources: [selectorBindings, timelineBindings, tradingBindings, tradingStateBridge, replayLifecycle, commandController, mobileDrawer, commandSurface, loadBinding, mobileNavBinding, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView, views.toastView],
@@ -138,12 +141,5 @@ export function createApplicationRuntime({ services, mount, router, requireEleme
     destroy,
   });
 
-  return {
-    start: lifecycle.start,
-    destroy: lifecycle.destroy,
-    ui,
-    coordinator,
-    mobileDrawer,
-    commandSurface,
-  };
+  return { start: lifecycle.start, destroy: lifecycle.destroy, ui, coordinator, mobileDrawer, commandSurface };
 }
