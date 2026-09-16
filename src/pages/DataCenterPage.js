@@ -1,31 +1,145 @@
 import { DATA_WORKSPACE_EVENTS, assertDataWorkspacePort } from '../ports/DataWorkspacePort.js';
+import { renderDataCenterPages } from './DataCenterView.js';
 
-function escapeText(value) { return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-function toSeconds(value) { const ms = Date.parse(value); if (!Number.isFinite(ms)) throw new Error('Choose a valid start and end date'); return Math.floor(ms / 1000); }
+function toSeconds(value) {
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) throw new Error('Choose a valid start and end date');
+  return Math.floor(ms / 1000);
+}
+
+function errorMessage(error) {
+  return error?.message || String(error);
+}
 
 export class DataCenterPage {
-  constructor(dataWorkspace) { this.data = assertDataWorkspacePort(dataWorkspace); this._destroyed = false; this._unbind = []; this._download = { status: 'idle', loaded: 0, total: 0, pct: 0, error: null }; this._jobs = []; this._renderToken = 0; }
-  init() {
-    if (this._destroyed) return;
-    for (const [event, handler] of [[DATA_WORKSPACE_EVENTS.LOADING_STARTED, p => { this._download = { status: 'running', loaded: 0, total: 0, pct: 0, error: null, ...p }; this._job('Historical data download','running'); this.render(); }],[DATA_WORKSPACE_EVENTS.PROGRESS, p => { this._download = { ...this._download, status:'running', ...p }; this._job('Historical data download','running',p?.pct); this.render(); }],[DATA_WORKSPACE_EVENTS.READY, p => { this._download = { ...this._download, status:'complete', loaded:p?.candles?.length ?? this._download.loaded, total:p?.candles?.length ?? this._download.total, pct:100, error:null }; this._job('Historical data download','complete',100); this.render(); }],[DATA_WORKSPACE_EVENTS.READY_DEGRADED, p => { this._download = { ...this._download, status:'degraded', loaded:p?.candles?.length ?? 0, total:p?.candles?.length ?? 0, pct:100 }; this._job('Historical data download','degraded',100); this.render(); }],[DATA_WORKSPACE_EVENTS.ERROR, e => { this._download = { ...this._download, status:'failed', error:e?.message || String(e) }; this._job('Historical data download','failed'); this.render(); }]]) this._unbind.push(this.data.on(event, handler));
-    const onClick = (event) => { const action = event.target.closest?.('[data-data-action]')?.dataset.dataAction; if (action === 'download') this.startDownload(); if (action === 'clear-current') this.clearCurrent(); if (action === 'validate') this.validate(); };
-    document.addEventListener('click', onClick); this._unbind.push(() => document.removeEventListener('click', onClick)); this.render();
+  constructor(dataWorkspace, { documentRef = globalThis.document } = {}) {
+    this.data = assertDataWorkspacePort(dataWorkspace);
+    this.document = documentRef;
+    this._destroyed = false;
+    this._initialized = false;
+    this._unbind = [];
+    this._download = { status: 'idle', loaded: 0, total: 0, pct: 0, error: null };
+    this._validation = null;
+    this._jobs = [];
+    this._renderToken = 0;
   }
-  _job(name,status,progress=null) { const j=this._jobs.find(x=>x.name===name); if(j) Object.assign(j,{status,...(progress==null?{}:{progress})}); else this._jobs.unshift({name,status,progress:progress??0}); this._jobs=this._jobs.slice(0,12); }
-  async startDownload() { if(['running','starting'].includes(this._download.status)) return; const symbol=document.getElementById('data-symbol')?.value?.trim().toUpperCase(); const timeframe=document.getElementById('data-timeframe')?.value; try { const from=toSeconds(document.getElementById('data-from')?.value); const to=toSeconds(document.getElementById('data-to')?.value); if(!symbol||!timeframe) throw new Error('Symbol and timeframe are required'); if(from>=to) throw new Error('End date must be after start date'); this._download={status:'starting',loaded:0,total:0,pct:0,error:null,symbol,timeframe,from,to}; this.render(); await this.data.download({symbol,timeframe,from,to}); } catch(e) { this._download={...this._download,status:'failed',error:e?.message||String(e)}; this._job('Historical data download','failed'); this.render(); } }
-  async clearCurrent() { try { await this.data.clearCurrent(); this._job('Clear current dataset','complete',100); this.render(); } catch(e) { this._job('Clear current dataset','failed'); this._download={...this._download,error:e?.message||String(e)}; this.render(); } }
-  async validate() { try { this._validation=await this.data.validateCurrent(); this._job('Dataset validation','complete',100); } catch(e) { this._validation={status:'error',message:e?.message||String(e)}; this._job('Dataset validation','failed'); } this.render(); }
-  async render() { if(this._destroyed)return; const token=++this._renderToken; const s=this.data.snapshot(); const storage=await this.data.storageEstimate(); if(this._destroyed||token!==this._renderToken)return; const symbol=s.symbol||'SOLUSDT', timeframe=s.timeframe||'15m'; const end=new Date(Date.now()-new Date().getTimezoneOffset()*60000), start=new Date(end.getTime()-30*86400000); const dates={start:start.toISOString().slice(0,16),end:end.toISOString().slice(0,16)}; this._set('dashboard',this._dashboard(s,storage)); this._set('downloads',this._downloads(symbol,timeframe,dates)); this._set('datasets',this._datasets(s)); this._set('validation',this._validationPage(s)); this._set('storage',this._storage(storage)); this._set('experiments',this._coming('Experiments','Experiment orchestration will consume the dataset and job contracts created here.')); this._set('strategies',this._coming('Strategies','Strategy definitions and walk-forward results will live here.')); this._set('journal',this._coming('Journal','Replay notes and research observations will be added here.')); this._set('jobs',this._jobsPage()); this._set('system',this._system(s)); }
-  _set(name,html){const el=document.getElementById(`page-${name}`);if(!el)return;const t=document.createElement('template');t.innerHTML=html;el.replaceChildren(t.content.cloneNode(true));}
-  _header(e,t,p){return `<header class="data-page-header"><div><span class="data-eyebrow">${e}</span><h1>${t}</h1><p>${p}</p></div></header>`}
-  _card(l,v){return `<article class="data-card"><span>${l}</span><strong>${v}</strong></article>`}
-  _dashboard(s,st){return `<div class="data-page">${this._header('WORKSPACE','Overview','A control room for market data, replay state and research jobs.')}<div class="data-card-grid">${this._card('Loaded candles',Number(s.count||0).toLocaleString())}${this._card('Current dataset',s.symbol?`${escapeText(s.symbol)} · ${escapeText(s.timeframe)}`:'None')}${this._card('Cache intervals',s.coverage?.length||0)}${this._card('Browser storage',st?.usage!=null?`${(st.usage/1073741824).toFixed(2)} GB`:'Unavailable')}</div><section class="data-panel"><h2>Quick actions</h2><div class="data-action-grid"><a href="#downloads">Download historical data</a><a href="#datasets">Manage datasets</a><a href="#validation">Validate current data</a><a href="#storage">Inspect storage</a></div></section><section class="data-panel"><h2>Current dataset</h2><dl class="data-detail-grid"><div><dt>Symbol</dt><dd>${escapeText(s.symbol||'None')}</dd></div><div><dt>Timeframe</dt><dd>${escapeText(s.timeframe||'None')}</dd></div><div><dt>Rows</dt><dd>${Number(s.count||0).toLocaleString()}</dd></div><div><dt>Quality</dt><dd>${escapeText(s.metadata?.quality||'Unknown')}</dd></div></dl></section></div>`}
-  _downloads(symbol,timeframe,d){const x=this._download,e=x.error?`<div class="data-alert" role="alert">${escapeText(x.error)}</div>`:'',p=['running','starting'].includes(x.status)?`<div class="download-progress"><div class="progress-track"><span style="width:${Math.max(0,Math.min(100,Number(x.pct)||0))}%"></span></div><div><strong>${Number(x.pct||0).toFixed(0)}%</strong><span>${Number(x.loaded||0).toLocaleString()} / ${Number(x.total||0).toLocaleString()} candles</span></div></div>`:'';return `<div class="data-page">${this._header('DATA / DOWNLOADS','Download Center','Fetch validated historical candles into the shared replay cache.')}${e}<section class="data-panel"><form class="data-form" novalidate><label>Symbol<input id="data-symbol" value="${escapeText(symbol)}" autocomplete="off" spellcheck="false"></label><label>Timeframe<select id="data-timeframe">${['1m','5m','15m','30m','1h','4h','1d'].map(tf=>`<option value="${tf}" ${tf===timeframe?'selected':''}>${tf}</option>`).join('')}</select></label><label>Start<input id="data-from" type="datetime-local" value="${d.start}"></label><label>End<input id="data-to" type="datetime-local" value="${d.end}"></label><button class="data-primary" type="button" data-data-action="download" ${['running','starting'].includes(x.status)?'disabled':''}>${x.status==='complete'?'Download again':'Start download'}</button></form>${p}<p class="data-note">Downloads use HistoricalDataManager, including cache reuse, retry and integrity checks.</p></section><section class="data-panel"><h2>Download lifecycle</h2><ol class="data-steps"><li>Normalize the requested candle range.</li><li>Reuse clean cached coverage where possible.</li><li>Fetch missing ranges with retry and integrity checks.</li><li>Publish the validated dataset to Replay.</li></ol></section></div>`}
-  _datasets(s){const rows=s.coverage?.length?s.coverage.map(iv=>`<tr><td>${new Date(iv.from*1000).toISOString()}</td><td>${new Date(iv.to*1000).toISOString()}</td><td>${escapeText(s.timeframe||'—')}</td></tr>`).join(''):'<tr><td colspan="3">No cached coverage for the current dataset.</td></tr>';return `<div class="data-page">${this._header('DATA / DATASETS','Dataset Manager','Inspect the active dataset and the cache coverage that backs it.')}<section class="data-panel"><div class="data-card-grid">${this._card('Symbol',escapeText(s.symbol||'None'))}${this._card('Timeframe',escapeText(s.timeframe||'None'))}${this._card('Rows',Number(s.count||0).toLocaleString())}${this._card('Quality',escapeText(s.metadata?.quality||'Unknown'))}</div></section><section class="data-panel"><div class="data-panel-head"><h2>Cached intervals</h2><button type="button" data-data-action="clear-current">Clear current dataset</button></div><div class="data-table-wrap"><table><thead><tr><th>From</th><th>To</th><th>Timeframe</th></tr></thead><tbody>${rows}</tbody></table></div></section></div>`}
-  _validationPage(s){const v=this._validation,status=v?.status||(s.metadata?.quality==='VALID'?'valid':s.count?'not-run':'empty'),label=status==='valid'?'VALID':status==='issues'?'ISSUES FOUND':status==='empty'?'NO DATA':'NOT RUN',detail=v?.metadata?`Invalid: ${v.metadata.invalidCount??0} · Gaps: ${v.metadata.gaps?.length??0}`:'Run validation against the active candle store.';return `<div class="data-page">${this._header('DATA / VALIDATION','Data Quality','Make dataset integrity visible before research consumes it.')}<section class="data-panel validation-card"><div class="validation-status ${status}"><span>${label}</span><strong>${Number(s.count||0).toLocaleString()} candles</strong><small>${escapeText(detail)}</small></div><button class="data-primary" type="button" data-data-action="validate">Validate current dataset</button></section></div>`}
-  _storage(st){const u=st?.usage,q=st?.quota,p=u&&q?u/q*100:null;return `<div class="data-page">${this._header('DATA / STORAGE','Storage','Understand how much browser storage is available to the replay cache.')}<div class="data-card-grid">${this._card('Used',u!=null?`${(u/1073741824).toFixed(2)} GB`:'Unavailable')}${this._card('Quota',q!=null?`${(q/1073741824).toFixed(2)} GB`:'Unavailable')}${this._card('Usage',p!=null?`${p.toFixed(1)}%`:'Unavailable')}${this._card('Cache',this.data.snapshot().cacheEnabled?'IndexedDB enabled':'Memory only')}</div><section class="data-panel"><h2>Storage policy</h2><p>Dataset persistence belongs to CandleCache. This page reports browser capacity rather than pretending the web application controls the operating system filesystem.</p></section></div>`}
-  _jobsPage(){const rows=this._jobs.length?this._jobs.map(j=>`<tr><td>${escapeText(j.name)}</td><td><span class="job-status ${j.status}">${escapeText(j.status)}</span></td><td>${j.progress!=null?`${Number(j.progress).toFixed(0)}%`:'—'}</td></tr>`).join(''):'<tr><td colspan="3">No jobs have run in this session.</td></tr>';return `<div class="data-page">${this._header('SYSTEM / JOBS','Jobs','A lightweight audit trail for data operations started in this browser session.')}<section class="data-panel"><div class="data-table-wrap"><table><thead><tr><th>Job</th><th>Status</th><th>Progress</th></tr></thead><tbody>${rows}</tbody></table></div></section></div>`}
-  _system(s){return `<div class="data-page">${this._header('SYSTEM','System','Runtime capabilities and data-service health.')}<div class="data-card-grid">${this._card('Replay data service','Ready')}${this._card('IndexedDB',s.cacheEnabled?'Available':'Unavailable')}${this._card('Candle store',`${Number(s.count||0).toLocaleString()} rows`)}${this._card('Session','Browser local')}</div><section class="data-panel"><h2>Architecture</h2><p>Page actions use the application data port; HistoricalDataManager remains the owner of range normalization, cache reuse, fetching, retries and integrity publication.</p></section></div>`}
-  _coming(title,detail){return `<div class="data-page">${this._header('RESEARCH',title,detail)}<section class="data-panel empty-page"><strong>Workspace reserved</strong><p>The navigation is established now so future research features can attach to the same shell and job contracts.</p></section></div>`}
-  destroy(){if(this._destroyed)return;this._destroyed=true;this._renderToken++;for(const off of this._unbind.splice(0)){try{off?.()}catch{}}}
+
+  init() {
+    if (this._destroyed || this._initialized) return this;
+    this._initialized = true;
+    const subscribe = (event, handler) => this._unbind.push(this.data.on(event, handler));
+    subscribe(DATA_WORKSPACE_EVENTS.LOADING_STARTED, (progress) => {
+      this._download = { status: 'running', loaded: 0, total: 0, pct: 0, error: null, ...progress };
+      this._job('Historical data download', 'running');
+      void this.render();
+    });
+    subscribe(DATA_WORKSPACE_EVENTS.PROGRESS, (progress) => {
+      this._download = { ...this._download, status: 'running', ...progress };
+      this._job('Historical data download', 'running', progress?.pct);
+      void this.render();
+    });
+    subscribe(DATA_WORKSPACE_EVENTS.READY, (payload) => {
+      const count = payload?.candles?.length ?? this._download.loaded;
+      this._download = { ...this._download, status: 'complete', loaded: count, total: payload?.candles?.length ?? this._download.total, pct: 100, error: null };
+      this._job('Historical data download', 'complete', 100);
+      void this.render();
+    });
+    subscribe(DATA_WORKSPACE_EVENTS.READY_DEGRADED, (payload) => {
+      const count = payload?.candles?.length ?? 0;
+      this._download = { ...this._download, status: 'degraded', loaded: count, total: count, pct: 100 };
+      this._job('Historical data download', 'degraded', 100);
+      void this.render();
+    });
+    subscribe(DATA_WORKSPACE_EVENTS.ERROR, (error) => {
+      this._download = { ...this._download, status: 'failed', error: errorMessage(error) };
+      this._job('Historical data download', 'failed');
+      void this.render();
+    });
+
+    const onClick = (event) => {
+      const action = event.target.closest?.('[data-data-action]')?.dataset.dataAction;
+      if (action === 'download') void this.startDownload();
+      else if (action === 'clear-current') void this.clearCurrent();
+      else if (action === 'validate') void this.validate();
+    };
+    this.document.addEventListener('click', onClick);
+    this._unbind.push(() => this.document.removeEventListener('click', onClick));
+    void this.render();
+    return this;
+  }
+
+  _job(name, status, progress = null) {
+    const job = this._jobs.find((item) => item.name === name);
+    if (job) Object.assign(job, { status, ...(progress == null ? {} : { progress }) });
+    else this._jobs.unshift({ name, status, progress: progress ?? 0 });
+    this._jobs = this._jobs.slice(0, 12);
+  }
+
+  async startDownload() {
+    if (['running', 'starting'].includes(this._download.status)) return;
+    const symbol = this.document.getElementById('data-symbol')?.value?.trim().toUpperCase();
+    const timeframe = this.document.getElementById('data-timeframe')?.value;
+    try {
+      const from = toSeconds(this.document.getElementById('data-from')?.value);
+      const to = toSeconds(this.document.getElementById('data-to')?.value);
+      if (!symbol || !timeframe) throw new Error('Symbol and timeframe are required');
+      if (from >= to) throw new Error('End date must be after start date');
+      this._download = { status: 'starting', loaded: 0, total: 0, pct: 0, error: null, symbol, timeframe, from, to };
+      await this.render();
+      await this.data.download({ symbol, timeframe, from, to });
+    } catch (error) {
+      this._download = { ...this._download, status: 'failed', error: errorMessage(error) };
+      this._job('Historical data download', 'failed');
+      await this.render();
+    }
+  }
+
+  async clearCurrent() {
+    try {
+      await this.data.clearCurrent();
+      this._job('Clear current dataset', 'complete', 100);
+      await this.render();
+    } catch (error) {
+      this._job('Clear current dataset', 'failed');
+      this._download = { ...this._download, error: errorMessage(error) };
+      await this.render();
+    }
+  }
+
+  async validate() {
+    try {
+      this._validation = await this.data.validateCurrent();
+      this._job('Dataset validation', 'complete', 100);
+    } catch (error) {
+      this._validation = { status: 'error', message: errorMessage(error) };
+      this._job('Dataset validation', 'failed');
+    }
+    await this.render();
+  }
+
+  async render() {
+    if (this._destroyed) return;
+    const token = ++this._renderToken;
+    const snapshot = this.data.snapshot();
+    const storageEstimate = await this.data.storageEstimate();
+    if (this._destroyed || token !== this._renderToken) return;
+    renderDataCenterPages({
+      documentRef: this.document,
+      snapshot,
+      storageEstimate,
+      download: this._download,
+      jobsState: this._jobs,
+      validationState: this._validation,
+    });
+  }
+
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    this._initialized = false;
+    this._renderToken++;
+    for (const off of this._unbind.splice(0)) {
+      try { off?.(); } catch { /* cleanup must not block remaining teardown */ }
+    }
+  }
 }
