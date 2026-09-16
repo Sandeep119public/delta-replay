@@ -8,11 +8,24 @@ import { workspaceMarkup } from '../../src/ui/paper/markup/Workspace.js';
 
 test('paper UI exposes required replay and trading controls', () => {
   const html = paperMarkup();
-  for (const id of [
-    'page-replay', 'chart-container', 'trading-panel', 'trade-tab', 'account-tab',
-    'tab-view-trade', 'tab-view-account', 'btn-play', 'btn-pause', 'btn-step',
-    'btn-reset', 'speed-select', 'btn-follow', 'btn-trading-drawer', 'drawer-scrim',
-  ]) assert.match(html, new RegExp(`id=["']${id}["']`), `missing #${id}`);
+  for (const id of ['page-replay','chart-container','trading-panel','trade-tab','account-tab','tab-view-trade','tab-view-account','btn-play','btn-pause','btn-step','btn-reset','speed-select','btn-follow','btn-trading-drawer','drawer-scrim']) assert.match(html, new RegExp(`id=["']${id}["']`), `missing #${id}`);
+});
+
+test('application shell exposes stable page and navigation contracts', () => {
+  const html = paperMarkup();
+  for (const page of ['dashboard','replay','downloads','datasets','validation','storage','experiments','strategies','journal','jobs','system']) {
+    assert.match(html, new RegExp(`id=["']page-${page}["']`), `missing page-${page}`);
+    assert.match(html, new RegExp(`class=["'][^"']*nav-link[^"']*["'][^>]*data-page=["']${page}["']`), `missing nav link for ${page}`);
+  }
+  assert.match(html, /id="mobile-nav-toggle"[^>]*aria-controls="app-sidebar"/);
+});
+
+test('data workspace exposes download and lifecycle controls', () => {
+  const html = paperMarkup();
+  for (const id of ['data-symbol','data-timeframe','data-from','data-to']) assert.match(html, new RegExp(`id=["']${id}["']`), `missing #${id}`);
+  assert.match(html, /data-data-action="download"/);
+  assert.match(html, /data-data-action="clear-current"/);
+  assert.match(html, /data-data-action="validate"/);
 });
 
 test('inactive account panel starts from the CSS/controller visibility contract', () => {
@@ -31,29 +44,18 @@ test('trading panel exposes a stable accessible name', () => {
 
 test('interactive replay controls declare button type explicitly', () => {
   const html = `${headerMarkup()}${timelineMarkup()}`;
-  for (const id of [
-    'header-start-replay-btn', 'timeline-start-btn', 'btn-play', 'btn-pause',
-    'btn-step', 'btn-reset', 'btn-follow', 'jump-btn', 'start-replay-btn', 'load-btn',
-  ]) {
-    const match = html.match(new RegExp(`<button[^>]*id=["']${id}["'][^>]*>`));
-    assert.ok(match, `missing button #${id}`);
-    assert.match(match[0], /type="button"/);
+  for (const id of ['header-start-replay-btn','timeline-start-btn','btn-play','btn-pause','btn-step','btn-reset','btn-follow','jump-btn','start-replay-btn','load-btn']) {
+    const match = html.match(new RegExp(`<button[^>]*id=["']${id}["'][^>]*>`)); assert.ok(match, `missing button #${id}`); assert.match(match[0], /type="button"/);
   }
 });
 
 test('legacy compatibility controls are explicitly marked as non-interactive', () => {
   const html = `${headerMarkup()}${timelineMarkup()}`;
-  for (const id of ['from-date', 'from-time', 'to-date', 'to-time', 'load-btn', 'jump-date', 'jump-time', 'jump-btn', 'start-replay-btn']) {
-    const match = html.match(new RegExp(`<[^>]*id=["']${id}["'][^>]*>`));
-    assert.ok(match, `missing #${id}`);
-    assert.match(match[0], /class="compat-control"/);
-    assert.match(match[0], /aria-hidden="true"/);
-    assert.match(match[0], /tabindex="-1"/);
+  for (const id of ['from-date','from-time','to-date','to-time','load-btn','jump-date','jump-time','jump-btn','start-replay-btn']) {
+    const match = html.match(new RegExp(`<[^>]*id=["']${id}["'][^>]*>`)); assert.ok(match, `missing #${id}`); assert.match(match[0], /class="compat-control"/); assert.match(match[0], /aria-hidden="true"/); assert.match(match[0], /tabindex="-1"/);
   }
 });
 
 test('primary replay control stays available for ready and ended states', () => {
-  const html = timelineMarkup();
-  assert.match(html, /id="btn-play"[^>]*class="replay-play"/);
-  assert.doesNotMatch(html, /id="btn-play"[^>]*disabled/);
+  const html = timelineMarkup(); assert.match(html, /id="btn-play"[^>]*class="replay-play"/); assert.doesNotMatch(html, /id="btn-play"[^>]*disabled/);
 });
