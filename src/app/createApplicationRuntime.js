@@ -5,20 +5,18 @@ import { createPaperUI } from '../ui/PaperUI.js';
 import { ChartManager } from '../chart/ChartManager.js';
 import { ChartAdapter } from '../chart/ChartAdapter.js';
 import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
-import { bindTradingEvents } from '../ui/bindTradingEvents.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createCommandSurface } from '../ui/CommandSurface.js';
-import { createChartTradingActions } from './ChartTradingActions.js';
 import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
 import { createReplayUIPort } from './ReplayUIPort.js';
-import { bindTradingState } from '../ui/TradingStateBridge.js';
 import { createLifecycleGuard } from './createLifecycleGuard.js';
 import { createReplayCapabilities } from './ReplayCapabilities.js';
 import { createReplayRuntime } from './createReplayRuntime.js';
+import { createTradingRuntime } from './createTradingRuntime.js';
 
 export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
-  const { appState, candleStore, engine, candleCache, tradingEngine } = services;
+  const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
@@ -29,6 +27,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const replayCapabilities = replayRuntime.capabilities;
   let coordinator = null;
   let commandController = null;
+  let chartManager = null;
 
   const callbacks = {
     onRetry: () => replayCapabilities.load({ autoStart: false }),
@@ -49,7 +48,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   };
 
   const chartContainer = requireElement('chart-container', mount.ownerDocument || document);
-  const chartManager = new ChartManager(chartContainer);
+  chartManager = new ChartManager(chartContainer);
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
   const mobileNavBinding = bindMobileNavigation();
   const ui = createPaperUI({
@@ -79,29 +78,8 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   });
   const selectorBindings = bindDatasetSelectors(ui, replay.actions);
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, actions: replay.actions });
-  const tradingBindings = bindTradingEvents({ tradingEvents, actions: replay.actions, errorPanel: ui.errorPanel });
+  const tradingRuntime = createTradingRuntime({ trading, tradingEvents, actions: replay.actions, ui, views, form, coordinator });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
-  const chartTradingActions = createChartTradingActions({
-    trading,
-    executeTrade: (intent) => {
-      if (intent.action === 'SET_TP') return trading.actions.setTakeProfit(intent.symbol, intent.price);
-      if (intent.action === 'SET_SL') return trading.actions.setStopLoss(intent.symbol, intent.price);
-      return { success: true };
-    },
-    reportError: (message) => coordinator?.showTradingError(message),
-  });
-  const chartTradingController = ui.createChartTradingController({
-    chartManager: ui.chartManager,
-    trading,
-    tradingEvents,
-    tradingPanel: views.tradingPanel,
-    floatingPosView: views.floatingPosView,
-    toastView: views.toastView,
-    orderFormView: views.tradingPanel.orderFormView,
-    actions: chartTradingActions,
-    ...form,
-  });
-  const tradingStateBridge = bindTradingState({ tradingEvents, trading, onChange: () => chartTradingController.syncChartTradingLines() });
   const loadBtn = ui.getReplayPorts().loadBtn;
   const onLoadClick = () => replay.actions.load();
   loadBtn?.addEventListener('click', onLoadClick);
@@ -120,8 +98,8 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       replay.coordinator,
       selectorBindings,
       timelineBindings,
-      tradingBindings,
-      tradingStateBridge,
+      tradingRuntime.tradingBindings,
+      tradingRuntime.tradingStateBridge,
       replay.replayLifecycle,
       replay.commandController,
       mobileDrawer,
@@ -134,7 +112,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       ui.controls,
       ui.themeManager,
       ui.errorPanel,
-      chartTradingController,
+      tradingRuntime.chartTradingController,
       ui.adapter,
       ui.chartManager,
       views.tradingPanel,
