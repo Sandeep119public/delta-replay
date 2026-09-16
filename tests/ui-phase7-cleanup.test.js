@@ -6,21 +6,25 @@ const html = fs.readFileSync('index.html', 'utf8');
 const application = fs.readFileSync('src/app/Application.js', 'utf8');
 const appShell = fs.readFileSync('src/ui/paper/markup/AppShell.js', 'utf8');
 
-
 describe('Phase 7 final UI system cleanup', () => {
-  it('loads cleanup and final responsive layers in order', () => {
+  it('loads the final interaction layer before later responsive refinements', () => {
     expect(html.indexOf('src/ui/phase7-final-system.css')).toBeGreaterThan(html.indexOf('src/ui/phase6-command-surface.css'));
     expect(html.indexOf('src/ui/phase8-responsive-final.css')).toBeGreaterThan(html.indexOf('src/ui/phase7-final-system.css'));
   });
 
-  it('neutralizes legacy navigation and dormant page containers', () => {
-    expect(css).toContain('.side-nav');
-    expect(css).toContain('#page-dashboard');
-    expect(css).toContain('#page-settings');
-    expect(css).toMatch(/display:\s*none\s*!important/);
+  it('does not hide active application navigation or routed data pages', () => {
+    expect(css).not.toContain('.side-nav');
+    expect(css).not.toContain('#page-dashboard');
+    expect(css).not.toContain('#page-strategies');
+    expect(css).not.toContain('#page-journal');
+    expect(css).not.toContain('#page-settings');
+    expect(appShell).toContain('class="app-sidebar"');
+    expect(appShell).toContain('id="page-dashboard"');
+    expect(appShell).toContain('id="page-strategies"');
+    expect(appShell).toContain('id="page-journal"');
   });
 
-  it('keeps the active replay shell as the product surface', () => {
+  it('keeps the application shell and router-owned pages active', () => {
     expect(appShell).toContain('id="page-replay"');
     expect(application).toContain('renderPaperLayout');
     expect(application).toContain("requireElement('chart-container')");
