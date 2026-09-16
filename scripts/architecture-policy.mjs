@@ -73,7 +73,6 @@ export const IMPACT_RULES = [
 
 export const IMPACT_ORDER = ['Architecture', 'UI', 'UI contracts', 'Replay', 'Trading', 'Data/state', 'Tests', 'Tooling', 'Guidance', 'Backend', 'CI'];
 
-export const PRESENTATION_COMPAT_FILE = 'src/ui/presentationCompat.js';
 export const INTEGRATION_LAYERS = new Set(['ui', 'pages', 'chart', 'app', 'router']);
 export const BROWSER_GLOBALS = /\b(document|window|navigator|localStorage|sessionStorage)\b/;
 export const FORBIDDEN_LEGACY_FILES = [
