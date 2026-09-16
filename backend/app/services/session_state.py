@@ -37,6 +37,7 @@ def _validate_history(history, *, replay_index=None) -> None:
         raise ValueError("session history must be a list")
     last_replay_index = -1
     market_context_keys = set()
+    market_step_indexes = set()
     first_type_by_index = {}
     non_market_seen_by_index = set()
     for item in history:
@@ -65,14 +66,17 @@ def _validate_history(history, *, replay_index=None) -> None:
             symbol = payload.get("symbol")
             if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
                 raise ValueError(f"{event_type} symbol is invalid")
-            key = (index, symbol)
-            if key in market_context_keys:
-                raise ValueError(f"multiple market context events exist for {symbol} at replay index {index}")
-            market_context_keys.add(key)
             if event_type == "market_step":
+                if index in market_step_indexes:
+                    raise ValueError(f"multiple market events exist for replay index {index}")
+                market_step_indexes.add(index)
                 if first_type_by_index[index] != "market_step":
                     raise ValueError(f"market_step at replay index {index} must be first")
             else:
+                key = (index, symbol)
+                if key in market_context_keys:
+                    raise ValueError(f"multiple market context events exist for {symbol} at replay index {index}")
+                market_context_keys.add(key)
                 candle_index = payload.get("index")
                 if isinstance(candle_index, bool) or not isinstance(candle_index, int) or candle_index != index:
                     raise ValueError("candle index must match replayIndex")
