@@ -32,7 +32,7 @@ def _validate_json_safety(document: Dict[str, Any]) -> None:
         raise ValueError(f"session document is not JSON-safe: {exc}") from exc
 
 
-def _validate_history(history, *, replay_index=None) -> None:
+def _validate_history(history, *, replay_index=None, replay=None) -> None:
     if not isinstance(history, list):
         raise ValueError("session history must be a list")
     last_replay_index = -1
@@ -61,6 +61,15 @@ def _validate_history(history, *, replay_index=None) -> None:
             symbol = payload.get("symbol")
             if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
                 raise ValueError(f"{event_type} symbol is invalid")
+            if replay is not None:
+                if index >= len(replay.candles):
+                    raise ValueError(f"{event_type} replayIndex is outside replay dataset")
+                if event_type == "candle":
+                    candle = payload.get("candle")
+                    if not isinstance(candle, dict):
+                        raise ValueError("candle event must contain a candle")
+                    if candle != replay.candles[index]:
+                        raise ValueError(f"candle event at replay index {index} does not match replay dataset")
             if event_type == "candle":
                 candle_index = payload.get("index")
                 if isinstance(candle_index, bool) or not isinstance(candle_index, int) or candle_index != index:
@@ -125,7 +134,7 @@ def serialize_session(
     candles when introducing a dataset that the repository may not yet own.
     """
     history = deepcopy(history or [])
-    _validate_history(history, replay_index=replay.index)
+    _validate_history(history, replay_index=replay.index, replay=replay)
     replay_state = replay.export_state()
     if not include_candles:
         replay_state.pop("candles", None)
@@ -160,7 +169,7 @@ def restore_session_bundle(document: Dict[str, Any]):
         raise ValueError(f"invalid session state: {exc}") from exc
 
     history = [] if version == 1 else deepcopy(document.get("history", []))
-    _validate_history(history, replay_index=replay.index)
+    _validate_history(history, replay_index=replay.index, replay=replay)
     return replay, trading, history
 
 
