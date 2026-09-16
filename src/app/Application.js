@@ -1,7 +1,7 @@
 import { ReplayCoordinator } from './ReplayCoordinator.js';
 import { ReplayCommandController } from './ReplayCommandController.js';
 import { createCoreServices } from './createCoreServices.js';
-import { createDataWorkspacePort } from './createDataWorkspacePort.js';
+import { createDataFeature } from './createDataFeature.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
 import { bindDatasetSelectors } from './bindDatasetSelectors.js';
@@ -22,20 +22,13 @@ import { bindTradingState } from '../ui/TradingStateBridge.js';
 import { createLifecycleGuard } from './createLifecycleGuard.js';
 import { createReplayCapabilities } from './ReplayCapabilities.js';
 import { Router } from '../router/Router.js';
-import { DataCenterPage } from '../pages/DataCenterPage.js';
-import { DataWorkspaceSession } from '../pages/DataWorkspaceSession.js';
 
 export { requireElement };
 function requireElement(id, root = document) { const element = root.getElementById?.(id) || root.querySelector?.('#' + id); if (!element) throw new Error(`Required element #${id} is missing`); return element; }
 
-const DATA_PAGES = ['dashboard', 'downloads', 'datasets', 'validation', 'storage', 'experiments', 'strategies', 'journal', 'jobs', 'system'];
-
 export function createApplication() {
   const services = createCoreServices();
   const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
-  const dataWorkspace = createDataWorkspacePort(services);
-  const dataWorkspaceSession = new DataWorkspaceSession(dataWorkspace).init();
-  const dataPages = new Map(DATA_PAGES.map((page) => [page, new DataCenterPage(dataWorkspaceSession, page)]));
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
@@ -51,7 +44,7 @@ export function createApplication() {
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
   const router = new Router();
   router.register('replay');
-  for (const page of DATA_PAGES) router.register(page, dataPages.get(page));
+  const dataFeature = createDataFeature({ services, router });
   router.init();
 
   const mobileNavToggle = document.getElementById('mobile-nav-toggle');
@@ -94,7 +87,7 @@ export function createApplication() {
   const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
   const mobileDrawer = bindMobileDrawer();
   const commandSurface = createCommandSurface({ focusTradePanel: mobileDrawer?.focusTradingPanel });
-  const destroy = bindApplicationLifecycle({ unbindKeyboardShortcuts, onDestroy: () => { router.destroy(); dataWorkspaceSession.destroy(); coordinator?.destroy?.(); }, engine, candleCache, resources: [selectorBindings, timelineBindings, tradingBindings, tradingStateBridge, replayLifecycle, commandController, mobileDrawer, commandSurface, loadBinding, mobileNavBinding, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView, views.toastView], extraCleanup: [unbindAutoFollow] });
+  const destroy = bindApplicationLifecycle({ unbindKeyboardShortcuts, onDestroy: () => { router.destroy(); dataFeature.destroy(); coordinator?.destroy?.(); }, engine, candleCache, resources: [selectorBindings, timelineBindings, tradingBindings, tradingStateBridge, replayLifecycle, commandController, mobileDrawer, commandSurface, loadBinding, mobileNavBinding, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView, views.toastView], extraCleanup: [unbindAutoFollow] });
   const lifecycle = createLifecycleGuard({ start() { ui.modeBanner.update(statusView.snapshot()); Promise.resolve(replayCapabilities.load({ autoStart: false })).catch((error) => { if (!lifecycle.destroyed) coordinator?.showTradingError?.(error?.message || 'Failed to load replay'); }); }, destroy });
-  return { start: lifecycle.start, destroy: lifecycle.destroy, services, ui, coordinator, mobileDrawer, commandSurface, router, dataPages, dataWorkspaceSession, dataWorkspace };
+  return { start: lifecycle.start, destroy: lifecycle.destroy, services, ui, coordinator, mobileDrawer, commandSurface, router, dataPages: dataFeature.dataPages, dataWorkspaceSession: dataFeature.dataWorkspaceSession, dataWorkspace: dataFeature.dataWorkspace };
 }
