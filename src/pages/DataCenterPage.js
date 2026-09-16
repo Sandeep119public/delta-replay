@@ -85,7 +85,7 @@ export class DataCenterPage {
       if (!symbol || !timeframe) throw new Error('Symbol and timeframe are required');
       if (from >= to) throw new Error('End date must be after start date');
       this._download = { status: 'starting', loaded: 0, total: 0, pct: 0, error: null, symbol, timeframe, from, to };
-      await this.render();
+      void this.render();
       await this.data.download({ symbol, timeframe, from, to });
     } catch (error) {
       this._download = { ...this._download, status: 'failed', error: errorMessage(error) };
