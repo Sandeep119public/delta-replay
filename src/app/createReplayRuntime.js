@@ -3,7 +3,7 @@ import { ReplayCommandController } from './ReplayCommandController.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { createApplicationActions } from './ApplicationActions.js';
 
-export function createReplayRuntime({ services, ui, replayPort, replayCapabilities, statusView }) {
+export function createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView }) {
   const { appState, candleStore, engine, dataManager, tradingEngine } = services;
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
@@ -28,6 +28,7 @@ export function createReplayRuntime({ services, ui, replayPort, replayCapabiliti
     tradingErrorView: ui.tradingErrorView,
     ...ui.getReplayPorts(),
   });
+  replayRuntime.attach(coordinator);
 
   const commandController = new ReplayCommandController({
     engine,
@@ -35,8 +36,8 @@ export function createReplayRuntime({ services, ui, replayPort, replayCapabiliti
     candleStore,
     headerBtn: ui.getReplayPorts().headerStartReplayBtn,
     tradingCapabilities: replayTradingCapabilities,
-    onLoad: ({ autoStart }) => replayCapabilities.load({ autoStart }),
-    onPreview: (index) => replayCapabilities.preview(index),
+    onLoad: ({ autoStart }) => replayRuntime.capabilities.load({ autoStart }),
+    onPreview: (index) => replayRuntime.capabilities.preview(index),
     onError: (msg) => coordinator.showTradingError(msg),
   });
 
@@ -45,7 +46,7 @@ export function createReplayRuntime({ services, ui, replayPort, replayCapabiliti
     coordinator,
     commandController,
     actions: createApplicationActions({
-      replay: replayCapabilities,
+      replay: replayRuntime.capabilities,
       commandController,
       replayPort,
       appState,
@@ -62,7 +63,7 @@ export function createReplayRuntime({ services, ui, replayPort, replayCapabiliti
       statusView,
       timeline: ui.timeline,
       modeBanner: ui.modeBanner,
-      preview: replayCapabilities.preview,
+      preview: replayRuntime.capabilities.preview,
       chartManager: ui.chartManager,
     }),
     unbindKeyboardShortcuts: commandController.bindKeyboardShortcuts(),
