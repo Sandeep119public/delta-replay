@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const page = fs.readFileSync('src/pages/DataCenterPage.js', 'utf8');
 const session = fs.readFileSync('src/pages/DataWorkspaceSession.js', 'utf8');
 const view = fs.readFileSync('src/pages/DataCenterView.js', 'utf8');
+const feature = fs.readFileSync('src/app/createDataFeature.js', 'utf8');
 const application = fs.readFileSync('src/app/Application.js', 'utf8');
 
 
@@ -30,10 +31,13 @@ describe('data feature separation of concerns', () => {
     expect(view).not.toContain('renderDataCenterPages');
   });
 
-  it('composes data pages through the router', () => {
-    expect(application).toContain('new DataWorkspaceSession(dataWorkspace).init()');
-    expect(application).toContain('router.register(page, dataPages.get(page))');
-    expect(application).toContain('router.destroy(); dataWorkspaceSession.destroy();');
+  it('isolates data feature composition from the application root', () => {
+    expect(feature).toContain('createDataWorkspacePort(services)');
+    expect(feature).toContain('router.register(page, dataPages.get(page))');
+    expect(feature).toContain('dataWorkspaceSession.destroy()');
+    expect(application).toContain('createDataFeature({ services, router })');
+    expect(application).not.toContain('new DataWorkspaceSession(');
+    expect(application).not.toContain('new DataCenterPage(');
   });
 
   it('does not retain the retired page-controller implementations', () => {
