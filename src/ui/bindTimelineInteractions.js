@@ -1,12 +1,11 @@
 import { TRADING_PRESENTATION_EVENTS, assertTradingPresentation } from '../ports/TradingPresentationPort.js';
-import { normalizeCandleSource } from './presentationCompat.js';
 
 export function bindTimelineInteractions({ timeline, candles = null, trading = null, tradingEvents = null, actions }) {
   timeline.onChange((idx) => actions.previewTimeline(idx));
   timeline.onCommit((idx) => actions.commitTimeline(idx));
   timeline.onStartHere((idx) => actions.startAt(idx));
   if (!candles) throw new TypeError('candle view is required');
-  const candleView = normalizeCandleSource(candles);
+  const candleView = candles;
   const tradingView = trading ? assertTradingPresentation(trading) : null;
 
   const eventPort = tradingEvents || (tradingView ? {
