@@ -131,7 +131,18 @@ def test_rebuild_rejects_market_step_after_non_market_command():
         {"type": "market_step", "replayIndex": 0, "payload": {"symbol": "BTCUSDT"}},
     ]
 
-    with pytest.raises(ReplayDivergenceError, match="must be first"):
+    with pytest.raises(ReplayDivergenceError, match="must precede trading commands"):
+        rebuild_trading(service, history, 0)
+
+
+def test_rebuild_rejects_market_step_after_candle_for_same_index():
+    service = replay()
+    history = [
+        {"type": "candle", "replayIndex": 0, "payload": {"candle": candle(1, 200), "index": 0, "symbol": "ETHUSDT"}},
+        {"type": "market_step", "replayIndex": 0, "payload": {"symbol": "BTCUSDT"}},
+    ]
+
+    with pytest.raises(ReplayDivergenceError, match="must follow the timeline event|must be first"):
         rebuild_trading(service, history, 0)
 
 
