@@ -48,7 +48,7 @@ export class ReplayControls {
     const state = this.replayPort.getState();
     if (state.status === 'playing') return this.replayPort.pause();
     if (state.status === 'paused') return this.replayPort.play();
-    if (state.status === 'ended') {
+    if (state.status === 'ended' || state.status === 'ready') {
       const candidate = Number(state.startIndex);
       const total = Number(state.totalCandles ?? state.total ?? 0);
       const startIndex = Number.isInteger(candidate) && candidate >= 0 && (total <= 0 || candidate < total) ? candidate : 0;
