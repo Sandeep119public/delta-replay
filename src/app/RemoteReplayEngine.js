@@ -17,6 +17,7 @@ export class RemoteReplayEngine {
     this.events = new Events();
     this._playTimer = null;
     this._stepInFlight = false;
+    this._operationTail = Promise.resolve();
     this._generation = 0;
     this._playIntent = 0;
     this._destroyed = false;
@@ -37,6 +38,11 @@ export class RemoteReplayEngine {
     }
     this.events.emit('stateChanged', this.getState());
   }
+  _enqueue(operation) {
+    const run = this._operationTail.then(operation, operation);
+    this._operationTail = run.catch(() => {});
+    return run;
+  }
   async _call(path, options = {}, generation = this._generation, lifecycle = null) {
     const response = await this.api.request(path, options);
     if (this._destroyed || generation !== this._generation) return this.getState();
@@ -46,8 +52,23 @@ export class RemoteReplayEngine {
   getState() { return { ...this.state, candle: clone(this.state.candle), total: this.state.totalCandles, totalCandles: this.state.totalCandles, visibleCandles: clone(this.state.visibleCandles) }; }
   getTotalCandles() { return this.state.totalCandles; }
   getVisibleCandles() { return clone(this.state.visibleCandles); }
-  async load(candles) { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; return this._call('/load', { method: 'POST', body: JSON.stringify({ candles: Array.isArray(candles) ? clone(candles) : [] }) }, generation, 'load'); }
-  async start(index = 0, symbol = null) { if (this._destroyed) return this.getState(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay start index must be an integer'); const normalizedSymbol = String(symbol ?? this.currentSymbol()).trim().toUpperCase(); if (!normalizedSymbol) throw new TypeError('Replay symbol must be provided'); const generation = ++this._generation; const result = await this._call(`/start/${numericIndex}?symbol=${encodeURIComponent(normalizedSymbol)}`, { method: 'POST' }, generation, 'start'); if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result }); return result; }
+  async load(candles) {
+    if (this._destroyed) return this.getState();
+    this.pause();
+    const generation = ++this._generation;
+    return this._enqueue(() => this._call('/load', { method: 'POST', body: JSON.stringify({ candles: Array.isArray(candles) ? clone(candles) : [] }) }, generation, 'load'));
+  }
+  async start(index = 0, symbol = null) {
+    if (this._destroyed) return this.getState();
+    const numericIndex = Number(index);
+    if (!Number.isInteger(numericIndex)) throw new TypeError('Replay start index must be an integer');
+    const normalizedSymbol = String(symbol ?? this.currentSymbol()).trim().toUpperCase();
+    if (!normalizedSymbol) throw new TypeError('Replay symbol must be provided');
+    const generation = ++this._generation;
+    const result = await this._enqueue(() => this._call(`/start/${numericIndex}?symbol=${encodeURIComponent(normalizedSymbol)}`, { method: 'POST' }, generation, 'start'));
+    if (!this._destroyed && generation === this._generation) this.events.emit('started', { index: this.state.currentIndex, state: result });
+    return result;
+  }
   async stepForward(symbol = null) {
     if (this._destroyed || this._stepInFlight) return this.getState();
     if (this.state.currentIndex < 0 || this.state.currentIndex >= this.state.totalCandles - 1) { if (this.state.totalCandles > 0 && this.state.currentIndex >= this.state.totalCandles - 1) this.pause(); return this.getState(); }
@@ -57,15 +78,31 @@ export class RemoteReplayEngine {
     try {
       const normalizedSymbol = symbol == null ? null : String(symbol).trim().toUpperCase();
       const query = normalizedSymbol ? `?symbol=${encodeURIComponent(normalizedSymbol)}` : '';
-      const result = await this._call(`/step${query}`, { method: 'POST' }, generation, 'step');
+      const result = await this._enqueue(() => this._call(`/step${query}`, { method: 'POST' }, generation, 'step'));
       if (this._destroyed || generation !== this._generation) return result;
       this.events.emit('stepped', { index: this.state.currentIndex, previousIndex, state: result, candle: clone(this.state.candle) });
       if (this.state.status === 'ended' || this.state.currentIndex >= this.state.totalCandles - 1) this.pause();
       return result;
     } finally { this._stepInFlight = false; }
   }
-  async seek(index) { if (this._destroyed) return this.getState(); this.pause(); const numericIndex = Number(index); if (!Number.isInteger(numericIndex)) throw new TypeError('Replay seek index must be an integer'); const generation = ++this._generation; const result = await this._call(`/seek/${numericIndex}?symbol=${encodeURIComponent(this.currentSymbol())}`, { method: 'POST' }, generation, 'seek'); if (!this._destroyed && generation === this._generation) this.events.emit('seeked', { index: this.state.currentIndex, state: result }); return result; }
-  async reset() { if (this._destroyed) return this.getState(); this.pause(); const generation = ++this._generation; const result = await this._call('/reset', { method: 'POST' }, generation, 'reset'); if (!this._destroyed && generation === this._generation) this.events.emit('reset', { index: this.state.currentIndex, state: result }); return result; }
+  async seek(index) {
+    if (this._destroyed) return this.getState();
+    this.pause();
+    const numericIndex = Number(index);
+    if (!Number.isInteger(numericIndex)) throw new TypeError('Replay seek index must be an integer');
+    const generation = ++this._generation;
+    const result = await this._enqueue(() => this._call(`/seek/${numericIndex}?symbol=${encodeURIComponent(this.currentSymbol())}`, { method: 'POST' }, generation, 'seek'));
+    if (!this._destroyed && generation === this._generation) this.events.emit('seeked', { index: this.state.currentIndex, state: result });
+    return result;
+  }
+  async reset() {
+    if (this._destroyed) return this.getState();
+    this.pause();
+    const generation = ++this._generation;
+    const result = await this._enqueue(() => this._call('/reset', { method: 'POST' }, generation, 'reset'));
+    if (!this._destroyed && generation === this._generation) this.events.emit('reset', { index: this.state.currentIndex, state: result });
+    return result;
+  }
   async play() {
     if (this._destroyed) return this.getState();
     const playIntent = ++this._playIntent;
