@@ -2,6 +2,7 @@ import { formatTime } from '../utils/time.js';
 
 export class Timeline {
   constructor({ sliderEl, startLabelEl, currentLabelEl, endLabelEl, indexLabelEl, timeLabelEl, startIndexLabelEl, startTimeLabelEl = null }) {
+    if (!sliderEl) throw new TypeError('Timeline requires slider element');
     this.slider = sliderEl;
     this.startLabel = startLabelEl;
     this.currentLabel = currentLabelEl;
@@ -10,27 +11,32 @@ export class Timeline {
     this.timeLabel = timeLabelEl;
     this.startIndexLabel = startIndexLabelEl;
     this.startTimeLabelEl = startTimeLabelEl;
-
     this._total = 0;
+    this._times = [];
+    this._candles = [];
     this._onChange = null;
     this._onCommit = null;
+    this._onStartHere = null;
     this._markers = [];
     try {
       this.markersEl = typeof document !== 'undefined' ? document.getElementById('timeline-markers') : null;
       this.startHereBtn = typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null;
-    } catch { this.markersEl = null; this.startHereBtn = null; }
-
+    } catch {
+      this.markersEl = null;
+      this.startHereBtn = null;
+    }
     this._onInput = () => {
-      const idx = Number(this.slider.value);
+      const idx = this._clampIndex(this.slider.value);
+      this.slider.value = String(idx);
       this._updateLabels(idx);
-      if (this._onChange) this._onChange(idx);
+      this._onChange?.(idx);
     };
     this.slider.addEventListener('input', this._onInput);
-
     this._onCommitEvent = () => {
-      const idx = Number(this.slider.value);
+      const idx = this._clampIndex(this.slider.value);
+      this.slider.value = String(idx);
       this._updateLabels(idx);
-      if (this._onCommit) this._onCommit(idx);
+      this._onCommit?.(idx);
     };
     this.slider.addEventListener('change', this._onCommitEvent);
     this._onStartHereClick = null;
@@ -43,25 +49,31 @@ export class Timeline {
       this.startHereBtn.removeEventListener?.('click', this._onStartHereClick);
       delete this.startHereBtn.dataset.wired;
     }
-    this._onChange = this._onCommit = this._onStartHere = null;
+    this._onChange = null;
+    this._onCommit = null;
+    this._onStartHere = null;
     this._onStartHereClick = null;
+    this._markers = [];
+    this._times = [];
+    this._candles = [];
   }
 
-  onChange(fn) { this._onChange = fn; }
-  onCommit(fn) { this._onCommit = fn; }
+  onChange(fn) { this._onChange = typeof fn === 'function' ? fn : null; }
+  onCommit(fn) { this._onCommit = typeof fn === 'function' ? fn : null; }
+
   onStartHere(fn) {
-    this._onStartHere = fn;
+    this._onStartHere = typeof fn === 'function' ? fn : null;
     try {
       const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
       if (btn && !btn.dataset.wired) {
         btn.dataset.wired = '1';
-        this._onStartHereClick = () => this._onStartHere?.(Number(this.slider.value));
+        this.startHereBtn = btn;
+        this._onStartHereClick = () => this._onStartHere?.(this.getSelectedIndex());
         btn.addEventListener('click', this._onStartHereClick);
       }
     } catch {}
   }
 
-  /** Trade markers: green dots for LONG entries, red for SHORT. Index-based. */
   setMarkers(markers = []) {
     this._markers = Array.isArray(markers) ? markers : [];
     this._renderMarkers();
@@ -71,79 +83,95 @@ export class Timeline {
     try {
       const el = this.markersEl || (typeof document !== 'undefined' ? document.getElementById('timeline-markers') : null);
       if (!el) return;
-      if (!this._total || !this._markers.length) { el.innerHTML = ''; return; }
-      el.innerHTML = this._markers.map(m => {
-        const pct = this._total > 1 ? (Math.min(Math.max(0, m.index), this._total - 1) / (this._total - 1)) * 100 : 0;
-        const cls = String(m.side).toUpperCase() === 'SELL' || String(m.side).toUpperCase() === 'SHORT' ? 'is-short' : 'is-long';
-        return `<span class="tl-marker ${cls}" style="left:${pct}%" title="${m.side} @ #${m.index}"></span>`;
-      }).join('');
+      this.markersEl = el;
+      while (el.firstChild) el.removeChild(el.firstChild);
+      if (!this._total || !this._markers.length) return;
+      const doc = el.ownerDocument || document;
+      for (const marker of this._markers) {
+        const rawIndex = Number(marker?.index);
+        if (!Number.isFinite(rawIndex)) continue;
+        const index = this._clampIndex(rawIndex);
+        const pct = this._total > 1 ? (index / (this._total - 1)) * 100 : 0;
+        const side = String(marker?.side ?? '').toUpperCase();
+        const node = doc.createElement('span');
+        node.className = `tl-marker ${side === 'SELL' || side === 'SHORT' ? 'is-short' : 'is-long'}`;
+        node.style.left = `${pct}%`;
+        node.title = `${side || 'TRADE'} @ #${index}`;
+        node.setAttribute('aria-label', node.title);
+        el.appendChild(node);
+      }
     } catch {}
   }
 
-  setTotal(total, candles) {
-    this._total = total;
-    // Store only timestamps to avoid duplicating full OHLC (future OHLC not needed for labels)
-    this._times = candles ? candles.map(c => c.time) : [];
-    // Keep reference for backward compat but not used for OHLC
-    this._candles = candles;
-    if (total === 0) {
+  setTotal(total, candles = null) {
+    const numericTotal = Number(total);
+    this._total = Number.isFinite(numericTotal) && numericTotal > 0 ? Math.floor(numericTotal) : 0;
+    this._times = Array.isArray(candles) ? candles.slice(0, this._total).map((c) => c?.time) : [];
+    this._candles = Array.isArray(candles) ? candles : [];
+    if (this._total === 0) {
       this.slider.disabled = true;
-      this.slider.min = 0;
-      this.slider.max = 0;
-      this.slider.value = 0;
-      this.startLabel.textContent = '—';
-      this.endLabel.textContent = '—';
+      this.slider.min = '0';
+      this.slider.max = '0';
+      this.slider.value = '0';
+      this._setText(this.startLabel, '—');
+      this._setText(this.endLabel, '—');
       this._updateLabels(0);
+      this._renderMarkers();
       return;
     }
     this.slider.disabled = false;
-    this.slider.min = 0;
-    this.slider.max = total - 1;
-    this.slider.value = Math.floor(total * 0.5);
+    this.slider.min = '0';
+    this.slider.max = String(this._total - 1);
+    const initialIndex = this._clampIndex(Math.floor(this._total * 0.5));
+    this.slider.value = String(initialIndex);
     try {
       const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
       if (btn) btn.disabled = false;
     } catch {}
     this._renderMarkers();
-    this._updateLabels(Number(this.slider.value));
-    // labels for start/end use timestamps only
-    if (this._times && this._times.length) {
-      this.startLabel.textContent = formatTime(this._times[0]);
-      this.endLabel.textContent = formatTime(this._times[this._times.length - 1]);
+    this._updateLabels(initialIndex);
+    if (this._times.length) {
+      this._setText(this.startLabel, formatTime(this._times[0]));
+      this._setText(this.endLabel, formatTime(this._times[this._times.length - 1]));
     }
   }
 
   setPosition(index) {
     if (this._total === 0) return;
-    this.slider.value = index;
-    this._updateLabels(index);
+    const safeIndex = this._clampIndex(index);
+    this.slider.value = String(safeIndex);
+    this._updateLabels(safeIndex);
+  }
+
+  _clampIndex(index) {
+    if (this._total <= 0) return 0;
+    const numeric = Number(index);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.min(Math.max(Math.trunc(numeric), 0), this._total - 1);
   }
 
   _updateProgress(idx) {
-    if (!this.slider || !this.slider.style || typeof this.slider.style.setProperty !== 'function') return;
+    if (!this.slider?.style || typeof this.slider.style.setProperty !== 'function') return;
     const pct = this._total > 1 ? (idx / (this._total - 1)) * 100 : 0;
     this.slider.style.setProperty('--timeline-progress', `${pct}%`);
   }
 
-  getSelectedIndex() {
-    return Number(this.slider.value);
-  }
+  getSelectedIndex() { return this._clampIndex(this.slider.value); }
 
-  setEnabled(enabled) {
-    this.slider.disabled = !enabled;
-  }
+  setEnabled(enabled) { this.slider.disabled = !enabled || this._total === 0; }
 
-  _updateLabels(idx) {
-    this.indexLabel.textContent = `${idx + 1} / ${this._total > 0 ? this._total : 0}`;
+  _setText(element, text) { if (element) element.textContent = text; }
+
+  _updateLabels(index) {
+    const idx = this._clampIndex(index);
     this._updateProgress(idx);
     this._renderMarkers();
-    const t = this._times?.[idx] ?? this._candles?.[idx]?.time;
-    const timeStr = Number.isFinite(t) ? formatTime(t) : '—';
-    this.timeLabel.textContent = timeStr;
-    this.currentLabel.textContent = timeStr;
-    this.startIndexLabel.textContent = `Replay cursor: #${idx + 1} of ${this._total}`;
-    if (this.startTimeLabelEl) {
-      this.startTimeLabelEl.textContent = Number.isFinite(t) ? timeStr : '—';
-    }
+    const t = this._times[idx] ?? this._candles[idx]?.time;
+    const timeStr = Number.isFinite(Number(t)) ? formatTime(t) : '—';
+    this._setText(this.indexLabel, `${idx + 1} / ${this._total}`);
+    this._setText(this.timeLabel, timeStr);
+    this._setText(this.currentLabel, timeStr);
+    this._setText(this.startIndexLabel, `Replay cursor: #${idx + 1} of ${this._total}`);
+    if (this.startTimeLabelEl) this._setText(this.startTimeLabelEl, Number.isFinite(Number(t)) ? timeStr : '—');
   }
 }
