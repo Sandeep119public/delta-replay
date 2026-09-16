@@ -76,3 +76,49 @@ def test_session_restore_rejects_stale_market_context_index():
 
     with pytest.raises(ValueError, match="market index.*must equal trading index"):
         restore_session_bundle(document)
+
+
+def test_session_serialization_rejects_noncanonical_candle_event():
+    replay, trading = build_active_session()
+    history = [
+        {
+            "type": "market_step",
+            "replayIndex": 0,
+            "payload": {"symbol": "BTCUSDT"},
+        },
+        {
+            "type": "candle",
+            "replayIndex": 1,
+            "payload": {
+                "symbol": "BTCUSDT",
+                "index": 1,
+                "candle": {**CANDLES[1], "close": 999},
+            },
+        },
+    ]
+
+    with pytest.raises(ValueError, match="does not match replay dataset"):
+        serialize_session(replay, trading, history)
+
+
+def test_session_serialization_accepts_canonical_candle_event():
+    replay, trading = build_active_session()
+    history = [
+        {
+            "type": "market_step",
+            "replayIndex": 0,
+            "payload": {"symbol": "BTCUSDT"},
+        },
+        {
+            "type": "candle",
+            "replayIndex": 1,
+            "payload": {
+                "symbol": "BTCUSDT",
+                "index": 1,
+                "candle": CANDLES[1],
+            },
+        },
+    ]
+
+    document = serialize_session(replay, trading, history)
+    assert document["history"][-1]["payload"]["candle"] == CANDLES[1]
