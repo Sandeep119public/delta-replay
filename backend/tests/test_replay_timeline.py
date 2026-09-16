@@ -104,6 +104,18 @@ def test_rebuild_handles_order_at_seeked_index_before_first_market_event():
     assert engine.positions["BTCUSDT"]["entry_price"] == 102
 
 
+def test_rebuild_applies_commands_after_synthesized_market_candle():
+    service = replay()
+    history = [order(0), market_step(2)]
+
+    engine = rebuild_trading(service, history, 2)
+
+    assert engine.index == 2
+    assert engine.orders[1]["createdIndex"] == 0
+    assert engine.orders[1]["status"] == "FILLED"
+    assert engine.positions["BTCUSDT"]["entry_price"] == 101
+
+
 def test_rebuild_applies_same_index_commands_in_persisted_order():
     service = replay()
     history = [
