@@ -48,3 +48,11 @@ def test_session_restore_rejects_same_ohlc_with_different_candle_metadata():
 
     with pytest.raises(ValueError, match="does not match replay dataset"):
         restore_session_bundle(document)
+
+
+def test_durable_style_session_document_keeps_dataset_identity_without_candles():
+    replay, trading = build_active_session()
+    document = serialize_session(replay, trading, include_candles=False)
+
+    assert document["replay"]["datasetId"] == replay.dataset_id
+    assert "candles" not in document["replay"]
