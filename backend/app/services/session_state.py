@@ -115,13 +115,23 @@ def serialize_session(
     replay: ReplayService,
     trading: PaperTradingEngine,
     history: list[dict] | None = None,
+    *,
+    include_candles: bool = True,
 ) -> Dict[str, Any]:
-    """Return the canonical JSON-compatible session persistence document."""
+    """Return the canonical JSON-compatible session persistence document.
+
+    Durable repositories can omit candle payloads for ordinary mutations because
+    the dataset is content-addressed and stored separately. They must include
+    candles when introducing a dataset that the repository may not yet own.
+    """
     history = deepcopy(history or [])
     _validate_history(history, replay_index=replay.index)
+    replay_state = replay.export_state()
+    if not include_candles:
+        replay_state.pop("candles", None)
     document = {
         "version": SESSION_STATE_VERSION,
-        "replay": replay.export_state(),
+        "replay": replay_state,
         "trading": trading.export_state(),
         "tradingMarket": trading.export_market_state(),
         "history": history,
