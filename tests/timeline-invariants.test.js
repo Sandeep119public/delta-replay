@@ -27,9 +27,7 @@ test('Timeline clamps programmatic and user cursor values to valid candle indice
   const slider = element();
   const els = labels();
   const timeline = new Timeline({ sliderEl: slider, ...els });
-  timeline.setTotal(4, [
-    { time: 100 }, { time: 200 }, { time: 300 }, { time: 400 },
-  ]);
+  timeline.setTotal(4, [{ time: 100 }, { time: 200 }, { time: 300 }, { time: 400 }]);
 
   timeline.setPosition(-50);
   assert.equal(timeline.getSelectedIndex(), 0);
@@ -72,16 +70,31 @@ test('Timeline keeps empty state disabled even when explicitly enabled', () => {
   assert.equal(slider.disabled, true);
 });
 
-test('Timeline does not inject marker metadata into markup', () => {
+test('Timeline renders marker metadata as DOM text rather than HTML', () => {
   const slider = element();
   const els = labels();
-  const timeline = new Timeline({ sliderEl: slider, ...els });
-  timeline.markersEl = {
+  const children = [];
+  const markersEl = {
     firstChild: null,
-    appendChild() { throw new Error('marker DOM unavailable'); },
+    ownerDocument: {
+      createElement() {
+        return {
+          className: '',
+          style: {},
+          title: '',
+          setAttribute(name, value) { this[name] = value; },
+        };
+      },
+    },
+    appendChild(node) { children.push(node); },
     removeChild() {},
   };
+  const timeline = new Timeline({ sliderEl: slider, ...els });
+  timeline.markersEl = markersEl;
   timeline.setTotal(2, [{ time: 100 }, { time: 200 }]);
   timeline.setMarkers([{ index: 1, side: '<img src=x onerror=alert(1)>' }]);
-  assert.equal(timeline.getSelectedIndex(), 1);
+
+  assert.equal(children.length, 1);
+  assert.equal(children[0].title, '<IMG SRC=X ONERROR=ALERT(1)> @ #1');
+  assert.equal(children[0].textContent, undefined);
 });
