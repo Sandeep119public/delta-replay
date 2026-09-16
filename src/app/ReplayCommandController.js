@@ -36,7 +36,14 @@ export class ReplayCommandController {
     const state = this.engine.getState();
     if (state.status === 'ready' || state.status === 'paused') return this.allowed(state.status === 'ready' ? 'start' : 'resume') ? this.run(() => this.engine.play()) : false;
     if (state.status === 'playing') return this.run(() => this.engine.pause());
-    if (state.status === 'ended') return this.allowed('restart') ? this.run(async () => { await this.engine.reset(); await this.engine.start(this.appState?.pendingStartIndex ?? 0); await this.engine.play(); }) : false;
+    if (state.status === 'ended') return this.allowed('restart') ? this.run(async () => {
+      const resetState = await this.engine.reset();
+      const targetIndex = this.appState?.pendingStartIndex;
+      if (Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex < this.engine.getTotalCandles() && resetState.currentIndex !== targetIndex) {
+        await this.engine.seek(targetIndex);
+      }
+      await this.engine.play();
+    }) : false;
     return this.run(() => this.onLoad?.({ autoStart: true }));
   }
   async startAt(index) { if (this.destroyed || this.busy) return false; const n = Number(index); if (!this.hasData() || !Number.isInteger(n) || n < 0 || n >= this.engine.getTotalCandles() || !this.allowed('start')) return false; return this.run(() => this.engine.start(n)); }
