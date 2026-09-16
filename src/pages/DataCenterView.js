@@ -69,11 +69,7 @@ function coming(title, detail) {
   return `<div class="data-page">${header('RESEARCH',title,detail)}<section class="data-panel empty-page"><strong>Workspace reserved</strong><p>The navigation is established now so future research features can attach to the same shell and job contracts.</p></section></div>`;
 }
 
-export async function renderDataCenterPages({ documentRef = globalThis.document, data, download, jobsState, validationState }) {
-  const token = data.renderToken();
-  const snapshot = data.snapshot();
-  const storageEstimate = await data.storageEstimate();
-  if (!data.isRenderCurrent(token)) return;
+export function renderDataCenterPages({ documentRef = globalThis.document, snapshot, storageEstimate, download, jobsState, validationState }) {
   const end = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
   const start = new Date(end.getTime() - 30 * 86400000);
   const dates = { start: start.toISOString().slice(0,16), end: end.toISOString().slice(0,16) };
