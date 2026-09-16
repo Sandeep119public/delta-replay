@@ -80,6 +80,30 @@ def test_rebuild_handles_market_history_before_configured_start_index():
     assert engine.positions["BTCUSDT"]["entry_price"] == 102
 
 
+def test_rebuild_handles_sparse_history_created_by_backward_seek():
+    service = replay()
+    service.start(0)
+    history = [market_step(0), order(1), market_step(2)]
+
+    engine = rebuild_trading(service, history, 2)
+
+    assert engine.index == 2
+    assert engine.orders[1]["status"] == "FILLED"
+    assert engine.positions["BTCUSDT"]["entry_price"] == 102
+
+
+def test_rebuild_handles_order_at_seeked_index_before_first_market_event():
+    service = replay()
+    service.start(2)
+    history = [order(1), market_step(2)]
+
+    engine = rebuild_trading(service, history, 2)
+
+    assert engine.index == 2
+    assert engine.orders[1]["status"] == "FILLED"
+    assert engine.positions["BTCUSDT"]["entry_price"] == 102
+
+
 def test_rebuild_applies_same_index_commands_in_persisted_order():
     service = replay()
     history = [
@@ -114,16 +138,6 @@ def test_rebuild_reproduces_funding_accounting():
     direct.on_candle(service.candles[2], 2, "BTCUSDT")
     direct.apply_funding(0.01, timestamp=3, symbol="BTCUSDT", mark_price=104)
     assert rebuilt.snapshot() == direct.snapshot()
-
-
-def test_rebuild_rejects_incomplete_market_timeline_when_trading_commands_exist():
-    service = replay()
-    try:
-        rebuild_trading(service, [market_step(0), order(1)], 1)
-    except ReplayDivergenceError as exc:
-        assert "missing market events" in str(exc)
-    else:
-        raise AssertionError("incomplete market history with trading commands must be rejected")
 
 
 def test_rebuild_can_create_a_pristine_market_baseline_for_forward_seek():
