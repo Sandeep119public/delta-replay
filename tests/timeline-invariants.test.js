@@ -18,7 +18,7 @@ function element(initialValue = '0') {
 }
 
 function labels() {
-  return ['startLabel', 'currentLabel', 'endLabel', 'indexLabel', 'timeLabel', 'startIndexLabel']
+  return ['startLabelEl', 'currentLabelEl', 'endLabelEl', 'indexLabelEl', 'timeLabelEl', 'startIndexLabelEl']
     .reduce((acc, key) => { acc[key] = { textContent: '' }; return acc; }, {});
 }
 
@@ -31,11 +31,11 @@ describe('Timeline invariants', () => {
 
     timeline.setPosition(-50);
     expect(timeline.getSelectedIndex()).toBe(0);
-    expect(els.indexLabel.textContent).toMatch(/^1 \/ 4$/);
+    expect(els.indexLabelEl.textContent).toMatch(/^1 \/ 4$/);
 
     timeline.setPosition(999);
     expect(timeline.getSelectedIndex()).toBe(3);
-    expect(els.indexLabel.textContent).toMatch(/^4 \/ 4$/);
+    expect(els.indexLabelEl.textContent).toMatch(/^4 \/ 4$/);
 
     slider.value = '999';
     slider.dispatch('input');
@@ -58,7 +58,7 @@ describe('Timeline invariants', () => {
     timeline.setTotal(3.9, [{ time: 100 }, { time: 200 }, { time: 300 }, { time: 400 }]);
     expect(slider.max).toBe('2');
     expect(timeline.getSelectedIndex()).toBe(1);
-    expect(els.indexLabel.textContent).toMatch(/^2 \/ 3$/);
+    expect(els.indexLabelEl.textContent).toMatch(/^2 \/ 3$/);
   });
 
   it('keeps empty state disabled even when explicitly enabled', () => {
