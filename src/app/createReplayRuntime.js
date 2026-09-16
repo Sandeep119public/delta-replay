@@ -2,9 +2,8 @@ import { ReplayCoordinator } from './ReplayCoordinator.js';
 import { ReplayCommandController } from './ReplayCommandController.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { createApplicationActions } from './ApplicationActions.js';
-import { createReplayCapabilities } from './ReplayCapabilities.js';
 
-export function createReplayRuntime({ services, ui, replayPort, statusView }) {
+export function createReplayRuntime({ services, ui, replayPort, replayCapabilities, statusView }) {
   const { appState, candleStore, engine, dataManager, tradingEngine } = services;
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
@@ -13,31 +12,7 @@ export function createReplayRuntime({ services, ui, replayPort, statusView }) {
     clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
   });
 
-  const replayRuntime = createReplayCapabilities();
-  const replayCapabilities = replayRuntime.capabilities;
-  let coordinator = null;
-  let commandController = null;
-  const callbacks = {
-    onRetry: () => replayCapabilities.load({ autoStart: false }),
-    onFollow: () => {
-      const idx = replayPort.getState().currentIndex;
-      ui.chartManager.setAutoFollow(true);
-      if (idx < 0) return;
-
-      const candle = candleStore.get(idx);
-      if (!candle) return;
-
-      ui.chartManager.setRevealedMax(candle.time);
-      coordinator.applyWindowedChart(idx);
-      ui.chartManager.followCurrent();
-    },
-    onLoadReplay: ({ targetSec } = {}) => replayCapabilities.load({ targetSec, autoStart: false }),
-    onPreviewWindow: (idx) => replayCapabilities.preview(idx),
-    onSeek: (idx) => commandController.trySeek(idx),
-    onTimeframeChange: (timeframe) => { appState.timeframe = timeframe; },
-  };
-
-  coordinator = new ReplayCoordinator({
+  const coordinator = new ReplayCoordinator({
     dataManager,
     candleStore,
     appState,
@@ -53,9 +28,8 @@ export function createReplayRuntime({ services, ui, replayPort, statusView }) {
     tradingErrorView: ui.tradingErrorView,
     ...ui.getReplayPorts(),
   });
-  replayRuntime.attach(coordinator);
 
-  commandController = new ReplayCommandController({
+  const commandController = new ReplayCommandController({
     engine,
     appState,
     candleStore,
@@ -67,7 +41,6 @@ export function createReplayRuntime({ services, ui, replayPort, statusView }) {
   });
 
   return {
-    replayCapabilities,
     replayTradingCapabilities,
     coordinator,
     commandController,
@@ -93,6 +66,5 @@ export function createReplayRuntime({ services, ui, replayPort, statusView }) {
       chartManager: ui.chartManager,
     }),
     unbindKeyboardShortcuts: commandController.bindKeyboardShortcuts(),
-    callbacks,
   };
 }
