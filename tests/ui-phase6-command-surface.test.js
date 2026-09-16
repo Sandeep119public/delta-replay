@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const css = fs.readFileSync('src/ui/phase6-command-surface.css', 'utf8');
 const commandSurface = fs.readFileSync('src/ui/CommandSurface.js', 'utf8');
+const runtime = fs.readFileSync('src/app/createApplicationRuntime.js', 'utf8');
 const application = fs.readFileSync('src/app/Application.js', 'utf8');
 const main = fs.readFileSync('src/main.js', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
@@ -33,8 +34,8 @@ describe('Phase 6 command surface', () => {
   it('routes trade-panel focus through the authoritative mobile drawer controller', () => {
     expect(commandSurface).toContain('focusTradePanel');
     expect(commandSurface).toContain("focusTradePanel('trade-qty')");
-    expect(application).toContain('createCommandSurface');
-    expect(application).toContain('focusTradePanel: mobileDrawer?.focusTradingPanel');
+    expect(runtime).toContain('createCommandSurface');
+    expect(runtime).toContain('focusTradePanel: mobileDrawer?.focusTradingPanel');
   });
 
   it('reports command execution failure instead of silently succeeding', () => {
@@ -48,8 +49,9 @@ describe('Phase 6 command surface', () => {
     for (const id of ['symbol-select', 'replay-date', 'header-start-replay-btn', 'timeline-slider', 'btn-play', 'btn-step', 'btn-reset', 'trade-qty']) {
       expect(commandSurface).toContain(`'${id}'`);
     }
-    expect(application).toContain('createCommandSurface');
-    expect(application).toContain('commandSurface,');
+    expect(runtime).toContain('createCommandSurface');
+    expect(runtime).toContain('commandSurface,');
+    expect(application).toContain('commandSurface: runtime.commandSurface');
     expect(main).toContain('app.commandSurface');
   });
 
