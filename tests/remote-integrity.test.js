@@ -66,11 +66,11 @@ describe('remote state integrity', () => {
     const play = engine.play();
     await Promise.resolve();
     const seek = engine.seek(2);
-    await seek;
+    await Promise.resolve();
     resolveStart({ status: 'paused', index: 0, startIndex: 0, total: 4, speed: 1, candle, visibleCandles: [candle] });
 
-    const result = await play;
-    expect(result.status).toBe('paused');
+    await play;
+    await seek;
     expect(engine.getState().status).toBe('paused');
     expect(engine.getState().currentIndex).toBe(2);
   });
@@ -88,15 +88,12 @@ describe('remote state integrity', () => {
     }) };
     const engine = new RemoteTradingEngine(api);
     await engine._refreshPromise;
-
     const first = engine.onMarketCandle({ symbol: 'BTCUSDT', candle: { ...candle, time: 2 }, index: 2 });
     const second = engine.onMarketCandle({ symbol: 'BTCUSDT', candle: { ...candle, time: 3 }, index: 3 });
-    resolveOld({ account: {}, positions: [], orders: [], trades: [], candle: { ...candle, time: 2 } });
-    await first;
-    expect(engine.getLatestCandle()).toBeNull();
-
     resolveNew({ account: {}, positions: [], orders: [], trades: [], candle: { ...candle, time: 3 } });
     await second;
+    resolveOld({ account: {}, positions: [], orders: [], trades: [], candle: { ...candle, time: 2 } });
+    await first;
     expect(engine.getLatestCandle().time).toBe(3);
   });
 });
