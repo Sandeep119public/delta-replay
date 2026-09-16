@@ -4,7 +4,7 @@ import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { createApplicationActions } from './ApplicationActions.js';
 import { createReplayCapabilities } from './ReplayCapabilities.js';
 
-export function createReplayRuntime({ services, ui, replayPort }) {
+export function createReplayRuntime({ services, ui, replayPort, statusView }) {
   const { appState, candleStore, engine, dataManager, tradingEngine } = services;
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
@@ -17,7 +17,6 @@ export function createReplayRuntime({ services, ui, replayPort }) {
   const replayCapabilities = replayRuntime.capabilities;
   let coordinator = null;
   let commandController = null;
-
   const callbacks = {
     onRetry: () => replayCapabilities.load({ autoStart: false }),
     onFollow: () => {
@@ -44,7 +43,7 @@ export function createReplayRuntime({ services, ui, replayPort }) {
     appState,
     replayEngine: engine,
     tradingCapabilities: replayTradingCapabilities,
-    statusView: ui.statusView,
+    statusView,
     chartManager: ui.chartManager,
     chartAdapter: ui.adapter,
     timeline: ui.timeline,
@@ -77,7 +76,7 @@ export function createReplayRuntime({ services, ui, replayPort }) {
       commandController,
       replayPort,
       appState,
-      statusView: ui.statusView,
+      statusView,
       modeBanner: ui.modeBanner,
       timeline: ui.timeline,
       controls: ui.controls,
@@ -87,7 +86,7 @@ export function createReplayRuntime({ services, ui, replayPort }) {
       engine,
       appState,
       candleStore,
-      statusView: ui.statusView,
+      statusView,
       timeline: ui.timeline,
       modeBanner: ui.modeBanner,
       preview: replayCapabilities.preview,
