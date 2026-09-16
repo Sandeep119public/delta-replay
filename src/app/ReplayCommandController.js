@@ -1,5 +1,12 @@
 export const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 5, 10];
 
+const HEADER_CONTROL = Object.freeze({
+  ready: { text: '▶ START REPLAY', label: 'Start replay' },
+  playing: { text: '⏸ PAUSE', label: 'Pause replay' },
+  paused: { text: '▶ RESUME', label: 'Resume replay' },
+  ended: { text: '↺ REPLAY AGAIN', label: 'Replay again' },
+});
+
 export function createReplayCommandPolicy(tradingCapabilities = null) {
   return Object.freeze({
     canExecute(action) {
@@ -72,7 +79,14 @@ export class ReplayCommandController {
   async pause() { if (this.destroyed || this.busy) return false; return this.engine.getState().status === 'playing' ? this.run(() => this.engine.pause()) : false; }
   async reset() { if (this.destroyed || this.busy || !this.hasData() || !this.allowed('reset')) return false; return this.run(async () => { const state = await this.engine.reset(); if (state.status === 'ready') this.onPreview?.(state.startIndex); }); }
   async trySeek(index) { if (this.destroyed || this.busy) return false; const n = Number(index); if (!this.hasData() || !Number.isInteger(n) || n < 0 || n >= this.engine.getTotalCandles() || !this.allowed('seek')) return false; return this.run(() => this.engine.seek(n)); }
-  renderHeaderBtn() { if (!this.headerBtn || this.destroyed) return; const s = this.engine.getState().status; this.headerBtn.textContent = ({ready:'▶ START REPLAY',playing:'⏸ PAUSE',paused:'▶ RESUME',ended:'↺ REPLAY AGAIN'})[s] || '▶ START REPLAY'; }
+  renderHeaderBtn() {
+    if (!this.headerBtn || this.destroyed) return;
+    const status = this.engine.getState().status;
+    const control = HEADER_CONTROL[status] || HEADER_CONTROL.ready;
+    this.headerBtn.textContent = control.text;
+    this.headerBtn.setAttribute('aria-label', control.label);
+    this.headerBtn.setAttribute('aria-keyshortcuts', 'Space');
+  }
   bindKeyboardShortcuts(target = globalThis.document) { if (!target?.addEventListener || this.destroyed) return () => {}; const handler = e => { const tag = e.target?.tagName?.toUpperCase?.(); if (['INPUT','SELECT','TEXTAREA'].includes(tag)) return; const f = e.code === 'Space' ? () => this.togglePlayPause() : e.code === 'ArrowRight' ? () => e.shiftKey ? this.jumpBy(10) : this.stepForward() : e.code === 'ArrowLeft' ? () => e.shiftKey ? this.jumpBy(-10) : this.stepBackward() : e.code === 'KeyR' ? () => this.reset() : e.code === 'Escape' ? () => this.pause() : null; if (f) { e.preventDefault(); void f(); } if (e.code === 'KeyZ') this.cycleSpeed(-1); if (e.code === 'KeyX') this.cycleSpeed(1); }; target.addEventListener('keydown', handler); return () => target.removeEventListener('keydown', handler); }
   destroy() { if (this.destroyed) return; this.destroyed = true; this.headerBtn?.removeEventListener?.('click', this.onHeaderClick); this.subscriptions.splice(0).forEach(off => { try { off?.(); } catch {} }); this.onLoad = null; this.onPreview = null; this.onError = null; }
 }
