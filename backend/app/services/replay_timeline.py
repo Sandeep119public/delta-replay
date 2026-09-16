@@ -94,6 +94,10 @@ def _validate_history_order(history) -> None:
             symbol = payload.get("symbol")
             if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
                 raise ReplayDivergenceError(f"{kind} symbol is invalid")
+            key = (replay_index, symbol)
+            if key in market_context_keys:
+                raise ReplayDivergenceError(f"multiple market context events exist for {symbol} at replay index {replay_index}")
+            market_context_keys.add(key)
             if kind == "market_step":
                 if replay_index in market_step_indexes:
                     raise ReplayDivergenceError(f"multiple market events exist for replay index {replay_index}")
@@ -101,10 +105,6 @@ def _validate_history_order(history) -> None:
                 if first_type_by_index[replay_index] != "market_step":
                     raise ReplayDivergenceError(f"market_step at replay index {replay_index} must be first")
             else:
-                key = (replay_index, symbol)
-                if key in market_context_keys:
-                    raise ReplayDivergenceError(f"multiple market context events exist for {symbol} at replay index {replay_index}")
-                market_context_keys.add(key)
                 candle_index = payload.get("index")
                 if isinstance(candle_index, bool) or not isinstance(candle_index, int) or candle_index != replay_index:
                     raise ReplayDivergenceError("candle index must match replayIndex")
