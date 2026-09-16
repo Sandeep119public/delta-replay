@@ -1,7 +1,6 @@
 import { unixToDateTimeInput, toUnixSeconds } from '../utils/time.js';
 import { resolvePresetTarget, resolveReplayTargetUnixSeconds } from '../utils/replayRange.js';
 import { snapshotDataset } from '../ports/DatasetPresentationPort.js';
-import { normalizeCandleSource } from './presentationCompat.js';
 
 /**
  * ReplayDateSelector encapsulates replay date/time inputs, preset chips,
@@ -12,8 +11,7 @@ import { normalizeCandleSource } from './presentationCompat.js';
  * ({ getCount, findIndexByTime }), `replay` (replay port), and
  * `onLoadReplay({ targetSec })`, `onPreviewWindow(index)`, `onSeek(index)`,
  * `onTimeframeChange(timeframe)` — never a coordinator, store, or command
- * controller. Engine-shaped candle sources are normalized through
- * presentationCompat.
+ * controller.
  */
 export class ReplayDateSelector {
   constructor({
@@ -36,7 +34,7 @@ export class ReplayDateSelector {
     presetChips = (typeof document !== 'undefined' ? document.querySelectorAll('.preset-chip') : []),
   } = {}) {
     this.dataset = dataset;
-    this.candles = candles ? normalizeCandleSource(candles) : null;
+    this.candles = candles;
     this.replayPort = replay ?? replayPort;
     this.onLoadReplay = onLoadReplay;
     this.onPreviewWindow = onPreviewWindow;
