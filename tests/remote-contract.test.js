@@ -70,7 +70,7 @@ describe('remote contracts', () => {
     expect(engine.getVisibleCandles()[0].open).toBe(100);
   });
 
-  it('ignores stale step responses after a newer replay operation', async () => {
+  it('serializes seek behind an in-flight step and keeps the newest generation authoritative', async () => {
     let resolveStep;
     const pendingStep = new Promise((resolve) => { resolveStep = resolve; });
     const client = api({
@@ -83,33 +83,42 @@ describe('remote contracts', () => {
     await engine.load([candle, candle, candle]);
     await engine.start(0);
     const step = engine.stepForward();
-    await engine.seek(2);
+    const seek = engine.seek(2);
+    await Promise.resolve();
+    expect(client.request).toHaveBeenLastCalledWith('/step', expect.anything());
+    expect(client.request).not.toHaveBeenCalledWith('/seek/2?symbol=BTCUSDT', expect.anything());
+
     resolveStep({ status: 'paused', index: 1, startIndex: 0, total: 3, speed: 1, candle: { ...candle, time: 2 }, visibleCandles: [candle] });
     await step;
+    await seek;
     expect(engine.getState().currentIndex).toBe(2);
   });
 
-  it('ignores stale concurrent start responses', async () => {
-    let resolveOld;
-    let resolveNew;
-    const old = new Promise((resolve) => { resolveOld = resolve; });
-    const newer = new Promise((resolve) => { resolveNew = resolve; });
+  it('serializes repeated start mutations in invocation order', async () => {
+    let resolveFirst;
+    const firstResponse = new Promise((resolve) => { resolveFirst = resolve; });
     let requestCount = 0;
     const client = {
       request: vi.fn((path) => {
-        if (path === '/load') return { status: 'ready', index: -1, startIndex: -1, total: 3, speed: 1, visibleCandles: [] };
+        if (path === '/load') return Promise.resolve({ status: 'ready', index: -1, startIndex: -1, total: 3, speed: 1, visibleCandles: [] });
         requestCount += 1;
-        return requestCount === 1 ? old : newer;
+        return requestCount === 1
+          ? firstResponse
+          : Promise.resolve({ status: 'paused', index: 2, startIndex: 2, total: 3, speed: 1, candle, visibleCandles: [] });
       }),
     };
     const engine = new RemoteReplayEngine(client);
     await engine.load([candle, candle, candle]);
     const first = engine.start(0);
     const second = engine.start(2);
-    resolveNew({ status: 'paused', index: 2, startIndex: 2, total: 3, speed: 1, candle, visibleCandles: [] });
-    await second;
-    resolveOld({ status: 'paused', index: 0, startIndex: 0, total: 3, speed: 1, candle, visibleCandles: [] });
+    await Promise.resolve();
+    expect(client.request).toHaveBeenCalledTimes(2);
+    expect(client.request).toHaveBeenNthCalledWith(2, '/start/0?symbol=BTCUSDT', expect.anything());
+
+    resolveFirst({ status: 'paused', index: 0, startIndex: 0, total: 3, speed: 1, candle, visibleCandles: [] });
     await first;
+    await second;
+    expect(client.request).toHaveBeenNthCalledWith(3, '/start/2?symbol=BTCUSDT', expect.anything());
     expect(engine.getState().currentIndex).toBe(2);
   });
 
