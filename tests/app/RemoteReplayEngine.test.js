@@ -16,6 +16,9 @@ describe('RemoteReplayEngine', () => {
       request: vi.fn((path) => {
         requests.push(path);
         if (path.startsWith('/step')) return step.promise;
+        if (path.startsWith('/seek/2')) {
+          return Promise.resolve({ status: 'paused', index: 2, startIndex: 0, total: 3, candle: null, visibleCandles: [] });
+        }
         return Promise.resolve({ status: 'paused', index: 0, startIndex: 0, total: 3, candle: null, visibleCandles: [] });
       }),
     };
