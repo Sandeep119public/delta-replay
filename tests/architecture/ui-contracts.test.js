@@ -23,6 +23,24 @@ test('inactive account panel starts from the CSS/controller visibility contract'
   assert.match(html, /id="tab-view-account"[^>]*aria-labelledby="account-tab"/);
 });
 
+test('trading panel exposes a stable accessible name', () => {
+  const html = workspaceMarkup();
+  assert.match(html, /id="trading-panel"[^>]*aria-labelledby="trading-panel-title"/);
+  assert.match(html, /<h2 id="trading-panel-title">Trading desk<\/h2>/);
+});
+
+test('interactive replay controls declare button type explicitly', () => {
+  const html = `${headerMarkup()}${timelineMarkup()}`;
+  for (const id of [
+    'header-start-replay-btn', 'timeline-start-btn', 'btn-play', 'btn-pause',
+    'btn-step', 'btn-reset', 'btn-follow', 'jump-btn', 'start-replay-btn', 'load-btn',
+  ]) {
+    const match = html.match(new RegExp(`<button[^>]*id=["']${id}["'][^>]*>`));
+    assert.ok(match, `missing button #${id}`);
+    assert.match(match[0], /type="button"/);
+  }
+});
+
 test('legacy compatibility controls are explicitly marked as non-interactive', () => {
   const html = `${headerMarkup()}${timelineMarkup()}`;
   for (const id of ['from-date', 'from-time', 'to-date', 'to-time', 'load-btn', 'jump-date', 'jump-time', 'jump-btn', 'start-replay-btn']) {
