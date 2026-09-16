@@ -21,7 +21,13 @@ export function createApplication() {
   const dataFeature = createDataFeature({ services, router });
   router.init();
 
-  const runtime = createApplicationRuntime({ services, mount, router, requireElement });
+  const runtime = createApplicationRuntime({
+    services,
+    mount,
+    router,
+    requireElement,
+    onDestroy: () => dataFeature.destroy(),
+  });
   return {
     start: runtime.start,
     destroy: runtime.destroy,
