@@ -78,6 +78,12 @@ export class DataWorkspaceSession {
 
   async startDownload(params) {
     if (['running', 'starting'].includes(this._download.status)) return;
+    if (params?.error) {
+      this._download = { ...this._download, ...params, status: 'failed', error: params.error };
+      this._job('Historical data download', 'failed');
+      this._notify();
+      return;
+    }
     this._download = { status: 'starting', loaded: 0, total: 0, pct: 0, error: null, ...params };
     this._notify();
     try {
