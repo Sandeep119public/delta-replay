@@ -56,3 +56,23 @@ def test_durable_style_session_document_keeps_dataset_identity_without_candles()
 
     assert document["replay"]["datasetId"] == replay.dataset_id
     assert "candles" not in document["replay"]
+
+
+def test_session_restore_rejects_replay_and_trading_index_divergence():
+    replay, trading = build_active_session()
+    document = serialize_session(replay, trading)
+    document["replay"]["index"] = 1
+
+    with pytest.raises(ValueError, match="trading index must equal replay index"):
+        restore_session_bundle(document)
+
+
+def test_session_restore_rejects_stale_market_context_index():
+    replay, trading = build_active_session()
+    replay.step()
+    trading.on_candle(CANDLES[1], 1, "BTCUSDT")
+    document = serialize_session(replay, trading)
+    document["tradingMarket"]["BTCUSDT"]["index"] = 0
+
+    with pytest.raises(ValueError, match="market index.*must equal trading index"):
+        restore_session_bundle(document)
