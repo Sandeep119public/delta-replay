@@ -1,6 +1,3 @@
-import { ReplayCoordinator } from './ReplayCoordinator.js';
-import { ReplayCommandController } from './ReplayCommandController.js';
-import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
 import { bindDatasetSelectors } from './bindDatasetSelectors.js';
 import { bindMobileNavigation } from './bindMobileNavigation.js';
@@ -11,7 +8,6 @@ import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
 import { bindTradingEvents } from '../ui/bindTradingEvents.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createCommandSurface } from '../ui/CommandSurface.js';
-import { createApplicationActions } from './ApplicationActions.js';
 import { createChartTradingActions } from './ChartTradingActions.js';
 import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
@@ -19,6 +15,7 @@ import { createReplayUIPort } from './ReplayUIPort.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
 import { createLifecycleGuard } from './createLifecycleGuard.js';
 import { createReplayCapabilities } from './ReplayCapabilities.js';
+import { createReplayRuntime } from './createReplayRuntime.js';
 
 export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
   const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
@@ -28,35 +25,22 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const dataset = createDatasetView(appState);
   const candles = createCandleView(candleStore);
   const statusView = createReplayStatusView({ engine, appState, candleStore });
-  const replayTradingCapabilities = Object.freeze({
-    hasOpenPosition: () => tradingEngine.hasOpenPosition(),
-    hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
-    hasTradingActivity: () => tradingEngine.hasTradingActivity(),
-    clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
-  });
-
-  const chartContainer = requireElement('chart-container', mount.ownerDocument || document);
-  const chartManager = new ChartManager(chartContainer);
-  const chartAdapter = new ChartAdapter(replayPort, chartManager);
-  const mobileNavBinding = bindMobileNavigation();
-
-  let coordinator = null;
-  let commandController = null;
   const replayRuntime = createReplayCapabilities();
   const replayCapabilities = replayRuntime.capabilities;
+  let coordinator = null;
+  let commandController = null;
+
   const callbacks = {
     onRetry: () => replayCapabilities.load({ autoStart: false }),
     onFollow: () => {
       const idx = replayPort.getState().currentIndex;
       chartManager.setAutoFollow(true);
-      if (idx >= 0) {
-        const candle = candleStore.get(idx);
-        if (candle) {
-          chartManager.setRevealedMax(candle.time);
-          coordinator?.applyWindowedChart(idx);
-          chartManager.followCurrent();
-        }
-      }
+      if (idx < 0) return;
+      const candle = candleStore.get(idx);
+      if (!candle) return;
+      chartManager.setRevealedMax(candle.time);
+      coordinator?.applyWindowedChart(idx);
+      chartManager.followCurrent();
     },
     onLoadReplay: ({ targetSec } = {}) => replayCapabilities.load({ targetSec, autoStart: false }),
     onPreviewWindow: (idx) => replayCapabilities.preview(idx),
@@ -64,43 +48,38 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     onTimeframeChange: (timeframe) => { appState.timeframe = timeframe; },
   };
 
-  const ui = createPaperUI({ replayPort, trading, tradingEvents, dataset, candles, chart: { chartManager, adapter: chartAdapter }, callbacks });
-  coordinator = new ReplayCoordinator({
-    dataManager,
-    candleStore,
-    appState,
-    replayEngine: engine,
-    tradingCapabilities: replayTradingCapabilities,
-    statusView,
-    chartManager: ui.chartManager,
-    chartAdapter: ui.adapter,
+  const chartContainer = requireElement('chart-container', mount.ownerDocument || document);
+  const chartManager = new ChartManager(chartContainer);
+  const chartAdapter = new ChartAdapter(replayPort, chartManager);
+  const mobileNavBinding = bindMobileNavigation();
+  const ui = createPaperUI({
+    replayPort,
+    trading,
+    tradingEvents,
+    dataset,
+    candles,
+    chart: { chartManager, adapter: chartAdapter },
+    callbacks,
+  });
+
+  const replay = createReplayRuntime({ services, ui, replayPort, replayCapabilities, statusView });
+  coordinator = replay.coordinator;
+  commandController = replay.commandController;
+
+  const form = ui.getOrderFormPorts();
+  const views = ui.createTerminalViews({
     timeline: ui.timeline,
     controls: ui.controls,
-    errorPanel: ui.errorPanel,
     modeBanner: ui.modeBanner,
-    tradingErrorView: ui.tradingErrorView,
-    ...ui.getReplayPorts(),
+    onLoadReplay: callbacks.onLoadReplay,
+    onPreviewWindow: callbacks.onPreviewWindow,
+    onSeek: callbacks.onSeek,
+    onTimeframeChange: callbacks.onTimeframeChange,
+    ...form,
   });
-  replayRuntime.attach(coordinator);
-
-  const coordinatorPorts = ui.getReplayPorts();
-  commandController = new ReplayCommandController({
-    engine,
-    appState,
-    candleStore,
-    headerBtn: coordinatorPorts.headerStartReplayBtn,
-    tradingCapabilities: replayTradingCapabilities,
-    onLoad: ({ autoStart }) => replayCapabilities.load({ autoStart }),
-    onPreview: (index) => replayCapabilities.preview(index),
-    onError: (msg) => coordinator?.showTradingError(msg),
-  });
-  const unbindKeyboardShortcuts = commandController.bindKeyboardShortcuts();
-  const actions = createApplicationActions({ replay: replayCapabilities, commandController, replayPort, appState, statusView, modeBanner: ui.modeBanner, timeline: ui.timeline, controls: ui.controls, errorPanel: ui.errorPanel });
-  const form = ui.getOrderFormPorts();
-  const views = ui.createTerminalViews({ timeline: ui.timeline, controls: ui.controls, modeBanner: ui.modeBanner, onLoadReplay: callbacks.onLoadReplay, onPreviewWindow: callbacks.onPreviewWindow, onSeek: callbacks.onSeek, onTimeframeChange: callbacks.onTimeframeChange, ...form });
-  const selectorBindings = bindDatasetSelectors(ui, actions);
-  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, actions });
-  const tradingBindings = bindTradingEvents({ tradingEvents, actions, errorPanel: ui.errorPanel });
+  const selectorBindings = bindDatasetSelectors(ui, replay.actions);
+  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, actions: replay.actions });
+  const tradingBindings = bindTradingEvents({ tradingEvents, actions: replay.actions, errorPanel: ui.errorPanel });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
   const chartTradingActions = createChartTradingActions({
     trading,
@@ -111,24 +90,59 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     },
     reportError: (message) => coordinator?.showTradingError(message),
   });
-  const chartTradingController = ui.createChartTradingController({ chartManager: ui.chartManager, trading, tradingEvents, tradingPanel: views.tradingPanel, floatingPosView: views.floatingPosView, toastView: views.toastView, orderFormView: views.tradingPanel.orderFormView, actions: chartTradingActions, ...form });
+  const chartTradingController = ui.createChartTradingController({
+    chartManager: ui.chartManager,
+    trading,
+    tradingEvents,
+    tradingPanel: views.tradingPanel,
+    floatingPosView: views.floatingPosView,
+    toastView: views.toastView,
+    orderFormView: views.tradingPanel.orderFormView,
+    actions: chartTradingActions,
+    ...form,
+  });
   const tradingStateBridge = bindTradingState({ tradingEvents, trading, onChange: () => chartTradingController.syncChartTradingLines() });
-  const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, statusView, timeline: ui.timeline, modeBanner: ui.modeBanner, preview: replayCapabilities.preview, chartManager: ui.chartManager });
-  const loadBtn = coordinatorPorts.loadBtn;
-  const onLoadClick = () => actions.load();
+  const loadBtn = ui.getReplayPorts().loadBtn;
+  const onLoadClick = () => replay.actions.load();
   loadBtn?.addEventListener('click', onLoadClick);
   const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
   const mobileDrawer = bindMobileDrawer();
   const commandSurface = createCommandSurface({ focusTradePanel: mobileDrawer?.focusTradingPanel });
   const destroy = bindApplicationLifecycle({
-    unbindKeyboardShortcuts,
+    unbindKeyboardShortcuts: replay.unbindKeyboardShortcuts,
     onDestroy: () => {
       onDestroy?.();
       router.destroy();
     },
     engine,
     candleCache,
-    resources: [selectorBindings, timelineBindings, tradingBindings, tradingStateBridge, replayLifecycle, commandController, mobileDrawer, commandSurface, loadBinding, mobileNavBinding, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView, views.toastView],
+    resources: [
+      replay.coordinator,
+      selectorBindings,
+      timelineBindings,
+      tradingBindings,
+      tradingStateBridge,
+      replay.replayLifecycle,
+      replay.commandController,
+      mobileDrawer,
+      commandSurface,
+      loadBinding,
+      mobileNavBinding,
+      ui.symbolSelector,
+      ui.timeframeSelector,
+      ui.timeline,
+      ui.controls,
+      ui.themeManager,
+      ui.errorPanel,
+      chartTradingController,
+      ui.adapter,
+      ui.chartManager,
+      views.tradingPanel,
+      views.dateSelector,
+      views.sparkline,
+      views.floatingPosView,
+      views.toastView,
+    ],
     extraCleanup: [unbindAutoFollow],
   });
   const lifecycle = createLifecycleGuard({
