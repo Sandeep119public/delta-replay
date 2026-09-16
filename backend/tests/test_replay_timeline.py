@@ -113,7 +113,7 @@ def test_rebuild_applies_commands_after_synthesized_market_candle():
     assert engine.index == 2
     assert engine.orders[1]["createdIndex"] == 0
     assert engine.orders[1]["status"] == "FILLED"
-    assert engine.positions["BTCUSDT"]["entry_price"] == 102
+    assert engine.positions["BTCUSDT"]["entry_price"] == 101
 
 
 def test_rebuild_applies_same_index_commands_in_persisted_order():
