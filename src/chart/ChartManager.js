@@ -23,8 +23,6 @@ export class ChartManager {
 
   init(initialTheme = null) {
     if (this._destroyed || this.chart) return;
-    // PaperUI rebuilds its mount tree during composition. Always bind the
-    // chart to the currently connected element rather than a detached node.
     if (typeof document !== 'undefined') {
       const liveContainer = document.getElementById('chart-container');
       if (liveContainer) this.container = liveContainer;
@@ -85,9 +83,9 @@ export class ChartManager {
   onChartClick(cb) { if (typeof cb === 'function') { this._onChartClickCallbacks.push(cb); return () => { this._onChartClickCallbacks = this._onChartClickCallbacks.filter(item => item !== cb); }; } return () => {}; }
   get tradingOverlay() { if (!this._tradingOverlay) this._tradingOverlay = new ChartTradingOverlay(this); return this._tradingOverlay; }
   updatePositionLines(position) { this.tradingOverlay.updatePositionLines(position); }
-  clearPositionLines() { this.tradingOverlay.clearPositionLines(); }
+  clearPositionLines() { if (this._tradingOverlay) this._tradingOverlay.clearPositionLines(); }
   updateOrderLines(orders) { this.tradingOverlay.updateOrderLines(orders); }
-  clearTradingLines() { this.tradingOverlay.clearTradingLines(); }
+  clearTradingLines() { if (this._tradingOverlay) this._tradingOverlay.clearTradingLines(); }
   clear() { this.clearTradingLines(); if (this.series) this.series.setData([]); }
   applyTheme(themeName) { const config = CHART_THEMES[themeName] || CHART_THEMES.dark; if (this.chart) { try { this.chart.applyOptions({ layout: config.layout, grid: config.grid, crosshair: { mode: 1, ...config.crosshair }, timeScale: { borderColor: config.timeScale.borderColor }, rightPriceScale: { borderColor: config.rightPriceScale.borderColor } }); } catch (err) { console.warn('[ChartManager] applyTheme chart options error:', err); } } if (this.series) { try { this.series.applyOptions(config.series); } catch (err) { console.warn('[ChartManager] applyTheme series options error:', err); } } return config; }
   destroy() {
