@@ -1,6 +1,7 @@
 import { ReplayCoordinator } from './ReplayCoordinator.js';
 import { ReplayCommandController } from './ReplayCommandController.js';
 import { createCoreServices } from './createCoreServices.js';
+import { createDataWorkspacePort } from './createDataWorkspacePort.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
 import { bindDatasetSelectors } from './bindDatasetSelectors.js';
@@ -24,40 +25,29 @@ import { Router } from '../router/Router.js';
 import { DataCenterPage } from '../pages/DataCenterPage.js';
 
 export { requireElement };
-
-function requireElement(id, root = document) {
-  const element = root.getElementById?.(id) || root.querySelector?.('#' + id);
-  if (!element) throw new Error(`Required element #${id} is missing`);
-  return element;
-}
+function requireElement(id, root = document) { const element = root.getElementById?.(id) || root.querySelector?.('#' + id); if (!element) throw new Error(`Required element #${id} is missing`); return element; }
 
 export function createApplication() {
   const services = createCoreServices();
   const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
+  const dataWorkspace = createDataWorkspacePort(services);
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
   const dataset = createDatasetView(appState);
   const candles = createCandleView(candleStore);
   const statusView = createReplayStatusView({ engine, appState, candleStore });
-  const replayTradingCapabilities = Object.freeze({
-    hasOpenPosition: () => tradingEngine.hasOpenPosition(),
-    hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
-    hasTradingActivity: () => tradingEngine.hasTradingActivity(),
-    clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
-  });
+  const replayTradingCapabilities = Object.freeze({ hasOpenPosition: () => tradingEngine.hasOpenPosition(), hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0, hasTradingActivity: () => tradingEngine.hasTradingActivity(), clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason) });
 
   const mount = requireElement('app');
   renderPaperLayout(mount);
   const chartContainer = requireElement('chart-container');
   const chartManager = new ChartManager(chartContainer);
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
-
   const router = new Router();
   for (const page of ['dashboard', 'replay', 'downloads', 'datasets', 'validation', 'storage', 'experiments', 'strategies', 'journal', 'jobs', 'system']) router.register(page);
   router.init();
-
-  const dataCenter = new DataCenterPage({ dataManager, candleStore, candleCache, appState });
+  const dataCenter = new DataCenterPage(dataWorkspace);
   dataCenter.init();
 
   const mobileNavToggle = document.getElementById('mobile-nav-toggle');
@@ -66,9 +56,7 @@ export function createApplication() {
   const onMobileNavToggle = () => setMobileNavOpen(!document.body.classList.contains('nav-open'));
   const onMobileNavScrim = () => setMobileNavOpen(false);
   const onPageChange = () => setMobileNavOpen(false);
-  mobileNavToggle?.addEventListener('click', onMobileNavToggle);
-  mobileNavScrim?.addEventListener('click', onMobileNavScrim);
-  window.addEventListener('pagechange', onPageChange);
+  mobileNavToggle?.addEventListener('click', onMobileNavToggle); mobileNavScrim?.addEventListener('click', onMobileNavScrim); window.addEventListener('pagechange', onPageChange);
   const mobileNavBinding = { destroy() { mobileNavToggle?.removeEventListener('click', onMobileNavToggle); mobileNavScrim?.removeEventListener('click', onMobileNavScrim); window.removeEventListener('pagechange', onPageChange); setMobileNavOpen(false); } };
 
   let coordinator = null;
@@ -78,10 +66,7 @@ export function createApplication() {
   const callbacks = {
     onRetry: () => replayCapabilities.load({ autoStart: false }),
     onFollow: () => { const idx = replayPort.getState().currentIndex; chartManager.setAutoFollow(true); if (idx >= 0) { const candle = candleStore.get(idx); if (candle) { chartManager.setRevealedMax(candle.time); coordinator?.applyWindowedChart(idx); chartManager.followCurrent(); } } },
-    onLoadReplay: ({ targetSec } = {}) => replayCapabilities.load({ targetSec, autoStart: false }),
-    onPreviewWindow: (idx) => replayCapabilities.preview(idx),
-    onSeek: (idx) => commandController?.trySeek(idx),
-    onTimeframeChange: (timeframe) => { appState.timeframe = timeframe; },
+    onLoadReplay: ({ targetSec } = {}) => replayCapabilities.load({ targetSec, autoStart: false }), onPreviewWindow: (idx) => replayCapabilities.preview(idx), onSeek: (idx) => commandController?.trySeek(idx), onTimeframeChange: (timeframe) => { appState.timeframe = timeframe; },
   };
   const ui = createPaperUI({ replayPort, trading, tradingEvents, dataset, candles, chart: { chartManager, adapter: chartAdapter }, callbacks });
   coordinator = new ReplayCoordinator({ dataManager, candleStore, appState, replayEngine: engine, tradingCapabilities: replayTradingCapabilities, statusView, chartManager: ui.chartManager, chartAdapter: ui.adapter, timeline: ui.timeline, controls: ui.controls, errorPanel: ui.errorPanel, modeBanner: ui.modeBanner, tradingErrorView: ui.tradingErrorView, ...ui.getReplayPorts() });
@@ -101,12 +86,11 @@ export function createApplication() {
   const tradingStateBridge = bindTradingState({ tradingEvents, trading, onChange: () => chartTradingController.syncChartTradingLines() });
   const replayLifecycle = bindReplayLifecycle({ engine, appState, candleStore, statusView, timeline: ui.timeline, modeBanner: ui.modeBanner, preview: replayCapabilities.preview, chartManager: ui.chartManager });
   const loadBtn = coordinatorPorts.loadBtn;
-  const onLoadClick = () => actions.load();
-  loadBtn?.addEventListener('click', onLoadClick);
+  const onLoadClick = () => actions.load(); loadBtn?.addEventListener('click', onLoadClick);
   const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
   const mobileDrawer = bindMobileDrawer();
   const commandSurface = createCommandSurface({ focusTradePanel: mobileDrawer?.focusTradingPanel });
   const destroy = bindApplicationLifecycle({ unbindKeyboardShortcuts, onDestroy: () => { dataCenter.destroy(); router.destroy(); coordinator?.destroy?.(); }, engine, candleCache, resources: [selectorBindings, timelineBindings, tradingBindings, tradingStateBridge, replayLifecycle, commandController, mobileDrawer, commandSurface, loadBinding, mobileNavBinding, ui.symbolSelector, ui.timeframeSelector, ui.timeline, ui.controls, ui.themeManager, ui.errorPanel, chartTradingController, ui.adapter, ui.chartManager, views.tradingPanel, views.dateSelector, views.sparkline, views.floatingPosView, views.toastView], extraCleanup: [unbindAutoFollow] });
   const lifecycle = createLifecycleGuard({ start() { ui.modeBanner.update(statusView.snapshot()); Promise.resolve(replayCapabilities.load({ autoStart: false })).catch((error) => { if (!lifecycle.destroyed) coordinator?.showTradingError?.(error?.message || 'Failed to load replay'); }); }, destroy });
-  return { start: lifecycle.start, destroy: lifecycle.destroy, services, ui, coordinator, mobileDrawer, commandSurface, router, dataCenter };
+  return { start: lifecycle.start, destroy: lifecycle.destroy, services, ui, coordinator, mobileDrawer, commandSurface, router, dataCenter, dataWorkspace };
 }
