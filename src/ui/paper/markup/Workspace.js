@@ -17,9 +17,9 @@ export const workspaceMarkup = () => `<div class="main-layout">
     </div>
   </main>
 
-  <aside id="trading-panel" class="trading-section" aria-label="Paper trading panel">
+  <aside id="trading-panel" class="trading-section" aria-labelledby="trading-panel-title">
     <div class="panel-heading">
-      <div><span class="eyebrow">PAPER ACCOUNT</span><h2>Trading desk</h2></div>
+      <div><span class="eyebrow">PAPER ACCOUNT</span><h2 id="trading-panel-title">Trading desk</h2></div>
       <span class="paper-badge">SIM</span>
     </div>
     <div class="trading-top-summary" aria-label="Account snapshot">
