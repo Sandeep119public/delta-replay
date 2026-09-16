@@ -1,8 +1,9 @@
-/** Browser page router with injected browser globals for deterministic tests. */
+/** Browser page router with explicit component lifecycle ownership. */
 export class Router {
   constructor({ win = null, doc = null, defaultPage = 'replay' } = {}) {
     this.pages = new Map();
     this.currentPage = null;
+    this._activeComponent = null;
     this._win = win;
     this._doc = doc;
     this.defaultPage = defaultPage;
@@ -12,6 +13,7 @@ export class Router {
       if (!link) return;
       const pageName = link.dataset.page;
       if (!this.pages.has(pageName)) return;
+      event.preventDefault?.();
       this.navigate(pageName);
     };
     this._initialized = false;
@@ -22,8 +24,24 @@ export class Router {
 
   register(name, component = null, options = {}) {
     if (!name || typeof name !== 'string') throw new TypeError('page name must be a non-empty string');
+    if (component != null && (typeof component.mount !== 'function' || typeof component.destroy !== 'function')) {
+      throw new TypeError(`page component for ${name} must expose mount(element) and destroy()`);
+    }
+    if (this.currentPage === name) throw new Error(`cannot replace active page: ${name}`);
     this.pages.set(name, { component, options });
     return this;
+  }
+
+  _deactivateCurrent() {
+    if (!this._activeComponent) return;
+    this._activeComponent.destroy();
+    this._activeComponent = null;
+  }
+
+  _activate(target, pageEl) {
+    const component = this.pages.get(target)?.component;
+    if (component) component.mount(pageEl, { pageName: target, router: this });
+    this._activeComponent = component;
   }
 
   navigate(pageName) {
@@ -36,8 +54,15 @@ export class Router {
     }
 
     const previous = this.currentPage;
-    if (this.win.location.hash.slice(1) !== target) this.win.location.hash = target;
+    this._deactivateCurrent();
+    try {
+      this._activate(target, pageEl);
+    } catch (error) {
+      this._activeComponent = null;
+      throw error;
+    }
 
+    if (this.win.location.hash.slice(1) !== target) this.win.location.hash = target;
     this.doc.querySelectorAll('.page[data-page]').forEach((el) => {
       const active = el === pageEl;
       el.classList.toggle('active', active);
@@ -72,6 +97,7 @@ export class Router {
 
   destroy() {
     if (!this._initialized) return;
+    this._deactivateCurrent();
     this.win.removeEventListener('hashchange', this._onHashChange);
     this.doc.removeEventListener('click', this._onNavClick);
     this._initialized = false;
@@ -79,4 +105,6 @@ export class Router {
   }
 }
 
-export const router = new Router();
+export function createRouter(options) {
+  return new Router(options);
+}
