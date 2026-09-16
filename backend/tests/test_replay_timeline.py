@@ -160,14 +160,29 @@ def test_rebuild_can_create_a_pristine_market_baseline_for_forward_seek():
     assert engine.get_latest_market("BTCUSDT")["candle"]["close"] == 104
 
 
-def test_rebuild_rejects_multiple_market_events_at_one_index():
+def test_rebuild_rejects_multiple_market_steps_at_one_index():
     service = replay()
     try:
         rebuild_trading(service, [market_step(0, "BTCUSDT"), market_step(0, "ETHUSDT")], 0)
     except ReplayDivergenceError as exc:
         assert "multiple market events" in str(exc)
     else:
-        raise AssertionError("multiple market events at one index must be rejected")
+        raise AssertionError("multiple market_step events at one index must be rejected")
+
+
+def test_rebuild_rejects_market_step_and_candle_for_same_symbol_at_one_index():
+    service = replay()
+    history = [
+        market_step(0, "BTCUSDT"),
+        {"type": "candle", "replayIndex": 0, "payload": {"candle": service.candles[0], "index": 0, "symbol": "BTCUSDT"}},
+    ]
+
+    try:
+        rebuild_trading(service, history, 0)
+    except ReplayDivergenceError as exc:
+        assert "multiple market context" in str(exc)
+    else:
+        raise AssertionError("market_step and candle for one symbol at one index must be rejected")
 
 
 def test_rebuild_rejects_out_of_order_history_even_after_target_boundary():

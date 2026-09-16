@@ -78,6 +78,10 @@ class PaperTradingEngine:
             raise ValueError(f"{name} must be provided")
         return value
 
+    @staticmethod
+    def _same_candle(left, right):
+        return left == right
+
     def fee(self, price, quantity):
         return self._positive_finite(price, "price") * self._positive_finite(quantity, "quantity") * self.fee_rate
 
@@ -128,8 +132,7 @@ class PaperTradingEngine:
             if market_index < -1 or market_index > self.index:
                 raise ValueError("market index is outside trading timeline")
             if market_index < 0:
-                if normalized_candle is not None:
-                    raise ValueError("market candle is invalid before the trading timeline")
+                raise ValueError("market candle is invalid before the trading timeline")
             mark_price = value.get("markPrice")
             if mark_price is not None:
                 mark_price = self._positive_finite(mark_price, "market mark price")
@@ -147,6 +150,11 @@ class PaperTradingEngine:
             raise ValueError("market candle must be an object")
         for field in ("open", "high", "low", "close"):
             self._positive_finite(normalized_candle.get(field), f"candle {field}")
+        existing = self._market_by_symbol.get(symbol)
+        if existing is not None and existing["index"] == index:
+            if not self._same_candle(existing["candle"], normalized_candle):
+                raise ValueError("same-index candle does not match existing market context")
+            return self
         self._market_by_symbol[symbol] = {"candle": normalized_candle, "index": index, "markPrice": None}
         return self
 
@@ -321,40 +329,41 @@ class PaperTradingEngine:
         symbol = self._symbol(symbol)
         if not isinstance(candle, dict):
             raise ValueError("candle must be an object")
+        normalized_candle = deepcopy(candle)
         for key in ("open", "high", "low", "close"):
-            self._positive_finite(candle.get(key), f"candle {key}")
+            normalized_candle[key] = self._positive_finite(normalized_candle.get(key), f"candle {key}")
         if index is None:
             index = self.index + 1
         else:
             index = self._integer(index, "candle index")
         if index < 0:
             raise ValueError("candle index must be non-negative")
+
         if index == self.index:
             existing = self._market_by_symbol.get(symbol)
-            if existing is not None:
-                previous = existing["candle"]
-                for field in ("open", "high", "low", "close"):
-                    if float(previous[field]) != float(candle[field]):
-                        raise ValueError("same-index candle does not match existing market context")
-                if "time" in previous and "time" in candle and previous["time"] != candle["time"]:
-                    raise ValueError("same-index candle time does not match existing market context")
+            if existing is None:
+                self.set_market_context(symbol, normalized_candle, index)
+                return []
+            if not self._same_candle(existing["candle"], normalized_candle):
+                raise ValueError("same-index candle does not match existing market context")
             return []
+
         if self.index == -1 and not (self.positions or self.orders or self.trades or self.funding):
             self.index = index
         elif index != self.index + 1:
             raise ValueError("candle index must advance exactly one position")
         else:
             self.index = index
-        self.set_market_context(symbol, candle, self.index)
+        self.set_market_context(symbol, normalized_candle, self.index)
         events = []
         for order_id in sorted(self.orders):
             order = self.orders[order_id]
             if order["status"] != "PENDING" or order["symbol"] != symbol:
                 continue
-            price = fill_price(order, candle, candle_index=self.index)
+            price = fill_price(order, normalized_candle, candle_index=self.index)
             if price is not None:
                 try:
-                    self._open(order, price, candle)
+                    self._open(order, price, normalized_candle)
                     order["status"] = "FILLED"
                     order["filledPrice"] = price
                     events.append({"type": "ORDER_FILLED", "order": order["id"]})
@@ -363,10 +372,10 @@ class PaperTradingEngine:
                     events.append({"type": "ORDER_REJECTED", "order": order["id"], "reason": str(exc)})
         position = self.positions.get(symbol)
         if position is not None:
-            position["current_price"] = candle["close"]
-            result = risk_exit(position, candle, self.index)
+            position["current_price"] = normalized_candle["close"]
+            result = risk_exit(position, normalized_candle, self.index)
             if result["triggered"]:
-                trade = self.close(symbol, result["exitPrice"], result["exitReason"], result["ambiguityResolution"], candle.get("time"))
+                trade = self.close(symbol, result["exitPrice"], result["exitReason"], result["ambiguityResolution"], normalized_candle.get("time"))
                 events.append({"type": result["exitReason"], "trade": trade, "symbol": symbol, "price": result["exitPrice"]})
         self._recalc()
         if self.account.equity <= self.account.maintenance_margin:
