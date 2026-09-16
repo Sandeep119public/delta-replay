@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const css = fs.readFileSync('src/ui/phase7-final-system.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
+const application = fs.readFileSync('src/app/Application.js', 'utf8');
 const runtime = fs.readFileSync('src/app/createApplicationRuntime.js', 'utf8');
 const appShell = fs.readFileSync('src/ui/paper/markup/AppShell.js', 'utf8');
 
@@ -24,10 +25,10 @@ describe('Phase 7 final UI system cleanup', () => {
     expect(appShell).toContain('id="page-journal"');
   });
 
-  it('keeps the application shell and runtime-owned chart active', () => {
+  it('keeps shell composition in Application and chart ownership in the runtime', () => {
     expect(appShell).toContain('id="page-replay"');
-    expect(runtime).toContain('renderPaperLayout');
-    expect(runtime).toContain("requireElement('chart-container')");
+    expect(application).toContain('renderPaperLayout');
+    expect(runtime).toContain("requireElement('chart-container'");
   });
 
   it('keeps shared focus and narrow-layout safety contracts', () => {
