@@ -17,25 +17,38 @@ function element(initialValue = '0') {
   };
 }
 
-function labels() {
-  return ['startLabelEl', 'currentLabelEl', 'endLabelEl', 'indexLabelEl', 'timeLabelEl', 'startIndexLabelEl']
-    .reduce((acc, key) => { acc[key] = { textContent: '' }; return acc; }, {});
+function timelineFixture() {
+  const slider = element();
+  const startLabel = { textContent: '' };
+  const currentLabel = { textContent: '' };
+  const endLabel = { textContent: '' };
+  const indexLabel = { textContent: '' };
+  const timeLabel = { textContent: '' };
+  const startIndexLabel = { textContent: '' };
+  const timeline = new Timeline({
+    sliderEl: slider,
+    startLabelEl: startLabel,
+    currentLabelEl: currentLabel,
+    endLabelEl: endLabel,
+    indexLabelEl: indexLabel,
+    timeLabelEl: timeLabel,
+    startIndexLabelEl: startIndexLabel,
+  });
+  return { timeline, slider, indexLabel };
 }
 
 describe('Timeline invariants', () => {
   it('clamps programmatic and user cursor values to valid candle indices', () => {
-    const slider = element();
-    const els = labels();
-    const timeline = new Timeline({ sliderEl: slider, ...els });
+    const { timeline, slider, indexLabel } = timelineFixture();
     timeline.setTotal(4, [{ time: 100 }, { time: 200 }, { time: 300 }, { time: 400 }]);
 
     timeline.setPosition(-50);
     expect(timeline.getSelectedIndex()).toBe(0);
-    expect(els.indexLabelEl.textContent).toMatch(/^1 \/ 4$/);
+    expect(indexLabel.textContent).toMatch(/^1 \/ 4$/);
 
     timeline.setPosition(999);
     expect(timeline.getSelectedIndex()).toBe(3);
-    expect(els.indexLabelEl.textContent).toMatch(/^4 \/ 4$/);
+    expect(indexLabel.textContent).toMatch(/^4 \/ 4$/);
 
     slider.value = '999';
     slider.dispatch('input');
@@ -47,9 +60,7 @@ describe('Timeline invariants', () => {
   });
 
   it('treats invalid and fractional totals as an empty or integral range', () => {
-    const slider = element();
-    const els = labels();
-    const timeline = new Timeline({ sliderEl: slider, ...els });
+    const { timeline, slider, indexLabel } = timelineFixture();
 
     timeline.setTotal(Number.NaN, [{ time: 100 }]);
     expect(timeline.getSelectedIndex()).toBe(0);
@@ -58,21 +69,18 @@ describe('Timeline invariants', () => {
     timeline.setTotal(3.9, [{ time: 100 }, { time: 200 }, { time: 300 }, { time: 400 }]);
     expect(slider.max).toBe('2');
     expect(timeline.getSelectedIndex()).toBe(1);
-    expect(els.indexLabelEl.textContent).toMatch(/^2 \/ 3$/);
+    expect(indexLabel.textContent).toMatch(/^2 \/ 3$/);
   });
 
   it('keeps empty state disabled even when explicitly enabled', () => {
-    const slider = element();
-    const els = labels();
-    const timeline = new Timeline({ sliderEl: slider, ...els });
+    const { timeline, slider } = timelineFixture();
     timeline.setTotal(0);
     timeline.setEnabled(true);
     expect(slider.disabled).toBe(true);
   });
 
   it('renders marker metadata as DOM properties rather than HTML', () => {
-    const slider = element();
-    const els = labels();
+    const { timeline } = timelineFixture();
     const children = [];
     const markersEl = {
       firstChild: null,
@@ -89,7 +97,6 @@ describe('Timeline invariants', () => {
       appendChild(node) { children.push(node); },
       removeChild() {},
     };
-    const timeline = new Timeline({ sliderEl: slider, ...els });
     timeline.markersEl = markersEl;
     timeline.setTotal(2, [{ time: 100 }, { time: 200 }]);
     timeline.setMarkers([{ index: 1, side: '<img src=x onerror=alert(1)>' }]);
