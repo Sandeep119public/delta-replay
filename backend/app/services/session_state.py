@@ -84,17 +84,20 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
         index = market.get("index")
         if isinstance(index, bool) or not isinstance(index, int) or index < 0 or index > trading.index:
             raise ValueError(f"market index for {symbol} is outside trading timeline")
+        if index >= len(replay.candles):
+            raise ValueError(f"market index for {symbol} is outside replay dataset")
         candle = market.get("candle")
         if not isinstance(candle, dict):
             raise ValueError(f"market candle for {symbol} is invalid")
+        canonical_candle = replay.candles[index]
+        if candle != canonical_candle:
+            raise ValueError(f"market candle for {symbol} does not match replay dataset at index {index}")
         for field in ("open", "high", "low", "close"):
             value = candle.get(field)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
                 raise ValueError(f"market candle {field} for {symbol} is invalid")
         if candle["high"] < max(candle["open"], candle["close"]) or candle["low"] > min(candle["open"], candle["close"]):
             raise ValueError(f"market candle range for {symbol} is invalid")
-        if index >= len(replay.candles):
-            raise ValueError(f"market index for {symbol} is outside replay dataset")
 
     missing_position_markets = sorted(set(trading.positions) - set(market_state))
     if missing_position_markets:
