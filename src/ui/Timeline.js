@@ -116,7 +116,6 @@ export class Timeline {
       this._setText(this.startLabel, '—');
       this._setText(this.endLabel, '—');
       this._updateLabels(0);
-      this._renderMarkers();
       return;
     }
     this.slider.disabled = false;
@@ -128,7 +127,6 @@ export class Timeline {
       const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
       if (btn) btn.disabled = false;
     } catch {}
-    this._renderMarkers();
     this._updateLabels(initialIndex);
     if (this._times.length) {
       this._setText(this.startLabel, formatTime(this._times[0]));
@@ -160,12 +158,11 @@ export class Timeline {
 
   setEnabled(enabled) { this.slider.disabled = !enabled || this._total === 0; }
 
-  _setText(element, text) { if (element) element.textContent = text; }
+  _setText(element, text) { if (element) element.textContent = String(text); }
 
   _updateLabels(index) {
     const idx = this._clampIndex(index);
     this._updateProgress(idx);
-    this._renderMarkers();
     const t = this._times[idx] ?? this._candles[idx]?.time;
     const timeStr = Number.isFinite(Number(t)) ? formatTime(t) : '—';
     this._setText(this.indexLabel, `${idx + 1} / ${this._total}`);
@@ -173,5 +170,6 @@ export class Timeline {
     this._setText(this.currentLabel, timeStr);
     this._setText(this.startIndexLabel, `Replay cursor: #${idx + 1} of ${this._total}`);
     if (this.startTimeLabelEl) this._setText(this.startTimeLabelEl, Number.isFinite(Number(t)) ? timeStr : '—');
+    this._renderMarkers();
   }
 }
