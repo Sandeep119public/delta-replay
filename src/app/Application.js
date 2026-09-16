@@ -11,6 +11,7 @@ import { ChartAdapter } from '../chart/ChartAdapter.js';
 import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
 import { bindTradingEvents } from '../ui/bindTradingEvents.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
+import { createCommandSurface } from '../ui/CommandSurface.js';
 import { createApplicationActions } from './ApplicationActions.js';
 import { createChartTradingActions } from './ChartTradingActions.js';
 import { createTradingPresentation } from './TradingPresentationAdapter.js';
@@ -181,6 +182,7 @@ export function createApplication() {
   loadBtn?.addEventListener('click', onLoadClick);
   const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
   const mobileDrawer = bindMobileDrawer();
+  const commandSurface = createCommandSurface({ focusTradePanel: mobileDrawer?.focusTradingPanel });
 
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts,
@@ -195,6 +197,7 @@ export function createApplication() {
       replayLifecycle,
       commandController,
       mobileDrawer,
+      commandSurface,
       loadBinding,
       ui.symbolSelector,
       ui.timeframeSelector,
@@ -224,5 +227,5 @@ export function createApplication() {
     destroy,
   });
 
-  return { start: lifecycle.start, destroy: lifecycle.destroy, services, ui, coordinator, mobileDrawer };
+  return { start: lifecycle.start, destroy: lifecycle.destroy, services, ui, coordinator, mobileDrawer, commandSurface };
 }
