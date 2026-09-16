@@ -1,17 +1,6 @@
-/* Phase 7: final UI system cleanup. */
+/* Phase 7: final interaction and resilience guardrails. */
 
-/* Legacy navigation and dormant page shells are no longer part of the active
-   replay product surface. Keep them inert if older markup is ever mounted. */
-.side-nav,
-#page-dashboard,
-#page-analytics,
-#page-strategies,
-#page-journal,
-#page-settings {
-  display: none !important;
-}
-
-/* Shared final interaction guardrails. */
+/* Shared focus treatment for keyboard users. */
 button:focus-visible,
 select:focus-visible,
 input:focus-visible {
@@ -19,6 +8,7 @@ input:focus-visible {
   outline-offset: 2px;
 }
 
+/* Prevent flex/grid children from imposing horizontal overflow on the shell. */
 .topbar,
 .timeline-section,
 .controls-section,
