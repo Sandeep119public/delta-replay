@@ -22,7 +22,9 @@ export class ReplayControls {
     this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.replayPort.pause()); });
     this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.replayPort.stepForward()); });
     this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.replayPort.reset()); });
-    this._listen(this.startReplayBtn, 'click', () => { void this._safeAction(() => this._runHeaderCommand()); });
+    // The header control is rendered here but its command is owned by
+    // ReplayCommandController. Keeping one command owner prevents a single
+    // click from dispatching start/pause twice when both layers are mounted.
     this._listen(this.speedSelect, 'change', () => {
       void this._safeAction(() => this.replayPort.setSpeed(this.speedSelect.value), () => {
         if (this.speedSelect) this.speedSelect.value = String(this.replayPort.getState().speed);

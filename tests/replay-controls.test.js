@@ -12,6 +12,7 @@ function button() {
     addEventListener(type, handler) { listeners.set(type, handler); },
     removeEventListener(type, handler) { if (listeners.get(type) === handler) listeners.delete(type); },
     click() { listeners.get('click')?.(); },
+    hasListener(type) { return listeners.has(type); },
   };
 }
 
@@ -43,28 +44,27 @@ function createControls(state) {
 }
 
 describe('ReplayControls', () => {
-  it('executes the action represented by the replay header control', async () => {
+  it('renders the replay header state without registering a competing command handler', () => {
     const { port, controls, instance } = createControls({ status: 'ready', totalCandles: 100, startIndex: 12, currentIndex: 12, speed: 1 });
     controls.startReplayBtn.dataset.startIndex = '12';
 
+    expect(controls.startReplayBtn.hasListener('click')).toBe(false);
     controls.startReplayBtn.click();
-    await Promise.resolve();
 
-    expect(port.calls).toContainEqual(['start', 12]);
-    expect(controls.startReplayBtn.textContent).toBe('PAUSE');
-    expect(controls.startReplayBtn.setAttribute).toHaveBeenCalledWith('aria-label', 'Pause replay');
+    expect(port.calls).toEqual([]);
+    expect(controls.startReplayBtn.textContent).toBe('START REPLAY');
+    expect(controls.startReplayBtn.setAttribute).toHaveBeenCalledWith('aria-label', 'Start replay');
     instance.destroy();
   });
 
-  it('pauses when the header control says PAUSE and resumes when it says RESUME', async () => {
+  it('keeps the header display synchronized for playing and paused states', () => {
     const { port, controls, instance } = createControls({ status: 'playing', totalCandles: 100, startIndex: 0, currentIndex: 10, speed: 1 });
-    controls.startReplayBtn.click();
-    await Promise.resolve();
-    expect(port.calls).toContainEqual(['pause']);
+    expect(controls.startReplayBtn.textContent).toBe('PAUSE');
+    expect(controls.startReplayBtn.setAttribute).toHaveBeenCalledWith('aria-label', 'Pause replay');
 
-    controls.startReplayBtn.click();
-    await Promise.resolve();
-    expect(port.calls).toContainEqual(['play']);
+    port.pause();
+    expect(controls.startReplayBtn.textContent).toBe('RESUME');
+    expect(controls.startReplayBtn.setAttribute).toHaveBeenCalledWith('aria-label', 'Resume replay');
     instance.destroy();
   });
 

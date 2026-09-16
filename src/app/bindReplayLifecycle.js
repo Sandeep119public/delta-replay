@@ -45,11 +45,15 @@ export function bindReplayLifecycle({
     }));
   }
 
-  subscriptions.push(engine.on('reset', (state) => {
-    if (state.status === 'ready') {
-      preview(appState.pendingStartIndex);
-      reveal(appState.pendingStartIndex);
-    } else if (state.index !== undefined) {
+  subscriptions.push(engine.on('reset', (payload) => {
+    const state = payload?.state ?? payload;
+    if (state?.status === 'ready') {
+      const startIndex = Number.isInteger(state.startIndex) ? state.startIndex : appState.pendingStartIndex;
+      preview(startIndex);
+      reveal(startIndex);
+    } else if (payload?.index !== undefined) {
+      reveal(payload.index);
+    } else if (state?.index !== undefined) {
       reveal(state.index);
     }
   }));
