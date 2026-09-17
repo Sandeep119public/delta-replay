@@ -7,7 +7,7 @@ import { ChartAdapter } from '../chart/ChartAdapter.js';
 import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createCommandSurface } from '../ui/CommandSurface.js';
-import { createReplayCommandPresentationPort } from '../ports/ReplayCommandPresentationPort.js';
+import { createDeferredReplayCommandPresentationPort } from '../ports/ReplayCommandPresentationPort.js';
 import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
 import { createReplayUIPort } from './ReplayUIPort.js';
@@ -21,6 +21,8 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
+  const commandBridge = createDeferredReplayCommandPresentationPort();
+  const commandPort = commandBridge.port;
   const dataset = createDatasetView(appState);
   const candles = createCandleView(candleStore);
   const statusView = createReplayStatusView({ engine, appState, candleStore });
@@ -28,7 +30,6 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const replayCapabilities = replayRuntime.capabilities;
   let coordinator = null;
   let commandController = null;
-  let commandPort = null;
   let chartManager = null;
 
   const callbacks = {
@@ -56,6 +57,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const ui = createPaperUI({
     mount,
     replayPort,
+    commandPort,
     trading,
     tradingEvents,
     dataset,
@@ -67,8 +69,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const replay = createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView });
   coordinator = replay.coordinator;
   commandController = replay.commandController;
-  commandPort = createReplayCommandPresentationPort(commandController);
-  ui.controls.setCommandPort(commandPort);
+  commandBridge.bind(commandController);
 
   const form = ui.getOrderFormPorts();
   const views = ui.createTerminalViews({
@@ -126,7 +127,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       views.floatingPosView,
       views.toastView,
     ],
-    extraCleanup: [unbindAutoFollow],
+    extraCleanup: [unbindAutoFollow, commandBridge],
   });
   const lifecycle = createLifecycleGuard({
     start() {
