@@ -61,7 +61,7 @@ describe('DatasetChangeService', () => {
     expect(dependencies.reportError).toHaveBeenCalledWith('Cannot change symbol after trading activity. Reset the simulation first.');
   });
 
-  it('rolls back the selector and app state when pending-order cleanup fails', async () => {
+  it('rolls back the selector when pending-order cleanup fails', async () => {
     const dependencies = deps({ clearPendingOrders: vi.fn(async () => ({ success: false, message: 'cleanup failed' })) });
     const service = createDatasetChangeService(dependencies);
     const select = { value: 'BTCUSDT' };
@@ -73,5 +73,42 @@ describe('DatasetChangeService', () => {
     expect(dependencies.invalidateLoad).not.toHaveBeenCalled();
     expect(dependencies.reload).not.toHaveBeenCalled();
     expect(dependencies.reportError).toHaveBeenCalledWith('cleanup failed');
+  });
+
+  it('serializes overlapping dataset changes and keeps the second selector consistent', async () => {
+    let releaseCleanup;
+    const cleanupStarted = new Promise((resolve) => { releaseCleanup = resolve; });
+    const dependencies = deps({
+      clearPendingOrders: vi.fn(() => cleanupStarted),
+    });
+    const service = createDatasetChangeService(dependencies);
+    const firstSelect = { value: 'BTCUSDT' };
+    const secondSelect = { value: 'BTCUSDT' };
+
+    const first = service.handleSymbolTimeframeChange('symbol', 'ETHUSDT', firstSelect);
+    await Promise.resolve();
+    const second = await service.handleSymbolTimeframeChange('symbol', 'SOLUSDT', secondSelect);
+
+    expect(second).toBe(false);
+    expect(secondSelect.value).toBe('BTCUSDT');
+    expect(dependencies.appState.symbol).toBe('BTCUSDT');
+    expect(dependencies.reload).not.toHaveBeenCalled();
+
+    releaseCleanup({ success: true });
+    await expect(first).resolves.toBe('reloaded');
+    expect(dependencies.appState.symbol).toBe('ETHUSDT');
+    expect(firstSelect.value).toBe('BTCUSDT');
+  });
+
+  it('does not reload when the selected dataset is unchanged', async () => {
+    const dependencies = deps();
+    const service = createDatasetChangeService(dependencies);
+    const select = { value: 'BTCUSDT' };
+
+    await expect(service.handleSymbolTimeframeChange('symbol', 'BTCUSDT', select)).resolves.toBe(true);
+
+    expect(dependencies.clearPendingOrders).not.toHaveBeenCalled();
+    expect(dependencies.invalidateLoad).not.toHaveBeenCalled();
+    expect(dependencies.reload).not.toHaveBeenCalled();
   });
 });
