@@ -7,11 +7,11 @@ import { ErrorPanel } from './ErrorPanel.js';
 import { ModeBanner } from './ModeBanner.js';
 import { ThemeManager } from './ThemeManager.js';
 import { TradingErrorView } from './TradingErrorView.js';
-import { renderPaperLayout } from './paper/PaperLayout.js';
 import { createPaperPorts } from './paper/PaperPorts.js';
 import { createPaperTerminalViews } from './createPaperTerminalViews.js';
 
 export function createPaperUI({
+  mount,
   replayPort,
   trading = null,
   tradingEvents = null,
@@ -20,14 +20,14 @@ export function createPaperUI({
   chart = null,
   callbacks = {},
 }) {
+  if (!mount) throw new TypeError('createPaperUI requires mount');
   if (!replayPort) throw new TypeError('createPaperUI requires replayPort');
   if (!dataset) throw new TypeError('createPaperUI requires dataset view');
   if (!chart?.chartManager || !chart?.adapter) throw new TypeError('createPaperUI requires chart handles { chartManager, adapter }');
   const { onRetry = null, onFollow = null } = callbacks;
-  const mount = document.getElementById('app');
-  if (!mount) throw new Error('Paper UI mount #app is missing');
-  if (!mount.querySelector('#chart-container')) renderPaperLayout(mount);
-  const el = (id) => document.getElementById(id);
+  if (!mount.querySelector('#chart-container')) throw new Error('Paper UI layout is not mounted');
+  const doc = mount.ownerDocument || globalThis.document;
+  const el = (id) => mount.querySelector(`#${id}`) || doc?.getElementById?.(id);
   const getSymbol = () => el('symbol-select')?.value || 'BTCUSDT';
   const ports = createPaperPorts(el);
   const chartManager = chart.chartManager;
