@@ -14,13 +14,7 @@ const IMPORT_PATTERN = /(?:\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+
 
 async function collectFiles(dir) {
   const absolute = path.join(ROOT, dir);
-  let entries;
-  try {
-    entries = await fs.readdir(absolute, { withFileTypes: true });
-  } catch (error) {
-    if (error && error.code === 'ENOENT') return [];
-    throw error;
-  }
+  const entries = await fs.readdir(absolute, { withFileTypes: true });
   const result = [];
   for (const entry of entries) {
     const child = path.join(dir, entry.name);
@@ -28,6 +22,11 @@ async function collectFiles(dir) {
     else if (entry.isFile() && entry.name.endsWith('.js')) result.push(child);
   }
   return result;
+}
+
+async function collectSourceLayers() {
+  const entries = await fs.readdir(path.join(ROOT, 'src'), { withFileTypes: true });
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
 }
 
 function stripCommentsAndStrings(source) {
@@ -63,6 +62,15 @@ function assertAcyclic(graph) {
 const violations = [];
 const graph = new Map(LAYERS.map(layer => [layer, new Set()]));
 
+const actualLayers = await collectSourceLayers();
+const declaredLayers = [...LAYERS].sort();
+for (const layer of declaredLayers) {
+  if (!actualLayers.includes(layer)) violations.push(`src/${layer}/: declared architecture layer does not exist`);
+}
+for (const layer of actualLayers) {
+  if (!LAYERS.includes(layer)) violations.push(`src/${layer}/: source layer is not declared in architecture policy`);
+}
+
 for (const forbiddenFile of FORBIDDEN_LEGACY_FILES) {
   try {
     await fs.access(path.join(ROOT, forbiddenFile));
@@ -81,7 +89,6 @@ for (const layer of LAYERS) {
       if (!imported || imported === layer) continue;
       graph.get(layer).add(imported);
       if (!ALLOWED[layer].has(imported)) violations.push(`${relative}: ${layer} -> ${imported} is forbidden`);
-      if ((layer === 'ui' || layer === 'pages') && imported === 'trading') violations.push(`${relative}: presentation layer must use application trading ports, not trading domain imports`);
     }
     if (!INTEGRATION_LAYERS.has(layer) && BROWSER_GLOBALS.test(code)) violations.push(`${relative}: browser global access is forbidden outside presentation/integration layers`);
     if (layer === 'ui' || layer === 'pages') {
