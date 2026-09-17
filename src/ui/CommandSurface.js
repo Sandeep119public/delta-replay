@@ -35,7 +35,7 @@ function focusElement(id) {
 
 function clickElement(id) {
   const element = document.getElementById(id);
-  if (!element) return false;
+  if (!element || element.disabled) return false;
   element.click();
   return true;
 }
@@ -121,7 +121,7 @@ export function createCommandSurface({ focusTradePanel = null } = {}) {
 
   function render() {
     const visible = visibleCommands();
-    activeIndex = Math.max(0, Math.min(activeIndex, visible.length - 1));
+    activeIndex = visible.length ? Math.max(0, Math.min(activeIndex, visible.length - 1)) : 0;
     list.replaceChildren();
 
     if (!visible.length) {
@@ -156,8 +156,8 @@ export function createCommandSurface({ focusTradePanel = null } = {}) {
         render();
       });
       item.addEventListener('click', () => {
-        runCommand(command.label, { focusTradePanel });
-        closeMenu();
+        const executed = runCommand(command.label, { focusTradePanel });
+        if (executed) closeMenu();
       });
       list.appendChild(item);
     });
@@ -182,7 +182,7 @@ export function createCommandSurface({ focusTradePanel = null } = {}) {
     trigger.setAttribute('aria-expanded', 'false');
     const focusTarget = previousFocus;
     previousFocus = null;
-    focusTarget?.focus?.();
+    if (focusTarget && document.contains?.(focusTarget)) focusTarget.focus?.();
   }
 
   function onTrigger() {
@@ -193,6 +193,14 @@ export function createCommandSurface({ focusTradePanel = null } = {}) {
   function onSearchInput() {
     activeIndex = 0;
     render();
+  }
+
+  function executeActiveCommand() {
+    const visible = visibleCommands();
+    if (!visible.length) return false;
+    const executed = runCommand(visible[activeIndex].label, { focusTradePanel });
+    if (executed) closeMenu();
+    return executed;
   }
 
   function onKeydown(event) {
@@ -235,8 +243,7 @@ export function createCommandSurface({ focusTradePanel = null } = {}) {
       render();
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      runCommand(visible[activeIndex].label, { focusTradePanel });
-      closeMenu();
+      executeActiveCommand();
     }
   }
 
@@ -256,6 +263,7 @@ export function createCommandSurface({ focusTradePanel = null } = {}) {
       document.removeEventListener('keydown', onKeydown);
       backdrop.remove();
       trigger.remove();
+      previousFocus = null;
     },
   };
 }
