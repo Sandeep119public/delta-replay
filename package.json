@@ -21,7 +21,7 @@
     "vibe:fast": "npm run test:ui-contracts && npm test",
     "vibe:check": "npm run check",
     "vibe:build": "npm run check",
-    "vibe:where": "node -e \"console.log('Ownership: app=composition, ui=DOM, replay=playback, trading=domain. Run vibe:fast while iterating.')\"",
+    "vibe:where": "node -e \"console.log('Ownership: app=composition, ui=DOM, data=market data, chart=chart integration, pages=page composition, router=navigation, ports=cross-layer contracts. Run vibe:fast while iterating.')\"",
     "vibe:context": "node scripts/vibe-context.mjs",
     "vibe:context:json": "node scripts/vibe-context.mjs --json",
     "vibe:ui": "npm run test:ui-contracts",
