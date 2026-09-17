@@ -18,7 +18,9 @@ describe('data feature separation of concerns', () => {
     expect(page).toContain('mount(element)');
     expect(page).toContain('this._element.addEventListener(\'click\', this._onClick)');
     expect(page).toContain('this._element.removeEventListener(\'click\', this._onClick)');
-    expect(page).not.toContain("this.document.addEventListener('click'");
+    expect(page).toContain('renderDataCenterPage({');
+    expect(page).toContain('element: this._element');
+    expect(page).not.toContain('this.document');
     expect(page).not.toContain('renderDataCenterPages');
   });
 
@@ -31,10 +33,17 @@ describe('data feature separation of concerns', () => {
 
   it('keeps the data view as a thin renderer registry', () => {
     expect(view).toContain('const renderers = {');
-    expect(view).toContain('setPage(documentRef, page, render());');
+    expect(view).toContain('setPage(element, render());');
     expect(view).not.toContain('function dashboard(');
     expect(view).not.toContain('function downloads(');
     expect(view).not.toContain('function datasets(');
+  });
+
+  it('keeps the shared renderer scoped to the caller-owned DOM element', () => {
+    expect(shared).toContain('export function setPage(element, html)');
+    expect(shared).toContain('element.ownerDocument');
+    expect(shared).toContain('element.replaceChildren');
+    expect(shared).not.toContain('getElementById(`page-${name}`)');
   });
 
   it('separates shared markup helpers from operational and research renderers', () => {
