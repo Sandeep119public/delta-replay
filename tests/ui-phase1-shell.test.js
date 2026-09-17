@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
+import { paperMarkup } from '../src/ui/paperMarkup.js';
 
 const css = fs.readFileSync('src/ui/phase1-chart-shell.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
@@ -32,6 +33,16 @@ describe('Phase 1 chart-first shell', () => {
     for (const id of ['timeline-slider', 'btn-play', 'btn-step', 'btn-reset']) {
       expect(timeline).toContain(`id="${id}"`);
     }
+  });
+
+  it('always hydrates the replay page with its workspace instead of accepting a partial shell', () => {
+    const markup = paperMarkup();
+    expect(markup).not.toContain('REPLAY_CONTENT');
+    expect(markup).toContain('id="page-replay" class="page active" data-page="replay" data-paper-layout="1"');
+    expect(markup).toContain('id="chart-container"');
+    expect(markup).toContain('id="trading-panel"');
+    expect(markup).toContain('id="timeline-slider"');
+    expect(markup).toContain('id="btn-play"');
   });
 
   it('has a real mobile sheet fallback instead of squeezing the desktop dock', () => {
