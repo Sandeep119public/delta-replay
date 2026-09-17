@@ -8,11 +8,11 @@ function toSeconds(value) {
 }
 
 export class DataCenterPage {
-  constructor(session) {
+  constructor(session, pageName = null) {
     if (!session?.data) throw new TypeError('data workspace session is required');
     this.session = session;
     this.data = assertDataWorkspacePort(session.data);
-    this.pageName = session.pageName ?? null;
+    this.pageName = pageName;
     this._element = null;
     this._unsubscribe = null;
     this._initialized = false;
