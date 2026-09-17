@@ -30,8 +30,14 @@ export function createDatasetChangeService({
     throw new TypeError('createDatasetChangeService requires reportError, invalidateLoad, and reload callbacks');
   }
 
+  let busy = false;
+
   return Object.freeze({
     async handleSymbolTimeframeChange(kind, newValue, selectElement) {
+      if (busy) {
+        if (selectElement) selectElement.value = kind === 'symbol' ? appState.symbol : appState.timeframe;
+        return false;
+      }
       if (kind !== 'symbol' && kind !== 'timeframe') {
         reportError(`Unsupported dataset change: ${kind}`);
         return false;
@@ -44,9 +50,6 @@ export function createDatasetChangeService({
         return false;
       }
 
-      // A completed trade is part of the current simulation's history. Do not
-      // mutate the selected dataset and then discover that the backend refuses
-      // to load it. The user must explicitly reset before changing datasets.
       if (hasTradingActivity?.()) {
         const msg = `Cannot change ${kind} after trading activity. Reset the simulation first.`;
         reportError(msg);
@@ -61,40 +64,53 @@ export function createDatasetChangeService({
         if (selectElement) selectElement.value = previousValue;
         return false;
       }
+      if (nextValue === previousValue) return true;
 
-      if (kind === 'symbol') appState.symbol = nextValue;
-      else appState.timeframe = nextValue;
+      busy = true;
+      try {
+        if (typeof clearPendingOrders === 'function') {
+          try {
+            const result = await clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE');
+            if (result?.success === false) throw new Error(result.message || 'Unable to clear pending orders');
+          } catch (error) {
+            if (selectElement) selectElement.value = previousValue;
+            reportError(error?.message || 'Unable to clear pending orders. Dataset change cancelled.');
+            return false;
+          }
+        }
 
-      if (typeof clearPendingOrders === 'function') {
+        // Mutate application selection only after all preconditions and
+        // pending-order cleanup have succeeded. This keeps concurrent UI
+        // changes from observing a half-committed dataset transition.
+        if (kind === 'symbol') appState.symbol = nextValue;
+        else appState.timeframe = nextValue;
+
+        // From this point the current dataset is intentionally being replaced.
+        // Invalidate in-flight work before clearing presentation state so stale
+        // responses cannot repopulate the old dataset.
+        invalidateLoad();
+        try { replayEngine.stop?.(); } catch (error) { console.warn('[DatasetChange] stop during dataset change failed', error); }
+        candleStore.clear();
+        appState.setCandles([]);
+        timeline?.setTotal(0, []);
+        chartManager?.clear();
+        chartManager?.setRevealedMax(null);
+        chartManager?.setAutoFollow(true);
+        appState.setPendingStartIndex(0);
+        controls?.setStartIndex(0);
+        if (startReplayBtn) startReplayBtn.disabled = true;
+        if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
+        appState.transitionLoading(LoadingState.IDLE);
+
         try {
-          const result = await clearPendingOrders(kind === 'symbol' ? 'SYMBOL_CHANGE' : 'TIMEFRAME_CHANGE');
-          if (result?.success === false) throw new Error(result.message || 'Unable to clear pending orders');
+          return await reload();
         } catch (error) {
-          if (kind === 'symbol') appState.symbol = previousValue;
-          else appState.timeframe = previousValue;
-          if (selectElement) selectElement.value = previousValue;
-          reportError(error?.message || 'Unable to clear pending orders. Dataset change cancelled.');
+          reportError(error?.message || `Unable to load ${kind} dataset.`);
           return false;
         }
+      } finally {
+        busy = false;
       }
-
-      // From this point the current dataset is intentionally being replaced.
-      // Invalidate in-flight work before clearing presentation state so stale
-      // responses cannot repopulate the old dataset.
-      invalidateLoad();
-      try { replayEngine.stop?.(); } catch (error) { console.warn('[DatasetChange] stop during dataset change failed', error); }
-      candleStore.clear();
-      appState.setCandles([]);
-      timeline?.setTotal(0, []);
-      chartManager?.clear();
-      chartManager?.setRevealedMax(null);
-      chartManager?.setAutoFollow(true);
-      appState.setPendingStartIndex(0);
-      controls?.setStartIndex(0);
-      if (startReplayBtn) startReplayBtn.disabled = true;
-      if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
-      appState.transitionLoading(LoadingState.IDLE);
-      return reload();
     },
   });
 }
