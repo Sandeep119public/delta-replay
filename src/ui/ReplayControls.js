@@ -9,6 +9,7 @@ export class ReplayControls {
     this.speedSelect = speedSelect;
     this.statusEl = statusEl;
     this.replayPort = replayPort;
+    this.commandController = null;
     this.followBtn = followBtn;
     this.onFollowClick = onFollowClick;
     this._listeners = [];
@@ -19,15 +20,12 @@ export class ReplayControls {
     };
 
     this._listen(this.playBtn, 'click', () => { void this._safeAction(() => this._runPlayCommand()); });
-    this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.replayPort.pause()); });
-    this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.replayPort.stepForward()); });
-    this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.replayPort.reset()); });
-    // The header control is rendered here but its command is owned by
-    // ReplayCommandController. Keeping one command owner prevents a single
-    // click from dispatching start/pause twice when both layers are mounted.
+    this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.commandController?.pause() ?? this.replayPort.pause()); });
+    this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.commandController?.stepForward() ?? this.replayPort.stepForward()); });
+    this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.commandController?.reset() ?? this.replayPort.reset()); });
     this._listen(this.speedSelect, 'change', () => {
-      void this._safeAction(() => this.replayPort.setSpeed(this.speedSelect.value), () => {
-        if (this.speedSelect) this.speedSelect.value = String(this.replayPort.getState().speed);
+      void this._safeAction(() => this.commandController?.setSpeed(this.speedSelect.value) ?? this.replayPort.setSpeed(this.speedSelect.value), (error) => {
+        if (this.speedSelect && error) this.speedSelect.value = String(this.replayPort.getState().speed);
       });
     });
 
@@ -46,7 +44,14 @@ export class ReplayControls {
     this.render(this.replayPort.getState());
   }
 
+  setCommandController(controller) {
+    if (!controller || typeof controller !== 'object') throw new TypeError('ReplayControls.setCommandController requires controller');
+    this.commandController = controller;
+    return this;
+  }
+
   _runPlayCommand() {
+    if (this.commandController) return this.commandController.togglePlayPause();
     const state = this.replayPort.getState();
     if (state.status === 'playing') return this.replayPort.pause();
     if (state.status === 'paused') return this.replayPort.play();
@@ -59,22 +64,12 @@ export class ReplayControls {
     return this.replayPort.play();
   }
 
-  _runHeaderCommand() {
-    const state = this.replayPort.getState();
-    if (state.status === 'playing') return this.replayPort.pause();
-    if (state.status === 'paused') return this.replayPort.play();
-    const idx = Number(this.startReplayBtn?.dataset.startIndex ?? state.startIndex ?? 0);
-    const total = Number(state.totalCandles ?? state.total ?? 0);
-    const startIndex = Number.isInteger(idx) && idx >= 0 && (total <= 0 || idx < total) ? idx : 0;
-    if (state.status === 'ready' || state.status === 'ended') return this.replayPort.start(startIndex);
-    return this.replayPort.play();
-  }
-
   destroy() {
     this._listeners.forEach(([el, type, handler]) => el?.removeEventListener?.(type, handler));
     this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch {} });
     this._listeners = [];
     this._subscriptions = [];
+    this.commandController = null;
     this.onFollowClick = null;
   }
 
