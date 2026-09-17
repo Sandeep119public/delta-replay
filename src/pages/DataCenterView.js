@@ -8,7 +8,7 @@ function createDates(now = Date.now()) {
   return { start: start.toISOString().slice(0, 16), end: end.toISOString().slice(0, 16) };
 }
 
-export function renderDataCenterPage({ documentRef = globalThis.document, page, snapshot, storageEstimate, download, jobsState = [], validationState }) {
+export function renderDataCenterPage({ element, page, snapshot, storageEstimate, download, jobsState = [], validationState }) {
   const dates = createDates();
   const renderers = {
     dashboard: () => dashboard(snapshot, storageEstimate),
@@ -22,5 +22,5 @@ export function renderDataCenterPage({ documentRef = globalThis.document, page, 
   };
   const render = renderers[page];
   if (!render) throw new Error(`Unknown data page: ${page}`);
-  setPage(documentRef, page, render());
+  setPage(element, render());
 }
