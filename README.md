@@ -65,15 +65,23 @@ Useful commands:
 
 When exploring the codebase, start with `ARCHITECTURE.md` and the current context command.
 
-- `src/app/` — composition and lifecycle wiring.
+- `src/app/` — application composition, remote replay/trading adapters, and lifecycle wiring.
 - `src/ui/` — DOM rendering and interaction.
 - `src/data/` — market-data providers and caches.
-- `src/replay/` — replay mechanics.
-- `src/trading/` — frontend trading domain.
-- `src/strategy/` — strategy and signal behavior.
+- `src/indicators/` — indicator calculations.
+- `src/state/` — application state.
+- `src/core/` — framework-neutral core primitives.
+- `src/chart/` — chart integration and replay/chart translation.
+- `src/pages/` — page composition.
+- `src/router/` — route selection and navigation.
+- `src/ports/` — narrow cross-layer contracts.
+- `src/utils/` — shared low-level utilities.
+- `src/personality/` — personality and assistant-facing behavior.
 - `backend/app/services/paper_engine.py` — canonical backend execution/accounting engine.
 - `backend/app/domain/execution.py` — shared fill and risk-exit semantics.
 - `backend/app/services/replay_timeline.py` — deterministic replay reconstruction.
+
+The frontend architecture policy describes these actual source boundaries. It does not declare replay, trading, or strategy directories that are not present in the current tree.
 
 A useful exploration rule: trace one user action end-to-end before changing code. For example, follow PLAY from UI control → replay API → engine → persisted session → UI state.
 
