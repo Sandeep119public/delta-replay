@@ -10,7 +10,7 @@ const HEADER_CONTROL = Object.freeze({
 export function createReplayCommandPolicy(tradingCapabilities = null) {
   return Object.freeze({
     canExecute(action) {
-      if (action === 'reset' || action === 'restart' || action === 'stepForward' || action === 'resume' || action === 'seek') return { allowed: true };
+      if (action === 'reset' || action === 'restart' || action === 'stepForward' || action === 'resume' || action === 'seek' || action === 'setSpeed') return { allowed: true };
       const hasTradingActivity = Boolean(tradingCapabilities?.hasTradingActivity?.());
       if (action === 'start' && hasTradingActivity) {
         return { allowed: false, reason: 'Cannot start a new replay position after trading activity. Seek to the desired candle or reset the simulation first.' };
@@ -73,8 +73,14 @@ export class ReplayCommandController {
       const current = Number(this.engine.getState().speed || 1);
       let i = PLAYBACK_SPEEDS.indexOf(current);
       if (i < 0) i = PLAYBACK_SPEEDS.indexOf(1);
-      return this.engine.setSpeed(PLAYBACK_SPEEDS[Math.min(PLAYBACK_SPEEDS.length - 1, Math.max(0, i + amount))]);
+      return this.setSpeed(PLAYBACK_SPEEDS[Math.min(PLAYBACK_SPEEDS.length - 1, Math.max(0, i + amount))]);
     } catch (e) { this.error(e?.message); return null; }
+  }
+  setSpeed(speed) {
+    if (this.destroyed || this.busy || !this.hasData() || !this.allowed('setSpeed')) return false;
+    const value = Number(speed);
+    if (!PLAYBACK_SPEEDS.includes(value)) return false;
+    try { return this.engine.setSpeed(value); } catch (e) { this.error(e?.message); return false; }
   }
   async pause() { if (this.destroyed || this.busy) return false; return this.engine.getState().status === 'playing' ? this.run(() => this.engine.pause()) : false; }
   async reset() { if (this.destroyed || this.busy || !this.hasData() || !this.allowed('reset')) return false; return this.run(async () => { const state = await this.engine.reset(); if (state.status === 'ready') this.onPreview?.(state.startIndex); }); }
