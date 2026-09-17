@@ -34,18 +34,24 @@ export function createApplicationActions({
       const state = replayPort.getState();
       if (state.status === 'ready' || state.status === 'idle') replay.preview(index);
     },
-    commitTimeline(index) {
+    async commitTimeline(index) {
       const state = replayPort.getState();
       if (state.status === 'paused' || state.status === 'playing' || state.status === 'ended') {
-        if (state.status === 'playing') commandController.pause();
-        const ok = commandController.trySeek(index);
-        if (!ok) timeline.setPosition(state.currentIndex);
-        return;
+        if (state.status === 'playing') {
+          const paused = await commandController.pause();
+          if (!paused) {
+            timeline.setPosition(state.currentIndex);
+            return false;
+          }
+        }
+        const ok = await commandController.trySeek(index);
+        if (!ok) timeline.setPosition(replayPort.getState().currentIndex);
+        return ok;
       }
       appState.setPendingStartIndex(index);
       controls.setStartIndex(index);
       reportStatus();
-      replay.preview(index);
+      return replay.preview(index);
     },
     startAt(index) {
       if (!Number.isFinite(Number(index)) || Number(index) < 0) return;
