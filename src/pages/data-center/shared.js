@@ -2,9 +2,9 @@ export function escapeText(value) {
   return String(value ?? '').replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[c]));
 }
 
-export function setPage(documentRef, name, html) {
-  const element = documentRef.getElementById(`page-${name}`);
-  if (!element) return;
+export function setPage(element, html) {
+  if (!element) throw new Error('Data page element is required');
+  const documentRef = element.ownerDocument;
   const template = documentRef.createElement('template');
   template.innerHTML = html;
   element.replaceChildren(template.content.cloneNode(true));
