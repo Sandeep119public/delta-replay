@@ -30,7 +30,7 @@ export function createReplayCommandPresentationPort(controller) {
     throw new TypeError('createReplayCommandPresentationPort requires a command owner');
   }
   const commands = Object.fromEntries(REQUIRED_COMMANDS.map((name) => [name, (...args) => controller[name](...args)]));
-  return Object.freeze(commands);
+  return Object.freeze(assertReplayCommandPresentationPort(commands));
 }
 
 export function createDeferredReplayCommandPresentationPort() {
