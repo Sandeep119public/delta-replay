@@ -44,6 +44,7 @@ export const RULES = [
   'Every listener, timer, subscription, observer, and resource needs a cleanup path.',
   'Keep patches small. Avoid broad formatting or unrelated refactors.',
   'Every declared source layer must correspond to a real src/<layer>/ directory.',
+  'PaperTradingEngine is the single canonical backend execution/accounting engine.',
 ];
 
 export const CHECKS = {
@@ -77,6 +78,9 @@ export const BROWSER_GLOBALS = /\b(document|window|navigator|localStorage|sessio
 export const FORBIDDEN_LEGACY_FILES = [
   'src/app/TradingUIPort.js',
   'src/app/TradingUIState.js',
+  'backend/app/services/trading_service.py',
+  'backend/app/services/execution_service.py',
+  'backend/app/domain/orders.py',
 ];
 export const BANNED_PRESENTATION_TOKENS = [
   /\w*[Cc]oordinator\w*/,
