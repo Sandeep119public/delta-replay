@@ -6,21 +6,22 @@ This document is the fast orientation layer for human and AI-assisted changes. T
 
 | Area | Owns | Prefer changing here first |
 | --- | --- | --- |
-| `src/app/` | application composition, runtime wiring, lifecycle, intent bridges | cross-feature behavior |
+| `src/app/` | application composition, remote adapters, runtime wiring, lifecycle, intent bridges | cross-feature behavior |
 | `src/ui/` | DOM rendering, controls, interaction, accessibility | UI and interaction behavior |
 | `src/data/` | candle providers, stores, caches, historical data | market-data behavior |
 | `src/indicators/` | indicator calculations and indicator data | technical indicators |
-| `src/replay/` | replay state and playback behavior | replay mechanics |
-| `src/trading/` | trading domain and execution behavior | orders, positions, risk, execution |
-| `src/strategy/` | strategy and signal behavior | strategy logic |
 | `src/state/` | application state | state shape and state transitions |
+| `src/core/` | framework-neutral core primitives | low-level shared behavior |
 | `src/chart/` | chart integration and chart/replay translation | chart behavior |
 | `src/pages/` | page-level composition | route/page wiring |
 | `src/router/` | route selection and navigation wiring | routing |
 | `src/ports/` | narrow cross-layer contracts | integration interfaces |
 | `src/utils/` | shared low-level utilities | generic helpers |
+| `src/personality/` | personality and assistant-facing behavior | personality behavior |
 | `backend/` | HTTP API, persistence, backend tests | server behavior |
 | `tests/architecture/` | architectural and UI contract tests | boundary changes |
+
+The current frontend keeps replay and trading remote adapters under `src/app/` because they coordinate backend capabilities and application state rather than constituting independent browser domain layers. The architecture policy intentionally describes the tree that exists, not planned directories that are not present.
 
 ## Composition rules
 
@@ -48,6 +49,12 @@ Every listener, subscription, timer, observer, chart handle, or cache handle cre
 
 Prefer `destroy()` or an unsubscribe function and register it with the application lifecycle. Cleanup should be idempotent because multiple lifecycle signals can converge on the same teardown path.
 
+## Architecture policy integrity
+
+Every declared `src/<layer>/` must exist, and every actual first-level directory under `src/` must be declared. This prevents the architecture checker from silently ignoring a renamed, deleted, or newly introduced layer.
+
+The policy is versioned. The current schema version is exposed by `scripts/architecture-policy.mjs` and is consumed by the context tooling and architecture tests.
+
 ## AI context and changed-file routing
 
 Use the same machine-backed architecture policy that the verifier uses:
@@ -59,7 +66,7 @@ npm run vibe:changed
 npm run vibe:changed:json
 ```
 
-The JSON variants use schema version `1` and expose ownership, dependency rules, verification commands, and changed-file impact routing. Treat this output as an agent-facing API. Do not copy ownership, dependency, or impact tables into new scripts; update `scripts/architecture-policy.mjs` instead.
+The JSON variants expose ownership, dependency rules, verification commands, and changed-file impact routing. Treat this output as an agent-facing API. Do not copy ownership, dependency, or impact tables into new scripts; update `scripts/architecture-policy.mjs` instead.
 
 ## Safe vibe-coding loop
 
