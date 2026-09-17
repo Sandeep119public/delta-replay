@@ -32,6 +32,6 @@ export const appShellMarkup = () => `
     <section id="page-journal" class="app-page page" data-page="journal" hidden></section>
     <section id="page-jobs" class="app-page page" data-page="jobs" hidden></section>
     <section id="page-system" class="app-page page" data-page="system" hidden></section>
-    <section id="page-replay" class="page active" data-page="replay">REPLAY_CONTENT</section>
+    <section id="page-replay" class="page active" data-page="replay" data-paper-layout="1">REPLAY_CONTENT</section>
   </main>
 `;
