@@ -51,3 +51,11 @@ test('legacy compatibility controls are explicitly marked as non-interactive', (
 test('primary replay control stays available for ready and ended states', () => {
   const html = timelineMarkup(); assert.match(html, /id="btn-play"[^>]*class="replay-play"/); assert.doesNotMatch(html, /id="btn-play"[^>]*disabled/);
 });
+
+test('replay speed selector exposes the full controller playback ladder', () => {
+  const html = timelineMarkup();
+  for (const speed of ['0.25', '0.5', '1', '2', '5', '10']) {
+    assert.match(html, new RegExp(`<option value="${speed}"`), `missing ${speed}x replay speed`);
+  }
+  assert.match(html, /<option value="1" selected>1×<\/option>/);
+});
