@@ -65,6 +65,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const replay = createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView });
   coordinator = replay.coordinator;
   commandController = replay.commandController;
+  ui.controls.setCommandController(commandController);
 
   const form = ui.getOrderFormPorts();
   const views = ui.createTerminalViews({
