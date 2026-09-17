@@ -39,7 +39,6 @@ export class ReplayDateSelector {
     this.onLoadReplay = onLoadReplay;
     this.onPreviewWindow = onPreviewWindow;
     this.onSeek = onSeek ?? onJump;
-    this.onJump = this.onSeek;
     this.onTimeframeChange = onTimeframeChange;
     this.timeframeSelect = timeframeSelect || (typeof document !== 'undefined' ? document.getElementById('timeframe-select') : null);
     this.replayDateEl = replayDateEl;
@@ -49,7 +48,6 @@ export class ReplayDateSelector {
     this.jumpBtn = jumpBtn;
     this.jumpErrorEl = jumpErrorEl;
     this.presetChips = presetChips;
-    this.onJump = onJump;
 
     if (!this.replayPort) throw new TypeError('ReplayDateSelector requires replayPort');
 
@@ -79,6 +77,7 @@ export class ReplayDateSelector {
   }
 
   selectPreset(presetKey) {
+    this._cancelPendingLoad();
     this.presetChips.forEach(chip => {
       if (chip.dataset?.preset === presetKey) chip.classList.add('active');
       else chip.classList.remove('active');
@@ -115,8 +114,9 @@ export class ReplayDateSelector {
 
     const handleInputChange = () => {
       this.presetChips.forEach(c => c.classList.remove('active'));
-      clearTimeout(this._debounceTimer);
+      this._cancelPendingLoad();
       this._debounceTimer = setTimeout(() => {
+        this._debounceTimer = null;
         const targetSec = resolveReplayTargetUnixSeconds(this.replayDateEl?.value, this.replayTimeEl?.value);
         this.onLoadReplay?.({ targetSec, autoStart: false });
       }, 400);
@@ -137,15 +137,21 @@ export class ReplayDateSelector {
     }
   }
 
+  _cancelPendingLoad() {
+    if (this._debounceTimer !== null) {
+      clearTimeout(this._debounceTimer);
+      this._debounceTimer = null;
+    }
+  }
+
   destroy() {
-    clearTimeout(this._debounceTimer);
+    this._cancelPendingLoad();
     this._handlers.forEach(([el, type, handler]) => el.removeEventListener?.(type, handler));
     this._handlers = [];
     this.replayPort = null;
     this.onLoadReplay = null;
     this.onPreviewWindow = null;
     this.onSeek = null;
-    this.onJump = null;
     this.onTimeframeChange = null;
   }
 
@@ -184,7 +190,6 @@ export class ReplayDateSelector {
       return;
     }
 
-    // No seek capability: only idle/ready preview navigation is possible.
     const st = this.replayPort.getState();
     if (st.status === 'idle' || st.status === 'ready') {
       this.onPreviewWindow?.(idx);
