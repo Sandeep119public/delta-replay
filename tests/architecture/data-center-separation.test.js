@@ -15,7 +15,7 @@ const terminalViews = fs.readFileSync('src/ui/createPaperTerminalViews.js', 'utf
 
 describe('data feature separation of concerns', () => {
   it('keeps a routed page controller scoped to its own element', () => {
-    expect(page).toContain('mount(element)');
+    expect(page).toMatch(/mount\(element[,)\]/);
     expect(page).toContain('this._element.addEventListener(\'click\', this._onClick)');
     expect(page).toContain('this._element.removeEventListener(\'click\', this._onClick)');
     expect(page).toContain('renderDataCenterPage({');
