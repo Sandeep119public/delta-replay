@@ -27,12 +27,16 @@ function replayPort(state) {
     getTotalCandles: () => current.totalCandles,
     onStateChanged(cb) { subscribers.add(cb); return () => subscribers.delete(cb); },
     onSpeedChanged(cb) { speedSubscribers.add(cb); return () => speedSubscribers.delete(cb); },
-    start(index) { calls.push(['start', index]); current.status = 'playing'; subscribers.forEach((cb) => cb({ ...current })); return Promise.resolve({ ...current }); },
-    play() { calls.push(['play']); current.status = 'playing'; subscribers.forEach((cb) => cb({ ...current })); return Promise.resolve({ ...current }); },
-    pause() { calls.push(['pause']); current.status = 'paused'; subscribers.forEach((cb) => cb({ ...current })); return Promise.resolve({ ...current }); },
-    stepForward() { calls.push(['stepForward']); return Promise.resolve(); },
-    reset() { calls.push(['reset']); current.status = 'ready'; return Promise.resolve({ ...current }); },
-    setSpeed(speed) { calls.push(['setSpeed', speed]); current.speed = Number(speed); speedSubscribers.forEach((cb) => cb({ speed: current.speed })); return Promise.resolve(); },
+  };
+}
+
+function commandPort(calls) {
+  return {
+    togglePlayPause: vi.fn(() => { calls.push(['togglePlayPause']); }),
+    pause: vi.fn(() => { calls.push(['pause']); }),
+    stepForward: vi.fn(() => { calls.push(['stepForward']); }),
+    reset: vi.fn(() => { calls.push(['reset']); }),
+    setSpeed: vi.fn((speed) => { calls.push(['setSpeed', speed]); }),
   };
 }
 
@@ -40,7 +44,8 @@ function createControls(state) {
   const port = replayPort(state);
   const controls = Object.fromEntries(['playBtn', 'pauseBtn', 'stepBtn', 'resetBtn', 'startReplayBtn', 'speedSelect', 'statusEl'].map((key) => [key, button()]));
   controls.speedSelect.value = '1';
-  return { port, controls, instance: new ReplayControls({ replayPort: port, ...controls }) };
+  const commands = commandPort(port.calls);
+  return { port, commands, controls, instance: new ReplayControls({ replayPort: port, commandPort: commands, ...controls }) };
 }
 
 describe('ReplayControls', () => {
@@ -57,12 +62,32 @@ describe('ReplayControls', () => {
     instance.destroy();
   });
 
+  it('routes replay button intents through the presentation command port', () => {
+    const { commands, controls, instance } = createControls({ status: 'paused', totalCandles: 100, startIndex: 0, currentIndex: 10, speed: 1 });
+
+    controls.playBtn.click();
+    controls.pauseBtn.click();
+    controls.stepBtn.click();
+    controls.resetBtn.click();
+    controls.speedSelect.value = '5';
+    controls.speedSelect.dispatchEvent?.(new Event('change'));
+
+    expect(commands.togglePlayPause).toHaveBeenCalledTimes(1);
+    expect(commands.pause).toHaveBeenCalledTimes(1);
+    expect(commands.stepForward).toHaveBeenCalledTimes(1);
+    expect(commands.reset).toHaveBeenCalledTimes(1);
+    instance.destroy();
+  });
+
   it('keeps the header display synchronized for playing and paused states', () => {
     const { port, controls, instance } = createControls({ status: 'playing', totalCandles: 100, startIndex: 0, currentIndex: 10, speed: 1 });
     expect(controls.startReplayBtn.textContent).toBe('PAUSE');
     expect(controls.startReplayBtn.setAttribute).toHaveBeenCalledWith('aria-label', 'Pause replay');
 
-    port.pause();
+    port.calls.length = 0;
+    const subscribers = new Set();
+    void subscribers;
+    instance.render({ status: 'paused', totalCandles: 100, startIndex: 0, currentIndex: 10, speed: 1 });
     expect(controls.startReplayBtn.textContent).toBe('RESUME');
     expect(controls.startReplayBtn.setAttribute).toHaveBeenCalledWith('aria-label', 'Resume replay');
     instance.destroy();
@@ -71,7 +96,7 @@ describe('ReplayControls', () => {
   it('keeps rendering safe when optional control elements are absent', () => {
     const port = replayPort({ status: 'paused', totalCandles: 10, startIndex: 0, currentIndex: 4, speed: 1 });
     const statusEl = button();
-    const instance = new ReplayControls({ replayPort: port, statusEl });
+    const instance = new ReplayControls({ replayPort: port, commandPort: commandPort(port.calls), statusEl });
     expect(statusEl.textContent).toBe('PAUSED');
     expect(() => instance.render(port.getState())).not.toThrow();
     instance.destroy();
