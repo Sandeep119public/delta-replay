@@ -32,3 +32,21 @@ export function createReplayCommandPresentationPort(controller) {
   const commands = Object.fromEntries(REQUIRED_COMMANDS.map((name) => [name, (...args) => controller[name](...args)]));
   return Object.freeze(commands);
 }
+
+export function createDeferredReplayCommandPresentationPort() {
+  let commands = null;
+  const port = Object.freeze(Object.fromEntries(REQUIRED_COMMANDS.map((name) => [
+    name,
+    (...args) => commands?.[name](...args) ?? false,
+  ])));
+  return Object.freeze({
+    port,
+    bind(controller) {
+      commands = createReplayCommandPresentationPort(controller);
+      return port;
+    },
+    destroy() {
+      commands = null;
+    },
+  });
+}
