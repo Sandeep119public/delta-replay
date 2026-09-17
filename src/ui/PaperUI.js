@@ -13,6 +13,7 @@ import { createPaperTerminalViews } from './createPaperTerminalViews.js';
 export function createPaperUI({
   mount,
   replayPort,
+  commandPort,
   trading = null,
   tradingEvents = null,
   dataset = null,
@@ -22,6 +23,7 @@ export function createPaperUI({
 }) {
   if (!mount) throw new TypeError('createPaperUI requires mount');
   if (!replayPort) throw new TypeError('createPaperUI requires replayPort');
+  if (!commandPort) throw new TypeError('createPaperUI requires commandPort');
   if (!dataset) throw new TypeError('createPaperUI requires dataset view');
   if (!chart?.chartManager || !chart?.adapter) throw new TypeError('createPaperUI requires chart handles { chartManager, adapter }');
   const { onRetry = null, onFollow = null } = callbacks;
@@ -62,6 +64,7 @@ export function createPaperUI({
     speedSelect: el('speed-select'),
     statusEl: el('replay-status'),
     replayPort,
+    commandPort,
     followBtn: el('btn-follow'),
     onFollowClick: onFollow,
   });
