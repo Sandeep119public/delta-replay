@@ -8,22 +8,23 @@ function toSeconds(value) {
 }
 
 export class DataCenterPage {
-  constructor(session, pageName, { documentRef = globalThis.document } = {}) {
+  constructor(session) {
     if (!session?.data) throw new TypeError('data workspace session is required');
     this.session = session;
     this.data = assertDataWorkspacePort(session.data);
-    this.pageName = pageName;
-    this.document = documentRef;
+    this.pageName = session.pageName ?? null;
     this._element = null;
     this._unsubscribe = null;
     this._initialized = false;
     this._renderToken = 0;
   }
 
-  mount(element) {
+  mount(element, { pageName = this.pageName } = {}) {
     if (this._initialized) return this;
-    if (!element) throw new Error(`Page element #page-${this.pageName} is required`);
+    if (!element) throw new Error('Data page element is required');
+    if (!pageName) throw new Error('Data page name is required');
     this._element = element;
+    this.pageName = pageName;
     this._initialized = true;
     this._unsubscribe = this.session.subscribe(() => { void this.render(); });
     this._element.addEventListener('click', this._onClick);
@@ -71,7 +72,7 @@ export class DataCenterPage {
     const storageEstimate = await this.data.storageEstimate();
     if (!this._initialized || token !== this._renderToken) return;
     renderDataCenterPage({
-      documentRef: this.document,
+      element: this._element,
       page: this.pageName,
       snapshot,
       storageEstimate,
