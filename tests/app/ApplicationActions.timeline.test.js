@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
+import { describe, expect, it } from 'vitest';
 
 import { createApplicationActions } from '../../src/app/ApplicationActions.js';
 
@@ -36,38 +35,40 @@ function makeDeps({ status = 'playing', currentIndex = 4 } = {}) {
   };
 }
 
-test('commitTimeline waits for pause before seeking', async () => {
-  const { actions, calls } = makeDeps();
+describe('ApplicationActions timeline commits', () => {
+  it('waits for pause before seeking', async () => {
+    const { actions, calls } = makeDeps();
 
-  const ok = await actions.commitTimeline(9);
+    const ok = await actions.commitTimeline(9);
 
-  assert.equal(ok, true);
-  assert.deepEqual(calls, ['pause:start', 'pause:end', 'seek:9']);
-});
-
-test('commitTimeline does not seek when pause fails', async () => {
-  const calls = [];
-  let state = { status: 'playing', currentIndex: 4 };
-  const commandController = {
-    async pause() { calls.push('pause'); return false; },
-    async trySeek() { calls.push('seek'); return true; },
-  };
-  const replayPort = { getState: () => ({ ...state }) };
-  const timeline = { setPosition: (index) => calls.push(`restore:${index}`) };
-  const actions = createApplicationActions({
-    replay: { preview: async () => true, load: async () => true, changeDataset() {} },
-    commandController,
-    replayPort,
-    appState: { setPendingStartIndex() {} },
-    statusView: { snapshot: () => ({}) },
-    modeBanner: { update() {} },
-    timeline,
-    controls: { setStartIndex() {} },
-    errorPanel: { show() {} },
+    expect(ok).toBe(true);
+    expect(calls).toEqual(['pause:start', 'pause:end', 'seek:9']);
   });
 
-  const ok = await actions.commitTimeline(9);
+  it('does not seek when pause fails', async () => {
+    const calls = [];
+    const state = { status: 'playing', currentIndex: 4 };
+    const commandController = {
+      async pause() { calls.push('pause'); return false; },
+      async trySeek() { calls.push('seek'); return true; },
+    };
+    const replayPort = { getState: () => ({ ...state }) };
+    const timeline = { setPosition: (index) => calls.push(`restore:${index}`) };
+    const actions = createApplicationActions({
+      replay: { preview: async () => true, load: async () => true, changeDataset() {} },
+      commandController,
+      replayPort,
+      appState: { setPendingStartIndex() {} },
+      statusView: { snapshot: () => ({}) },
+      modeBanner: { update() {} },
+      timeline,
+      controls: { setStartIndex() {} },
+      errorPanel: { show() {} },
+    });
 
-  assert.equal(ok, false);
-  assert.deepEqual(calls, ['pause', 'restore:4']);
+    const ok = await actions.commitTimeline(9);
+
+    expect(ok).toBe(false);
+    expect(calls).toEqual(['pause', 'restore:4']);
+  });
 });
