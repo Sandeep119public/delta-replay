@@ -13,6 +13,18 @@ const REQUIRED_COMMANDS = Object.freeze([
   'setSpeed',
 ]);
 
+function assertCommandOwner(controller) {
+  if (!controller || typeof controller !== 'object') {
+    throw new TypeError('createReplayCommandPresentationPort requires a command owner');
+  }
+  for (const name of REQUIRED_COMMANDS) {
+    if (typeof controller[name] !== 'function') {
+      throw new TypeError(`replay command owner requires ${name}()`);
+    }
+  }
+  return controller;
+}
+
 export function assertReplayCommandPresentationPort(commands) {
   if (!commands || typeof commands !== 'object') {
     throw new TypeError('replay command presentation port requires an object');
@@ -26,10 +38,7 @@ export function assertReplayCommandPresentationPort(commands) {
 }
 
 export function createReplayCommandPresentationPort(controller) {
-  if (!controller || typeof controller !== 'object') {
-    throw new TypeError('createReplayCommandPresentationPort requires a command owner');
-  }
-  assertReplayCommandPresentationPort(controller);
+  assertCommandOwner(controller);
   const commands = Object.fromEntries(REQUIRED_COMMANDS.map((name) => [name, (...args) => controller[name](...args)]));
   return Object.freeze(assertReplayCommandPresentationPort(commands));
 }
