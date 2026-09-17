@@ -52,6 +52,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
   const mobileNavBinding = bindMobileNavigation();
   const ui = createPaperUI({
+    mount,
     replayPort,
     trading,
     tradingEvents,
