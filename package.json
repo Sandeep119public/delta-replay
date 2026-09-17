@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:architecture": "node --test tests/architecture/*.test.js",
+    "test:architecture": "node --test tests/architecture/boundaries.test.js tests/architecture/data-workspace-port.test.js tests/architecture/replay-command-controller.test.js tests/architecture/replay-command-presentation-port.test.js tests/architecture/ui-contracts.test.js",
     "test:architecture:graph": "node scripts/check-architecture.mjs",
     "test:ui-contracts": "node --test tests/architecture/ui-contracts.test.js",
     "check": "npm run test:architecture:graph && npm run test:architecture && npm run test:ui-contracts && npm test && npm run build",
