@@ -7,6 +7,7 @@ import { ChartAdapter } from '../chart/ChartAdapter.js';
 import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createCommandSurface } from '../ui/CommandSurface.js';
+import { createReplayCommandPresentationPort } from '../ports/ReplayCommandPresentationPort.js';
 import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
 import { createReplayUIPort } from './ReplayUIPort.js';
@@ -27,6 +28,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const replayCapabilities = replayRuntime.capabilities;
   let coordinator = null;
   let commandController = null;
+  let commandPort = null;
   let chartManager = null;
 
   const callbacks = {
@@ -65,7 +67,8 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const replay = createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView });
   coordinator = replay.coordinator;
   commandController = replay.commandController;
-  ui.controls.setCommandController(commandController);
+  commandPort = createReplayCommandPresentationPort(commandController);
+  ui.controls.setCommandPort(commandPort);
 
   const form = ui.getOrderFormPorts();
   const views = ui.createTerminalViews({
