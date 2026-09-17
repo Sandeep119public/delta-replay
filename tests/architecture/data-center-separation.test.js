@@ -61,9 +61,12 @@ describe('data feature separation of concerns', () => {
     expect(application).not.toContain('new DataCenterPage(');
   });
 
-  it('keeps PaperUI focused on terminal wiring rather than terminal construction details', () => {
+  it('keeps PaperUI focused on terminal wiring rather than layout ownership', () => {
+    expect(paperUi).toContain('mount,');
     expect(paperUi).toContain("import { createPaperTerminalViews } from './createPaperTerminalViews.js';");
     expect(paperUi).toContain('return createPaperTerminalViews(');
+    expect(paperUi).not.toContain("from './paper/PaperLayout.js'");
+    expect(paperUi).not.toContain('renderPaperLayout(');
     expect(paperUi).not.toContain('new TradingPanel(');
     expect(paperUi).not.toContain('new ReplayDateSelector(');
     expect(terminalViews).toContain('new TradingPanel(');
