@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SessionRequestQueue } from '../src/app/createCoreServices.js';
+import { SessionRequestQueue } from '../src/app/SessionRequestQueue.js';
 
 describe('session request queue', () => {
   it('runs session operations in submission order', async () => {
