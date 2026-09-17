@@ -41,6 +41,19 @@ describe('ReplayCommandController', () => {
     expect(start).not.toHaveBeenCalled();
   });
 
+  it('sets only supported playback speeds and rejects arbitrary values', () => {
+    const setSpeed = vi.fn((speed) => speed);
+    const controller = new ReplayCommandController({
+      engine: { getState: () => ({ status: 'ready', speed: 1 }), setSpeed },
+      candleStore: { getCount: () => 1 },
+    });
+
+    expect(controller.setSpeed('5')).toBe(5);
+    expect(controller.setSpeed('3')).toBe(false);
+    expect(setSpeed).toHaveBeenCalledTimes(1);
+    expect(setSpeed).toHaveBeenCalledWith(5);
+  });
+
   it('does not change speed after destroy', () => {
     const setSpeed = vi.fn();
     const controller = new ReplayCommandController({
