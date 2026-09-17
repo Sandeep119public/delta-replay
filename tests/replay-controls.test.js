@@ -12,6 +12,7 @@ function button() {
     addEventListener(type, handler) { listeners.set(type, handler); },
     removeEventListener(type, handler) { if (listeners.get(type) === handler) listeners.delete(type); },
     click() { listeners.get('click')?.(); },
+    emit(type) { listeners.get(type)?.(); },
     hasListener(type) { return listeners.has(type); },
   };
 }
@@ -70,12 +71,13 @@ describe('ReplayControls', () => {
     controls.stepBtn.click();
     controls.resetBtn.click();
     controls.speedSelect.value = '5';
-    controls.speedSelect.dispatchEvent?.(new Event('change'));
+    controls.speedSelect.emit('change');
 
     expect(commands.togglePlayPause).toHaveBeenCalledTimes(1);
     expect(commands.pause).toHaveBeenCalledTimes(1);
     expect(commands.stepForward).toHaveBeenCalledTimes(1);
     expect(commands.reset).toHaveBeenCalledTimes(1);
+    expect(commands.setSpeed).toHaveBeenCalledWith('5');
     instance.destroy();
   });
 
@@ -85,8 +87,6 @@ describe('ReplayControls', () => {
     expect(controls.startReplayBtn.setAttribute).toHaveBeenCalledWith('aria-label', 'Pause replay');
 
     port.calls.length = 0;
-    const subscribers = new Set();
-    void subscribers;
     instance.render({ status: 'paused', totalCandles: 100, startIndex: 0, currentIndex: 10, speed: 1 });
     expect(controls.startReplayBtn.textContent).toBe('RESUME');
     expect(controls.startReplayBtn.setAttribute).toHaveBeenCalledWith('aria-label', 'Resume replay');
