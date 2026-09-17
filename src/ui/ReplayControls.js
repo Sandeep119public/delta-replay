@@ -1,5 +1,7 @@
+import { assertReplayCommandPresentationPort } from '../ports/ReplayCommandPresentationPort.js';
+
 export class ReplayControls {
-  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, replayPort, followBtn = null, onFollowClick = null }) {
+  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, replayPort, commandPort = null, followBtn = null, onFollowClick = null }) {
     if (!replayPort) throw new TypeError('ReplayControls requires replayPort');
     this.playBtn = playBtn;
     this.pauseBtn = pauseBtn;
@@ -9,7 +11,7 @@ export class ReplayControls {
     this.speedSelect = speedSelect;
     this.statusEl = statusEl;
     this.replayPort = replayPort;
-    this.commandController = null;
+    this.commandPort = commandPort ? assertReplayCommandPresentationPort(commandPort) : null;
     this.followBtn = followBtn;
     this.onFollowClick = onFollowClick;
     this._listeners = [];
@@ -20,11 +22,11 @@ export class ReplayControls {
     };
 
     this._listen(this.playBtn, 'click', () => { void this._safeAction(() => this._runPlayCommand()); });
-    this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.commandController?.pause() ?? this.replayPort.pause()); });
-    this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.commandController?.stepForward() ?? this.replayPort.stepForward()); });
-    this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.commandController?.reset() ?? this.replayPort.reset()); });
+    this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.commandPort?.pause() ?? this.replayPort.pause()); });
+    this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.commandPort?.stepForward() ?? this.replayPort.stepForward()); });
+    this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.commandPort?.reset() ?? this.replayPort.reset()); });
     this._listen(this.speedSelect, 'change', () => {
-      void this._safeAction(() => this.commandController?.setSpeed(this.speedSelect.value) ?? this.replayPort.setSpeed(this.speedSelect.value), (error) => {
+      void this._safeAction(() => this.commandPort?.setSpeed(this.speedSelect.value) ?? this.replayPort.setSpeed(this.speedSelect.value), (error) => {
         if (this.speedSelect && error) this.speedSelect.value = String(this.replayPort.getState().speed);
       });
     });
@@ -44,14 +46,13 @@ export class ReplayControls {
     this.render(this.replayPort.getState());
   }
 
-  setCommandController(controller) {
-    if (!controller || typeof controller !== 'object') throw new TypeError('ReplayControls.setCommandController requires controller');
-    this.commandController = controller;
+  setCommandPort(port) {
+    this.commandPort = assertReplayCommandPresentationPort(port);
     return this;
   }
 
   _runPlayCommand() {
-    if (this.commandController) return this.commandController.togglePlayPause();
+    if (this.commandPort) return this.commandPort.togglePlayPause();
     const state = this.replayPort.getState();
     if (state.status === 'playing') return this.replayPort.pause();
     if (state.status === 'paused') return this.replayPort.play();
@@ -69,7 +70,7 @@ export class ReplayControls {
     this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch {} });
     this._listeners = [];
     this._subscriptions = [];
-    this.commandController = null;
+    this.commandPort = null;
     this.onFollowClick = null;
   }
 
