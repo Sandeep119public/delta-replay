@@ -26,8 +26,7 @@ export function createPaperUI({
   if (!chart?.chartManager || !chart?.adapter) throw new TypeError('createPaperUI requires chart handles { chartManager, adapter }');
   const { onRetry = null, onFollow = null } = callbacks;
   if (!mount.querySelector('#chart-container')) throw new Error('Paper UI layout is not mounted');
-  const doc = mount.ownerDocument || globalThis.document;
-  const el = (id) => mount.querySelector(`#${id}`) || doc?.getElementById?.(id);
+  const el = (id) => mount.querySelector(`#${id}`);
   const getSymbol = () => el('symbol-select')?.value || 'BTCUSDT';
   const ports = createPaperPorts(el);
   const chartManager = chart.chartManager;
