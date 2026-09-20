@@ -145,6 +145,18 @@ class ReplaySession:
         """Compatibility alias for a full replay reset."""
         return self.reset_replay(symbol)
 
+    def clear_risk(self, symbol: str, target: str = "all"):
+        if target == "stopLoss":
+            position = self.trading.clear_stop_loss(symbol)
+        elif target == "takeProfit":
+            position = self.trading.clear_take_profit(symbol)
+        elif target == "all":
+            position = self.trading.clear_risk(symbol)
+        else:
+            raise ValueError("unsupported risk target")
+        self.record("clear_risk", self.replay.index, {"symbol": symbol, "target": target})
+        return position
+
     def submit_order(self, symbol, side, quantity, order_type="market", limit_price=None, stop_price=None):
         created = self.trading.submit(symbol, side, quantity, order_type, limit_price, stop_price, created_index=self.replay.index)
         self.record("order", self.replay.index, {"symbol": symbol, "side": side, "quantity": quantity, "type": order_type, "limitPrice": limit_price, "stopPrice": stop_price})
