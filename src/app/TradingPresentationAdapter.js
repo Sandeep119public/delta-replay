@@ -31,16 +31,12 @@ export function createTradingPresentation(tradingEngine) {
   if (!tradingEngine || typeof tradingEngine !== 'object') throw new TypeError('createTradingPresentation requires a trading engine');
 
   const snapshot = () => {
-    let account = null, positions = [], pendingOrders = [], orders = [], trades = [];
-    let stats = { totalTrades: 0, winRate: 0, profitFactor: 0, netReturn: 0 };
-    try {
-      account = tradingEngine.getAccountSnapshot?.() ?? null;
-      positions = tradingEngine.getPositions?.() ?? [];
-      pendingOrders = tradingEngine.getPendingOrders?.() ?? [];
-      orders = tradingEngine.getOrders?.() ?? [];
-      trades = tradingEngine.getTrades?.() ?? [];
-      stats = tradingEngine.getPerformanceStats?.() || stats;
-    } catch {}
+    const account = tradingEngine.getAccountSnapshot?.() ?? null;
+    const positions = tradingEngine.getPositions?.() ?? [];
+    const pendingOrders = tradingEngine.getPendingOrders?.() ?? [];
+    const orders = tradingEngine.getOrders?.() ?? [];
+    const trades = tradingEngine.getTrades?.() ?? [];
+    const stats = tradingEngine.getPerformanceStats?.() || { totalTrades: 0, winRate: 0, profitFactor: 0, netReturn: 0 };
     const markPrice = latestMarkPrice(tradingEngine);
     return freezeValue({ account, positions, pendingOrders, orders, trades, stats, hasMarket: markPrice != null, markPrice });
   };
