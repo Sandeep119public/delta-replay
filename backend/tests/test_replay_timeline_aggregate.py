@@ -180,3 +180,23 @@ def test_replay_session_reconstruction_is_deterministic():
     assert first.trading.export_state() == second.trading.export_state()
     assert first.trading.export_market_state() == second.trading.export_market_state()
     assert first.history == second.history
+
+
+def test_replay_session_owns_risk_clear_command_and_rebuilds_it():
+    session = ReplaySession()
+    session.load([
+        {"time": 1, "open": 100, "high": 101, "low": 99, "close": 100},
+        {"time": 2, "open": 100, "high": 102, "low": 98, "close": 101},
+    ])
+    session.start(0, "BTCUSDT")
+    session.submit_order("BTCUSDT", "buy", 1)
+    session.step("BTCUSDT")
+    session.set_risk("BTCUSDT", 95, 110)
+
+    session.clear_risk("BTCUSDT", "stopLoss")
+
+    assert session.trading.positions["BTCUSDT"]["stop_loss"] is None
+    assert session.trading.positions["BTCUSDT"]["take_profit"] == 110
+    assert session.history[-1]["type"] == "clear_risk"
+    session.seek(1, "BTCUSDT")
+    assert session.trading.positions["BTCUSDT"]["stop_loss"] is None
