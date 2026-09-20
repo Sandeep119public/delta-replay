@@ -80,3 +80,15 @@ def test_replay_session_rejects_invalid_trading_replacement():
 
     with pytest.raises(TypeError, match="PaperTradingEngine"):
         session.replace_trading(object())
+
+
+def test_timeline_owns_market_symbol_queries():
+    timeline = ReplayTimeline([
+        event("market_step", 0, {"symbol": "BTCUSDT"}),
+        event("order", 0, {"symbol": "BTCUSDT", "side": "buy", "quantity": 1}),
+        event("market_step", 1, {"symbol": "ETHUSDT"}),
+        event("candle", 1, {"symbol": "SOLUSDT", "index": 1, "candle": {"open": 1, "high": 1, "low": 1, "close": 1}},
+    ])
+
+    assert timeline.latest_market_step_symbol() == "ETHUSDT"
+    assert timeline.latest_market_event_symbol() == "SOLUSDT"
