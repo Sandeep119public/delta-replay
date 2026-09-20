@@ -3,13 +3,9 @@ import fs from 'node:fs';
 
 const OWNER = 'src/ui/replay.css';
 const NON_OWNER_STYLES = [
-  'src/ui/replay.css',
-  'src/ui/trading.css',
   'src/ui/trading.css',
   'src/ui/mobile.css',
   'src/ui/system.css',
-  'src/ui/system.css',
-  'src/ui/responsive.css',
   'src/ui/responsive.css',
 ];
 
@@ -128,7 +124,7 @@ function findRule(rules, selector) {
 }
 
 describe('workspace geometry ownership', () => {
-  it('keeps the replay page frame in Phase 1', () => {
+  it('keeps the replay page frame in replay layer', () => {
     const rules = cssRules(fs.readFileSync(OWNER, 'utf8'));
     const pageFrame = findRule(rules, '#page-replay.active');
 
@@ -138,7 +134,7 @@ describe('workspace geometry ownership', () => {
     expect(pageFrame?.declarations).toMatch(/grid-template-areas\s*:/);
   });
 
-  it('keeps the desktop workspace geometry in Phase 1', () => {
+  it('keeps the desktop workspace geometry in replay layer', () => {
     const rules = cssRules(fs.readFileSync(OWNER, 'utf8'));
     for (const selector of WORKSPACE_SELECTORS) {
       expect(findRule(rules, selector), `${OWNER} must define ${selector}`).toBeTruthy();
@@ -150,7 +146,7 @@ describe('workspace geometry ownership', () => {
     expect(findRule(rules, '.trading-section')?.declarations).toMatch(/grid-row\s*:\s*1/);
   });
 
-  it('keeps mobile drawer geometry in Phase 1', () => {
+  it('keeps mobile drawer geometry in replay layer', () => {
     const rules = cssRules(fs.readFileSync(OWNER, 'utf8'));
     const mobileDrawer = findRule(rules, 'body.drawer-open .trading-section');
     expect(mobileDrawer).toBeTruthy();
@@ -166,7 +162,7 @@ describe('workspace geometry ownership', () => {
         .map(({ selector, declarations }) => ({ selector, properties: geometryProperties(declarations) }))
         .filter(({ properties }) => properties.length > 0);
 
-      expect(violations, `${path} adds owned geometry outside Phase 1`).toEqual([]);
+      expect(violations, `${path} adds owned geometry outside replay layer`).toEqual([]);
     }
   });
 });
