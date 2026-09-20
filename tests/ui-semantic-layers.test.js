@@ -21,8 +21,8 @@ describe('UI semantic layers', () => {
   it('mobile layer owns touch and safe-area adaptations', () => {
     const css = read('../src/ui/mobile.css');
     expect(css).toContain('env(safe-area-inset-bottom)');
-    expect(css).toContain('--phase5-touch: 44px');
-    expect(css).toContain('min-height: var(--phase5-touch)');
+    expect(css).toMatch(/--phase5-touch:\s*44px/);
+    expect(css).toMatch(/min-height:\s*var\(--phase5-touch\)/);
   });
 
   it('system layer owns command-surface and accessibility polish', () => {
