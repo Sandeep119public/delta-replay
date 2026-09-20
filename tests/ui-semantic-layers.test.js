@@ -1,55 +1,56 @@
-import assert from 'node:assert/strict';
+import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
-import test from 'node:test';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('replay layer owns replay and timeline geometry', () => {
-  const css = read('../src/ui/replay.css');
-  assert.match(css, /\.main-layout\s*\{[\s\S]*display:\s*grid/);
-  assert.match(css, /\.timeline-section\s*\{[\s\S]*display:\s*grid/);
-  assert.match(css, /\.controls-section\s*\{[\s\S]*position:\s*absolute/);
-});
+describe('UI semantic layers', () => {
+  it('replay layer owns replay and timeline geometry', () => {
+    const css = read('../src/ui/replay.css');
+    expect(css).toMatch(/\.main-layout\s*\{[\s\S]*display:\s*grid/);
+    expect(css).toMatch(/\.timeline-section\s*\{[\s\S]*display:\s*grid/);
+    expect(css).toMatch(/\.controls-section\s*\{[\s\S]*position:\s*absolute/);
+  });
 
-test('trading layer owns trading workspace styling', () => {
-  const css = read('../src/ui/trading.css');
-  assert.match(css, /\.side-actions\s*\{[\s\S]*gap:\s*9px/);
-  assert.match(css, /\.position-card\s*\{[\s\S]*border-color:/);
-  assert.match(css, /\.flatten-button\s*\{[\s\S]*min-height:/);
-});
+  it('trading layer owns trading workspace styling', () => {
+    const css = read('../src/ui/trading.css');
+    expect(css).toMatch(/\.side-actions\s*\{[\s\S]*gap:\s*9px/);
+    expect(css).toMatch(/\.position-card\s*\{[\s\S]*border-color:/);
+    expect(css).toMatch(/\.flatten-button\s*\{[\s\S]*min-height:/);
+  });
 
-test('mobile layer owns touch and safe-area adaptations', () => {
-  const css = read('../src/ui/mobile.css');
-  assert.match(css, /env\(safe-area-inset-bottom\)/);
-  assert.match(css, /--phase5-touch:\s*44px/);
-  assert.match(css, /min-height:\s*var\(--phase5-touch\)/);
-});
+  it('mobile layer owns touch and safe-area adaptations', () => {
+    const css = read('../src/ui/mobile.css');
+    expect(css).toContain('env(safe-area-inset-bottom)');
+    expect(css).toContain('--phase5-touch: 44px');
+    expect(css).toContain('min-height: var(--phase5-touch)');
+  });
 
-test('system layer owns command-surface and accessibility polish', () => {
-  const css = read('../src/ui/system.css');
-  assert.match(css, /\.phase6-command-item[\s\S]*min-height:\s*44px/);
-  assert.match(css, /button:focus-visible/);
-});
+  it('system layer owns command-surface and accessibility polish', () => {
+    const css = read('../src/ui/system.css');
+    expect(css).toMatch(/\.phase6-command-item[\s\S]*min-height:\s*44px/);
+    expect(css).toMatch(/button:focus-visible/);
+  });
 
-test('responsive layer owns viewport-specific refinements', () => {
-  const css = read('../src/ui/responsive.css');
-  for (const media of [
-    '@media (min-width: 641px) and (max-width: 1024px)',
-    '@media (max-width: 640px)',
-    '@media (max-width: 420px)',
-    '@media (max-width: 360px)',
-  ]) assert.ok(css.includes(media), `missing responsive media query: ${media}`);
-  assert.match(css, /\.mobile-nav-toggle/);
-  assert.match(css, /body\.drawer-open \.trading-section::before/);
-});
+  it('responsive layer owns viewport-specific refinements', () => {
+    const css = read('../src/ui/responsive.css');
+    for (const media of [
+      '@media (min-width: 641px) and (max-width: 1024px)',
+      '@media (max-width: 640px)',
+      '@media (max-width: 420px)',
+      '@media (max-width: 360px)',
+    ]) expect(css).toContain(media);
+    expect(css).toMatch(/\.mobile-nav-toggle/);
+    expect(css).toMatch(/body\.drawer-open \.trading-section::before/);
+  });
 
-test('HTML loads semantic layers in cascade order', () => {
-  const html = read('../index.html');
-  const layers = ['index.css', 'data-center.css', 'replay.css', 'trading.css', 'mobile.css', 'system.css', 'responsive.css'];
-  let previous = -1;
-  for (const layer of layers) {
-    const index = html.indexOf(`/src/ui/${layer}`);
-    assert.ok(index > previous, `stylesheet order is wrong for ${layer}`);
-    previous = index;
-  }
+  it('HTML loads semantic layers in cascade order', () => {
+    const html = read('../index.html');
+    const layers = ['index.css', 'data-center.css', 'replay.css', 'trading.css', 'mobile.css', 'system.css', 'responsive.css'];
+    let previous = -1;
+    for (const layer of layers) {
+      const index = html.indexOf('/src/ui/' + layer);
+      expect(index, 'stylesheet order is wrong for ' + layer).toBeGreaterThan(previous);
+      previous = index;
+    }
+  });
 });
