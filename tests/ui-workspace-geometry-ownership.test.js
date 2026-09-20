@@ -1,16 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 
-const OWNER = 'src/ui/phase1-chart-shell.css';
+const OWNER = 'src/ui/replay.css';
 const NON_OWNER_STYLES = [
-  'src/ui/phase2-replay-rail.css',
-  'src/ui/phase3-trade-dock.css',
-  'src/ui/phase4-position-activity.css',
-  'src/ui/phase5-mobile-sheets.css',
-  'src/ui/phase6-command-surface.css',
-  'src/ui/phase7-final-system.css',
-  'src/ui/phase8-responsive-final.css',
-  'src/ui/phase9-screen-size-optimization.css',
+  'src/ui/replay.css',
+  'src/ui/trading.css',
+  'src/ui/trading.css',
+  'src/ui/mobile.css',
+  'src/ui/system.css',
+  'src/ui/system.css',
+  'src/ui/responsive.css',
+  'src/ui/responsive.css',
 ];
 
 const PAGE_SHELL_SELECTORS = [
