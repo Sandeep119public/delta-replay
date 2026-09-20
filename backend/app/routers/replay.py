@@ -42,7 +42,7 @@ def _active_replay_symbol(session, requested_symbol=None):
         return requested
 
     try:
-        return latest_market_event_symbol(session.history)
+        return session.timeline.latest_market_event_symbol()
     except ReplayDivergenceError as exc:
         raise HTTPException(409, "Start the replay before advancing or seeking it") from exc
 
