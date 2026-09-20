@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -6,8 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, m
 
 from ..domain.errors import StateInvariantError
 from ..models import Candle
-from ..services.paper_engine import PaperTradingEngine
-from ..services.replay_timeline import ReplayDivergenceError, rebuild_trading
+from ..services.replay_timeline import ReplayDivergenceError
 from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
@@ -85,13 +83,6 @@ def snapshot(service: PaperTradingEngine):
         "orders": orders,
         "pendingOrders": [order for order in orders if order["status"] == "PENDING"],
     }
-
-
-def replay_candle(session, symbol: str):
-    candle = session.replay.state().get("candle")
-    if not candle:
-        raise HTTPException(409, "Load data and start replay before trading")
-    return candle
 
 
 def require_active_replay(session, action: str):
