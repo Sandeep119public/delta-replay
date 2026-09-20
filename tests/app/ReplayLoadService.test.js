@@ -81,6 +81,20 @@ describe('ReplayLoadService', () => {
     expect(d.appState.setReplayState).toHaveBeenCalledWith({ status: 'ready', totalCandles: 1 });
   });
 
+  it('does not publish local candles when the remote replay load fails', async () => {
+    const d = deps(vi.fn().mockResolvedValue({
+      candles: [{ time: 1, open: 100, high: 101, low: 99, close: 100 }],
+      metadata: {},
+    }));
+    const remoteFailure = new Error('remote replay load failed');
+    d.replayEngine.load = vi.fn().mockRejectedValue(remoteFailure);
+
+    await createReplayLoadService(d).loadAndPrepareReplay({ targetSec: 1 });
+
+    expect(d.replayEngine.load).toHaveBeenCalledOnce();
+    expect(d.appState.setCandles).not.toHaveBeenCalled();
+  });
+
   it('waits for replay start when auto-starting', async () => {
     let resolveStart;
     const start = new Promise((resolve) => { resolveStart = resolve; });
