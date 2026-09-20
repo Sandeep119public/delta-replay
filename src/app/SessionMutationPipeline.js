@@ -26,8 +26,6 @@ export class SessionMutationPipeline {
     if (this._destroyed) return Promise.resolve({ applied: false, stale: true, response: null });
 
     const sequence = ++this._nextSequence;
-    if (!serialize) this._latestSequence.set(scope, sequence);
-
     const execute = async () => {
       if (this._destroyed || (typeof canExecute === 'function' && !canExecute())) {
         return { applied: false, stale: true, response: null };
@@ -35,9 +33,10 @@ export class SessionMutationPipeline {
 
       const response = await operation();
       const latestSequence = this._latestSequence.get(scope) || 0;
-      const stale = !serialize && sequence !== latestSequence;
+      const stale = !serialize && sequence < latestSequence;
       const applied = !this._destroyed && !stale && generation === this._generation;
 
+      if (!stale && !this._destroyed) this._latestSequence.set(scope, sequence);
       if (applied && typeof apply === 'function') apply(response);
       return { applied, stale, response };
     };
