@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 
-const css = fs.readFileSync('src/ui/phase4-position-activity.css', 'utf8');
+const css = fs.readFileSync('src/ui/trading.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const workspace = fs.readFileSync('src/ui/paper/markup/Workspace.js', 'utf8');
 
 describe('Phase 4 position and activity inspector', () => {
   it('loads Phase 4 after the trade dock layer', () => {
-    expect(html.indexOf('src/ui/phase4-position-activity.css')).toBeGreaterThan(
-      html.indexOf('src/ui/phase3-trade-dock.css'),
+    expect(html.indexOf('src/ui/trading.css')).toBeGreaterThan(
+      html.indexOf('src/ui/trading.css'),
     );
   });
 
