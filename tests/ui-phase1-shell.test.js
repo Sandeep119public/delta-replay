@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import { paperMarkup } from '../src/ui/paperMarkup.js';
 
-const css = fs.readFileSync('src/ui/phase1-chart-shell.css', 'utf8');
+const css = fs.readFileSync('src/ui/replay.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const workspace = fs.readFileSync('src/ui/paper/markup/Workspace.js', 'utf8');
 const timeline = fs.readFileSync('src/ui/paper/markup/Timeline.js', 'utf8');
@@ -11,7 +11,7 @@ const timeline = fs.readFileSync('src/ui/paper/markup/Timeline.js', 'utf8');
 describe('Phase 1 chart-first shell', () => {
   it('loads the phase 1 shell after the canonical UI stylesheet', () => {
     expect(html.indexOf('src/ui/index.css')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('src/ui/phase1-chart-shell.css')).toBeGreaterThan(html.indexOf('src/ui/index.css'));
+    expect(html.indexOf('src/ui/replay.css')).toBeGreaterThan(html.indexOf('src/ui/index.css'));
   });
 
   it('keeps the trading desk in a dedicated chart-adjacent column', () => {
