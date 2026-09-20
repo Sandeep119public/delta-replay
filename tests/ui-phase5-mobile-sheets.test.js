@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 
-const css = fs.readFileSync('src/ui/phase5-mobile-sheets.css', 'utf8');
+const css = fs.readFileSync('src/ui/mobile.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const mobileDrawer = fs.readFileSync('src/ui/bindMobileDrawer.js', 'utf8');
 const workspace = fs.readFileSync('src/ui/paper/markup/Workspace.js', 'utf8');
 
 describe('Phase 5 mobile-first sheets', () => {
   it('loads Phase 5 after the earlier UI layers', () => {
-    expect(html.indexOf('src/ui/phase5-mobile-sheets.css')).toBeGreaterThan(html.indexOf('src/ui/phase4-position-activity.css'));
+    expect(html.indexOf('src/ui/mobile.css')).toBeGreaterThan(html.indexOf('src/ui/trading.css'));
   });
   it('uses viewport-safe sheet spacing and touch-sized controls', () => {
     expect(css).toContain('env(safe-area-inset-bottom)');
