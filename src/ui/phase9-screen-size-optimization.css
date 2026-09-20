@@ -182,11 +182,6 @@
 @media (max-width: 640px) {
   :root {
     --phase10-header-gutter: 54px;
-    --phase10-timeline: 136px;
-  }
-
-  #page-replay.active {
-    grid-template-rows: var(--phase1-header) 0 minmax(0, 1fr) var(--phase10-timeline);
   }
 
   .topbar {
