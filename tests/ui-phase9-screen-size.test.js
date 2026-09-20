@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 
-const css = fs.readFileSync('src/ui/phase9-screen-size-optimization.css', 'utf8');
+const css = fs.readFileSync('src/ui/responsive.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
-const shell = fs.readFileSync('src/ui/phase1-chart-shell.css', 'utf8');
+const shell = fs.readFileSync('src/ui/replay.css', 'utf8');
 
 describe('Phase 9 screen-size optimization', () => {
   it('loads after the previous responsive layers', () => {
-    expect(html.indexOf('src/ui/phase9-screen-size-optimization.css')).toBeGreaterThan(
-      html.indexOf('src/ui/phase8-responsive-final.css'),
+    expect(html.indexOf('src/ui/responsive.css')).toBeGreaterThan(
+      html.indexOf('src/ui/responsive.css'),
     );
   });
 
