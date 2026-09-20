@@ -8,6 +8,7 @@ from fastapi import HTTPException, Request
 
 from .paper_engine import PaperTradingEngine
 from .replay_service import ReplayService
+from .replay_timeline import ReplayTimeline
 from .session_repository import InMemorySessionRepository, SessionRepository
 from .session_state import restore_session_bundle, serialize_session
 
@@ -19,21 +20,25 @@ SESSION_HEADER = "X-Session-ID"
 class SessionState:
     replay: ReplayService = field(default_factory=ReplayService)
     trading: PaperTradingEngine = field(default_factory=PaperTradingEngine)
-    history: list[dict] = field(default_factory=list)
+    _timeline: ReplayTimeline = field(default_factory=ReplayTimeline, repr=False)
+
+    @property
+    def history(self) -> list[dict]:
+        return self._timeline.snapshot()
+
+    @history.setter
+    def history(self, events):
+        self._timeline.replace(events)
+
+    @property
+    def timeline(self) -> ReplayTimeline:
+        return self._timeline
 
     def record(self, command_type: str, replay_index: int, payload: dict):
-        self.truncate_future_history(replay_index)
-        self.history.append({
-            "type": command_type,
-            "replayIndex": int(replay_index),
-            "payload": deepcopy(payload),
-        })
+        self._timeline.record(command_type, replay_index, payload)
 
     def truncate_future_history(self, replay_index: int):
-        self.history = [
-            item for item in self.history
-            if item.get("replayIndex", -1) <= replay_index
-        ]
+        self._timeline.truncate_after(replay_index)
 
 
 class SessionManager:
@@ -95,7 +100,7 @@ class SessionManager:
             replay, trading, history = restore_session_bundle(document)
         except (TypeError, ValueError, KeyError, RuntimeError) as exc:
             raise RuntimeError(f"unable to restore session state: {exc}") from exc
-        return SessionState(replay=replay, trading=trading, history=history)
+        return SessionState(replay=replay, trading=trading, _timeline=ReplayTimeline(history))
 
     def atomic(self, session_id: str, operation):
         """Run a session mutation with one serialized repository commit."""
