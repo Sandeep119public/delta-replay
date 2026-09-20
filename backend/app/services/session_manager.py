@@ -7,7 +7,7 @@ from fastapi import HTTPException, Request
 from .replay_session import ReplaySession
 from .replay_timeline import ReplayTimeline
 from .session_repository import InMemorySessionRepository, SessionRepository
-from .session_state import restore_session_bundle, serialize_session
+from .session_state import restore_replay_session, serialize_replay_session
 
 
 SESSION_HEADER = "X-Session-ID"
@@ -55,7 +55,7 @@ class SessionManager:
                 session = ReplaySession()
                 self.repository.save(
                     session_id,
-                    serialize_session(session.replay, session.trading, session.history),
+                    serialize_replay_session(session),
                 )
             else:
                 session = self._restore(document)
@@ -69,10 +69,9 @@ class SessionManager:
     @staticmethod
     def _restore(document) -> ReplaySession:
         try:
-            replay, trading, history = restore_session_bundle(document)
+            return restore_replay_session(document)
         except (TypeError, ValueError, KeyError, RuntimeError) as exc:
             raise RuntimeError(f"unable to restore session state: {exc}") from exc
-        return ReplaySession(replay=replay, trading=trading, _timeline=ReplayTimeline(history))
 
     def atomic(self, session_id: str, operation):
         """Run a session mutation with one serialized repository commit."""
