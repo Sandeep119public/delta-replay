@@ -116,12 +116,15 @@ class PostgresSessionRepository(SessionRepository):
             if persisted_dataset_id is not None and persisted_dataset_id != derived_dataset_id:
                 raise ValueError("replay datasetId does not match candle data")
             dataset_id_value = persisted_dataset_id or derived_dataset_id
+            # Dataset reclamation and session writes share one
+            # transaction-level lock. Acquire it before checking existence so
+            # GC cannot delete a dataset between the check and session commit.
+            connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
             exists = connection.execute(
                 "SELECT 1 FROM replay_datasets WHERE dataset_id = %s",
                 (dataset_id_value,),
             ).fetchone()
             if exists is None:
-                connection.execute("SELECT pg_advisory_xact_lock(%s)", (DATASET_GC_LOCK_KEY,))
                 connection.execute(
                     """INSERT INTO replay_datasets (dataset_id, candles)
                        VALUES (%s, %s::jsonb)
