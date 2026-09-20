@@ -49,7 +49,7 @@ export function createTradingPresentation(tradingEngine) {
     cancelOrder: (id) => tradingEngine.cancelOrder(id),
     cancelAll: (reason) => tradingEngine.cancelAll(reason),
     reset: () => tradingEngine.reset(),
-    setStartingBalance: (balance) => tradingEngine.setStartingBalance(balance),
+    setCapital: (balance) => tradingEngine.setStartingBalance(balance),
     setFeeRate: (rate) => tradingEngine.setFeeRate(rate),
     hasOpenPosition: (symbol) => tradingEngine.hasOpenPosition(symbol),
   });
