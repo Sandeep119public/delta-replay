@@ -12,6 +12,7 @@ VALID_HISTORY_TYPES = {"order", "close", "cancel", "cancel_all", "risk", "clear_
 class ReplayDivergenceError(ValueError):
     """Raised when persisted commands cannot reproduce the trading state."""
 
+
 class ReplayTimeline:
     """Canonical ordered event history for a replay session."""
 
@@ -19,7 +20,7 @@ class ReplayTimeline:
         self._events = [deepcopy(event) for event in (events or [])]
         validate_history(self._events)
 
-    def snapshot(self):
+    def snapshot(self) -> list[dict]:
         return deepcopy(self._events)
 
     def latest_market_step_symbol(self) -> str:
