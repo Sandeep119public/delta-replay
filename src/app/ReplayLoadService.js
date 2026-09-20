@@ -110,9 +110,9 @@ export function createReplayLoadService({
       if (!candles || !candles.length) throw Object.assign(new Error('No candles returned'), { code: 'NO_DATA' });
 
       resetRetryState();
-      appState.setCandles(candles);
       await replayEngine.load(candles);
       if (token !== loadToken || signal.aborted || destroyed) return;
+      appState.setCandles(candles);
       appState.setReplayState(replayEngine.getState());
       timeline?.setTotal(candles.length, candles);
       let replayIdx = findClosestCandleIndex(resolvedTarget, candleStore, candles);
