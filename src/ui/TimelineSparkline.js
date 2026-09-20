@@ -48,34 +48,32 @@ export class TimelineSparkline {
   _attach() {
     if (this._attached) return;
     this._attached = true;
-    try {
-      const subscribe = (owner, eventName, typedSubscribe, handler) => {
-        const unsubscribe = typeof typedSubscribe === 'function'
-          ? typedSubscribe(handler)
-          : owner?.on?.(eventName, handler);
-        if (typeof unsubscribe === 'function') this._subscriptions.push(unsubscribe);
-      };
-      subscribe(this.replayPort, 'stateChanged', this.replayPort?.onStateChanged, this._onState);
-      const events = this.tradingEvents?.events || this.trading?.events || TRADING_PRESENTATION_EVENTS;
-      subscribe(this.tradingEvents || this.trading, events.TRADE_EXECUTED, null, this._onState);
-      subscribe(this.tradingEvents || this.trading, events.POSITION_CLOSED, null, this._onState);
-      subscribe(this.tradingEvents || this.trading, events.POSITION_OPENED, null, this._onState);
-      if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('resize', this._onResize);
-      if (typeof ResizeObserver !== 'undefined' && this.canvas?.parentElement) {
-        this._ro = new ResizeObserver(this._onResize);
-        this._ro.observe(this.canvas.parentElement);
-      }
-      this.canvas?.addEventListener?.('click', this._boundClick);
-      this.canvas?.addEventListener?.('touchstart', this._boundTouchStart, { passive: true });
-      this.canvas?.addEventListener?.('touchmove', this._boundTouchMove, { passive: false });
-    } catch {}
+    const subscribe = (owner, eventName, typedSubscribe, handler) => {
+      const unsubscribe = typeof typedSubscribe === 'function'
+        ? typedSubscribe(handler)
+        : owner?.on?.(eventName, handler);
+      if (typeof unsubscribe === 'function') this._subscriptions.push(unsubscribe);
+    };
+    subscribe(this.replayPort, 'stateChanged', this.replayPort?.onStateChanged, this._onState);
+    const events = this.tradingEvents?.events || this.trading?.events || TRADING_PRESENTATION_EVENTS;
+    subscribe(this.tradingEvents || this.trading, events.TRADE_EXECUTED, null, this._onState);
+    subscribe(this.tradingEvents || this.trading, events.POSITION_CLOSED, null, this._onState);
+    subscribe(this.tradingEvents || this.trading, events.POSITION_OPENED, null, this._onState);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('resize', this._onResize);
+    if (typeof ResizeObserver !== 'undefined' && this.canvas?.parentElement) {
+      this._ro = new ResizeObserver(this._onResize);
+      this._ro.observe(this.canvas.parentElement);
+    }
+    this.canvas?.addEventListener?.('click', this._boundClick);
+    this.canvas?.addEventListener?.('touchstart', this._boundTouchStart, { passive: true });
+    this.canvas?.addEventListener?.('touchmove', this._boundTouchMove, { passive: false });
   }
 
   destroy() {
     if (!this._attached) return;
     this._attached = false;
     try {
-      this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch {} });
+      this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[TimelineSparkline] unsubscribe failed', error); } });
       this._subscriptions = [];
       if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') window.removeEventListener('resize', this._onResize);
       this._ro?.disconnect?.();
@@ -89,15 +87,15 @@ export class TimelineSparkline {
   }
 
   _candles() {
-    try { return this.candles?.getAll?.() || []; } catch { return []; }
+    return this.candles?.getAll?.() || [];
   }
 
   _trades() {
-    try { return this.trading?.snapshot().trades || []; } catch { return []; }
+    return this.trading?.snapshot().trades || [];
   }
 
   _cursor() {
-    try { return this.replayPort?.getState?.().currentIndex ?? -1; } catch { return -1; }
+    return this.replayPort?.getState?.().currentIndex ?? -1;
   }
 
   _indexForTime(t, times) {
@@ -167,26 +165,28 @@ export class TimelineSparkline {
   }
 
   _handleClick(e) {
-    try {
-      const candles = this._candles(); if (!candles.length) return;
-      let offsetX = e?.offsetX;
-      if (!Number.isFinite(offsetX)) {
-        const rect = this.canvas?.getBoundingClientRect?.(); const clientX = e?.clientX;
-        if (!rect || !Number.isFinite(clientX)) return; offsetX = clientX - rect.left;
-      }
-      this._seekAtOffset(offsetX, candles.length);
-    } catch {}
+    const candles = this._candles();
+    if (!candles.length) return;
+    let offsetX = e?.offsetX;
+    if (!Number.isFinite(offsetX)) {
+      const rect = this.canvas?.getBoundingClientRect?.();
+      const clientX = e?.clientX;
+      if (!rect || !Number.isFinite(clientX)) return;
+      offsetX = clientX - rect.left;
+    }
+    this._seekAtOffset(offsetX, candles.length);
   }
   _handleTouch(e, isMove) {
-    try {
-      const candles = this._candles(); if (!candles.length) return;
-      const touch = e?.touches?.[0] || e?.changedTouches?.[0];
-      if (!touch || !Number.isFinite(touch.clientX)) return;
-      if (isMove && typeof e?.preventDefault === 'function') e.preventDefault();
-      const rect = this.canvas?.getBoundingClientRect?.(); if (!rect) return;
-      this._seekAtOffset(touch.clientX - rect.left, candles.length);
-    } catch {}
+    const candles = this._candles();
+    if (!candles.length) return;
+    const touch = e?.touches?.[0] || e?.changedTouches?.[0];
+    if (!touch || !Number.isFinite(touch.clientX)) return;
+    if (isMove && typeof e?.preventDefault === 'function') e.preventDefault();
+    const rect = this.canvas?.getBoundingClientRect?.();
+    if (!rect) return;
+    this._seekAtOffset(touch.clientX - rect.left, candles.length);
   }
+
   _seekAtOffset(offsetX, count) {
     const width = this.canvas?.getBoundingClientRect?.()?.width || this.canvas?.clientWidth || 1;
     const idx = Math.min(Math.max(0, Math.round((offsetX / width) * (count - 1))), count - 1);
