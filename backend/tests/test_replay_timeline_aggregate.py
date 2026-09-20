@@ -92,3 +92,25 @@ def test_timeline_owns_market_symbol_queries():
 
     assert timeline.latest_market_step_symbol() == "ETHUSDT"
     assert timeline.latest_market_event_symbol() == "SOLUSDT"
+
+
+def test_timeline_iteration_is_defensive():
+    timeline = ReplayTimeline([event("market_step", 0)])
+
+    next(iter(timeline))["payload"]["symbol"] = "ETHUSDT"
+
+    assert timeline.snapshot()[0]["payload"]["symbol"] == "BTCUSDT"
+
+
+def test_timeline_truncate_preserves_validated_ownership():
+    timeline = ReplayTimeline([
+        event("market_step", 0),
+        event("market_step", 1),
+    ])
+
+    timeline.truncate_after(0)
+    assert timeline.snapshot() == [event("market_step", 0)]
+
+    snapshot = timeline.snapshot()
+    snapshot[0]["payload"]["symbol"] = "ETHUSDT"
+    assert timeline.snapshot() == [event("market_step", 0)]
