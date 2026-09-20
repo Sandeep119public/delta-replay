@@ -1,0 +1,323 @@
+/* Consolidated from the former phase stylesheets. Preserve source order within this layer. */
+
+/* phase8-responsive-final.css */
+/* Phase 8: final responsive and regression guardrails. */
+
+:root {
+  --phase8-touch: 44px;
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .topbar { gap: 10px; padding-inline: 12px; }
+  .topbar-center,
+  .selector-group { min-width: 0; }
+  .selector-group select,
+  .selector-group input,
+  .controls-row button,
+  .controls-row select { min-height: var(--phase8-touch); }
+}
+
+@media (max-width: 640px) {
+  .topbar,
+  .timeline-section,
+  .controls-section {
+    max-width: 100%;
+  }
+
+  .topbar { padding-inline: 10px; }
+  .topbar-right { min-width: 0; }
+
+  .phase6-command-trigger,
+  .phase6-command-close,
+  .phase6-command-item,
+  .panel-tab-btn,
+  .field input,
+  .field select,
+  .tab-panel input,
+  .tab-panel select,
+  .advanced-toggle,
+  .risk-details > summary,
+  .risk-actions .btn,
+  .flatten-button,
+  .controls-row button,
+  .controls-row select { min-height: var(--phase8-touch); }
+
+  .phase6-command-backdrop {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar { padding-inline: 8px; }
+  .phase6-command { max-width: 100%; }
+}
+
+[data-page] { max-width: 100%; }
+
+/* phase9-screen-size-optimization.css */
+/* Phase 9: screen-size optimization.
+ * This layer owns responsive component sizing only. The replay page frame and
+ * workspace geometry belong to phase1-chart-shell.css.
+ *
+ * Mobile replay hierarchy is owned by phase10-mobile-replay-polish.css.
+ * Keep that layer separate so the cascade has one source of truth for the
+ * final phone layout.
+ */
+
+:root {
+  --phase9-touch: 44px;
+}
+
+.topbar {
+  box-sizing: border-box;
+}
+
+.topbar-center,
+.topbar-right,
+.controls-row,
+.timeline-meta,
+.phase6-command {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#chart-container canvas,
+#chart-container svg,
+.chart-stage canvas,
+.chart-stage svg {
+  max-width: 100%;
+}
+
+@media (min-width: 841px) and (max-width: 1024px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding-inline: 12px;
+  }
+  .topbar-center { overflow: hidden; }
+  .selector-group select,
+  .selector-group input,
+  .controls-row button,
+  .controls-row select,
+  .phase6-command-trigger { min-height: var(--phase9-touch); }
+}
+
+@media (min-width: 641px) and (max-width: 840px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-inline: 10px;
+  }
+  .topbar-center .date-group,
+  .topbar-right #data-status { display: none; }
+  .topbar-center { justify-content: flex-end; overflow: hidden; }
+  .timeline-section,
+  .controls-section { padding-inline: 10px; }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-inline: 8px;
+  }
+  .topbar-center {
+    max-width: none;
+    overflow: visible;
+    justify-content: space-between;
+    gap: 4px;
+  }
+  .topbar-center .selector-group { flex: 0 0 auto; }
+  .topbar-center .symbol-group select { width: 68px; }
+  .topbar-center .tf-group select { width: 56px; }
+  .topbar-center .date-group { gap: 4px; }
+  .date-group input { width: 80px; min-width: 0; padding-inline: 6px; }
+  .date-group input[type="time"] { width: 64px; }
+  #header-start-replay-btn {
+    width: var(--phase9-touch);
+    min-width: var(--phase9-touch);
+    min-height: var(--phase9-touch);
+    padding: 0;
+    font-size: 0;
+  }
+  #header-start-replay-btn::before {
+    content: '▶';
+    font-size: 13px;
+    line-height: 1;
+  }
+  .topbar-right .paper-badge,
+  .topbar-right #data-status { display: none; }
+  .logo {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .phase6-command-trigger {
+    min-width: var(--phase9-touch);
+    min-height: var(--phase9-touch);
+    padding-inline: 8px;
+  }
+  .timeline-section { padding: 6px 8px; gap: 2px 7px; }
+  .controls-section { padding: 4px 8px env(safe-area-inset-bottom); }
+  .controls-row { gap: 4px; overflow: hidden; }
+  .controls-row button,
+  .controls-row select { min-height: var(--phase9-touch); }
+  .phase6-command-backdrop { padding-inline: 8px; }
+  .phase6-command { max-height: min(78dvh, 680px); }
+  .phase6-command-list { max-height: calc(78dvh - 94px); }
+  .field input,
+  .field select,
+  .tab-panel input,
+  .tab-panel select,
+  .advanced-toggle,
+  .risk-details > summary,
+  .risk-actions .btn,
+  .flatten-button,
+  .order-action,
+  .btn-buy-main,
+  .btn-sell-main { min-height: var(--phase9-touch); }
+}
+
+@media (max-width: 420px) {
+  .topbar { padding-inline: 6px; }
+  .logo { font-size: 14px; letter-spacing: 0.12em; }
+  .topbar-center { gap: 3px; }
+  .topbar-center .symbol-group select { width: 64px; }
+  .topbar-center .tf-group select { width: 52px; }
+  .date-group input { width: 76px; }
+  .date-group input[type="time"] { width: 62px; }
+  .timeline-section {
+    grid-template-columns: minmax(84px, 0.72fr) minmax(0, 1.6fr);
+    padding-inline: 6px;
+  }
+  .controls-section { padding-inline: 6px; }
+  .replay-primary .replay-play { min-width: 60px; padding-inline: 8px; }
+  .phase6-command-backdrop {
+    padding-inline: 6px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+  .phase6-command { border-radius: 16px; }
+}
+
+@media (max-width: 340px) {
+  .topbar-center { gap: 2px; }
+  .topbar-center .symbol-group select { width: 58px; }
+  .topbar-center .tf-group select { width: 50px; }
+  .date-group { gap: 2px; }
+  .date-group input { width: 74px; }
+  .date-group input[type="time"] { width: 60px; }
+}
+
+@media (max-width: 360px) {
+  .topbar-right .phase6-command-trigger {
+    width: var(--phase9-touch);
+    padding: 0;
+    font-size: 0;
+  }
+  .topbar-right .phase6-command-trigger::before {
+    content: '⋯';
+    font-size: 20px;
+    line-height: 1;
+  }
+  .timeline-meta { gap: 4px; font-size: 8px; }
+  .replay-speed { margin-left: 0; }
+  #speed-select { min-width: 48px; }
+}
+
+@media (orientation: landscape) and (max-width: 840px) {
+  .phase6-command { max-height: 88dvh; }
+  .phase6-command-list { max-height: calc(88dvh - 94px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase6-command { scroll-behavior: auto; }
+}
+
+/* phase10-mobile-replay-polish.css */
+/* Phase 10: mobile replay interaction polish.
+ * Only owns mobile navigation placement and trading-drawer presentation.
+ * Replay frame geometry remains owned by phase1/phase2 responsive layers.
+ */
+
+@media (max-width: 640px) {
+  #app {
+    position: relative;
+  }
+
+  /* The navigation control belongs to the application shell, not the browser
+     viewport. Keeping it in page coordinates prevents it from sitting on top
+     of the replay header when the page is mounted below the app shell. */
+  .mobile-nav-toggle {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    z-index: 70;
+  }
+
+  #page-replay.active .topbar-left {
+    min-width: 0;
+    padding-left: 48px;
+  }
+
+  #page-replay.active .topbar-right {
+    min-width: 0;
+  }
+
+  #page-replay.active .logo {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Give the sheet a visible drag affordance without adding another control
+     or changing its interaction contract. */
+  body.drawer-open .trading-section {
+    padding-top: 22px;
+  }
+
+  body.drawer-open .trading-section::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 42px;
+    height: 4px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: var(--paper-line-strong);
+    pointer-events: none;
+  }
+
+  body.drawer-open .panel-heading {
+    padding-top: 2px;
+  }
+
+  body.drawer-open .trading-section {
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 420px) {
+  #page-replay.active .topbar-left {
+    padding-left: 46px;
+  }
+}
+
+@media (max-width: 360px) {
+  #page-replay.active .topbar-left {
+    padding-left: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-nav-toggle {
+    transition: none;
+  }
+}
+
