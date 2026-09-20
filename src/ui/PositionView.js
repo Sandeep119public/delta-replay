@@ -72,9 +72,11 @@ export class PositionView {
     const tp = this.tpInput?.value?.trim();
     if (!sl && !tp) { const message = 'Enter SL or TP price'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
     const symbol = position.symbol;
-    if (sl && tp) return this._run(() => this.trading.actions.updateRisk({ symbol, stopLoss: Number(sl), takeProfit: Number(tp) }));
-    if (sl) return this._run(() => this.trading.actions.setStopLoss(symbol, Number(sl)));
-    return this._run(() => this.trading.actions.setTakeProfit(symbol, Number(tp)));
+    return this._run(() => this.trading.actions.setRisk({
+      symbol,
+      stopLoss: sl ? Number(sl) : (position.stopLossPrice ?? null),
+      takeProfit: tp ? Number(tp) : (position.takeProfitPrice ?? null),
+    }));
   }
 
   clearRisk() {
