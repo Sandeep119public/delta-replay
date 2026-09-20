@@ -4,10 +4,11 @@ from uuid import uuid4
 import pytest
 
 from app.services.paper_engine import PaperTradingEngine
+from app.services.replay_session import ReplaySession
 from app.services.replay_service import ReplayService
 from app.services.session_manager import SessionManager
 from app.services.session_repository import InMemorySessionRepository
-from app.services.session_state import SESSION_STATE_VERSION, restore_session, serialize_session
+from app.services.session_state import SESSION_STATE_VERSION, restore_replay_session, serialize_replay_session
 
 
 def candle(o, h, l, c, t=1):
@@ -32,8 +33,10 @@ def test_session_round_trip_preserves_replay_and_trading_state():
     trading.set_risk("BTCUSDT", stop_loss=96, take_profit=115)
     second_order = trading.submit("ETHUSDT", "sell", 1, "stop_market", stop_price=90)
 
-    document = serialize_session(replay, trading)
-    restored_replay, restored_trading = restore_session(document)
+    session = ReplaySession(replay=replay, trading=trading)
+    document = serialize_replay_session(session)
+    restored = restore_replay_session(document)
+    restored_replay, restored_trading = restored.replay, restored.trading
 
     assert document["version"] == SESSION_STATE_VERSION
     assert restored_replay.export_state() == replay.export_state()
@@ -62,7 +65,7 @@ def test_session_round_trip_preserves_symbol_specific_close_price():
     trading.on_candle(candle(100, 110, 99, 110, 2), 1, "ETHUSDT")
     trading.on_candle(candle(50000, 50100, 49900, 50000, 3), 2, "BTCUSDT")
 
-    _, restored = restore_session(serialize_session(replay, trading))
+    restored = restore_replay_session(serialize_replay_session(ReplaySession(replay=replay, trading=trading))).trading
 
     market = restored.get_latest_market("ETHUSDT")
     assert market["candle"]["close"] == 110
@@ -76,11 +79,11 @@ def test_restore_rejects_invalid_trading_market_context():
     replay.load([candle(100, 101, 99, 100)])
     replay.start(0)
     trading = PaperTradingEngine()
-    document = serialize_session(replay, trading)
+    document = serialize_replay_session(ReplaySession(replay=replay, trading=trading))
     document["tradingMarket"] = {"BTCUSDT": {"candle": {"close": 0}, "index": -1}}
 
     with pytest.raises(ValueError, match="outside trading timeline"):
-        restore_session(document)
+        restore_replay_session(document)
 
 
 def test_zero_fee_open_position_round_trips_through_persistence():
@@ -190,12 +193,12 @@ def test_repository_defensively_copies_documents():
 
 def test_restore_rejects_unknown_version():
     with pytest.raises(ValueError, match="unsupported session state version"):
-        restore_session({"version": 99, "replay": {}, "trading": {}})
+        restore_replay_session({"version": 99, "replay": {}, "trading": {}})
 
 
 def test_restore_rejects_malformed_trading_state():
     with pytest.raises(ValueError, match="trading state missing fields"):
-        restore_session({
+        restore_replay_session({
             "version": SESSION_STATE_VERSION,
             "replay": {"candles": [], "index": -1, "startIndex": -1, "speed": 1, "status": "idle"},
             "trading": {},
@@ -209,7 +212,7 @@ def test_restore_rejects_non_finite_persisted_numbers():
     document["trading"]["account"]["walletBalance"] = nan
 
     with pytest.raises(ValueError, match="JSON-safe"):
-        restore_session(document)
+        restore_replay_session(document)
 
 
 def test_restore_rejects_inconsistent_replay_lifecycle_state():
@@ -222,16 +225,16 @@ def test_restore_rejects_inconsistent_replay_lifecycle_state():
             "speed": 1,
             "status": "ready",
         },
-        "trading": serialize_session(ReplayService(), PaperTradingEngine())["trading"],
+        "trading": PaperTradingEngine().export_state(),
     }
 
     with pytest.raises(ValueError, match="ready replay"):
-        restore_session(base)
+        restore_replay_session(base)
 
     base["replay"]["status"] = "paused"
     base["replay"]["startIndex"] = -1
     with pytest.raises(ValueError, match="active indices"):
-        restore_session(base)
+        restore_replay_session(base)
 
 
 def test_session_manager_delete_removes_persisted_state():
