@@ -28,7 +28,7 @@ def test_timeline_record_truncates_future_before_appending():
 def test_timeline_rejects_invalid_event_order_on_record():
     timeline = ReplayTimeline([event("market_step", 0)])
 
-    with pytest.raises(ReplayDivergenceError, match="must precede trading commands"):
+    with pytest.raises(ReplayDivergenceError, match="multiple market context"):
         timeline.record("market_step", 0, {"symbol": "BTCUSDT"})
 
 
