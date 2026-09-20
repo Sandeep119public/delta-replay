@@ -46,18 +46,16 @@ export function createTradingPresentation(tradingEngine) {
   };
 
   const actions = Object.freeze({
-    submitMarketOrder: (order) => tradingEngine.submitMarketOrder(order),
-    submitLimitOrder: (order) => tradingEngine.placeLimitOrder(order),
-    submitStopOrder: (order) => tradingEngine.placeStopOrder(order),
-    flattenPosition: (symbol) => tradingEngine.flattenPosition(symbol),
-    updateRisk: (payload) => tradingEngine.updateRisk(payload),
-    setStopLoss: (symbol, price) => tradingEngine.setStopLoss(symbol, price),
-    setTakeProfit: (symbol, price) => tradingEngine.setTakeProfit(symbol, price),
+    submitOrder: (order) => tradingEngine.submitOrder(order),
+    closePosition: (symbol) => tradingEngine.closePosition(symbol),
+    setRisk: (payload) => tradingEngine.setRisk(payload),
     clearRisk: (symbol) => tradingEngine.clearRisk(symbol),
     cancelOrder: (id) => tradingEngine.cancelOrder(id),
-    resetAccount: () => tradingEngine.resetAccount(),
-    setCapital: (balance) => tradingEngine.setStartingBalance(balance),
+    cancelAll: (reason) => tradingEngine.cancelAll(reason),
+    reset: () => tradingEngine.reset(),
+    setStartingBalance: (balance) => tradingEngine.setStartingBalance(balance),
     setFeeRate: (rate) => tradingEngine.setFeeRate(rate),
+    hasOpenPosition: (symbol) => tradingEngine.hasOpenPosition(symbol),
     hasOpenPosition: (symbol) => tradingEngine.hasOpenPosition(symbol),
   });
 
