@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 
-const css = fs.readFileSync('src/ui/phase8-responsive-final.css', 'utf8');
+const css = fs.readFileSync('src/ui/responsive.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const workspace = fs.readFileSync('src/ui/paper/markup/Workspace.js', 'utf8');
 const timeline = fs.readFileSync('src/ui/paper/markup/Timeline.js', 'utf8');
@@ -9,7 +9,7 @@ const mobileDrawer = fs.readFileSync('src/ui/bindMobileDrawer.js', 'utf8');
 
 describe('Phase 8 final responsive system', () => {
   it('loads the final responsive layer after all redesign layers', () => {
-    expect(html.indexOf('src/ui/phase8-responsive-final.css')).toBeGreaterThan(html.indexOf('src/ui/phase7-final-system.css'));
+    expect(html.indexOf('src/ui/responsive.css')).toBeGreaterThan(html.indexOf('src/ui/system.css'));
   });
 
   it('covers tablet and mobile breakpoint contracts without owning the desktop shell', () => {
