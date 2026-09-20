@@ -155,6 +155,28 @@ describe('HistoricalDataManager — fetching', () => {
     expect(validCandles.length).toBe(4);
   });
 
+  it('can load into an isolated target store without mutating the manager store', async () => {
+    const sharedStore = new CandleStore();
+    const targetStore = new CandleStore();
+    const cache = new CandleCache({ enableIDB: false });
+    const client = mockClient({ '*': [c(1000, 100), c(1060, 101)] });
+    const provider = new DeltaCandleProvider({ client, maxCandles: 100000 });
+    const mgr = new HistoricalDataManager({ provider, store: sharedStore, cache });
+
+    const result = await mgr.load({
+      symbol: 'BTCUSD',
+      timeframe: '1m',
+      from: 1000,
+      to: 1060,
+      store: targetStore,
+    });
+
+    expect(sharedStore.getCount()).toBe(0);
+    expect(targetStore.getCount()).toBe(2);
+    expect(result.metadata.symbol).toBe('BTCUSD');
+    expect(targetStore.getMetadata()).toMatchObject({ symbol: 'BTCUSD', timeframe: '1m', count: 2 });
+  });
+
   it('abort during fetch', async () => {
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
