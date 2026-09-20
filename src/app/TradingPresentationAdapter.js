@@ -24,7 +24,7 @@ function assertPresentationEvent(event) {
 function subscribeAll(tradingEngine, handler) {
   if (typeof handler !== 'function') throw new TypeError('trading event handler must be a function');
   const unsubs = [...PRESENTATION_EVENT_NAMES].map((event) => tradingEngine.on?.(event, handler)).filter((fn) => typeof fn === 'function');
-  return () => unsubs.forEach((unsubscribe) => { try { unsubscribe(); } catch {} });
+  return () => unsubs.forEach((unsubscribe) => { try { unsubscribe(); } catch (error) { console.warn('[TradingPresentationAdapter] unsubscribe failed', error); } });
 }
 
 export function createTradingPresentation(tradingEngine) {
