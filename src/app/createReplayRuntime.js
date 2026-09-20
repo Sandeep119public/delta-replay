@@ -9,7 +9,7 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
     hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
     hasTradingActivity: () => tradingEngine.hasTradingActivity(),
-    clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
+    clearPendingOrders: (reason) => tradingEngine.cancelAll(reason),
   });
 
   const coordinator = new ReplayCoordinator({
