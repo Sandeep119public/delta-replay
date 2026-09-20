@@ -48,10 +48,12 @@ class ReplayTimeline:
         self._events = candidate
 
     def truncate_after(self, replay_index):
-        self._events = [
-            event for event in self._events
+        candidate = [
+            deepcopy(event) for event in self._events
             if event.get("replayIndex", -1) <= replay_index
         ]
+        validate_history(candidate)
+        self._events = candidate
 
     def record(self, command_type, replay_index, payload):
         candidate = self.snapshot()
@@ -68,7 +70,7 @@ class ReplayTimeline:
         self._events = candidate
 
     def __iter__(self):
-        return iter(self._events)
+        return iter(self.snapshot())
 
     def __len__(self):
         return len(self._events)
