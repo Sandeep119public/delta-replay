@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..models import CandleBatch
 from ..services.paper_engine import PaperTradingEngine
-from ..services.replay_timeline import ReplayDivergenceError, rebuild_trading
+from ..services.replay_timeline import ReplayDivergenceError, latest_market_event_symbol, rebuild_trading
 from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
@@ -28,13 +28,10 @@ def require_pristine_trading(session, action, *, allow_replay_progress=False):
 
 
 def _replay_symbol(session, fallback="BTCUSDT"):
-    for command in reversed(session.history):
-        if command.get("type") not in {"market_step", "candle"}:
-            continue
-        symbol = command.get("payload", {}).get("symbol")
-        if isinstance(symbol, str) and symbol.strip():
-            return symbol.strip().upper()
-    return fallback
+    try:
+        return latest_market_event_symbol(session.history)
+    except ReplayDivergenceError:
+        return fallback
 
 
 def _active_replay_symbol(session, requested_symbol=None):
@@ -44,14 +41,10 @@ def _active_replay_symbol(session, requested_symbol=None):
             raise HTTPException(422, "symbol must be provided")
         return requested
 
-    for command in reversed(session.history):
-        if command.get("type") not in {"market_step", "candle"}:
-            continue
-        symbol = command.get("payload", {}).get("symbol")
-        if isinstance(symbol, str) and symbol.strip():
-            return symbol.strip().upper()
-
-    raise HTTPException(409, "Start the replay before advancing or seeking it")
+    try:
+        return latest_market_event_symbol(session.history)
+    except ReplayDivergenceError as exc:
+        raise HTTPException(409, "Start the replay before advancing or seeking it") from exc
 
 
 @router.get("/state")

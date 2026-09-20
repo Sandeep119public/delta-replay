@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, m
 from ..domain.errors import StateInvariantError
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
-from ..services.replay_timeline import ReplayDivergenceError, rebuild_trading
+from ..services.replay_timeline import ReplayDivergenceError, latest_market_step_symbol, rebuild_trading
 from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
@@ -114,13 +114,10 @@ def _internal_http_error(exc: StateInvariantError) -> HTTPException:
 
 
 def _replay_symbol(session):
-    for command in session.history:
-        if command.get("type") != "market_step":
-            continue
-        symbol = command.get("payload", {}).get("symbol")
-        if isinstance(symbol, str) and symbol.strip():
-            return symbol.strip().upper()
-    raise HTTPException(409, "Start the replay before processing a market candle")
+    try:
+        return latest_market_step_symbol(session.history)
+    except ReplayDivergenceError as exc:
+        raise HTTPException(409, "Start the replay before processing a market candle") from exc
 
 
 def _requested_market_symbol(session, requested_symbol):

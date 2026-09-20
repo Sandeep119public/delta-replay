@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.paper_engine import PaperTradingEngine
 from app.services.replay_service import ReplayService
-from app.services.replay_timeline import ReplayDivergenceError, rebuild_trading
+from app.services.replay_timeline import ReplayDivergenceError, latest_market_step_symbol, rebuild_trading
 
 
 client = TestClient(app)
@@ -186,6 +186,72 @@ def test_manual_candle_same_symbol_retry_does_not_duplicate_history():
         from app.services.session_manager import manager
         history = manager.get(session_id).history
         assert sum(1 for event in history if event["type"] == "candle" and event["payload"]["symbol"] == "ETHUSDT") == 1
+    finally:
+        from app.services.session_manager import manager
+        manager.delete(session_id)
+
+
+
+def test_latest_market_step_symbol_follows_explicit_symbol_switch():
+    history = [
+        {"type": "market_step", "replayIndex": 0, "payload": {"symbol": "BTCUSDT"}},
+        {"type": "candle", "replayIndex": 0, "payload": {"candle": candle(1, 200), "index": 0, "symbol": "ETHUSDT"}},
+        {"type": "market_step", "replayIndex": 1, "payload": {"symbol": "ETHUSDT"}},
+    ]
+
+    assert latest_market_step_symbol(history) == "ETHUSDT"
+
+
+def test_trading_candle_without_symbol_uses_latest_replay_symbol_after_switch():
+    session_id = str(uuid4())
+    headers = {"X-Session-ID": session_id}
+    payload = {"candles": [candle(1, 100), candle(2, 102), candle(3, 104)]}
+
+    try:
+        assert client.post("/api/v1/replay/load", headers=headers, json=payload).status_code == 200
+        assert client.post("/api/v1/replay/start/0", headers=headers, params={"symbol": "BTCUSDT"}).status_code == 200
+        stepped = client.post("/api/v1/replay/step", headers=headers, params={"symbol": "ETHUSDT"})
+        assert stepped.status_code == 200
+        assert stepped.json()["index"] == 1
+
+        response = client.post("/api/v1/trading/candle", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["candle"] == candle(2, 102)
+
+        from app.services.session_manager import manager
+        session = manager.get(session_id)
+        assert session.trading.get_latest_market("ETHUSDT")["index"] == 1
+        assert session.trading.get_latest_market("BTCUSDT")["index"] == 0
+    finally:
+        from app.services.session_manager import manager
+        manager.delete(session_id)
+
+
+def test_trading_reset_preserves_latest_replay_symbol_after_switch():
+    session_id = str(uuid4())
+    headers = {"X-Session-ID": session_id}
+    payload = {"candles": [candle(1, 100), candle(2, 102), candle(3, 104)]}
+
+    try:
+        assert client.post("/api/v1/replay/load", headers=headers, json=payload).status_code == 200
+        assert client.post("/api/v1/replay/start/0", headers=headers, params={"symbol": "BTCUSDT"}).status_code == 200
+        stepped = client.post("/api/v1/replay/step", headers=headers, params={"symbol": "ETHUSDT"})
+        assert stepped.status_code == 200
+
+        reset = client.post("/api/v1/trading/reset", headers=headers)
+        assert reset.status_code == 200
+        assert reset.json()["index"] == 1
+
+        from app.services.session_manager import manager
+        session = manager.get(session_id)
+        assert session.trading.get_latest_market("BTCUSDT")["index"] == 0
+        assert session.trading.get_latest_market("ETHUSDT")["index"] == 1
+        assert not any(
+            event.get("type") == "candle"
+            and event.get("replayIndex") == 1
+            and event.get("payload", {}).get("symbol") == "BTCUSDT"
+            for event in session.history
+        )
     finally:
         from app.services.session_manager import manager
         manager.delete(session_id)
