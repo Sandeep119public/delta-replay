@@ -1,3 +1,5 @@
+import { SessionMutationPipeline } from './SessionMutationPipeline.js';
+
 class Events {
   constructor() {
     this.map = new Map();
@@ -25,7 +27,7 @@ const BASE_STEP_DELAY_MS = 500;
 const clone = (value) => value == null ? value : structuredClone(value);
 
 export class RemoteReplayEngine {
-  constructor(api, tradingEngine = null, symbolProvider = () => 'BTCUSDT') {
+  constructor(api, tradingEngine = null, symbolProvider = () => 'BTCUSDT', mutationPipeline = new SessionMutationPipeline()) {
     if (!api || typeof api.request !== 'function') {
       throw new TypeError('RemoteReplayEngine requires API client');
     }
@@ -36,14 +38,13 @@ export class RemoteReplayEngine {
     this.api = api;
     this.tradingEngine = tradingEngine;
     this.symbolProvider = symbolProvider;
+    this.mutationPipeline = mutationPipeline;
     this.events = new Events();
     this._playTimer = null;
     this._stepInFlight = false;
-    this._generation = 0;
+    this._generation = this.mutationPipeline.generation();
     this._playIntent = 0;
     this._destroyed = false;
-    this._mutationQueue = [];
-    this._mutationRunning = false;
     this.state = {
       status: 'idle',
       currentIndex: -1,
@@ -88,45 +89,19 @@ export class RemoteReplayEngine {
   }
 
   async _call(path, options = {}, generation = this._generation, lifecycle = null) {
-    const response = await this.api.request(path, options);
-    if (this._destroyed || generation !== this._generation) return this.getState();
-    this._sync(response, lifecycle);
+    const result = await this.mutationPipeline.run(
+      () => this.api.request(path, options),
+      {
+        generation,
+        apply: (response) => this._sync(response, lifecycle),
+      },
+    );
     return this.getState();
   }
 
-  _enqueueMutation(operation) {
-    if (this._destroyed) return Promise.resolve(this.getState());
-
-    return new Promise((resolve, reject) => {
-      this._mutationQueue.push({ operation, resolve, reject });
-      void this._drainMutations();
-    });
-  }
-
-  async _drainMutations() {
-    if (this._mutationRunning) return;
-
-    this._mutationRunning = true;
-    try {
-      while (this._mutationQueue.length) {
-        const item = this._mutationQueue.shift();
-        if (this._destroyed) {
-          item.resolve(this.getState());
-          continue;
-        }
-
-        try {
-          item.resolve(await item.operation());
-        } catch (error) {
-          item.reject(error);
-        }
-      }
-    } finally {
-      this._mutationRunning = false;
-      if (this._mutationQueue.length && !this._destroyed) {
-        void this._drainMutations();
-      }
-    }
+  _invalidateGeneration() {
+    this._generation = this.mutationPipeline.invalidate();
+    return this._generation;
   }
 
   getState() {
@@ -150,15 +125,15 @@ export class RemoteReplayEngine {
   load(candles) {
     if (this._destroyed) return Promise.resolve(this.getState());
     this.pause();
-    const generation = ++this._generation;
+    const generation = this._invalidateGeneration();
     const payload = Array.isArray(candles) ? clone(candles) : [];
 
-    return this._enqueueMutation(() => this._call(
+    return this._call(
       '/load',
       { method: 'POST', body: JSON.stringify({ candles: payload }) },
       generation,
       'load',
-    ));
+    );
   }
 
   start(index = 0, symbol = null) {
@@ -172,8 +147,8 @@ export class RemoteReplayEngine {
     const normalizedSymbol = String(symbol ?? this.currentSymbol()).trim().toUpperCase();
     if (!normalizedSymbol) throw new TypeError('Replay symbol must be provided');
 
-    const generation = ++this._generation;
-    return this._enqueueMutation(async () => {
+    const generation = this._invalidateGeneration();
+    return (async () => {
       const result = await this._call(
         `/start/${numericIndex}?symbol=${encodeURIComponent(normalizedSymbol)}`,
         { method: 'POST' },
@@ -185,7 +160,7 @@ export class RemoteReplayEngine {
         this.events.emit('started', { index: this.state.currentIndex, state: result });
       }
       return result;
-    });
+    })();
   }
 
   stepForward(symbol = null) {
@@ -201,7 +176,7 @@ export class RemoteReplayEngine {
     const generation = this._generation;
     const previousIndex = this.state.currentIndex;
 
-    return this._enqueueMutation(async () => {
+    return (async () => {
       try {
         const normalizedSymbol = symbol == null ? null : String(symbol).trim().toUpperCase();
         const query = normalizedSymbol ? `?symbol=${encodeURIComponent(normalizedSymbol)}` : '';
@@ -223,7 +198,7 @@ export class RemoteReplayEngine {
       } finally {
         this._stepInFlight = false;
       }
-    });
+    })();
   }
 
   seek(index) {
@@ -235,7 +210,7 @@ export class RemoteReplayEngine {
       return Promise.reject(new TypeError('Replay seek index must be an integer'));
     }
 
-    const generation = ++this._generation;
+    const generation = this._invalidateGeneration();
     return this._enqueueMutation(async () => {
       const result = await this._call(
         `/seek/${numericIndex}?symbol=${encodeURIComponent(this.currentSymbol())}`,
@@ -248,7 +223,7 @@ export class RemoteReplayEngine {
         this.events.emit('seeked', { index: this.state.currentIndex, state: result });
       }
       return result;
-    });
+    })();
   }
 
   reset() {
@@ -263,7 +238,7 @@ export class RemoteReplayEngine {
         this.events.emit('reset', { index: this.state.currentIndex, state: result });
       }
       return result;
-    });
+    })();
   }
 
   async play() {
@@ -348,12 +323,6 @@ export class RemoteReplayEngine {
 
     this.pause();
     this._destroyed = true;
-    this._generation++;
-
-    for (const item of this._mutationQueue.splice(0)) {
-      item.resolve(this.getState());
-    }
-
     this.events = new Events();
     this.tradingEngine = null;
   }
