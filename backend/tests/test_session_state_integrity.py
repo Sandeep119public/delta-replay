@@ -3,8 +3,9 @@ import copy
 import pytest
 
 from app.services.paper_engine import PaperTradingEngine
+from app.services.replay_session import ReplaySession
 from app.services.replay_service import ReplayService
-from app.services.session_state import restore_session_bundle, serialize_session
+from app.services.session_state import restore_session_bundle, serialize_replay_session
 
 
 def candle(o, h, l, c, t):
@@ -17,11 +18,13 @@ def session_document():
     replay.start(0)
     trading = PaperTradingEngine()
     trading.on_candle(replay.candles[0], 0, "BTCUSDT")
-    return serialize_session(replay, trading, [{
+    session = ReplaySession(replay=replay, trading=trading)
+    session.replace_history([{
         "type": "market_step",
         "replayIndex": 0,
         "payload": {"symbol": "BTCUSDT"},
     }])
+    return serialize_replay_session(session)
 
 
 def test_restore_preserves_replay_and_trading_cursors():
@@ -62,7 +65,7 @@ def test_restore_rejects_replay_trading_cursor_mismatch_with_trading_activity():
     replay.start(0)
     trading = PaperTradingEngine()
     trading.on_candle(replay.candles[0], 0, "BTCUSDT")
-    document = serialize_session(replay, trading)
+    document = serialize_replay_session(ReplaySession(replay=replay, trading=trading))
     document["replay"]["index"] = -1
     document["replay"]["startIndex"] = -1
     document["replay"]["status"] = "ready"
