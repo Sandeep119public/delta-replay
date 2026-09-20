@@ -343,10 +343,6 @@ export class RemoteReplayEngine {
     return next;
   }
 
-  registerActionGuard() {
-    return () => {};
-  }
-
   destroy() {
     if (this._destroyed) return;
 
