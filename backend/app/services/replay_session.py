@@ -141,9 +141,6 @@ class ReplaySession:
             })
         self.reconstruct_trading(replay_index, symbol, market_history)
 
-    def reset(self, symbol: str) -> dict:
-        """Compatibility alias for a full replay reset."""
-        return self.reset_replay(symbol)
 
     def clear_risk(self, symbol: str, target: str = "all"):
         if target == "stopLoss":
