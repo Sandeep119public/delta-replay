@@ -30,7 +30,7 @@ export class OrderFormView {
     else if (type === 'STOP_MARKET') { const stopPrice = Number(this.stopPriceInput?.value); if (!Number.isFinite(stopPrice) || stopPrice <= 0) { const message = 'Enter a valid stop price'; this.onError?.(message); return { success: false, message }; } action = () => this.trading.actions.submitStopOrder({ symbol, side, quantity, stopPrice }); }
     else action = () => this.trading.actions.submitMarketOrder({ symbol, side, quantity });
     this.busy = true; this.render();
-    try { const result = await action(); if (!result?.success) this.onError?.(result?.message || 'Order rejected'); else this.onSuccess?.(result); this.onRender?.(); return result; }
+    try { const result = await this.trading.actions.submitOrder(order); if (!result?.success) this.onError?.(result?.message || 'Order rejected'); else this.onSuccess?.(result); this.onRender?.(); return result; }
     catch (error) { const message = error?.message || 'Order request failed'; this.onError?.(message); return { success: false, message }; }
     finally { this.busy = false; this.render(); }
   }
