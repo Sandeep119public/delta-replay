@@ -345,7 +345,7 @@ def set_fee_rate(request: Request, command: FeeRateRequest):
 @router.post("/reset")
 def reset(request: Request):
     def reset_engine(session):
-        symbol = _replay_symbol(session)
+        symbol = _replay_symbol(session) if session.replay.index >= 0 else "BTCUSDT"
         try:
             session.reset_trading(symbol)
         except ReplayDivergenceError as exc:
