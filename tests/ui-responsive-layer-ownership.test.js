@@ -13,8 +13,8 @@ describe('UI responsive layer ownership', () => {
 
     expect(phase9).not.toContain('Phase 10: mobile replay workspace polish');
     expect(phase9).not.toContain('--phase10-header-gutter');
-    expect(phase10).toContain('--phase10-header-gutter');
     expect(phase10).toContain('.mobile-nav-toggle');
+    expect(phase10).toContain('body.drawer-open .trading-section::before');
   });
 
   it('loads Phase 10 after the earlier responsive layers', () => {
