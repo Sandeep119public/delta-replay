@@ -27,7 +27,7 @@ describe('RemoteTradingEngine state ordering', () => {
     queue.shift().resolve(state());
     await engine._refreshPromise;
 
-    const first = engine.submitMarketOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 1 });
+    const first = engine.submitOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 1, type: 'market' });
     const second = engine.setFeeRate(0.001);
 
     expect(queue).toHaveLength(2);
