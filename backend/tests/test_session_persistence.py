@@ -208,7 +208,7 @@ def test_restore_rejects_malformed_trading_state():
 def test_restore_rejects_non_finite_persisted_numbers():
     replay = ReplayService()
     trading = PaperTradingEngine()
-    document = serialize_session(replay, trading)
+    document = serialize_replay_session(ReplaySession(replay=replay, trading=trading))
     document["trading"]["account"]["walletBalance"] = nan
 
     with pytest.raises(ValueError, match="JSON-safe"):
