@@ -95,7 +95,7 @@ export class HistoricalDataManager extends EventEmitter {
     if(validCandles.length===0){const err=new Error('No valid candles after integrity');err.code='NO_DATA';this.emit(DataEvents.ERROR,err);throw err;}
     if(metadata.repairSuccess!==false&&metadata.integrityStatus!==INTEGRITY_STATUS.DEGRADED)this.cache.set(symbol,timeframe,effectiveFrom,effectiveTo,validCandles,{timeframeSec:tfSec,venue:resolvedVenue,gridOrigin});
     const isDegraded=metadata.integrityStatus===INTEGRITY_STATUS.DEGRADED||metadata.repairSuccess===false;const quality=isDegraded?'DEGRADED':'VALID';
-    this.store.load(validCandles,{symbol,timeframe,requestedFrom,requestedTo,effectiveFrom,effectiveTo,venue:resolvedVenue,gridOrigin,quality,...metadata});
+    targetStore.load(validCandles,{symbol,timeframe,requestedFrom,requestedTo,effectiveFrom,effectiveTo,venue:resolvedVenue,gridOrigin,quality,...metadata});
     this.emit(DataEvents.READY,{candles:validCandles,metadata:targetStore.getMetadata(),quality}); if(isDegraded)this.emit(DataEvents.READY_DEGRADED,{candles:validCandles,metadata:targetStore.getMetadata(),quality}); emitProgress(); return {candles:validCandles,metadata:targetStore.getMetadata(),quality};
   }
   getStore(){return this.store;} getCache(){return this.cache;} clear(){this.store.clear();this.cache.clear();}
