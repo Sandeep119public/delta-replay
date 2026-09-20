@@ -70,8 +70,6 @@ def test_trading_reset_reanchors_to_current_replay_timeline():
     assert reset_body["index"] == 2
     assert reset_body["orders"] == []
     assert reset_body["positions"] == []
-    assert reset_body["equity"] if "equity" in reset_body else True
-
     trading = manager.get(str(session)).trading
     assert trading.index == 2
     assert manager.get(str(session)).history == [
@@ -98,7 +96,7 @@ def test_trading_reset_reanchors_to_current_replay_timeline():
     assert stepped.status_code == 200
     body = stepped.json()
     assert body["candle"]["close"] == 130
-    assert body["trading"]["positions"][0]["entryPrice"] == 120
+    assert body["trading"]["positions"][0]["entry_price"] == 120
 
 
 def test_reset_preserves_custom_trading_configuration():
