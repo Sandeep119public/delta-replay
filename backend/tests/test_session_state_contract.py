@@ -36,6 +36,6 @@ def test_session_identity_rejects_history_tampering():
     try:
         restore_replay_session(document)
     except ValueError as exc:
-        assert "simulation identity" in str(exc)
+        assert "session history" in str(exc)
     else:
         raise AssertionError("tampered simulation identity was accepted")
