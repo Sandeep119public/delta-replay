@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, m
 from ..domain.errors import StateInvariantError
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
+from ..services.replay_timeline import ReplayDivergenceError, rebuild_trading
 from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
@@ -361,31 +362,65 @@ def reset(request: Request):
         margin_rate = previous_trading.margin_rate
         maint_margin_rate = previous_trading.maint_margin_rate
         replay_index = session.replay.index
+
+        if replay_index < 0:
+            session.trading = PaperTradingEngine(
+                starting_balance=balance,
+                fee_rate=fee_rate,
+                margin_rate=margin_rate,
+                maint_margin_rate=maint_margin_rate,
+            )
+            session.history = [
+                deepcopy(event)
+                for event in session.history
+                if event.get("type") in {"market_step", "candle"}
+            ]
+            return snapshot(session.trading)
+
         symbol = _replay_symbol(session)
+        market_history = [
+            deepcopy(event)
+            for event in session.history
+            if event.get("type") in {"market_step", "candle"}
+        ]
 
-        fresh = PaperTradingEngine(
-            starting_balance=balance,
-            fee_rate=fee_rate,
-            margin_rate=margin_rate,
-            maint_margin_rate=maint_margin_rate,
+        has_current_context = any(
+            event.get("replayIndex") == replay_index
+            and event.get("payload", {}).get("symbol") == symbol
+            for event in market_history
         )
-        session.trading = fresh
-        session.history = []
-
-        if replay_index >= 0:
+        if not has_current_context:
             market = previous_trading.get_latest_market(symbol)
             if market is not None and market.get("index") == replay_index:
                 candle = market["candle"]
             else:
                 candle = session.replay.candles[replay_index]
+            market_history.append({
+                "type": "candle",
+                "replayIndex": replay_index,
+                "payload": {
+                    "candle": deepcopy(candle),
+                    "index": replay_index,
+                    "symbol": symbol,
+                },
+            })
 
-            fresh.on_candle(candle, replay_index, symbol)
-            session.record(
-                "candle",
+        try:
+            fresh = rebuild_trading(
+                session.replay,
+                market_history,
                 replay_index,
-                {"candle": deepcopy(candle), "index": replay_index, "symbol": symbol},
+                default_symbol=symbol,
+                starting_balance=balance,
+                fee_rate=fee_rate,
+                margin_rate=margin_rate,
+                maint_margin_rate=maint_margin_rate,
             )
+        except ReplayDivergenceError as exc:
+            raise HTTPException(409, f"Unable to reset trading deterministically: {exc}") from exc
 
+        session.trading = fresh
+        session.history = market_history
         return snapshot(fresh)
     try:
         return atomic_session(request, reset_engine)
