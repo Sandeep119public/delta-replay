@@ -93,6 +93,8 @@ export class RemoteReplayEngine {
       () => this.api.request(path, options),
       {
         generation,
+        scope: 'replay',
+        canExecute: () => !this._destroyed,
         apply: (response) => this._sync(response, lifecycle),
       },
     );
