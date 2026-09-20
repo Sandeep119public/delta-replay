@@ -151,13 +151,13 @@ def reset(request: Request):
         margin_rate = trading.margin_rate
         maint_margin_rate = trading.maint_margin_rate
         symbol = _replay_symbol(session)
-        session.trading = PaperTradingEngine(
+        session.replace_trading(PaperTradingEngine(
             starting_balance=balance,
             fee_rate=fee_rate,
             margin_rate=margin_rate,
             maint_margin_rate=maint_margin_rate,
-        )
-        session.history = []
+        ))
+        session.replace_history([])
         replay = session.replay.reset()
         if replay["index"] >= 0:
             session.trading.on_candle(replay["candle"], replay["index"], symbol)
