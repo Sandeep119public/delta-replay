@@ -102,10 +102,10 @@ export class AppState extends EventEmitter {
     this.emit('change', this.snapshot());
   }
 
-  setCandles(candles) {
+  setCandles(candles, metadata = {}) {
     const store = this._ensureStore();
     if (!candles?.length) store.clear();
-    else store.load(candles);
+    else store.load(candles, metadata || {});
     this._candles = [];
     this.emit('candles', this.candles);
     this.emit('change', this.snapshot());
