@@ -105,9 +105,6 @@ def serialize_replay_session(session: ReplaySession) -> Dict[str, Any]:
     return _serialize_components(session.replay, session.trading, session.history)
 
 
-def serialize_session(replay: ReplayService, trading: PaperTradingEngine, history: list[dict] | None = None) -> Dict[str, Any]:
-    """Compatibility wrapper for legacy callers."""
-    return _serialize_components(replay, trading, history)
 
 
 def restore_session_bundle(document: Dict[str, Any]):
@@ -144,8 +141,6 @@ def restore_replay_session(document: Dict[str, Any]) -> ReplaySession:
     return ReplaySession(replay=replay, trading=trading, _timeline=ReplayTimeline(history))
 
 
-def restore_session(document: Dict[str, Any]):
-    return restore_session_bundle(document)[:2]
 
 
 def extract_history(document: Dict[str, Any]) -> list[dict]:
