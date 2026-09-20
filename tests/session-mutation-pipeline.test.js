@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SessionMutationPipeline } from '../src/app/SessionMutationPipeline.js';
+import { MUTATION_MODE, SessionMutationPipeline } from '../src/app/SessionMutationPipeline.js';
 
 describe('session mutation pipeline', () => {
   it('runs session operations in submission order', async () => {
@@ -36,7 +36,7 @@ describe('session mutation pipeline', () => {
     await expect(after).resolves.toMatchObject({ applied: true, response: 'ok' });
   });
 
-  it('marks an invalidated response stale without dropping the queued command', async () => {
+  it('rejects unsupported ordering modes', () => {\n    const pipeline = new SessionMutationPipeline();\n    expect(() => pipeline.run(async () => 'ok', { mode: 'parallel' })).toThrow(/Unsupported session mutation mode/);\n  });\n\n  it('keeps latest-only responses generation-safe', async () => {\n    const pipeline = new SessionMutationPipeline();\n    const first = pipeline.run(async () => 'first', { mode: MUTATION_MODE.LATEST, scope: 'trading' });\n    const second = pipeline.run(async () => 'second', { mode: MUTATION_MODE.LATEST, scope: 'trading' });\n    await expect(first).resolves.toMatchObject({ applied: true });\n    await expect(second).resolves.toMatchObject({ applied: true });\n  });\n\n  it('marks an invalidated response stale without dropping the queued command', async () => {
     const pipeline = new SessionMutationPipeline();
     const generation = pipeline.generation();
     const applied = [];
