@@ -254,12 +254,7 @@ def risk(request: Request, command: RiskRequest):
 @router.post("/risk/clear")
 def clear_risk(request: Request, symbol: str, target: Literal["all", "stopLoss", "takeProfit"] = "all"):
     def clear(session):
-        if target == "stopLoss":
-            position = session.trading.clear_stop_loss(symbol)
-        elif target == "takeProfit":
-            position = session.trading.clear_take_profit(symbol)
-        else:
-            position = session.trading.clear_risk(symbol)
+        position = session.clear_risk(symbol, target)
         return {"position": position, **snapshot(session.trading)}
     try:
         return atomic_session(request, clear)
