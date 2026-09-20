@@ -41,6 +41,8 @@ export class RemoteTradingEngine {
       () => this.api.request(path, options),
       {
         generation: this.mutationPipeline.generation(),
+        scope: 'trading',
+        serialize: false,
         apply: (response) => this._sync(response, action, this.data),
       },
     );
