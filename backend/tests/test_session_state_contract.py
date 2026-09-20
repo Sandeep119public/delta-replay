@@ -39,3 +39,11 @@ def test_session_identity_rejects_history_tampering():
         assert "simulation identity" in str(exc)
     else:
         raise AssertionError("tampered simulation identity was accepted")
+
+
+def test_simulation_identity_changes_when_execution_history_changes():
+    session = sample_session()
+    first = serialize_replay_session(session)["simulationId"]
+    session.submit_order("BTCUSDT", "buy", 1)
+    second = serialize_replay_session(session)["simulationId"]
+    assert first != second
