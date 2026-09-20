@@ -71,22 +71,32 @@ class ReplaySession:
         self.record("market_step", result["index"], {"symbol": symbol})
         return result, events
 
-    def seek(self, index: int, symbol: str) -> dict:
-        """Seek and deterministically reconstruct trading state at that bar."""
-        result = self.replay.seek(index)
-        filtered_history = [event for event in self.history if event.get("replayIndex", -1) <= result["index"]]
+    def reconstruct_trading(self, target_index: int, symbol: str, history=None) -> PaperTradingEngine:
+        """Rebuild trading state from one canonical history prefix."""
         current = self.trading
-        self.replace_trading(rebuild_trading(
+        source_history = self.history if history is None else history
+        filtered_history = [
+            deepcopy(event) for event in source_history
+            if event.get("replayIndex", -1) <= target_index
+        ]
+        rebuilt = rebuild_trading(
             self.replay,
             filtered_history,
-            result["index"],
+            target_index,
             default_symbol=symbol,
             starting_balance=current.account.starting_balance,
             fee_rate=current.fee_rate,
             margin_rate=current.margin_rate,
             maint_margin_rate=current.maint_margin_rate,
-        ))
+        )
+        self.replace_trading(rebuilt)
         self.replace_history(filtered_history)
+        return rebuilt
+
+    def seek(self, index: int, symbol: str) -> dict:
+        """Seek and deterministically reconstruct trading state at that bar."""
+        result = self.replay.seek(index)
+        self.reconstruct_trading(result["index"], symbol)
         return result
 
     def reset_replay(self, symbol: str) -> dict:
@@ -129,21 +139,23 @@ class ReplaySession:
                 "replayIndex": replay_index,
                 "payload": {"candle": deepcopy(candle), "index": replay_index, "symbol": symbol},
             })
-        self.replace_trading(rebuild_trading(
-            self.replay,
-            market_history,
-            replay_index,
-            default_symbol=symbol,
-            starting_balance=balance,
-            fee_rate=fee_rate,
-            margin_rate=margin_rate,
-            maint_margin_rate=maint_margin_rate,
-        ))
-        self.replace_history(market_history)
+        self.reconstruct_trading(replay_index, symbol, market_history)
 
     def reset(self, symbol: str) -> dict:
         """Compatibility alias for a full replay reset."""
         return self.reset_replay(symbol)
+
+    def clear_risk(self, symbol: str, target: str = "all"):
+        if target == "stopLoss":
+            position = self.trading.clear_stop_loss(symbol)
+        elif target == "takeProfit":
+            position = self.trading.clear_take_profit(symbol)
+        elif target == "all":
+            position = self.trading.clear_risk(symbol)
+        else:
+            raise ValueError("unsupported risk target")
+        self.record("clear_risk", self.replay.index, {"symbol": symbol, "target": target})
+        return position
 
     def submit_order(self, symbol, side, quantity, order_type="market", limit_price=None, stop_price=None):
         created = self.trading.submit(symbol, side, quantity, order_type, limit_price, stop_price, created_index=self.replay.index)
@@ -181,16 +193,6 @@ class ReplaySession:
     def set_risk(self, symbol, stop_loss=None, take_profit=None):
         position = self.trading.set_risk(symbol, stop_loss, take_profit)
         self.record("risk", self.replay.index, {"symbol": symbol, "stopLoss": stop_loss, "takeProfit": take_profit})
-        return position
-
-    def clear_risk(self, symbol, target="all"):
-        if target == "stopLoss":
-            position = self.trading.clear_stop_loss(symbol)
-        elif target == "takeProfit":
-            position = self.trading.clear_take_profit(symbol)
-        else:
-            position = self.trading.clear_risk(symbol)
-        self.record("clear_risk", self.replay.index, {"symbol": symbol, "target": target})
         return position
 
     def process_candle(self, candle, index, symbol, *, record=True):

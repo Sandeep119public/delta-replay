@@ -6,7 +6,7 @@ import { AppState } from '../state/AppState.js';
 import { RemoteReplayEngine } from './RemoteReplayEngine.js';
 import { RemoteTradingEngine } from './RemoteTradingEngine.js';
 import { BackendService } from './BackendService.js';
-import { SessionRequestQueue } from './SessionRequestQueue.js';
+import { SessionMutationPipeline } from './SessionMutationPipeline.js';
 import { getSessionId } from './sessionId.js';
 
 export function createCoreServices() {
@@ -23,11 +23,11 @@ export function createCoreServices() {
     chunkSize: 1000,
     strictMode: true,
   });
-  const requestQueue = new SessionRequestQueue();
-  const replayApi = new BackendService('replay', sessionId, requestQueue);
-  const tradingApi = new BackendService('trading', sessionId, requestQueue);
-  const backtestApi = new BackendService('backtest', sessionId, requestQueue);
-  const tradingEngine = new RemoteTradingEngine(tradingApi);
-  const engine = new RemoteReplayEngine(replayApi, tradingEngine, () => appState.symbol);
-  return { tradingEngine, engine, appState, candleStore, candleCache, dataManager, replayApi, tradingApi, backtestApi, sessionId };
+  const mutationPipeline = new SessionMutationPipeline();
+  const replayApi = new BackendService('replay', sessionId);
+  const tradingApi = new BackendService('trading', sessionId);
+  const backtestApi = new BackendService('backtest', sessionId);
+  const tradingEngine = new RemoteTradingEngine(tradingApi, mutationPipeline);
+  const engine = new RemoteReplayEngine(replayApi, tradingEngine, () => appState.symbol, mutationPipeline);
+  return { tradingEngine, engine, appState, candleStore, candleCache, dataManager, replayApi, tradingApi, backtestApi, mutationPipeline, sessionId };
 }

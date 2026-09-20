@@ -1,13 +1,13 @@
-from copy import deepcopy
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, model_validator
 
 from ..domain.errors import StateInvariantError
-from ..models import Candle
+from ..domain.execution import EXECUTION_MODEL
 from ..services.paper_engine import PaperTradingEngine
-from ..services.replay_timeline import ReplayDivergenceError, rebuild_trading
+from ..models import Candle
+from ..services.replay_timeline import ReplayDivergenceError
 from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
@@ -81,17 +81,11 @@ def snapshot(service: PaperTradingEngine):
     orders = list(state["orders"].values())
     return {
         **state,
+        "executionModel": EXECUTION_MODEL,
         "positions": list(state["positions"].values()),
         "orders": orders,
         "pendingOrders": [order for order in orders if order["status"] == "PENDING"],
     }
-
-
-def replay_candle(session, symbol: str):
-    candle = session.replay.state().get("candle")
-    if not candle:
-        raise HTTPException(409, "Load data and start replay before trading")
-    return candle
 
 
 def require_active_replay(session, action: str):
@@ -261,12 +255,7 @@ def risk(request: Request, command: RiskRequest):
 @router.post("/risk/clear")
 def clear_risk(request: Request, symbol: str, target: Literal["all", "stopLoss", "takeProfit"] = "all"):
     def clear(session):
-        if target == "stopLoss":
-            position = session.trading.clear_stop_loss(symbol)
-        elif target == "takeProfit":
-            position = session.trading.clear_take_profit(symbol)
-        else:
-            position = session.trading.clear_risk(symbol)
+        position = session.clear_risk(symbol, target)
         return {"position": position, **snapshot(session.trading)}
     try:
         return atomic_session(request, clear)

@@ -153,3 +153,50 @@ def test_replay_session_order_records_as_one_command():
 
     assert order["status"] == "PENDING"
     assert [event["type"] for event in session.history] == ["market_step", "order"]
+
+
+def test_replay_session_reconstruction_is_deterministic():
+    candles = [
+        {"time": 1, "open": 100, "high": 101, "low": 99, "close": 100},
+        {"time": 2, "open": 100, "high": 103, "low": 98, "close": 102},
+        {"time": 3, "open": 102, "high": 104, "low": 101, "close": 103},
+    ]
+
+    first = ReplaySession()
+    first.load(candles)
+    first.start(0, "BTCUSDT")
+    first.step("BTCUSDT")
+    first.submit_order("BTCUSDT", "buy", 1)
+    first.seek(2, "BTCUSDT")
+
+    second = ReplaySession()
+    second.load(candles)
+    second.start(0, "BTCUSDT")
+    second.step("BTCUSDT")
+    second.submit_order("BTCUSDT", "buy", 1)
+    second.seek(2, "BTCUSDT")
+
+    assert first.replay.export_state() == second.replay.export_state()
+    assert first.trading.export_state() == second.trading.export_state()
+    assert first.trading.export_market_state() == second.trading.export_market_state()
+    assert first.history == second.history
+
+
+def test_replay_session_owns_risk_clear_command_and_rebuilds_it():
+    session = ReplaySession()
+    session.load([
+        {"time": 1, "open": 100, "high": 101, "low": 99, "close": 100},
+        {"time": 2, "open": 100, "high": 102, "low": 98, "close": 101},
+    ])
+    session.start(0, "BTCUSDT")
+    session.submit_order("BTCUSDT", "buy", 1)
+    session.step("BTCUSDT")
+    session.set_risk("BTCUSDT", 95, 110)
+
+    session.clear_risk("BTCUSDT", "stopLoss")
+
+    assert session.trading.positions["BTCUSDT"]["stop_loss"] is None
+    assert session.trading.positions["BTCUSDT"]["take_profit"] == 110
+    assert session.history[-1]["type"] == "clear_risk"
+    session.seek(1, "BTCUSDT")
+    assert session.trading.positions["BTCUSDT"]["stop_loss"] is None
