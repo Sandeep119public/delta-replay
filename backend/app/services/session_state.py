@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 from .paper_engine import PaperTradingEngine
 from .replay_service import ReplayService
+from .replay_timeline import ReplayDivergenceError, validate_history
 
 
 SESSION_STATE_VERSION = 2
@@ -33,58 +34,10 @@ def _validate_json_safety(document: Dict[str, Any]) -> None:
 
 
 def _validate_history(history, *, replay_index=None) -> None:
-    if not isinstance(history, list):
-        raise ValueError("session history must be a list")
-    last_replay_index = -1
-    market_context_keys = set()
-    market_step_indexes = set()
-    first_type_by_index = {}
-    non_market_seen_by_index = set()
-    for item in history:
-        if not isinstance(item, dict):
-            raise ValueError("session history entries must be objects")
-        event_type = item.get("type")
-        if not isinstance(event_type, str) or event_type not in VALID_HISTORY_TYPES:
-            raise ValueError("unsupported session history event type")
-        index = item.get("replayIndex")
-        if isinstance(index, bool) or not isinstance(index, int) or index < -1:
-            raise ValueError("session history replayIndex is invalid")
-        if index < last_replay_index:
-            raise ValueError("session history must be ordered by replayIndex")
-        if replay_index is not None and index > replay_index:
-            raise ValueError("session history contains an event beyond replay index")
-        payload = item.get("payload")
-        if not isinstance(payload, dict):
-            raise ValueError("session history payload must be an object")
-        if index not in first_type_by_index:
-            first_type_by_index[index] = event_type
-        if event_type in MARKET_EVENT_TYPES:
-            if index < 0:
-                raise ValueError(f"{event_type} cannot use replayIndex -1")
-            if index in non_market_seen_by_index:
-                raise ValueError(f"market context at replay index {index} must precede trading commands")
-            symbol = payload.get("symbol")
-            if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
-                raise ValueError(f"{event_type} symbol is invalid")
-            key = (index, symbol)
-            if key in market_context_keys:
-                raise ValueError(f"multiple market context events exist for {symbol} at replay index {index}")
-            market_context_keys.add(key)
-            if event_type == "market_step":
-                if index in market_step_indexes:
-                    raise ValueError(f"multiple market events exist for replay index {index}")
-                market_step_indexes.add(index)
-                if first_type_by_index[index] != "market_step":
-                    raise ValueError(f"market_step at replay index {index} must be first")
-            else:
-                candle_index = payload.get("index")
-                if isinstance(candle_index, bool) or not isinstance(candle_index, int) or candle_index != index:
-                    raise ValueError("candle index must match replayIndex")
-                if first_type_by_index[index] not in MARKET_EVENT_TYPES:
-                    raise ValueError(f"market context at replay index {index} must follow the timeline event")
-        else:
-            non_market_seen_by_index.add(index)
-        last_replay_index = index
+    try:
+        validate_history(history, replay_index_limit=replay_index)
+    except ReplayDivergenceError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, market_state: dict) -> None:

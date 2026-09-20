@@ -4,6 +4,7 @@ from .paper_engine import PaperTradingEngine
 
 
 MARKET_EVENT_TYPES = {"market_step", "candle"}
+VALID_HISTORY_TYPES = {"order", "close", "cancel", "cancel_all", "risk", "clear_risk", "funding", "market_step", "candle", "capital", "fee_rate"}
 
 
 def latest_market_step_symbol(history):
@@ -88,53 +89,63 @@ def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> No
         raise ReplayDivergenceError(f"replay command {kind} diverged: {exc}") from exc
 
 
-def _validate_history_order(history) -> None:
+def validate_history(history, *, replay_index_limit=None) -> None:
+    """Validate persisted command history and canonical market-event ordering."""
+    if not isinstance(history, list):
+        raise ReplayDivergenceError("session history must be a list")
+
     last_replay_index = -1
     market_context_keys = set()
     market_step_indexes = set()
     first_type_by_index = {}
     non_market_seen_by_index = set()
+
     for command in history:
         if not isinstance(command, dict):
-            raise ReplayDivergenceError("replay history entry must be an object")
-        replay_index = command.get("replayIndex")
-        if isinstance(replay_index, bool) or not isinstance(replay_index, int) or replay_index < -1:
-            raise ReplayDivergenceError("command replayIndex is invalid")
-        if replay_index < last_replay_index:
-            raise ReplayDivergenceError("command history is not ordered by replay index")
-        kind = command.get("type")
-        if replay_index not in first_type_by_index:
-            first_type_by_index[replay_index] = kind
-        if kind in MARKET_EVENT_TYPES:
-            if replay_index < 0:
-                raise ReplayDivergenceError(f"{kind} replayIndex must be non-negative")
-            if replay_index in non_market_seen_by_index:
-                raise ReplayDivergenceError(f"market context at replay index {replay_index} must precede trading commands")
-            payload = command.get("payload")
-            if not isinstance(payload, dict):
-                raise ReplayDivergenceError(f"{kind} payload must be an object")
+            raise ReplayDivergenceError("session history entries must be objects")
+        event_type = command.get("type")
+        if not isinstance(event_type, str) or event_type not in VALID_HISTORY_TYPES:
+            raise ReplayDivergenceError("unsupported session history event type")
+        index = command.get("replayIndex")
+        if isinstance(index, bool) or not isinstance(index, int) or index < -1:
+            raise ReplayDivergenceError("session history replayIndex is invalid")
+        if index < last_replay_index:
+            raise ReplayDivergenceError("session history is not ordered by replayIndex")
+        if replay_index_limit is not None and index > replay_index_limit:
+            raise ReplayDivergenceError("session history contains an event beyond replay index")
+        payload = command.get("payload")
+        if not isinstance(payload, dict):
+            raise ReplayDivergenceError("session history payload must be an object")
+        if index not in first_type_by_index:
+            first_type_by_index[index] = event_type
+
+        if event_type in MARKET_EVENT_TYPES:
+            if index < 0:
+                raise ReplayDivergenceError(f"{event_type} cannot use replayIndex -1")
+            if index in non_market_seen_by_index:
+                raise ReplayDivergenceError(f"market context at replay index {index} must precede trading commands")
             symbol = payload.get("symbol")
             if not isinstance(symbol, str) or not symbol.strip() or symbol != symbol.strip().upper():
-                raise ReplayDivergenceError(f"{kind} symbol is invalid")
-            key = (replay_index, symbol)
+                raise ReplayDivergenceError(f"{event_type} symbol is invalid")
+            key = (index, symbol)
             if key in market_context_keys:
-                raise ReplayDivergenceError(f"multiple market context events exist for {symbol} at replay index {replay_index}")
+                raise ReplayDivergenceError(f"multiple market context events exist for {symbol} at replay index {index}")
             market_context_keys.add(key)
-            if kind == "market_step":
-                if replay_index in market_step_indexes:
-                    raise ReplayDivergenceError(f"multiple market events exist for replay index {replay_index}")
-                market_step_indexes.add(replay_index)
-                if first_type_by_index[replay_index] != "market_step":
-                    raise ReplayDivergenceError(f"market_step at replay index {replay_index} must be first")
+            if event_type == "market_step":
+                if index in market_step_indexes:
+                    raise ReplayDivergenceError(f"multiple market events exist for replay index {index}")
+                market_step_indexes.add(index)
+                if first_type_by_index[index] != "market_step":
+                    raise ReplayDivergenceError(f"market_step at replay index {index} must be first")
             else:
                 candle_index = payload.get("index")
-                if isinstance(candle_index, bool) or not isinstance(candle_index, int) or candle_index != replay_index:
+                if isinstance(candle_index, bool) or not isinstance(candle_index, int) or candle_index != index:
                     raise ReplayDivergenceError("candle index must match replayIndex")
-                if first_type_by_index[replay_index] not in MARKET_EVENT_TYPES:
-                    raise ReplayDivergenceError(f"market context at replay index {replay_index} must follow the timeline event")
+                if first_type_by_index[index] not in MARKET_EVENT_TYPES:
+                    raise ReplayDivergenceError(f"market context at replay index {index} must follow the timeline event")
         else:
-            non_market_seen_by_index.add(replay_index)
-        last_replay_index = replay_index
+            non_market_seen_by_index.add(index)
+        last_replay_index = index
 
 
 def rebuild_trading(
@@ -165,7 +176,7 @@ def rebuild_trading(
         maint_margin_rate=maint_margin_rate,
     )
     history = list(history or [])
-    _validate_history_order(history)
+    validate_history(history)
 
     if target_index == -1:
         for command in history:
