@@ -117,5 +117,5 @@ export class RemoteTradingEngine {
   setFeeRate(rate) { return this._action('/account/fee-rate', { method: 'POST', body: JSON.stringify({ rate }) }, 'fee'); }
   async onMarketCandle(payload = null) { if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; const candle = payload?.candle || null; const body = candle ? JSON.stringify({ symbol: String(payload.symbol || candle.symbol || 'BTCUSDT').toUpperCase(), candle, index: payload.index ?? null }) : undefined; try { const result = await this._request('/candle', { method: 'POST', ...(body ? { body } : {}) }, 'candle'); return this._destroyed ? { success: false, message: 'Trading engine is destroyed' } : result.applied ? result.response : { success: true, ...this.getStateSnapshot(), stale: true }; } catch (error) { return { success: false, message: error?.message || 'Trading request failed', error }; }
   }
-  destroy() { if (this._destroyed) return; this._destroyed = true; this._generation++; this._requestSequence++; this._pendingRequests.clear(); this.events = new Events(); this.latestCandle = null; }
+  destroy() { if (this._destroyed) return; this._destroyed = true; this.events = new Events(); this.latestCandle = null; }
 }
