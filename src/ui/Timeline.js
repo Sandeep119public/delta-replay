@@ -18,13 +18,8 @@ export class Timeline {
     this._onCommit = null;
     this._onStartHere = null;
     this._markers = [];
-    try {
-      this.markersEl = typeof document !== 'undefined' ? document.getElementById('timeline-markers') : null;
-      this.startHereBtn = typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null;
-    } catch {
-      this.markersEl = null;
-      this.startHereBtn = null;
-    }
+    this.markersEl = typeof document !== 'undefined' ? document.getElementById('timeline-markers') : null;
+    this.startHereBtn = typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null;
     this._onInput = () => {
       const idx = this._clampIndex(this.slider.value);
       this.slider.value = String(idx);
@@ -63,15 +58,13 @@ export class Timeline {
 
   onStartHere(fn) {
     this._onStartHere = typeof fn === 'function' ? fn : null;
-    try {
-      const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
-      if (btn && !btn.dataset.wired) {
-        btn.dataset.wired = '1';
-        this.startHereBtn = btn;
-        this._onStartHereClick = () => this._onStartHere?.(this.getSelectedIndex());
-        btn.addEventListener('click', this._onStartHereClick);
-      }
-    } catch {}
+    const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
+    if (btn && !btn.dataset.wired) {
+      btn.dataset.wired = '1';
+      this.startHereBtn = btn;
+      this._onStartHereClick = () => this._onStartHere?.(this.getSelectedIndex());
+      btn.addEventListener('click', this._onStartHereClick);
+    }
   }
 
   setMarkers(markers = []) {
@@ -80,27 +73,25 @@ export class Timeline {
   }
 
   _renderMarkers() {
-    try {
-      const el = this.markersEl || (typeof document !== 'undefined' ? document.getElementById('timeline-markers') : null);
-      if (!el) return;
-      this.markersEl = el;
-      while (el.firstChild) el.removeChild(el.firstChild);
-      if (!this._total || !this._markers.length) return;
-      const doc = el.ownerDocument || document;
-      for (const marker of this._markers) {
-        const rawIndex = Number(marker?.index);
-        if (!Number.isFinite(rawIndex)) continue;
-        const index = this._clampIndex(rawIndex);
-        const pct = this._total > 1 ? (index / (this._total - 1)) * 100 : 0;
-        const side = String(marker?.side ?? '').toUpperCase();
-        const node = doc.createElement('span');
-        node.className = `tl-marker ${side === 'SELL' || side === 'SHORT' ? 'is-short' : 'is-long'}`;
-        node.style.left = `${pct}%`;
-        node.title = `${side || 'TRADE'} @ #${index}`;
-        node.setAttribute('aria-label', node.title);
-        el.appendChild(node);
-      }
-    } catch {}
+    const el = this.markersEl || (typeof document !== 'undefined' ? document.getElementById('timeline-markers') : null);
+    if (!el) return;
+    this.markersEl = el;
+    while (el.firstChild) el.removeChild(el.firstChild);
+    if (!this._total || !this._markers.length) return;
+    const doc = el.ownerDocument || document;
+    for (const marker of this._markers) {
+      const rawIndex = Number(marker?.index);
+      if (!Number.isFinite(rawIndex)) continue;
+      const index = this._clampIndex(rawIndex);
+      const pct = this._total > 1 ? (index / (this._total - 1)) * 100 : 0;
+      const side = String(marker?.side ?? '').toUpperCase();
+      const node = doc.createElement('span');
+      node.className = `tl-marker ${side === 'SELL' || side === 'SHORT' ? 'is-short' : 'is-long'}`;
+      node.style.left = `${pct}%`;
+      node.title = `${side || 'TRADE'} @ #${index}`;
+      node.setAttribute('aria-label', node.title);
+      el.appendChild(node);
+    }
   }
 
   setTotal(total, candles = null) {
@@ -123,10 +114,8 @@ export class Timeline {
     this.slider.max = String(this._total - 1);
     const initialIndex = this._clampIndex(Math.floor(this._total * 0.5));
     this.slider.value = String(initialIndex);
-    try {
-      const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
-      if (btn) btn.disabled = false;
-    } catch {}
+    const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
+    if (btn) btn.disabled = false;
     this._updateLabels(initialIndex);
     if (this._times.length) {
       this._setText(this.startLabel, formatTime(this._times[0]));
