@@ -4,6 +4,18 @@ export function bindMobileNavigation({ documentRef = globalThis.document, window
   const sidebar = documentRef.getElementById('app-sidebar');
   let previousFocus = null;
 
+  const isMobile = () => {
+    try {
+      return windowRef.matchMedia?.('(max-width: 640px)')?.matches ?? windowRef.innerWidth <= 640;
+    } catch {
+      return windowRef.innerWidth <= 640;
+    }
+  };
+
+  const getFocusable = () => [...sidebar?.querySelectorAll?.(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  ) || []].filter((el) => !el.closest?.('[hidden], .hidden, .compat-control'));
+
   const setOpen = (open) => {
     const isOpen = Boolean(open);
     if (isOpen && !documentRef.body.classList.contains('nav-open')) {
@@ -14,14 +26,19 @@ export function bindMobileNavigation({ documentRef = globalThis.document, window
     toggle?.setAttribute('aria-expanded', String(isOpen));
     toggle?.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
     scrim?.setAttribute('aria-hidden', String(!isOpen));
+    if (sidebar) {
+      if (isMobile()) sidebar.setAttribute('aria-hidden', String(!isOpen));
+      else sidebar.removeAttribute('aria-hidden');
+    }
 
     if (isOpen) {
       requestAnimationFrame(() => {
         sidebar?.querySelector('.nav-link.active, .nav-link')?.focus?.();
       });
     } else if (previousFocus?.focus) {
-      requestAnimationFrame(() => previousFocus.focus());
+      const restore = previousFocus;
       previousFocus = null;
+      requestAnimationFrame(() => restore.focus());
     }
   };
 
@@ -29,9 +46,26 @@ export function bindMobileNavigation({ documentRef = globalThis.document, window
   const onScrim = () => setOpen(false);
   const onPageChange = () => setOpen(false);
   const onKeyDown = (event) => {
-    if (event.key === 'Escape' && documentRef.body.classList.contains('nav-open')) {
+    if (!documentRef.body.classList.contains('nav-open')) return;
+
+    if (event.key === 'Escape') {
       event.preventDefault();
       setOpen(false);
+      return;
+    }
+
+    if (event.key !== 'Tab') return;
+    const focusable = getFocusable();
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (event.shiftKey && documentRef.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && documentRef.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   };
 
