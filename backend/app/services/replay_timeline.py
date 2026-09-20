@@ -17,6 +17,17 @@ def latest_market_step_symbol(history):
     raise ReplayDivergenceError("replay history has no canonical market symbol")
 
 
+def latest_market_event_symbol(history):
+    """Return the symbol from the most recent canonical market event (step or candle)."""
+    for command in reversed(list(history or [])):
+        if command.get("type") not in MARKET_EVENT_TYPES:
+            continue
+        symbol = command.get("payload", {}).get("symbol")
+        if isinstance(symbol, str) and symbol.strip():
+            return symbol.strip().upper()
+    raise ReplayDivergenceError("replay history has no canonical market symbol")
+
+
 class ReplayDivergenceError(ValueError):
     """Raised when persisted commands cannot reproduce the trading state."""
 
