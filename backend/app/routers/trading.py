@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, model_validator
 
 from ..domain.errors import StateInvariantError
+from ..domain.execution import EXECUTION_MODEL
 from ..models import Candle
 from ..services.replay_timeline import ReplayDivergenceError
 from ..services.session_manager import atomic_session, get_session
@@ -79,6 +80,7 @@ def snapshot(service: PaperTradingEngine):
     orders = list(state["orders"].values())
     return {
         **state,
+        "executionModel": EXECUTION_MODEL,
         "positions": list(state["positions"].values()),
         "orders": orders,
         "pendingOrders": [order for order in orders if order["status"] == "PENDING"],
