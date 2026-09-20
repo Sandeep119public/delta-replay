@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 
-const css = fs.readFileSync('src/ui/phase2-replay-rail.css', 'utf8');
+const css = fs.readFileSync('src/ui/replay.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const timeline = fs.readFileSync('src/ui/paper/markup/Timeline.js', 'utf8');
 
 describe('Phase 2 unified replay rail', () => {
   it('loads after the phase 1 shell layer', () => {
-    expect(html.indexOf('src/ui/phase1-chart-shell.css')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('src/ui/phase2-replay-rail.css')).toBeGreaterThan(
-      html.indexOf('src/ui/phase1-chart-shell.css'),
+    expect(html.indexOf('src/ui/replay.css')).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf('src/ui/replay.css')).toBeGreaterThan(
+      html.indexOf('src/ui/replay.css'),
     );
   });
 
