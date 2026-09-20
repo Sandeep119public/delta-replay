@@ -383,17 +383,17 @@ def reset(request: Request):
         replay_index = session.replay.index
 
         if replay_index < 0:
-            session.trading = PaperTradingEngine(
+            session.replace_trading(PaperTradingEngine(
                 starting_balance=balance,
                 fee_rate=fee_rate,
                 margin_rate=margin_rate,
                 maint_margin_rate=maint_margin_rate,
-            )
-            session.history = [
+            ))
+            session.replace_history([
                 deepcopy(event)
                 for event in session.history
                 if event.get("type") in {"market_step", "candle"}
-            ]
+            ])
             return snapshot(session.trading)
 
         market_history = [
@@ -438,8 +438,8 @@ def reset(request: Request):
         except ReplayDivergenceError as exc:
             raise HTTPException(409, f"Unable to reset trading deterministically: {exc}") from exc
 
-        session.trading = fresh
-        session.history = market_history
+        session.replace_trading(fresh)
+        session.replace_history(market_history)
         return snapshot(fresh)
     try:
         return atomic_session(request, reset_engine)

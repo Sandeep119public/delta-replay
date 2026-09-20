@@ -60,13 +60,13 @@ def load(request: Request, batch: CandleBatch):
         require_pristine_trading(session, "loading new data", allow_replay_progress=True)
         trading = session.trading
         session.replay.load(candles)
-        session.trading = PaperTradingEngine(
+        session.replace_trading(PaperTradingEngine(
             starting_balance=trading.account.starting_balance,
             fee_rate=trading.fee_rate,
             margin_rate=trading.margin_rate,
             maint_margin_rate=trading.maint_margin_rate,
-        )
-        session.history = []
+        ))
+        session.replace_history([])
         return replay_snapshot(session)
 
     return atomic_session(request, replace)
@@ -121,7 +121,7 @@ def seek(request: Request, index: int, symbol: str | None = None):
         filtered_history = [item for item in session.history if item.get("replayIndex", -1) <= result["index"]]
         trading = session.trading
         try:
-            session.trading = rebuild_trading(
+            session.replace_trading(rebuild_trading(
                 session.replay,
                 filtered_history,
                 result["index"],
@@ -130,10 +130,10 @@ def seek(request: Request, index: int, symbol: str | None = None):
                 fee_rate=trading.fee_rate,
                 margin_rate=trading.margin_rate,
                 maint_margin_rate=trading.maint_margin_rate,
-            )
+            ))
         except ReplayDivergenceError as exc:
             raise HTTPException(409, f"Unable to deterministically replay this position: {exc}") from exc
-        session.history = filtered_history
+        session.replace_history(filtered_history)
         return replay_snapshot(session)
 
     try:
@@ -151,13 +151,13 @@ def reset(request: Request):
         margin_rate = trading.margin_rate
         maint_margin_rate = trading.maint_margin_rate
         symbol = _replay_symbol(session)
-        session.trading = PaperTradingEngine(
+        session.replace_trading(PaperTradingEngine(
             starting_balance=balance,
             fee_rate=fee_rate,
             margin_rate=margin_rate,
             maint_margin_rate=maint_margin_rate,
-        )
-        session.history = []
+        ))
+        session.replace_history([])
         replay = session.replay.reset()
         if replay["index"] >= 0:
             session.trading.on_candle(replay["candle"], replay["index"], symbol)

@@ -1,5 +1,6 @@
 import pytest
 
+from app.services.replay_session import ReplaySession
 from app.services.replay_timeline import ReplayDivergenceError, ReplayTimeline
 
 
@@ -50,9 +51,7 @@ def test_timeline_replace_validates_before_commit():
 
 
 def test_session_history_is_a_projection_of_timeline():
-    from app.services.session_manager import SessionState
-
-    session = SessionState()
+    session = ReplaySession()
     session.record("market_step", 0, {"symbol": "BTCUSDT"})
 
     history = session.history
@@ -61,5 +60,23 @@ def test_session_history_is_a_projection_of_timeline():
     assert len(session.timeline) == 1
     assert len(session.history) == 1
 
-    session.history = [event("market_step", 0), event("market_step", 1)]
+    session.replace_history([event("market_step", 0), event("market_step", 1)])
     assert len(session.timeline) == 2
+
+
+def test_replay_session_replaces_trading_through_aggregate_boundary():
+    session = ReplaySession()
+    original = session.trading
+    replacement = session.trading.__class__()
+
+    session.replace_trading(replacement)
+
+    assert session.trading is replacement
+    assert session.trading is not original
+
+
+def test_replay_session_rejects_invalid_trading_replacement():
+    session = ReplaySession()
+
+    with pytest.raises(TypeError, match="PaperTradingEngine"):
+        session.replace_trading(object())
