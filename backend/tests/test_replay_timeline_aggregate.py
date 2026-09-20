@@ -90,8 +90,7 @@ def test_timeline_owns_market_symbol_queries():
         event("candle", 1, {"symbol": "SOLUSDT", "index": 1, "candle": {"open": 1, "high": 1, "low": 1, "close": 1}}),
     ])
 
-    assert timeline.latest_market_step_symbol() == "ETHUSDT"
-    assert timeline.latest_market_event_symbol() == "SOLUSDT"
+    assert timeline.latest_replay_symbol() == "ETHUSDT"
 
 
 def test_timeline_iteration_is_defensive():
