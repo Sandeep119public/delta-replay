@@ -347,7 +347,7 @@ def reset(request: Request):
     def reset_engine(session):
         symbol = _replay_symbol(session)
         try:
-            session.reset(symbol)
+            session.reset_trading(symbol)
         except ReplayDivergenceError as exc:
             raise HTTPException(409, f"Unable to reset trading deterministically: {exc}") from exc
         return snapshot(session.trading)
