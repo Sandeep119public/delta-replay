@@ -91,7 +91,6 @@ def test_timeline_owns_market_symbol_queries():
     ])
 
     assert timeline.latest_replay_symbol() == "ETHUSDT"
-    assert timeline.latest_market_context_symbol() == "SOLUSDT"
 
 
 def test_timeline_iteration_is_defensive():

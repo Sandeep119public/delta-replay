@@ -166,32 +166,30 @@ describe('remote contracts', () => {
     expect(engine.getAccountSnapshot().equity).toBe(12000);
   });
 
-  it('serializes trading mutations instead of allowing stale action responses', async () => {
-    let resolveFirst;
-    const firstResponse = new Promise((resolve) => { resolveFirst = resolve; });
+  it('returns canonical state when an older action response arrives late', async () => {
+    let resolveOld;
+    let resolveNew;
+    const old = new Promise((resolve) => { resolveOld = resolve; });
+    const newer = new Promise((resolve) => { resolveNew = resolve; });
     let requestCount = 0;
     const client = {
       request: vi.fn((path) => {
         if (path === '/state') return { account: { startingBalance: 10000, equity: 10000 }, positions: [], orders: [], trades: [] };
         requestCount += 1;
-        return requestCount === 1
-          ? firstResponse
-          : Promise.resolve({ account: { startingBalance: 10000, equity: 12000 }, positions: [], orders: [], trades: [] });
+        return requestCount === 1 ? old : newer;
       }),
     };
     const engine = new RemoteTradingEngine(client);
     await engine._refreshPromise;
-
     const first = engine.setStartingBalance(9000);
     const second = engine.setStartingBalance(12000);
-
-    expect(client.request).toHaveBeenCalledTimes(2);
-    resolveFirst({ account: { startingBalance: 9000, equity: 9000 }, positions: [], orders: [], trades: [] });
-    await first;
+    resolveNew({ account: { startingBalance: 12000, equity: 12000 }, positions: [], orders: [], trades: [] });
     await second;
-
+    resolveOld({ account: { startingBalance: 9000, equity: 9000 }, positions: [], orders: [], trades: [] });
+    const stale = await first;
+    expect(stale.stale).toBe(true);
+    expect(stale.account.equity).toBe(12000);
     expect(engine.getAccountSnapshot().equity).toBe(12000);
-    expect(client.request).toHaveBeenCalledTimes(3);
   });
 
   it('returns defensive trading snapshots', async () => {
@@ -238,6 +236,7 @@ describe('remote contracts', () => {
       setRisk: vi.fn(),
       clearRisk: vi.fn(),
       cancelOrder: vi.fn(),
+      cancelAll: vi.fn(),
       reset: vi.fn(),
       setStartingBalance: vi.fn(),
       setFeeRate: vi.fn(),

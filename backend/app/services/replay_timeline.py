@@ -24,24 +24,19 @@ class ReplayTimeline:
         return deepcopy(self._events)
 
     def latest_replay_symbol(self) -> str:
-        """Return the most recent canonical replay market-step symbol."""
+        """Return the symbol of the most recent immutable replay market step.
+
+        Supplemental symbol candles are deliberately excluded. They are market
+        context for trading reconstruction, not a change to the replay dataset's
+        active symbol.
+        """
         for command in reversed(self._events):
             if command.get("type") != "market_step":
                 continue
             symbol = command.get("payload", {}).get("symbol")
             if isinstance(symbol, str) and symbol.strip():
                 return symbol.strip().upper()
-        raise ReplayDivergenceError("replay history has no canonical market symbol")
-
-    def latest_market_context_symbol(self) -> str:
-        """Return the most recent canonical market-event symbol."""
-        for command in reversed(self._events):
-            if command.get("type") not in MARKET_EVENT_TYPES:
-                continue
-            symbol = command.get("payload", {}).get("symbol")
-            if isinstance(symbol, str) and symbol.strip():
-                return symbol.strip().upper()
-        raise ReplayDivergenceError("replay history has no canonical market symbol")
+        raise ReplayDivergenceError("replay history has no canonical replay symbol")
 
     def replace(self, events):
         candidate = [deepcopy(event) for event in (events or [])]

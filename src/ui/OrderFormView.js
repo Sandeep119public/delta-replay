@@ -23,16 +23,52 @@ export class OrderFormView {
   updateNotional() { const target = globalThis.document?.getElementById?.('qty-notional'); const qty = Number(this.qtyInput?.value); const mark = Number(this.trading?.snapshot?.().markPrice); if (!target || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(mark)) return; target.textContent = `≈ $${(qty * mark).toLocaleString(undefined, { maximumFractionDigits: 0 })}`; }
   async placeOrder(side) {
     if (this.busy || !this.trading) return { success: false, message: 'Order request already in progress' };
-    const quantity = Number(this.qtyInput?.value); const type = this.getOrderType(); const symbol = this.getSymbol();
-    if (!Number.isFinite(quantity) || quantity <= 0) { const message = 'Enter a valid quantity'; this.onError?.(message); return { success: false, message }; }
-    let action;
-    if (type === 'LIMIT') { const limitPrice = Number(this.limitPriceInput?.value); if (!Number.isFinite(limitPrice) || limitPrice <= 0) { const message = 'Enter a valid limit price'; this.onError?.(message); return { success: false, message }; } action = () => this.trading.actions.submitLimitOrder({ symbol, side, quantity, limitPrice }); }
-    else if (type === 'STOP_MARKET') { const stopPrice = Number(this.stopPriceInput?.value); if (!Number.isFinite(stopPrice) || stopPrice <= 0) { const message = 'Enter a valid stop price'; this.onError?.(message); return { success: false, message }; } action = () => this.trading.actions.submitStopOrder({ symbol, side, quantity, stopPrice }); }
-    else action = () => this.trading.actions.submitMarketOrder({ symbol, side, quantity });
-    this.busy = true; this.render();
-    try { const result = await action(); if (!result?.success) this.onError?.(result?.message || 'Order rejected'); else this.onSuccess?.(result); this.onRender?.(); return result; }
-    catch (error) { const message = error?.message || 'Order request failed'; this.onError?.(message); return { success: false, message }; }
-    finally { this.busy = false; this.render(); }
+    const quantity = Number(this.qtyInput?.value);
+    const type = this.getOrderType();
+    const symbol = this.getSymbol();
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      const message = 'Enter a valid quantity';
+      this.onError?.(message);
+      return { success: false, message };
+    }
+
+    let order;
+    if (type === 'LIMIT') {
+      const limitPrice = Number(this.limitPriceInput?.value);
+      if (!Number.isFinite(limitPrice) || limitPrice <= 0) {
+        const message = 'Enter a valid limit price';
+        this.onError?.(message);
+        return { success: false, message };
+      }
+      order = { symbol, side, quantity, type: 'limit', limitPrice };
+    } else if (type === 'STOP_MARKET') {
+      const stopPrice = Number(this.stopPriceInput?.value);
+      if (!Number.isFinite(stopPrice) || stopPrice <= 0) {
+        const message = 'Enter a valid stop price';
+        this.onError?.(message);
+        return { success: false, message };
+      }
+      order = { symbol, side, quantity, type: 'stop_market', stopPrice };
+    } else {
+      order = { symbol, side, quantity, type: 'market' };
+    }
+
+    this.busy = true;
+    this.render();
+    try {
+      const result = await this.trading.actions.submitOrder(order);
+      if (!result?.success) this.onError?.(result?.message || 'Order rejected');
+      else this.onSuccess?.(result);
+      this.onRender?.();
+      return result;
+    } catch (error) {
+      const message = error?.message || 'Order request failed';
+      this.onError?.(message);
+      return { success: false, message };
+    } finally {
+      this.busy = false;
+      this.render();
+    }
   }
   render() { const hasMarket = this.trading?.snapshot?.().hasMarket === true || this.trading?.snapshot?.().markPrice > 0; if (this.buyBtn) this.buyBtn.disabled = this.busy || !hasMarket; if (this.sellBtn) this.sellBtn.disabled = this.busy || !hasMarket; }
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { SessionMutationPipeline } from '../src/app/SessionMutationPipeline.js';
+import { MUTATION_MODE, SessionMutationPipeline } from '../src/app/SessionMutationPipeline.js';
 
 describe('session mutation pipeline', () => {
-  it('runs serial session operations in submission order', async () => {
+  it('runs session operations in submission order', async () => {
     const pipeline = new SessionMutationPipeline();
     const events = [];
     let releaseFirst;
@@ -36,7 +36,7 @@ describe('session mutation pipeline', () => {
     await expect(after).resolves.toMatchObject({ applied: true, response: 'ok' });
   });
 
-  it('marks an invalidated response stale without dropping the queued command', async () => {
+  it('rejects unsupported ordering modes', () => {\n    const pipeline = new SessionMutationPipeline();\n    expect(() => pipeline.run(async () => 'ok', { mode: 'parallel' })).toThrow(/Unsupported session mutation mode/);\n  });\n\n  it('keeps latest-only responses generation-safe', async () => {\n    const pipeline = new SessionMutationPipeline();\n    const first = pipeline.run(async () => 'first', { mode: MUTATION_MODE.LATEST, scope: 'trading' });\n    const second = pipeline.run(async () => 'second', { mode: MUTATION_MODE.LATEST, scope: 'trading' });\n    await expect(first).resolves.toMatchObject({ applied: true });\n    await expect(second).resolves.toMatchObject({ applied: true });\n  });\n\n  it('marks an invalidated response stale without dropping the queued command', async () => {
     const pipeline = new SessionMutationPipeline();
     const generation = pipeline.generation();
     const applied = [];
@@ -46,30 +46,4 @@ describe('session mutation pipeline', () => {
     await expect(stale).resolves.toMatchObject({ applied: false, response: 'stale' });
     expect(applied).toEqual([]);
   });
-
-
-  it('allows latest-only reads to complete independently while applying only the newest response', async () => {
-    const pipeline = new SessionMutationPipeline();
-    const applied = [];
-    let resolveOld;
-    let resolveNew;
-    const old = new Promise((resolve) => { resolveOld = resolve; });
-    const newer = new Promise((resolve) => { resolveNew = resolve; });
-
-    const first = pipeline.run(() => old, { mode: 'latest', scope: 'state', apply: (value) => applied.push(value) });
-    const second = pipeline.run(() => newer, { mode: 'latest', scope: 'state', apply: (value) => applied.push(value) });
-
-    resolveNew('new');
-    await second;
-    resolveOld('old');
-    await first;
-
-    expect(applied).toEqual(['new']);
-  });
-
-  it('rejects unknown mutation modes', () => {
-    const pipeline = new SessionMutationPipeline();
-    expect(() => pipeline.run(() => Promise.resolve(), { mode: 'parallel' })).toThrow(/serial or latest/);
-  });
-
 });

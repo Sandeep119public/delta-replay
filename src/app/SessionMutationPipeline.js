@@ -1,3 +1,5 @@
+const MUTATION_MODE = Object.freeze({ SERIAL: 'serial', LATEST: 'latest' });
+
 export class SessionMutationPipeline {
   constructor() {
     this._tail = null;
@@ -20,15 +22,10 @@ export class SessionMutationPipeline {
     generation = this._generation,
     apply = null,
     scope = 'default',
-    mode = 'serial',
+    serialize = true,
     canExecute = null,
   } = {}) {
-    if (mode !== 'serial' && mode !== 'latest') {
-      throw new TypeError('session mutation mode must be serial or latest');
-    }
-    if (this._destroyed) {
-      return Promise.resolve({ applied: false, stale: true, response: null });
-    }
+    if (this._destroyed) return Promise.resolve({ applied: false, stale: true, response: null });
 
     const sequence = ++this._nextSequence;
     const execute = async () => {
@@ -38,20 +35,26 @@ export class SessionMutationPipeline {
 
       const response = await operation();
       const latestSequence = this._latestSequence.get(scope) || 0;
-      const stale = mode === 'latest' && sequence < latestSequence;
+      const stale = mode === MUTATION_MODE.LATEST && sequence < latestSequence;
       const applied = !this._destroyed && !stale && generation === this._generation;
 
-      if (mode === 'latest' && !stale && !this._destroyed) {
-        this._latestSequence.set(scope, sequence);
-      }
+      if (mode === MUTATION_MODE.LATEST && !stale && !this._destroyed) this._latestSequence.set(scope, sequence);
       if (applied && typeof apply === 'function') apply(response);
       return { applied, stale, response };
     };
 
-    if (mode === 'latest') return execute();
+    if (mode === MUTATION_MODE.LATEST) return execute();
 
-    const next = this._tail ? this._tail.then(execute, execute) : execute();
-    this._tail = next.catch(() => undefined);
+    if (!this._tail) {
+      const next = execute();
+      const tracked = next.catch(() => undefined);
+      this._tail = tracked;
+      return next;
+    }
+
+    const next = this._tail.then(execute, execute);
+    const tracked = next.catch(() => undefined);
+    this._tail = tracked;
     return next;
   }
 
@@ -62,3 +65,6 @@ export class SessionMutationPipeline {
     this._latestSequence.clear();
   }
 }
+
+
+export { MUTATION_MODE };

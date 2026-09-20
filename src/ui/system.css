@@ -1,3 +1,6 @@
+/* Consolidated from the former phase stylesheets. Preserve source order within this layer. */
+
+/* phase6-command-surface.css */
 /* Phase 6: focused navigation + command surface.
  * The replay canvas remains the primary destination; secondary navigation is
  * available on demand through one keyboard-friendly command surface.
@@ -194,3 +197,49 @@
     backdrop-filter: none;
   }
 }
+
+/* phase7-final-system.css */
+/* Phase 7: final interaction and resilience guardrails. */
+
+/* Shared focus treatment for keyboard users. */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--paper-blue);
+  outline-offset: 2px;
+}
+
+/* Prevent flex/grid children from imposing horizontal overflow on the shell. */
+.topbar,
+.timeline-section,
+.controls-section,
+.phase6-command,
+.phase6-command-backdrop {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .topbar,
+  .timeline-section,
+  .controls-section {
+    max-width: 100%;
+  }
+
+  .phase6-command-search,
+  .phase6-command-item,
+  .controls-row {
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

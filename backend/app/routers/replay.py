@@ -21,7 +21,7 @@ def trading_api_snapshot(engine):
 
 def _replay_symbol(session, fallback="BTCUSDT"):
     try:
-        return session.timeline.latest_market_context_symbol()
+        return session.timeline.latest_replay_symbol()
     except ReplayDivergenceError:
         return fallback
 
@@ -33,7 +33,7 @@ def _active_replay_symbol(session, requested_symbol=None):
             raise HTTPException(422, "symbol must be provided")
         return symbol
     try:
-        return session.timeline.latest_market_context_symbol()
+        return session.timeline.latest_replay_symbol()
     except ReplayDivergenceError as exc:
         raise HTTPException(409, "Start the replay before advancing or seeking it") from exc
 
