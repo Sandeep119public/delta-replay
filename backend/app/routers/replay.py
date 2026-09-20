@@ -28,8 +28,8 @@ def require_pristine_trading(session, action, *, allow_replay_progress=False):
 
 
 def _replay_symbol(session, fallback="BTCUSDT"):
-    for command in session.history:
-        if command.get("type") != "market_step":
+    for command in reversed(session.history):
+        if command.get("type") not in {"market_step", "candle"}:
             continue
         symbol = command.get("payload", {}).get("symbol")
         if isinstance(symbol, str) and symbol.strip():
@@ -44,9 +44,14 @@ def _active_replay_symbol(session, requested_symbol=None):
             raise HTTPException(422, "symbol must be provided")
         return requested
 
-    if session.replay.index < 0:
-        raise HTTPException(409, "Start the replay before advancing or seeking it")
-    return _replay_symbol(session)
+    for command in reversed(session.history):
+        if command.get("type") not in {"market_step", "candle"}:
+            continue
+        symbol = command.get("payload", {}).get("symbol")
+        if isinstance(symbol, str) and symbol.strip():
+            return symbol.strip().upper()
+
+    raise HTTPException(409, "Start the replay before advancing or seeking it")
 
 
 @router.get("/state")
