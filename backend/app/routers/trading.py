@@ -309,33 +309,28 @@ def process(request: Request, command: MarketCandleRequest | None = None):
             raise HTTPException(409, "Load data and start replay before processing a market candle")
 
         active_symbol = _active_symbol(session, None)
-        if command.symbol is not None:
-            requested_symbol = str(command.symbol).strip().upper()
-            if requested_symbol != active_symbol:
-                raise HTTPException(
-                    409,
-                    "candle symbol must match the active replay symbol for deterministic history",
-                )
+        symbol = _active_symbol(session, command.symbol)
         if command.index is not None and command.index != replay_index:
             raise HTTPException(409, "candle index must match replay index for deterministic history")
 
-        expected = session.replay.candles[replay_index]
         if command.candle is None:
-            candle = normalize_candle(expected)
+            if symbol != active_symbol:
+                raise HTTPException(409, "a candle is required when processing a supplemental symbol")
+            candle = normalize_candle(session.replay.candles[replay_index])
         else:
             candle = normalize_candle(command.candle.model_dump())
-            if candle != expected:
-                raise HTTPException(
-                    409,
-                    "candle data must match the immutable replay candle for deterministic history",
-                )
+            if symbol == active_symbol:
+                expected = normalize_candle(session.replay.candles[replay_index])
+                if candle != expected:
+                    raise HTTPException(
+                        409,
+                        "candle data must match the immutable replay candle for deterministic history",
+                    )
 
         index = replay_index
-        existing = session.trading.get_latest_market(active_symbol)
+        existing = session.trading.get_latest_market(symbol)
         is_same_index_retry = existing is not None and existing.get("index") == index
-        events = session.trading.on_candle(candle, index, active_symbol)
-        if not is_same_index_retry:
-            session.record("candle", replay_index, {"candle": candle, "index": index, "symbol": active_symbol})
+        events = session.trading.on_candle(candle, index, symbol)
         return {"events": events, "candle": candle, **snapshot(session.trading)}
 
     try:
