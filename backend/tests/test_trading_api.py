@@ -21,7 +21,9 @@ def test_full_lifecycle():
     session = uuid4()
     assert client.post("/api/v1/replay/load", headers=h(session), json={"candles": CANDLES}).status_code == 200
     assert client.post("/api/v1/replay/start/0", headers=h(session)).status_code == 200
-    assert client.post("/api/v1/trading/order", headers=h(session), json={"symbol": "BTCUSDT", "side": "buy", "quantity": 1, "type": "market"}).status_code == 200
+    placed = client.post("/api/v1/trading/order", headers=h(session), json={"symbol": "BTCUSDT", "side": "buy", "quantity": 1, "type": "market"})
+    assert placed.status_code == 200
+    assert placed.json()["order"]["createdIndex"] == 0
     stepped = client.post("/api/v1/replay/step", headers=h(session))
     assert stepped.status_code == 200
     body = stepped.json()
@@ -45,6 +47,58 @@ def test_session_header_is_required():
     client = TestClient(app)
     assert client.get("/api/v1/trading/state").status_code == 400
     assert client.get("/api/v1/trading/state", headers={"X-Session-ID": "bad"}).status_code == 400
+
+
+def test_trading_reset_reanchors_to_current_replay_timeline():
+    client = TestClient(app)
+    session = uuid4()
+    candles = CANDLES + [
+        {"time": 4, "open": 120, "high": 140, "low": 110, "close": 130, "volume": 1},
+    ]
+    headers = h(session)
+
+    assert client.post("/api/v1/replay/load", headers=headers, json={"candles": candles}).status_code == 200
+    assert client.post("/api/v1/replay/start/0", headers=headers).status_code == 200
+    assert client.post("/api/v1/replay/step", headers=headers).status_code == 200
+    assert client.post("/api/v1/replay/step", headers=headers).status_code == 200
+    assert client.get("/api/v1/replay/state", headers=headers).json()["index"] == 2
+
+    reset = client.post("/api/v1/trading/reset", headers=headers)
+
+    assert reset.status_code == 200
+    reset_body = reset.json()
+    assert reset_body["index"] == 2
+    assert reset_body["orders"] == []
+    assert reset_body["positions"] == []
+    assert reset_body["equity"] if "equity" in reset_body else True
+
+    trading = manager.get(str(session)).trading
+    assert trading.index == 2
+    assert manager.get(str(session)).history == [
+        {
+            "type": "candle",
+            "replayIndex": 2,
+            "payload": {
+                "candle": candles[2],
+                "index": 2,
+                "symbol": "BTCUSDT",
+            },
+        }
+    ]
+
+    placed = client.post(
+        "/api/v1/trading/order",
+        headers=headers,
+        json={"symbol": "BTCUSDT", "side": "buy", "quantity": 1, "type": "market"},
+    )
+    assert placed.status_code == 200
+    assert placed.json()["order"]["createdIndex"] == 2
+
+    stepped = client.post("/api/v1/replay/step", headers=headers)
+    assert stepped.status_code == 200
+    body = stepped.json()
+    assert body["candle"]["close"] == 130
+    assert body["trading"]["positions"][0]["entryPrice"] == 120
 
 
 def test_reset_preserves_custom_trading_configuration():
