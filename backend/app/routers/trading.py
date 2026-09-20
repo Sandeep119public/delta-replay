@@ -167,18 +167,8 @@ def funding(request: Request):
 def order(request: Request, command: EngineOrder):
     def submit(session):
         require_active_replay(session, "placing an order")
-        service = session.trading
-        created = service.submit(
-            command.symbol,
-            command.side,
-            command.quantity,
-            command.type,
-            command.limitPrice,
-            command.stopPrice,
-            created_index=session.replay.index,
-        )
-        session.record("order", session.replay.index, {"symbol": command.symbol, "side": command.side, "quantity": command.quantity, "type": command.type, "limitPrice": command.limitPrice, "stopPrice": command.stopPrice})
-        return {"order": created, **snapshot(service)}
+        created = session.submit_order(command.symbol, command.side, command.quantity, command.type, command.limitPrice, command.stopPrice)
+        return {"order": created, **snapshot(session.trading)}
     try:
         return atomic_session(request, submit)
     except StateInvariantError as exc:
@@ -196,10 +186,9 @@ def close(request: Request, command: CloseRequest):
             raise HTTPException(409, f"No market price available for {command.symbol}")
         candle = market["candle"]
         price = float(candle["close"])
-        trade = session.trading.close(command.symbol, price, quantity=command.quantity, timestamp=candle.get("time"))
+        trade = session.close_position(command.symbol, price, quantity=command.quantity, timestamp=candle.get("time"))
         if not trade:
             raise HTTPException(422, "no open position")
-        session.record("close", session.replay.index, {"symbol": command.symbol, "quantity": command.quantity, "price": price, "timestamp": candle.get("time")})
         return {"trade": trade, **snapshot(session.trading)}
     try:
         return atomic_session(request, close_position)
@@ -218,10 +207,9 @@ def apply_funding(request: Request, command: FundingRequest):
                 pass
             else:
                 raise HTTPException(409, "Funding requires an open position")
-        events = session.trading.apply_funding(command.rate, timestamp=command.timestamp, symbol=command.symbol, mark_price=command.markPrice)
+        events = session.apply_funding(command.rate, timestamp=command.timestamp, symbol=command.symbol, mark_price=command.markPrice)
         if not events:
             raise HTTPException(409, "Funding requires an open position")
-        session.record("funding", session.replay.index, {"rate": command.rate, "timestamp": command.timestamp, "symbol": command.symbol, "markPrice": command.markPrice})
         return {"events": events, **snapshot(session.trading)}
     try:
         return atomic_session(request, apply)
@@ -234,17 +222,8 @@ def apply_funding(request: Request, command: FundingRequest):
 @router.post("/orders/cancel-all")
 def cancel_all(request: Request, reason: str | None = None):
     def cancel_pending(session):
-        service = session.trading
-        pending = list(service.pending_orders())
-        if not pending:
-            return {"orders": [], **snapshot(service)}
-        cancelled = [service.cancel(order["id"]) for order in pending]
-        if reason:
-            for order in cancelled:
-                order["cancelReason"] = str(reason)
-                service.orders[order["id"]]["cancelReason"] = str(reason)
-        session.record("cancel_all", session.replay.index, {"reason": str(reason) if reason else None})
-        return {"orders": cancelled, **snapshot(service)}
+        cancelled = session.cancel_all(reason)
+        return {"orders": cancelled, **snapshot(session.trading)}
     try:
         return atomic_session(request, cancel_pending)
     except StateInvariantError as exc:
@@ -256,8 +235,7 @@ def cancel_all(request: Request, reason: str | None = None):
 @router.post("/orders/{order_id}/cancel")
 def cancel(request: Request, order_id: int):
     def cancel_one(session):
-        order = session.trading.cancel(order_id)
-        session.record("cancel", session.replay.index, {"orderId": order_id})
+        order = session.cancel_order(order_id)
         return {"order": order, **snapshot(session.trading)}
     try:
         return atomic_session(request, cancel_one)
@@ -271,8 +249,7 @@ def cancel(request: Request, order_id: int):
 def risk(request: Request, command: RiskRequest):
     try:
         def set_risk(session):
-            position = session.trading.set_risk(command.symbol, command.stopLoss, command.takeProfit)
-            session.record("risk", session.replay.index, {"symbol": command.symbol, "stopLoss": command.stopLoss, "takeProfit": command.takeProfit})
+            position = session.set_risk(command.symbol, command.stopLoss, command.takeProfit)
             return {"position": position, **snapshot(session.trading)}
         return atomic_session(request, set_risk)
     except StateInvariantError as exc:
@@ -290,7 +267,6 @@ def clear_risk(request: Request, symbol: str, target: Literal["all", "stopLoss",
             position = session.trading.clear_take_profit(symbol)
         else:
             position = session.trading.clear_risk(symbol)
-        session.record("clear_risk", session.replay.index, {"symbol": symbol, "target": target})
         return {"position": position, **snapshot(session.trading)}
     try:
         return atomic_session(request, clear)
@@ -331,9 +307,7 @@ def process(request: Request, command: MarketCandleRequest | None = None):
         index = replay_index
         existing = session.trading.get_latest_market(symbol)
         is_same_index_retry = existing is not None and existing.get("index") == index
-        events = session.trading.on_candle(candle, index, symbol)
-        if not is_same_index_retry:
-            session.record("candle", replay_index, {"candle": candle, "index": index, "symbol": symbol})
+        events = session.process_candle(candle, index, symbol, record=not is_same_index_retry)
         return {"events": events, "candle": candle, **snapshot(session.trading)}
 
     try:
@@ -347,9 +321,7 @@ def process(request: Request, command: MarketCandleRequest | None = None):
 @router.post("/account/capital")
 def set_capital(request: Request, command: CapitalRequest):
     def change_capital(session):
-        service = session.trading.set_starting_balance(command.balance)
-        session.record("capital", -1, {"balance": command.balance})
-        return snapshot(service)
+        return snapshot(session.set_starting_balance(command.balance))
     try:
         return atomic_session(request, change_capital)
     except StateInvariantError as exc:
@@ -362,9 +334,7 @@ def set_capital(request: Request, command: CapitalRequest):
 def set_fee_rate(request: Request, command: FeeRateRequest):
     try:
         def change_fee(session):
-            result = session.trading.set_fee_rate(command.rate)
-            session.record("fee_rate", session.replay.index, {"rate": command.rate})
-            return snapshot(result)
+            return snapshot(session.set_fee_rate(command.rate))
         return atomic_session(request, change_fee)
     except StateInvariantError as exc:
         raise _internal_http_error(exc) from exc
@@ -375,75 +345,15 @@ def set_fee_rate(request: Request, command: FeeRateRequest):
 @router.post("/reset")
 def reset(request: Request):
     def reset_engine(session):
-        previous_trading = session.trading
-        balance = previous_trading.account.starting_balance
-        fee_rate = previous_trading.fee_rate
-        margin_rate = previous_trading.margin_rate
-        maint_margin_rate = previous_trading.maint_margin_rate
-        replay_index = session.replay.index
-
-        if replay_index < 0:
-            session.replace_trading(PaperTradingEngine(
-                starting_balance=balance,
-                fee_rate=fee_rate,
-                margin_rate=margin_rate,
-                maint_margin_rate=maint_margin_rate,
-            ))
-            session.replace_history([
-                deepcopy(event)
-                for event in session.history
-                if event.get("type") in {"market_step", "candle"}
-            ])
-            return snapshot(session.trading)
-
-        market_history = [
-            deepcopy(event)
-            for event in session.history
-            if event.get("type") in {"market_step", "candle"}
-        ]
         symbol = _replay_symbol(session)
-
-        has_current_context = any(
-            event.get("replayIndex") == replay_index
-            and event.get("payload", {}).get("symbol") == symbol
-            for event in market_history
-        )
-        if not has_current_context:
-            market = previous_trading.get_latest_market(symbol)
-            if market is not None and market.get("index") == replay_index:
-                candle = market["candle"]
-            else:
-                candle = session.replay.candles[replay_index]
-            market_history.append({
-                "type": "candle",
-                "replayIndex": replay_index,
-                "payload": {
-                    "candle": deepcopy(candle),
-                    "index": replay_index,
-                    "symbol": symbol,
-                },
-            })
-
         try:
-            fresh = rebuild_trading(
-                session.replay,
-                market_history,
-                replay_index,
-                default_symbol=symbol,
-                starting_balance=balance,
-                fee_rate=fee_rate,
-                margin_rate=margin_rate,
-                maint_margin_rate=maint_margin_rate,
-            )
+            session.reset(symbol)
         except ReplayDivergenceError as exc:
             raise HTTPException(409, f"Unable to reset trading deterministically: {exc}") from exc
-
-        session.replace_trading(fresh)
-        session.replace_history(market_history)
-        return snapshot(fresh)
+        return snapshot(session.trading)
     try:
         return atomic_session(request, reset_engine)
     except StateInvariantError as exc:
         raise _internal_http_error(exc) from exc
     except ValueError as exc:
-        raise HTTPException(422, str(exc))
+        raise HTTPException(409, str(exc))
