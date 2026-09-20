@@ -113,19 +113,23 @@ def _internal_http_error(exc: StateInvariantError) -> HTTPException:
     )
 
 
-def _active_symbol(session, requested_symbol):
-    if requested_symbol is not None:
-        symbol = str(requested_symbol).strip().upper()
-        if not symbol:
-            raise HTTPException(422, "symbol must be provided")
-        return symbol
-    for command in reversed(session.history):
-        if command.get("type") not in {"market_step", "candle"}:
+def _replay_symbol(session):
+    for command in session.history:
+        if command.get("type") != "market_step":
             continue
         symbol = command.get("payload", {}).get("symbol")
         if isinstance(symbol, str) and symbol.strip():
             return symbol.strip().upper()
     raise HTTPException(409, "Start the replay before processing a market candle")
+
+
+def _requested_market_symbol(session, requested_symbol):
+    if requested_symbol is not None:
+        symbol = str(requested_symbol).strip().upper()
+        if not symbol:
+            raise HTTPException(422, "symbol must be provided")
+        return symbol
+    return _replay_symbol(session)
 
 
 @router.get("/state")
@@ -302,15 +306,31 @@ def clear_risk(request: Request, symbol: str, target: Literal["all", "stopLoss",
 @router.post("/candle")
 def process(request: Request, command: MarketCandleRequest | None = None):
     command = command or MarketCandleRequest()
+
     def process_candle(session):
         replay_index = session.replay.state()["index"]
         if replay_index < 0:
             raise HTTPException(409, "Load data and start replay before processing a market candle")
-        symbol = _active_symbol(session, command.symbol)
+
+        replay_symbol = _replay_symbol(session)
+        symbol = _requested_market_symbol(session, command.symbol)
         if command.index is not None and command.index != replay_index:
             raise HTTPException(409, "candle index must match replay index for deterministic history")
-        raw = command.candle.model_dump() if command.candle is not None else replay_candle(session, symbol)
-        candle = normalize_candle(raw)
+
+        if command.candle is None:
+            if symbol != replay_symbol:
+                raise HTTPException(409, "a candle is required when processing a supplemental symbol")
+            candle = normalize_candle(session.replay.candles[replay_index])
+        else:
+            candle = normalize_candle(command.candle.model_dump())
+            if symbol == replay_symbol:
+                expected = normalize_candle(session.replay.candles[replay_index])
+                if candle != expected:
+                    raise HTTPException(
+                        409,
+                        "candle data must match the immutable replay candle for deterministic history",
+                    )
+
         index = replay_index
         existing = session.trading.get_latest_market(symbol)
         is_same_index_retry = existing is not None and existing.get("index") == index
@@ -318,6 +338,7 @@ def process(request: Request, command: MarketCandleRequest | None = None):
         if not is_same_index_retry:
             session.record("candle", replay_index, {"candle": candle, "index": index, "symbol": symbol})
         return {"events": events, "candle": candle, **snapshot(session.trading)}
+
     try:
         return atomic_session(request, process_candle)
     except StateInvariantError as exc:

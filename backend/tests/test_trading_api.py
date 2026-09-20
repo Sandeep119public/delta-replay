@@ -151,6 +151,33 @@ def test_market_candle_requires_an_active_replay_index():
     assert "start replay" in response.json()["detail"]
 
 
+def test_market_candle_requires_immutable_replay_data():
+    client = TestClient(app)
+    session = uuid4()
+    headers = h(session)
+
+    assert client.post("/api/v1/replay/load", headers=headers, json={"candles": CANDLES}).status_code == 200
+    assert client.post("/api/v1/replay/start/0", headers=headers).status_code == 200
+
+    forged = {**CANDLES[0], "close": 100.5}
+    response = client.post(
+        "/api/v1/trading/candle",
+        headers=headers,
+        json={"symbol": "BTCUSDT", "candle": forged, "index": 0},
+    )
+
+    assert response.status_code == 409
+    assert "immutable replay candle" in response.json()["detail"]
+    assert manager.get(str(session)).history == [
+        {
+            "type": "market_step",
+            "replayIndex": 0,
+            "payload": {"symbol": "BTCUSDT"},
+        }
+    ]
+    assert manager.get(str(session)).trading.get_latest_market("BTCUSDT")["candle"] == CANDLES[0]
+
+
 def test_order_requires_an_active_replay_index():
     client = TestClient(app)
     session = uuid4()
