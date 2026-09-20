@@ -46,7 +46,6 @@ describe('session mutation pipeline', () => {
     await expect(stale).resolves.toMatchObject({ applied: false, response: 'stale' });
     expect(applied).toEqual([]);
   });
-});
 
 
   it('allows latest-only reads to complete independently while applying only the newest response', async () => {
@@ -72,3 +71,5 @@ describe('session mutation pipeline', () => {
     const pipeline = new SessionMutationPipeline();
     expect(() => pipeline.run(() => Promise.resolve(), { mode: 'parallel' })).toThrow(/serial or latest/);
   });
+
+});
