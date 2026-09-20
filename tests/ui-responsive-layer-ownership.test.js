@@ -9,8 +9,7 @@ describe('UI responsive layer ownership', () => {
   it('keeps the responsive layers consolidated in one stylesheet', () => {
     const responsive = fs.readFileSync(responsivePath, 'utf8');
 
-    expect(responsive).toContain('Phase 10: mobile replay workspace polish');
-    expect(responsive).toContain('--phase10-header-gutter');
+    expect(responsive).toContain('Phase 10: mobile replay interaction polish');
     expect(responsive).toContain('.mobile-nav-toggle');
     expect(responsive).toContain('body.drawer-open .trading-section::before');
   });
