@@ -43,6 +43,7 @@ export class RemoteTradingEngine {
         generation: this.mutationPipeline.generation(),
         scope: 'trading',
         serialize: false,
+        canExecute: () => !this._destroyed,
         apply: (response) => this._sync(response, action, this.data),
       },
     );
