@@ -17,7 +17,7 @@ import { createReplayRuntime } from './createReplayRuntime.js';
 import { createTradingRuntime } from './createTradingRuntime.js';
 
 export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
-  const { appState, candleStore, engine, candleCache, dataManager, tradingEngine } = services;
+  const { appState, candleStore, engine, candleCache, dataManager, tradingEngine, mutationPipeline } = services;
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
@@ -102,6 +102,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     candleCache,
     resources: [
       replay.coordinator,
+      mutationPipeline,
       selectorBindings,
       timelineBindings,
       tradingRuntime.tradingBindings,
