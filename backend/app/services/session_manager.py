@@ -5,7 +5,6 @@ from uuid import UUID
 from fastapi import HTTPException, Request
 
 from .replay_session import ReplaySession
-from .replay_timeline import ReplayTimeline
 from .session_repository import InMemorySessionRepository, SessionRepository
 from .session_state import restore_replay_session, serialize_replay_session
 
