@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, m
 
 from ..domain.errors import StateInvariantError
 from ..domain.execution import EXECUTION_MODEL
+from ..services.paper_engine import PaperTradingEngine
 from ..models import Candle
 from ..services.replay_timeline import ReplayDivergenceError
 from ..services.session_manager import atomic_session, get_session
