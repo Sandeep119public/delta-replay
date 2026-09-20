@@ -170,6 +170,67 @@ def test_manual_candle_attaches_new_symbol_at_current_replay_index():
         manager.delete(session_id)
 
 
+def test_supplemental_symbol_does_not_replace_primary_replay_symbol():
+    session_id = str(uuid4())
+    headers = {"X-Session-ID": session_id}
+    payload = {"candles": [candle(1, 100), candle(2, 102), candle(3, 104)]}
+
+    try:
+        assert client.post("/api/v1/replay/load", headers=headers, json=payload).status_code == 200
+        assert client.post("/api/v1/replay/start/0", headers=headers, params={"symbol": "BTCUSDT"}).status_code == 200
+        supplemental = client.post(
+            "/api/v1/trading/candle",
+            headers=headers,
+            json={"symbol": "ETHUSDT", "candle": candle(1, 200), "index": 0},
+        )
+        assert supplemental.status_code == 200
+
+        reset = client.post("/api/v1/replay/reset", headers=headers)
+        assert reset.status_code == 200
+        assert reset.json()["trading"]["index"] == 0
+        assert reset.json()["trading"]["positions"] == []
+        assert reset.json()["candle"] == candle(1, 100)
+
+        stepped = client.post("/api/v1/replay/step", headers=headers)
+        assert stepped.status_code == 200
+        assert stepped.json()["candle"] == candle(2, 102)
+        assert stepped.json()["trading"]["index"] == 1
+        assert stepped.json()["trading"]["positions"] == []
+    finally:
+        from app.services.session_manager import manager
+        manager.delete(session_id)
+
+
+def test_trading_reset_preserves_primary_replay_symbol_after_supplemental_event():
+    session_id = str(uuid4())
+    headers = {"X-Session-ID": session_id}
+    payload = {"candles": [candle(1, 100), candle(2, 102), candle(3, 104)]}
+
+    try:
+        assert client.post("/api/v1/replay/load", headers=headers, json=payload).status_code == 200
+        assert client.post("/api/v1/replay/start/0", headers=headers, params={"symbol": "BTCUSDT"}).status_code == 200
+        supplemental = client.post(
+            "/api/v1/trading/candle",
+            headers=headers,
+            json={"symbol": "ETHUSDT", "candle": candle(1, 200), "index": 0},
+        )
+        assert supplemental.status_code == 200
+
+        reset = client.post("/api/v1/trading/reset", headers=headers)
+        assert reset.status_code == 200
+        trading = reset.json()
+        assert trading["index"] == 0
+        assert trading["positions"] == []
+
+        stepped = client.post("/api/v1/replay/step", headers=headers)
+        assert stepped.status_code == 200
+        assert stepped.json()["candle"] == candle(2, 102)
+        assert stepped.json()["trading"]["index"] == 1
+    finally:
+        from app.services.session_manager import manager
+        manager.delete(session_id)
+
+
 def test_manual_candle_same_symbol_retry_does_not_duplicate_history():
     session_id = str(uuid4())
     headers = {"X-Session-ID": session_id}

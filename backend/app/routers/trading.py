@@ -404,16 +404,7 @@ def reset(request: Request):
             for event in session.history
             if event.get("type") in {"market_step", "candle"}
         ]
-        symbol = next(
-            (
-                event["payload"]["symbol"]
-                for event in reversed(market_history)
-                if isinstance(event.get("payload"), dict)
-                and isinstance(event["payload"].get("symbol"), str)
-                and event["payload"]["symbol"].strip()
-            ),
-            "BTCUSDT",
-        )
+        symbol = _replay_symbol(session)
 
         has_current_context = any(
             event.get("replayIndex") == replay_index
