@@ -200,7 +200,7 @@ export class RemoteReplayEngine {
     }
 
     const generation = ++this._generation;
-    return this._enqueueMutation(async () => {
+    return (async () => {
       const result = await this._call(
         `/seek/${numericIndex}?symbol=${encodeURIComponent(this.currentSymbol())}`,
         { method: 'POST' },
@@ -220,7 +220,7 @@ export class RemoteReplayEngine {
     this.pause();
 
     const generation = ++this._generation;
-    return this._enqueueMutation(async () => {
+    return (async () => {
       const result = await this._call('/reset', { method: 'POST' }, generation, 'reset');
 
       if (!this._destroyed && generation === this._generation) {
