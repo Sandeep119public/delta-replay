@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 
-const css = fs.readFileSync('src/ui/phase7-final-system.css', 'utf8');
+const css = fs.readFileSync('src/ui/system.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const application = fs.readFileSync('src/app/Application.js', 'utf8');
 const runtime = fs.readFileSync('src/app/createApplicationRuntime.js', 'utf8');
@@ -9,8 +9,8 @@ const appShell = fs.readFileSync('src/ui/paper/markup/AppShell.js', 'utf8');
 
 describe('Phase 7 final UI system cleanup', () => {
   it('loads the final interaction layer before later responsive refinements', () => {
-    expect(html.indexOf('src/ui/phase7-final-system.css')).toBeGreaterThan(html.indexOf('src/ui/phase6-command-surface.css'));
-    expect(html.indexOf('src/ui/phase8-responsive-final.css')).toBeGreaterThan(html.indexOf('src/ui/phase7-final-system.css'));
+    expect(html.indexOf('src/ui/system.css')).toBeGreaterThan(html.indexOf('src/ui/system.css'));
+    expect(html.indexOf('src/ui/responsive.css')).toBeGreaterThan(html.indexOf('src/ui/system.css'));
   });
 
   it('does not hide active application navigation or routed data pages', () => {
