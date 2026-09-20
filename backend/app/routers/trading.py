@@ -165,7 +165,15 @@ def order(request: Request, command: EngineOrder):
     def submit(session):
         require_active_replay(session, "placing an order")
         service = session.trading
-        created = service.submit(command.symbol, command.side, command.quantity, command.type, command.limitPrice, command.stopPrice)
+        created = service.submit(
+            command.symbol,
+            command.side,
+            command.quantity,
+            command.type,
+            command.limitPrice,
+            command.stopPrice,
+            created_index=session.replay.index,
+        )
         session.record("order", session.replay.index, {"symbol": command.symbol, "side": command.side, "quantity": command.quantity, "type": command.type, "limitPrice": command.limitPrice, "stopPrice": command.stopPrice})
         return {"order": created, **snapshot(service)}
     try:
