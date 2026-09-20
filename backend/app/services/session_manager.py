@@ -102,7 +102,7 @@ class SessionManager:
             session = ReplaySession()
             self.repository.save(
                 session_id,
-                serialize_session(session.replay, session.trading, session.history),
+                serialize_replay_session(session),
             )
 
     def delete(self, session_id: str) -> None:
