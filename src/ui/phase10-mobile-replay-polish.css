@@ -1,0 +1,270 @@
+/* Phase 10: mobile replay workstation polish.
+ * Owns the small-screen replay chrome only. It fixes the app-shell navigation
+ * collision, gives the replay setup a predictable two-row header, and reserves
+ * space for transport controls so the timeline slider remains directly usable.
+ */
+
+@media (max-width: 640px) {
+  .page-host {
+    position: relative;
+  }
+
+  .mobile-nav-toggle {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    z-index: 70;
+  }
+
+  #page-replay.active .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 40px 44px;
+    min-height: 96px;
+    height: 96px;
+    gap: 4px 8px;
+    padding: 4px 8px;
+  }
+
+  #page-replay.active .topbar-left {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    padding-left: 48px;
+  }
+
+  #page-replay.active .logo {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 15px;
+    letter-spacing: .12em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #page-replay.active .topbar-right {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  #page-replay.active .topbar-right .phase6-command-trigger {
+    min-width: 88px;
+    min-height: 40px;
+    padding-inline: 9px;
+    font-size: 9px;
+  }
+
+  #page-replay.active .topbar-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  #page-replay.active .selector-group {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  #page-replay.active .selector-group label {
+    display: none;
+  }
+
+  #page-replay.active .symbol-group select {
+    width: 88px;
+  }
+
+  #page-replay.active .tf-group select {
+    width: 64px;
+  }
+
+  #page-replay.active .date-group {
+    display: none;
+  }
+
+  #page-replay.active #header-start-replay-btn {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    margin-left: auto;
+    padding: 0;
+    font-size: 0;
+    border-radius: 10px;
+  }
+
+  #page-replay.active #header-start-replay-btn::before {
+    content: '▶';
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  #page-replay.active .timeline-section {
+    grid-template-columns: minmax(92px, .78fr) minmax(0, 1.65fr);
+    grid-template-rows: 24px 28px 24px 48px;
+    grid-template-areas:
+      "meta header"
+      "meta chart"
+      "meta slider"
+      "meta spacer";
+    gap: 2px 8px;
+    padding: 7px 8px 0;
+    min-height: 124px;
+  }
+
+  #page-replay.active .timeline-header {
+    min-width: 0;
+    gap: 6px;
+    font-size: 7px;
+  }
+
+  #page-replay.active #timeline-current-label {
+    font-size: 10px;
+  }
+
+  #page-replay.active #timeline-sparkline {
+    height: 28px;
+  }
+
+  #page-replay.active #timeline-slider {
+    min-height: 24px;
+  }
+
+  #page-replay.active .timeline-meta {
+    align-content: start;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    padding-top: 1px;
+    font-size: 8px;
+  }
+
+  #page-replay.active #timeline-start-btn {
+    justify-self: start;
+    min-height: 32px;
+    padding-inline: 9px;
+    font-size: 8px;
+  }
+
+  #page-replay.active #start-index-label {
+    line-height: 1.25;
+  }
+
+  #page-replay.active #start-time-label,
+  #page-replay.active #timeline-index-label,
+  #page-replay.active #timeline-time-label {
+    display: none;
+  }
+
+  #page-replay.active .controls-section {
+    position: absolute;
+    inset: auto 0 0 92px;
+    width: auto;
+    height: 48px;
+    padding: 4px 8px;
+    border-top: 1px solid var(--paper-line);
+    background: rgba(255, 253, 248, .98);
+    box-shadow: -8px -5px 18px rgba(77, 64, 42, .06);
+  }
+
+  #page-replay.active .controls-row {
+    justify-content: center;
+    gap: 5px;
+  }
+
+  #page-replay.active .replay-primary .replay-play {
+    min-width: 72px;
+    min-height: 40px;
+    padding-inline: 10px;
+  }
+
+  #page-replay.active .replay-secondary button {
+    min-width: 48px;
+    min-height: 40px;
+    padding-inline: 6px;
+  }
+
+  #page-replay.active #speed-select {
+    min-width: 56px;
+    min-height: 40px;
+  }
+
+  #page-replay.active .replay-follow,
+  #page-replay.active #replay-status {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  #page-replay.active .topbar-left {
+    padding-left: 46px;
+  }
+
+  #page-replay.active .topbar-right .phase6-command-trigger {
+    min-width: 80px;
+    padding-inline: 7px;
+  }
+
+  #page-replay.active .symbol-group select {
+    width: 82px;
+  }
+
+  #page-replay.active .tf-group select {
+    width: 60px;
+  }
+
+  #page-replay.active .timeline-section {
+    grid-template-columns: minmax(88px, .78fr) minmax(0, 1.65fr);
+  }
+
+  #page-replay.active .controls-section {
+    left: 88px;
+  }
+
+  #page-replay.active .replay-primary .replay-play {
+    min-width: 68px;
+  }
+
+  #page-replay.active .replay-secondary button {
+    min-width: 44px;
+  }
+}
+
+@media (max-width: 360px) {
+  #page-replay.active .topbar-left {
+    padding-left: 44px;
+  }
+
+  #page-replay.active .topbar-right .phase6-command-trigger {
+    min-width: 44px;
+    width: 44px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  #page-replay.active .topbar-right .phase6-command-trigger::before {
+    content: '⋯';
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  #page-replay.active .symbol-group select {
+    width: 76px;
+  }
+
+  #page-replay.active .tf-group select {
+    width: 58px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-nav-toggle {
+    transition: none;
+  }
+}
