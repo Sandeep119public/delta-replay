@@ -240,7 +240,7 @@ describe('remote contracts', () => {
       cancelOrder: vi.fn(),
       cancelAll: vi.fn(),
       reset: vi.fn(),
-      setStartingBalance: vi.fn(),
+      setCapital: vi.fn(),
       setFeeRate: vi.fn(),
     };
     const trading = createTradingPresentation(engine);
