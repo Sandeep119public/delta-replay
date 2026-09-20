@@ -36,12 +36,14 @@ describe('session mutation pipeline', () => {
     await expect(after).resolves.toMatchObject({ applied: true, response: 'ok' });
   });
 
-  it('invalidates queued work before it can mutate state', async () => {
+  it('marks an invalidated response stale without dropping the queued command', async () => {
     const pipeline = new SessionMutationPipeline();
     const generation = pipeline.generation();
-    const stale = pipeline.run(async () => 'stale', { generation });
+    const applied = [];
+    const stale = pipeline.run(async () => 'stale', { generation, apply: (value) => applied.push(value) });
     pipeline.invalidate();
 
-    await expect(stale).resolves.toMatchObject({ applied: false });
+    await expect(stale).resolves.toMatchObject({ applied: false, response: 'stale' });
+    expect(applied).toEqual([]);
   });
 });
