@@ -4,6 +4,10 @@
  */
 
 @media (max-width: 640px) {
+  #app {
+    position: relative;
+  }
+
   /* The navigation control belongs to the application shell, not the browser
      viewport. Keeping it in page coordinates prevents it from sitting on top
      of the replay header when the page is mounted below the app shell. */
