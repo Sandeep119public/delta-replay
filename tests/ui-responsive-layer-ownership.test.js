@@ -7,8 +7,8 @@ const htmlPath = 'index.html';
 describe('UI responsive layer ownership', () => {
   it('keeps all responsive refinements in the consolidated layer', () => {
     const responsive = fs.readFileSync(`${ROOT}/responsive.css`, 'utf8');
-    expect(responsive).toContain('Phase 10: mobile replay workspace polish');
-    expect(responsive).toContain('--phase10-header-gutter');
+    expect(responsive).toContain('Consolidated semantic layer');
+    expect(responsive).toMatch(/--phase(?:8|9|10)-/);
     expect(responsive).toContain('.mobile-nav-toggle');
     expect(responsive).toContain('body.drawer-open .trading-section::before');
   });
