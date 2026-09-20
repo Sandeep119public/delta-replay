@@ -126,7 +126,7 @@ def restore_session_bundle(document: Dict[str, Any]):
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"invalid session state: {exc}") from exc
     history = [] if version == 1 else deepcopy(document.get("history", []))
-    _validate_history(history, replay_index_limit=replay.index)
+    _validate_history(history, replay_index=replay.index)
     if version >= 3:
         simulation = document.get("simulation")
         if not isinstance(simulation, dict):
