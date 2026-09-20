@@ -153,3 +153,21 @@ def test_replay_session_order_records_as_one_command():
 
     assert order["status"] == "PENDING"
     assert [event["type"] for event in session.history] == ["market_step", "order"]
+
+
+def test_replay_session_seek_rebuilds_owned_trading_state():
+    session = ReplaySession()
+    session.load([
+        {"time": 1, "open": 100, "high": 101, "low": 99, "close": 100},
+        {"time": 2, "open": 100, "high": 102, "low": 98, "close": 101},
+        {"time": 3, "open": 101, "high": 103, "low": 100, "close": 102},
+    ])
+    session.start(0, "BTCUSDT")
+    session.step("BTCUSDT")
+    session.submit_order("BTCUSDT", "buy", 1)
+
+    session.seek(0, "BTCUSDT")
+
+    assert session.replay.index == 0
+    assert session.trading.index == 0
+    assert session.history == [{"type": "market_step", "replayIndex": 0, "payload": {"symbol": "BTCUSDT"}}]
