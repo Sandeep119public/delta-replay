@@ -195,16 +195,6 @@ class ReplaySession:
         self.record("risk", self.replay.index, {"symbol": symbol, "stopLoss": stop_loss, "takeProfit": take_profit})
         return position
 
-    def clear_risk(self, symbol, target="all"):
-        if target == "stopLoss":
-            position = self.trading.clear_stop_loss(symbol)
-        elif target == "takeProfit":
-            position = self.trading.clear_take_profit(symbol)
-        else:
-            position = self.trading.clear_risk(symbol)
-        self.record("clear_risk", self.replay.index, {"symbol": symbol, "target": target})
-        return position
-
     def process_candle(self, candle, index, symbol, *, record=True):
         events = self.trading.on_candle(candle, index, symbol)
         if record:
