@@ -22,6 +22,37 @@ def candle(o, h, l, c, t=1):
     return {"open": o, "high": h, "low": l, "close": c, "time": t}
 
 
+def test_dataset_write_locks_before_existence_check():
+    class Result:
+        def fetchone(self):
+            return {"dataset_id": "existing"}
+
+    class Connection:
+        def __init__(self):
+            self.lock_acquired = False
+            self.queries = []
+
+        def execute(self, sql, params=None):
+            self.queries.append(sql)
+            if "pg_advisory_xact_lock" in sql:
+                self.lock_acquired = True
+            elif "SELECT 1 FROM replay_datasets" in sql and not self.lock_acquired:
+                raise AssertionError("dataset existence must be checked under the GC lock")
+            return Result()
+
+    replay = ReplayService()
+    replay.load([candle(100, 105, 95, 102)])
+    document = serialize_session(replay, PaperTradingEngine())
+    connection = Connection()
+
+    prepared = PostgresSessionRepository._prepare_storage_document(connection, document)
+
+    assert prepared["replay"]["datasetId"] == document["replay"]["datasetId"]
+    assert "candles" not in prepared["replay"]
+    assert "pg_advisory_xact_lock" in connection.queries[0]
+    assert "SELECT 1 FROM replay_datasets" in connection.queries[1]
+
+
 def test_postgres_round_trip_and_revisioning():
     repository = PostgresSessionRepository(os.environ["DATABASE_URL"])
     session_id = str(uuid4())
