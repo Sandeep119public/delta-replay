@@ -124,3 +124,32 @@ def test_timeline_iteration_returns_a_fresh_snapshot_each_time():
 
     assert first is not second
     assert first == second
+
+
+def test_replay_session_load_and_start_own_mutation_and_history():
+    session = ReplaySession()
+    candles = [
+        {"time": 1, "open": 100, "high": 101, "low": 99, "close": 100},
+        {"time": 2, "open": 100, "high": 102, "low": 98, "close": 101},
+    ]
+
+    session.load(candles)
+    session.start(0, "BTCUSDT")
+
+    assert session.replay.index == 0
+    assert session.trading.index == 0
+    assert session.history[0]["type"] == "market_step"
+
+
+def test_replay_session_order_records_as_one_command():
+    session = ReplaySession()
+    session.load([
+        {"time": 1, "open": 100, "high": 101, "low": 99, "close": 100},
+        {"time": 2, "open": 100, "high": 102, "low": 98, "close": 101},
+    ])
+    session.start(0, "BTCUSDT")
+
+    order = session.submit_order("BTCUSDT", "buy", 1)
+
+    assert order["status"] == "PENDING"
+    assert [event["type"] for event in session.history] == ["market_step", "order"]
