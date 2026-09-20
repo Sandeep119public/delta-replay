@@ -61,7 +61,7 @@ def test_postgres_round_trip_and_revisioning():
     replay.load([candle(100, 105, 95, 102)])
     replay.start(0)
     trading = PaperTradingEngine(starting_balance=25000)
-    document = serialize_session(replay, trading)
+    document = serialize_replay_session(ReplaySession(replay=replay, trading=trading))
 
     try:
         repository.save(session_id, document)
