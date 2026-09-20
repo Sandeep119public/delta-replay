@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from ..models import CandleBatch
+from ..domain.execution import EXECUTION_MODEL
 from ..services.replay_timeline import ReplayDivergenceError
 from ..services.session_manager import atomic_session, get_session
 
@@ -39,7 +40,7 @@ def _active_replay_symbol(session, requested_symbol=None):
 
 @router.get("/state")
 def state(request: Request):
-    return get_session(request).replay.state()
+    return {**get_session(request).replay.state(), "executionModel": EXECUTION_MODEL}
 
 
 @router.post("/load")
@@ -100,4 +101,4 @@ def reset(request: Request):
 
 
 def replay_snapshot(session, replay_state):
-    return {**replay_state, "trading": trading_api_snapshot(session.trading)}
+    return {**replay_state, "executionModel": EXECUTION_MODEL, "trading": trading_api_snapshot(session.trading)}
