@@ -89,36 +89,50 @@ class ReplaySession:
         self.replace_history(filtered_history)
         return result
 
-    def reset(self, symbol: str) -> dict:
-        """Reset trading while retaining the current market context."""
+    def reset_replay(self, symbol: str) -> dict:
+        """Reset replay and trading together, preserving simulation configuration."""
+        replay = self.replay.reset()
+        self.replace_trading(self._new_trading())
+        if replay["index"] >= 0:
+            self.trading.on_candle(replay["candle"], replay["index"], symbol)
+            self.replace_history([{
+                "type": "market_step",
+                "replayIndex": replay["index"],
+                "payload": {"symbol": symbol},
+            }])
+        else:
+            self.replace_history([])
+        return replay
+
+    def reset_trading(self, symbol: str) -> None:
+        """Reset only trading state while retaining the current replay position."""
         previous = self.trading
+        replay_index = self.replay.index
         balance = previous.account.starting_balance
         fee_rate = previous.fee_rate
         margin_rate = previous.margin_rate
         maint_margin_rate = previous.maint_margin_rate
-        replay = self.replay.reset()
-        if replay["index"] < 0:
+        if replay_index < 0:
             self.replace_trading(PaperTradingEngine(balance, fee_rate, margin_rate, maint_margin_rate))
-            self.replace_history([])
-            return replay
-
+            self.replace_history([deepcopy(event) for event in self.history if event.get("type") in {"market_step", "candle"}])
+            return
         market_history = [deepcopy(event) for event in self.history if event.get("type") in {"market_step", "candle"}]
         has_context = any(
-            event.get("replayIndex") == replay["index"] and event.get("payload", {}).get("symbol") == symbol
+            event.get("replayIndex") == replay_index and event.get("payload", {}).get("symbol") == symbol
             for event in market_history
         )
         if not has_context:
             market = previous.get_latest_market(symbol)
-            candle = market["candle"] if market and market.get("index") == replay["index"] else self.replay.candles[replay["index"]]
+            candle = market["candle"] if market and market.get("index") == replay_index else self.replay.candles[replay_index]
             market_history.append({
                 "type": "candle",
-                "replayIndex": replay["index"],
-                "payload": {"candle": deepcopy(candle), "index": replay["index"], "symbol": symbol},
+                "replayIndex": replay_index,
+                "payload": {"candle": deepcopy(candle), "index": replay_index, "symbol": symbol},
             })
         self.replace_trading(rebuild_trading(
             self.replay,
             market_history,
-            replay["index"],
+            replay_index,
             default_symbol=symbol,
             starting_balance=balance,
             fee_rate=fee_rate,
@@ -126,7 +140,10 @@ class ReplaySession:
             maint_margin_rate=maint_margin_rate,
         ))
         self.replace_history(market_history)
-        return replay
+
+    def reset(self, symbol: str) -> dict:
+        """Compatibility alias for a full replay reset."""
+        return self.reset_replay(symbol)
 
     def submit_order(self, symbol, side, quantity, order_type="market", limit_price=None, stop_price=None):
         created = self.trading.submit(symbol, side, quantity, order_type, limit_price, stop_price, created_index=self.replay.index)
