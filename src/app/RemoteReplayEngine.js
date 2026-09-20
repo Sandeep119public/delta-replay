@@ -42,8 +42,6 @@ export class RemoteReplayEngine {
     this._generation = 0;
     this._playIntent = 0;
     this._destroyed = false;
-    this._mutationQueue = [];
-    this._mutationRunning = false;
     this.state = {
       status: 'idle',
       currentIndex: -1,
@@ -94,40 +92,6 @@ export class RemoteReplayEngine {
     return this.getState();
   }
 
-  _enqueueMutation(operation) {
-    if (this._destroyed) return Promise.resolve(this.getState());
-
-    return new Promise((resolve, reject) => {
-      this._mutationQueue.push({ operation, resolve, reject });
-      void this._drainMutations();
-    });
-  }
-
-  async _drainMutations() {
-    if (this._mutationRunning) return;
-
-    this._mutationRunning = true;
-    try {
-      while (this._mutationQueue.length) {
-        const item = this._mutationQueue.shift();
-        if (this._destroyed) {
-          item.resolve(this.getState());
-          continue;
-        }
-
-        try {
-          item.resolve(await item.operation());
-        } catch (error) {
-          item.reject(error);
-        }
-      }
-    } finally {
-      this._mutationRunning = false;
-      if (this._mutationQueue.length && !this._destroyed) {
-        void this._drainMutations();
-      }
-    }
-  }
 
   getState() {
     return {
@@ -153,12 +117,12 @@ export class RemoteReplayEngine {
     const generation = ++this._generation;
     const payload = Array.isArray(candles) ? clone(candles) : [];
 
-    return this._enqueueMutation(() => this._call(
+    return this._call(
       '/load',
       { method: 'POST', body: JSON.stringify({ candles: payload }) },
       generation,
       'load',
-    ));
+    );
   }
 
   start(index = 0, symbol = null) {
@@ -173,7 +137,7 @@ export class RemoteReplayEngine {
     if (!normalizedSymbol) throw new TypeError('Replay symbol must be provided');
 
     const generation = ++this._generation;
-    return this._enqueueMutation(async () => {
+    return (async () => {
       const result = await this._call(
         `/start/${numericIndex}?symbol=${encodeURIComponent(normalizedSymbol)}`,
         { method: 'POST' },
@@ -201,7 +165,7 @@ export class RemoteReplayEngine {
     const generation = this._generation;
     const previousIndex = this.state.currentIndex;
 
-    return this._enqueueMutation(async () => {
+    return (async () => {
       try {
         const normalizedSymbol = symbol == null ? null : String(symbol).trim().toUpperCase();
         const query = normalizedSymbol ? `?symbol=${encodeURIComponent(normalizedSymbol)}` : '';
@@ -248,7 +212,7 @@ export class RemoteReplayEngine {
         this.events.emit('seeked', { index: this.state.currentIndex, state: result });
       }
       return result;
-    });
+    })();
   }
 
   reset() {
@@ -263,7 +227,7 @@ export class RemoteReplayEngine {
         this.events.emit('reset', { index: this.state.currentIndex, state: result });
       }
       return result;
-    });
+    })();
   }
 
   async play() {
@@ -350,9 +314,6 @@ export class RemoteReplayEngine {
     this._destroyed = true;
     this._generation++;
 
-    for (const item of this._mutationQueue.splice(0)) {
-      item.resolve(this.getState());
-    }
 
     this.events = new Events();
     this.tradingEngine = null;
