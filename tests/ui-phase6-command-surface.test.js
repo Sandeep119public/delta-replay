@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 
-const css = fs.readFileSync('src/ui/phase6-command-surface.css', 'utf8');
+const css = fs.readFileSync('src/ui/system.css', 'utf8');
 const commandSurface = fs.readFileSync('src/ui/CommandSurface.js', 'utf8');
 const runtime = fs.readFileSync('src/app/createApplicationRuntime.js', 'utf8');
 const application = fs.readFileSync('src/app/Application.js', 'utf8');
@@ -11,7 +11,7 @@ const navigationPath = 'src/ui/Navigation.js';
 
 describe('Phase 6 command surface', () => {
   it('loads the command layer after the responsive sheet layer', () => {
-    expect(html.indexOf('src/ui/phase6-command-surface.css')).toBeGreaterThan(html.indexOf('src/ui/phase5-mobile-sheets.css'));
+    expect(html.indexOf('src/ui/system.css')).toBeGreaterThan(html.indexOf('src/ui/mobile.css'));
   });
 
   it('keeps replay as the primary shell and removes the unused side navigation', () => {
