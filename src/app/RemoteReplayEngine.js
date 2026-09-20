@@ -1,4 +1,4 @@
-import { SessionMutationPipeline } from './SessionMutationPipeline.js';
+import { MUTATION_MODE, SessionMutationPipeline } from './SessionMutationPipeline.js';
 
 class Events {
   constructor() {
