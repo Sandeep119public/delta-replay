@@ -38,4 +38,9 @@ def test_ambiguous_bar_uses_conservative_stop_first_policy():
 
 def test_unknown_execution_policy_is_rejected():
     with pytest.raises(ValueError, match="unsupported execution policy"):
-        evaluate(position(), {"time": 2, "open": 100, "high": 115, "low": 85, "close": 105}, 1, execution_policy="UNKNOWN")
+        evaluate(
+            position(),
+            {"time": 2, "open": 100, "high": 115, "low": 85, "close": 105},
+            1,
+            execution_policy="UNKNOWN",
+        )

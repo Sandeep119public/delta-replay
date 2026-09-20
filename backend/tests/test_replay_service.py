@@ -39,3 +39,52 @@ def test_restore_rejects_start_index_ahead_of_current_cursor():
 
     with pytest.raises(ValueError, match="replay start index cannot exceed current index"):
         ReplayService.from_state(state)
+
+
+
+def test_start_does_not_implicitly_process_a_second_candle():
+    service = ReplayService()
+    service.load([candle(0), candle(1), candle(2)])
+
+    state = service.start(1)
+
+    assert state["index"] == 1
+    assert state["candle"]["time"] == 2
+    assert state["visibleCandles"][-1]["time"] == 2
+
+
+def test_step_is_idempotent_at_end():
+    service = ReplayService()
+    service.load([candle(0), candle(1)])
+    service.start(1)
+
+    first = service.step()
+    second = service.step()
+
+    assert first == second
+    assert second["index"] == 1
+    assert second["status"] == "ended"
+
+
+def test_seek_and_reset_are_deterministic():
+    service = ReplayService()
+    service.load([candle(0), candle(1), candle(2)])
+    service.start(0)
+    service.seek(2)
+
+    reset = service.reset()
+
+    assert reset["index"] == 0
+    assert reset["startIndex"] == 0
+    assert reset["status"] == "paused"
+
+
+def test_from_state_rejects_invalid_timeline_cursor():
+    service = ReplayService()
+    service.load([candle(0), candle(1), candle(2)])
+    service.start(0)
+    state = service.export_state()
+    state["index"] = 3
+
+    with pytest.raises(ValueError, match="outside candle range"):
+        ReplayService.from_state(state)
