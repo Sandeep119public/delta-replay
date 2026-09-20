@@ -10,21 +10,6 @@ from .replay_timeline import ReplayDivergenceError, validate_history
 
 SESSION_STATE_VERSION = 2
 SUPPORTED_SESSION_STATE_VERSIONS = {1, SESSION_STATE_VERSION}
-VALID_HISTORY_TYPES = {
-    "order",
-    "close",
-    "cancel",
-    "cancel_all",
-    "risk",
-    "clear_risk",
-    "funding",
-    "market_step",
-    "candle",
-    "capital",
-    "fee_rate",
-}
-MARKET_EVENT_TYPES = {"market_step", "candle"}
-
 
 def _validate_json_safety(document: Dict[str, Any]) -> None:
     try:
