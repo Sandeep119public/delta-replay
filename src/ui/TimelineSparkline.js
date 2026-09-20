@@ -72,15 +72,13 @@ export class TimelineSparkline {
   destroy() {
     if (!this._attached) return;
     this._attached = false;
-    try {
-      this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[TimelineSparkline] unsubscribe failed', error); } });
-      this._subscriptions = [];
-      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') window.removeEventListener('resize', this._onResize);
-      this._ro?.disconnect?.();
-      this.canvas?.removeEventListener?.('click', this._boundClick);
-      this.canvas?.removeEventListener?.('touchstart', this._boundTouchStart);
-      this.canvas?.removeEventListener?.('touchmove', this._boundTouchMove);
-    } catch {}
+    this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[TimelineSparkline] unsubscribe failed', error); } });
+    this._subscriptions = [];
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') window.removeEventListener('resize', this._onResize);
+    this._ro?.disconnect?.();
+    this.canvas?.removeEventListener?.('click', this._boundClick);
+    this.canvas?.removeEventListener?.('touchstart', this._boundTouchStart);
+    this.canvas?.removeEventListener?.('touchmove', this._boundTouchMove);
     this._ro = null;
     this.onSeek = null;
     this.replayPort = null;
