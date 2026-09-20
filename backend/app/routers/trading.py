@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -6,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, m
 from ..domain.errors import StateInvariantError
 from ..models import Candle
 from ..services.paper_engine import PaperTradingEngine
+from ..services.replay_timeline import ReplayDivergenceError, rebuild_trading
 from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
@@ -165,7 +167,15 @@ def order(request: Request, command: EngineOrder):
     def submit(session):
         require_active_replay(session, "placing an order")
         service = session.trading
-        created = service.submit(command.symbol, command.side, command.quantity, command.type, command.limitPrice, command.stopPrice)
+        created = service.submit(
+            command.symbol,
+            command.side,
+            command.quantity,
+            command.type,
+            command.limitPrice,
+            command.stopPrice,
+            created_index=session.replay.index,
+        )
         session.record("order", session.replay.index, {"symbol": command.symbol, "side": command.side, "quantity": command.quantity, "type": command.type, "limitPrice": command.limitPrice, "stopPrice": command.stopPrice})
         return {"order": created, **snapshot(service)}
     try:
@@ -347,13 +357,81 @@ def set_fee_rate(request: Request, command: FeeRateRequest):
 @router.post("/reset")
 def reset(request: Request):
     def reset_engine(session):
-        balance = session.trading.account.starting_balance
-        fee_rate = session.trading.fee_rate
-        margin_rate = session.trading.margin_rate
-        maint_margin_rate = session.trading.maint_margin_rate
-        session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate, margin_rate=margin_rate, maint_margin_rate=maint_margin_rate)
-        session.history = []
-        return snapshot(session.trading)
+        previous_trading = session.trading
+        balance = previous_trading.account.starting_balance
+        fee_rate = previous_trading.fee_rate
+        margin_rate = previous_trading.margin_rate
+        maint_margin_rate = previous_trading.maint_margin_rate
+        replay_index = session.replay.index
+
+        if replay_index < 0:
+            session.trading = PaperTradingEngine(
+                starting_balance=balance,
+                fee_rate=fee_rate,
+                margin_rate=margin_rate,
+                maint_margin_rate=maint_margin_rate,
+            )
+            session.history = [
+                deepcopy(event)
+                for event in session.history
+                if event.get("type") in {"market_step", "candle"}
+            ]
+            return snapshot(session.trading)
+
+        market_history = [
+            deepcopy(event)
+            for event in session.history
+            if event.get("type") in {"market_step", "candle"}
+        ]
+        symbol = next(
+            (
+                event["payload"]["symbol"]
+                for event in reversed(market_history)
+                if isinstance(event.get("payload"), dict)
+                and isinstance(event["payload"].get("symbol"), str)
+                and event["payload"]["symbol"].strip()
+            ),
+            "BTCUSDT",
+        )
+
+        has_current_context = any(
+            event.get("replayIndex") == replay_index
+            and event.get("payload", {}).get("symbol") == symbol
+            for event in market_history
+        )
+        if not has_current_context:
+            market = previous_trading.get_latest_market(symbol)
+            if market is not None and market.get("index") == replay_index:
+                candle = market["candle"]
+            else:
+                candle = session.replay.candles[replay_index]
+            market_history.append({
+                "type": "candle",
+                "replayIndex": replay_index,
+                "payload": {
+                    "candle": deepcopy(candle),
+                    "index": replay_index,
+                    "symbol": symbol,
+                },
+            })
+
+        try:
+            fresh = rebuild_trading(
+                session.replay,
+                market_history,
+                replay_index,
+                default_symbol=symbol,
+                starting_balance=balance,
+                fee_rate=fee_rate,
+                margin_rate=margin_rate,
+                maint_margin_rate=maint_margin_rate,
+            )
+        except ReplayDivergenceError as exc:
+            raise HTTPException(409, f"Unable to reset trading deterministically: {exc}") from exc
+
+        session.trading = fresh
+        session.history = market_history
+        return snapshot(fresh)
     try:
         return atomic_session(request, reset_engine)
     except StateInvariantError as exc:
