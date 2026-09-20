@@ -331,6 +331,8 @@ def process(request: Request, command: MarketCandleRequest | None = None):
         existing = session.trading.get_latest_market(symbol)
         is_same_index_retry = existing is not None and existing.get("index") == index
         events = session.trading.on_candle(candle, index, symbol)
+        if not is_same_index_retry:
+            session.record("candle", replay_index, {"candle": candle, "index": index, "symbol": symbol})
         return {"events": events, "candle": candle, **snapshot(session.trading)}
 
     try:
