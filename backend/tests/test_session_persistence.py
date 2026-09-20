@@ -212,7 +212,7 @@ def test_restore_rejects_non_finite_persisted_numbers():
     document["trading"]["account"]["walletBalance"] = nan
 
     with pytest.raises(ValueError, match="JSON-safe"):
-        restore_session(document)
+        restore_replay_session(document)
 
 
 def test_restore_rejects_inconsistent_replay_lifecycle_state():
@@ -229,12 +229,12 @@ def test_restore_rejects_inconsistent_replay_lifecycle_state():
     }
 
     with pytest.raises(ValueError, match="ready replay"):
-        restore_session(base)
+        restore_replay_session(base)
 
     base["replay"]["status"] = "paused"
     base["replay"]["startIndex"] = -1
     with pytest.raises(ValueError, match="active indices"):
-        restore_session(base)
+        restore_replay_session(base)
 
 
 def test_session_manager_delete_removes_persisted_state():
