@@ -1,3 +1,5 @@
+const MUTATION_MODE = Object.freeze({ SERIAL: 'serial', LATEST: 'latest' });
+
 export class SessionMutationPipeline {
   constructor() {
     this._tail = null;
@@ -33,15 +35,15 @@ export class SessionMutationPipeline {
 
       const response = await operation();
       const latestSequence = this._latestSequence.get(scope) || 0;
-      const stale = !serialize && sequence < latestSequence;
+      const stale = mode === MUTATION_MODE.LATEST && sequence < latestSequence;
       const applied = !this._destroyed && !stale && generation === this._generation;
 
-      if (!stale && !this._destroyed) this._latestSequence.set(scope, sequence);
+      if (mode === MUTATION_MODE.LATEST && !stale && !this._destroyed) this._latestSequence.set(scope, sequence);
       if (applied && typeof apply === 'function') apply(response);
       return { applied, stale, response };
     };
 
-    if (!serialize) return execute();
+    if (mode === MUTATION_MODE.LATEST) return execute();
 
     if (!this._tail) {
       const next = execute();
@@ -63,3 +65,6 @@ export class SessionMutationPipeline {
     this._latestSequence.clear();
   }
 }
+
+
+export { MUTATION_MODE };
