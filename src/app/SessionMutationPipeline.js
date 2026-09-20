@@ -22,7 +22,7 @@ export class SessionMutationPipeline {
     generation = this._generation,
     apply = null,
     scope = 'default',
-    serialize = true,
+    mode = MUTATION_MODE.SERIAL,
     canExecute = null,
   } = {}) {
     if (this._destroyed) return Promise.resolve({ applied: false, stale: true, response: null });
