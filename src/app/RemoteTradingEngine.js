@@ -30,20 +30,49 @@ export class RemoteTradingEngine {
     this.data = { account: normalizeAccount(), positions: [], orders: [], pendingOrders: [], trades: [], funding: [] };
     this.latestCandle = null;
     this._generation = 0;
+    this._requestSequence = 0;
+    this._lastAppliedRequest = 0;
+    this._pendingRequests = new Map();
     this._destroyed = false;
     this._refreshPromise = this.refresh().catch(() => null);
   }
   on(event, handler) { return this._destroyed ? () => {} : this.events.on(event, handler); }
-  async _request(path, options = {}, action = null, generation = this._generation) {
-    const response = await this.api.request(path, options);
-    if (this._destroyed || generation !== this._generation) {
-      return { applied: false, response };
-    }
+  _reconcilePendingRequests() {
+    if (this._destroyed) return;
+    const candidates = [...this._pendingRequests.values()].filter((request) => request.settled && !request.error && request.generation === this._generation && request.id > this._lastAppliedRequest);
+    if (!candidates.length) return;
+    candidates.sort((a, b) => b.id - a.id);
+    const next = candidates[0];
+    const higherPending = [...this._pendingRequests.values()].some((request) => request.generation === this._generation && request.id > next.id && !request.settled);
+    if (higherPending) return;
+    this._lastAppliedRequest = next.id;
     const previous = this.data;
-    this._sync(response, action, previous);
-    return { applied: true, response };
+    this._sync(next.response, next.action, previous);
+    for (const [id, request] of this._pendingRequests) {
+      if (request.settled && (request.error || id <= this._lastAppliedRequest)) this._pendingRequests.delete(id);
+    }
   }
-
+  async _request(path, options = {}, action = null, generation = this._generation) {
+    const request = { id: ++this._requestSequence, generation, action, settled: false, error: null, response: null };
+    this._pendingRequests.set(request.id, request);
+    try {
+      request.response = await this.api.request(path, options);
+      request.settled = true;
+      if (this._destroyed || generation !== this._generation) {
+        this._pendingRequests.delete(request.id);
+        return { applied: false, response: request.response };
+      }
+      this._reconcilePendingRequests();
+      const applied = this._lastAppliedRequest === request.id;
+      return { applied, response: request.response };
+    } catch (error) {
+      request.error = error;
+      request.settled = true;
+      if (this._destroyed || generation !== this._generation) this._pendingRequests.delete(request.id);
+      else this._reconcilePendingRequests();
+      throw error;
+    }
+  }
   _sync(response = {}, action = null, previous = this.data) {
     if (this._destroyed) return;
     if (response.account) this.data.account = normalizeAccount(response.account);
@@ -116,5 +145,5 @@ export class RemoteTradingEngine {
   setFeeRate(rate) { return this._action('/account/fee-rate', { method: 'POST', body: JSON.stringify({ rate }) }, 'fee'); }
   async onMarketCandle(payload = null) { if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; const candle = payload?.candle || null; const body = candle ? JSON.stringify({ symbol: String(payload.symbol || candle.symbol || 'BTCUSDT').toUpperCase(), candle, index: payload.index ?? null }) : undefined; try { const result = await this._request('/candle', { method: 'POST', ...(body ? { body } : {}) }, 'candle'); return this._destroyed ? { success: false, message: 'Trading engine is destroyed' } : result.applied ? result.response : { success: true, ...this.getStateSnapshot(), stale: true }; } catch (error) { return { success: false, message: error?.message || 'Trading request failed', error }; }
   }
-  destroy() { if (this._destroyed) return; this._destroyed = true; this._generation++; this.events = new Events(); this.latestCandle = null; }
+  destroy() { if (this._destroyed) return; this._destroyed = true; this._generation++; this._requestSequence++; this._pendingRequests.clear(); this.events = new Events(); this.latestCandle = null; }
 }
