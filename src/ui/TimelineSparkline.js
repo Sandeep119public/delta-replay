@@ -72,15 +72,13 @@ export class TimelineSparkline {
   destroy() {
     if (!this._attached) return;
     this._attached = false;
-    try {
-      this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[TimelineSparkline] unsubscribe failed', error); } });
-      this._subscriptions = [];
-      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') window.removeEventListener('resize', this._onResize);
-      this._ro?.disconnect?.();
-      this.canvas?.removeEventListener?.('click', this._boundClick);
-      this.canvas?.removeEventListener?.('touchstart', this._boundTouchStart);
-      this.canvas?.removeEventListener?.('touchmove', this._boundTouchMove);
-    } catch {}
+    this._subscriptions.forEach((unsubscribe) => { try { unsubscribe?.(); } catch (error) { console.warn('[TimelineSparkline] unsubscribe failed', error); } });
+    this._subscriptions = [];
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') window.removeEventListener('resize', this._onResize);
+    this._ro?.disconnect?.();
+    this.canvas?.removeEventListener?.('click', this._boundClick);
+    this.canvas?.removeEventListener?.('touchstart', this._boundTouchStart);
+    this.canvas?.removeEventListener?.('touchmove', this._boundTouchMove);
     this._ro = null;
     this.onSeek = null;
     this.replayPort = null;
@@ -91,7 +89,7 @@ export class TimelineSparkline {
   }
 
   _trades() {
-    try { return this.trading?.snapshot().trades || []; } catch { return []; }
+    return this.trading?.snapshot().trades || [];
   }
 
   _cursor() {
@@ -165,26 +163,29 @@ export class TimelineSparkline {
   }
 
   _handleClick(e) {
-    try {
-      const candles = this._candles(); if (!candles.length) return;
-      let offsetX = e?.offsetX;
-      if (!Number.isFinite(offsetX)) {
-        const rect = this.canvas?.getBoundingClientRect?.(); const clientX = e?.clientX;
-        if (!rect || !Number.isFinite(clientX)) return; offsetX = clientX - rect.left;
-      }
-      this._seekAtOffset(offsetX, candles.length);
-    } catch {}
+    const candles = this._candles();
+    if (!candles.length) return;
+    let offsetX = e?.offsetX;
+    if (!Number.isFinite(offsetX)) {
+      const rect = this.canvas?.getBoundingClientRect?.();
+      const clientX = e?.clientX;
+      if (!rect || !Number.isFinite(clientX)) return;
+      offsetX = clientX - rect.left;
+    }
+    this._seekAtOffset(offsetX, candles.length);
   }
+
   _handleTouch(e, isMove) {
-    try {
-      const candles = this._candles(); if (!candles.length) return;
-      const touch = e?.touches?.[0] || e?.changedTouches?.[0];
-      if (!touch || !Number.isFinite(touch.clientX)) return;
-      if (isMove && typeof e?.preventDefault === 'function') e.preventDefault();
-      const rect = this.canvas?.getBoundingClientRect?.(); if (!rect) return;
-      this._seekAtOffset(touch.clientX - rect.left, candles.length);
-    } catch {}
+    const candles = this._candles();
+    if (!candles.length) return;
+    const touch = e?.touches?.[0] || e?.changedTouches?.[0];
+    if (!touch || !Number.isFinite(touch.clientX)) return;
+    if (isMove && typeof e?.preventDefault === 'function') e.preventDefault();
+    const rect = this.canvas?.getBoundingClientRect?.();
+    if (!rect) return;
+    this._seekAtOffset(touch.clientX - rect.left, candles.length);
   }
+
   _seekAtOffset(offsetX, count) {
     const width = this.canvas?.getBoundingClientRect?.()?.width || this.canvas?.clientWidth || 1;
     const idx = Math.min(Math.max(0, Math.round((offsetX / width) * (count - 1))), count - 1);
