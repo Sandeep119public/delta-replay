@@ -25,6 +25,9 @@ export class SessionMutationPipeline {
     mode = MUTATION_MODE.SERIAL,
     canExecute = null,
   } = {}) {
+    if (!Object.values(MUTATION_MODE).includes(mode)) {
+      throw new TypeError('Unsupported session mutation mode');
+    }
     if (this._destroyed) return Promise.resolve({ applied: false, stale: true, response: null });
 
     const sequence = ++this._nextSequence;
