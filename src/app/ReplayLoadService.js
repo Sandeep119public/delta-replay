@@ -1,4 +1,5 @@
 import { DataEvents } from '../data/HistoricalDataManager.js';
+import { CandleStore } from '../data/CandleStore.js';
 import { DataError, ErrorCategory, LoadingState } from '../data/DataError.js';
 import { calculateAutoRange, findClosestCandleIndex } from '../utils/replayRange.js';
 import { isRetryableCategory as isRetryableErrorCategory } from '../ports/ErrorPresentationPort.js';
@@ -103,7 +104,17 @@ export function createReplayLoadService({
 
     let retryScheduled = false;
     try {
-      const { candles, metadata } = await dataManager.load({ symbol, timeframe, from, to, signal, strict: true, halfOpen: true });
+      const stagingStore = new CandleStore();
+      const { candles, metadata } = await dataManager.load({
+        symbol,
+        timeframe,
+        from,
+        to,
+        signal,
+        strict: true,
+        halfOpen: true,
+        store: stagingStore,
+      });
       sessionProgressUnsubscribe();
       if (progressUnsubscribe === sessionProgressUnsubscribe) progressUnsubscribe = null;
       if (token !== loadToken || signal.aborted || destroyed) return;
