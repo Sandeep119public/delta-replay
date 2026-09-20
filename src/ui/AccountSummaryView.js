@@ -54,7 +54,7 @@ export class AccountSummaryView {
   setCapital(balance) {
     if (!Number.isFinite(balance) || balance <= 0) { const message = 'Enter a valid capital amount (> 0)'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
     if (this.trading.actions.hasOpenPosition?.()) { const message = 'Close the position before changing starting balance'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
-    return this._run(() => this.trading.actions.setStartingBalance(balance));
+    return this._run(() => this.trading.actions.setCapital(balance));
   }
 
   setFeeRate(rate) {
