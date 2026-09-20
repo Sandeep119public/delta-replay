@@ -123,7 +123,7 @@ export function createReplayLoadService({
       resetRetryState();
       await replayEngine.load(candles);
       if (token !== loadToken || signal.aborted || destroyed) return;
-      appState.setCandles(candles);
+      appState.setCandles(candles, metadata);
       appState.setReplayState(replayEngine.getState());
       timeline?.setTotal(candles.length, candles);
       let replayIdx = findClosestCandleIndex(resolvedTarget, candleStore, candles);
