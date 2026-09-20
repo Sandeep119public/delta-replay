@@ -112,5 +112,7 @@ The runtime keeps one canonical owner for each mutable concern:
 - TradingPresentationAdapter is the only place where UI intent names are translated to those remote commands.
 - SessionMutationPipeline has two explicit concurrency modes: serial for state mutations and latest for independently refreshable reads/market-candle updates. Generation invalidation remains the lifecycle boundary.
 - Replay symbol queries are named by intent: latest_replay_symbol means the most recent replay step, while latest_market_context_symbol means the most recent market context event. They are intentionally distinct because supplemental symbol candles can change market context without changing replay identity.
+- Session persistence is exposed through ReplaySession: serialize_replay_session and restore_replay_session. Component-level compatibility wrappers are not part of the public persistence API.
+- UI styles are organized into semantic layers: replay.css, trading.css, mobile.css, system.css, and responsive.css. Historical phase filenames are implementation history, not new extension points.
 
 These rules are architectural constraints, not compatibility shims. New callers should use the canonical APIs rather than adding aliases.
