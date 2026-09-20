@@ -4,7 +4,10 @@ import { createReplayLoadService } from '../../src/app/ReplayLoadService.js';
 function deps(load, overrides = {}) {
   return {
     dataManager: { on: vi.fn(() => vi.fn()), load },
-    candleStore: { get: vi.fn((index) => ({ openTime: index + 1 })) },
+    candleStore: {
+      get: vi.fn((index) => ({ openTime: index + 1 })),
+      load: vi.fn(),
+    },
     appState: {
       symbol: 'BTCUSDT', timeframe: '1m', loadingState: 'idle',
       transitionLoading: vi.fn(), setLoading: vi.fn(), setRetryCount: vi.fn(),
@@ -64,6 +67,16 @@ describe('ReplayLoadService', () => {
     expect(unsubSecond).toHaveBeenCalledOnce();
   });
 
+  it('publishes the committed candle metadata after remote replay load succeeds', async () => {
+    const candles = [{ time: 1, open: 100, high: 101, low: 99, close: 100 }];
+    const metadata = { symbol: 'BTCUSDT', timeframe: '1m', count: 1 };
+    const d = deps(vi.fn().mockResolvedValue({ candles, metadata }));
+
+    await createReplayLoadService(d).loadAndPrepareReplay({ targetSec: 1 });
+
+    expect(d.appState.setCandles).toHaveBeenCalledWith(candles, metadata);
+  });
+
   it('waits for replay load before publishing replay state', async () => {
     let resolveEngineLoad;
     const engineLoad = new Promise((resolve) => { resolveEngineLoad = resolve; });
@@ -79,6 +92,31 @@ describe('ReplayLoadService', () => {
     resolveEngineLoad();
     await run;
     expect(d.appState.setReplayState).toHaveBeenCalledWith({ status: 'ready', totalCandles: 1 });
+  });
+
+  it('stages candles outside the shared store until the remote replay load succeeds', async () => {
+    const candles = [{ time: 1, open: 100, high: 101, low: 99, close: 100 }];
+    const sharedStore = new (await import('../../src/data/CandleStore.js')).CandleStore();
+    sharedStore.load(
+      [{ time: 999, open: 90, high: 91, low: 89, close: 90 }],
+      { symbol: 'BTCUSDT', timeframe: '1m' },
+    );
+    let stagingStore = null;
+    const d = deps(vi.fn(async ({ store }) => {
+      stagingStore = store;
+      store.load(candles, { symbol: 'BTCUSDT', timeframe: '1m' });
+      return { candles, metadata: store.getMetadata() };
+    }), { candleStore: sharedStore });
+    d.replayEngine.load = vi.fn().mockRejectedValue(new Error('remote replay load failed'));
+
+    await createReplayLoadService(d).loadAndPrepareReplay({ targetSec: 1 });
+
+    expect(stagingStore).not.toBe(sharedStore);
+    expect(stagingStore.getCount()).toBe(1);
+    expect(sharedStore.getAll()).toEqual([
+      { time: 999, open: 90, high: 91, low: 89, close: 90, volume: undefined },
+    ]);
+    expect(d.appState.setCandles).not.toHaveBeenCalled();
   });
 
   it('waits for replay start when auto-starting', async () => {

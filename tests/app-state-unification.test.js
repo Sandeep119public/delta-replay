@@ -30,6 +30,22 @@ describe('AppState — Unification & Central Reactivity', () => {
     expect(state.dataError).toBe(mockError);
   });
 
+  it('setCandles preserves supplied candle metadata in the canonical store', () => {
+    const state = new AppState();
+    state.setCandles(
+      [{ time: 1000, open: 100, high: 105, low: 95, close: 102, volume: 12 }],
+      { symbol: 'BTCUSDT', timeframe: '1m', quality: 'VALID' },
+    );
+
+    expect(state.totalCandles).toBe(1);
+    expect(state._store.getMetadata()).toMatchObject({
+      symbol: 'BTCUSDT',
+      timeframe: '1m',
+      quality: 'VALID',
+      count: 1,
+    });
+  });
+
   it('setPendingStartIndex updates cursor and emits pendingStartIndexChanged', () => {
     const state = new AppState();
     const handler = vi.fn();

@@ -28,8 +28,12 @@ export class HistoricalDataManager extends EventEmitter {
     this.strictMode = strictMode;
   }
 
-  async load({ symbol, timeframe, from, to, signal, strict = this.strictMode, allowGaps = false, halfOpen = false, policy = null, origin = null, venue = null } = {}) {
+  async load({ symbol, timeframe, from, to, signal, strict = this.strictMode, allowGaps = false, halfOpen = false, policy = null, origin = null, venue = null, store = null } = {}) {
     if (!symbol || !timeframe) throw new Error('symbol and timeframe required');
+    const targetStore = store ?? this.store;
+    if (!targetStore || typeof targetStore.load !== 'function' || typeof targetStore.getMetadata !== 'function') {
+      throw new TypeError('HistoricalDataManager store must implement load() and getMetadata()');
+    }
     if (!Number.isFinite(from) || !Number.isFinite(to)) throw new Error('from/to must be numbers');
     if (from >= to) throw new Error('from must be < to');
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -59,10 +63,10 @@ export class HistoricalDataManager extends EventEmitter {
         if (realMissing.length === 0 && !isClean && metadata.gaps.length > 0) realMissing = metadata.gaps.map(g => ({ from: g.from, to: g.to + (halfOpen ? tfSec : 0) }));
         if (realMissing.length === 0 && isClean) {
           if (JSON.stringify(authoritativeCoverage) !== JSON.stringify(actualIntervals)) this.cache.repairIntervals(symbol, timeframe, { timeframeSec: tfSec, venue: resolvedVenue, gridOrigin });
-          this.store.load(validCandles, { symbol, timeframe, requestedFrom, requestedTo, effectiveFrom, effectiveTo, venue: resolvedVenue, gridOrigin, quality: 'VALID', ...metadata, cached: true });
-          this.emit(DataEvents.READY, { candles: validCandles, metadata: this.store.getMetadata(), quality: 'VALID' });
+          targetStore.load(validCandles, { symbol, timeframe, requestedFrom, requestedTo, effectiveFrom, effectiveTo, venue: resolvedVenue, gridOrigin, quality: 'VALID', ...metadata, cached: true });
+          this.emit(DataEvents.READY, { candles: validCandles, metadata: targetStore.getMetadata(), quality: 'VALID' });
           this.emit(DataEvents.PROGRESS, { loaded: validCandles.length, total: validCandles.length, pct: 100 });
-          return { candles: validCandles, metadata: this.store.getMetadata(), quality: 'VALID' };
+          return { candles: validCandles, metadata: targetStore.getMetadata(), quality: 'VALID' };
         }
         this.cache.reconcile(symbol, timeframe, { from: effectiveFrom, to: effectiveTo, candles: validCandles, timeframeSec: tfSec, venue: resolvedVenue, gridOrigin, halfOpen });
         cacheRes = { hit: false, candles: validCandles, missing: realMissing.length > 0 ? realMissing : [{ from: effectiveFrom, to: effectiveTo }], intervals: actualIntervals };
@@ -91,8 +95,8 @@ export class HistoricalDataManager extends EventEmitter {
     if(validCandles.length===0){const err=new Error('No valid candles after integrity');err.code='NO_DATA';this.emit(DataEvents.ERROR,err);throw err;}
     if(metadata.repairSuccess!==false&&metadata.integrityStatus!==INTEGRITY_STATUS.DEGRADED)this.cache.set(symbol,timeframe,effectiveFrom,effectiveTo,validCandles,{timeframeSec:tfSec,venue:resolvedVenue,gridOrigin});
     const isDegraded=metadata.integrityStatus===INTEGRITY_STATUS.DEGRADED||metadata.repairSuccess===false;const quality=isDegraded?'DEGRADED':'VALID';
-    this.store.load(validCandles,{symbol,timeframe,requestedFrom,requestedTo,effectiveFrom,effectiveTo,venue:resolvedVenue,gridOrigin,quality,...metadata});
-    this.emit(DataEvents.READY,{candles:validCandles,metadata:this.store.getMetadata(),quality}); if(isDegraded)this.emit(DataEvents.READY_DEGRADED,{candles:validCandles,metadata:this.store.getMetadata(),quality}); emitProgress(); return {candles:validCandles,metadata:this.store.getMetadata(),quality};
+    targetStore.load(validCandles,{symbol,timeframe,requestedFrom,requestedTo,effectiveFrom,effectiveTo,venue:resolvedVenue,gridOrigin,quality,...metadata});
+    this.emit(DataEvents.READY,{candles:validCandles,metadata:targetStore.getMetadata(),quality}); if(isDegraded)this.emit(DataEvents.READY_DEGRADED,{candles:validCandles,metadata:targetStore.getMetadata(),quality}); emitProgress(); return {candles:validCandles,metadata:targetStore.getMetadata(),quality};
   }
   getStore(){return this.store;} getCache(){return this.cache;} clear(){this.store.clear();this.cache.clear();}
 }
