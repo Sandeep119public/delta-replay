@@ -44,10 +44,10 @@ def test_reset_uses_latest_active_symbol_after_explicit_switch():
 
 def test_reset_uses_latest_symbol_from_canonical_candle_event():
     session = SimpleNamespace(
-        history=[
+        timeline=ReplayTimeline([
             market_step(0, "BTCUSDT"),
             candle_event(1, "ETHUSDT"),
-        ],
+        ]),
     )
 
     assert _replay_symbol(session) == "ETHUSDT"
@@ -55,10 +55,10 @@ def test_reset_uses_latest_symbol_from_canonical_candle_event():
 
 def test_active_replay_symbol_uses_latest_canonical_market_event():
     session = SimpleNamespace(
-        history=[
+        timeline=ReplayTimeline([
             market_step(0, "BTCUSDT"),
             candle_event(1, "ETHUSDT"),
-        ],
+        ]),
     )
 
     assert _active_replay_symbol(session) == "ETHUSDT"
