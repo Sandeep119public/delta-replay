@@ -50,4 +50,9 @@ describe('Phase 1 chart-first shell', () => {
     expect(css).toMatch(/body\.drawer-open \.trading-section/);
     expect(css).toMatch(/position:\s*fixed/);
   });
+
+  it('keeps the app container as a horizontal flex layout on desktop for the sidebar and page host', () => {
+    const dataCenterCss = fs.readFileSync('src/ui/data-center.css', 'utf8');
+    expect(dataCenterCss).toMatch(/#app\s*\{[^}]*display:\s*flex/);
+  });
 });
