@@ -39,3 +39,16 @@ def test_session_identity_rejects_history_tampering():
         assert "simulation identity" in str(exc)
     else:
         raise AssertionError("tampered simulation identity was accepted")
+
+
+def test_replay_session_reset_keeps_market_timeline_only():
+    session = sample_session()
+    session.step("BTCUSDT")
+    session.submit_order("BTCUSDT", "buy", 1)
+
+    session.reset("BTCUSDT")
+
+    assert session.replay.index == 0
+    assert all(event["type"] in {"market_step", "candle"} for event in session.history)
+    assert not session.trading.positions
+    assert not session.trading.orders
