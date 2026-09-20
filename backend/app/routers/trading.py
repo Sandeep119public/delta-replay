@@ -347,13 +347,38 @@ def set_fee_rate(request: Request, command: FeeRateRequest):
 @router.post("/reset")
 def reset(request: Request):
     def reset_engine(session):
-        balance = session.trading.account.starting_balance
-        fee_rate = session.trading.fee_rate
-        margin_rate = session.trading.margin_rate
-        maint_margin_rate = session.trading.maint_margin_rate
-        session.trading = PaperTradingEngine(starting_balance=balance, fee_rate=fee_rate, margin_rate=margin_rate, maint_margin_rate=maint_margin_rate)
+        previous_trading = session.trading
+        balance = previous_trading.account.starting_balance
+        fee_rate = previous_trading.fee_rate
+        margin_rate = previous_trading.margin_rate
+        maint_margin_rate = previous_trading.maint_margin_rate
+        replay_index = session.replay.index
+        symbol = _replay_symbol(session)
+
+        fresh = PaperTradingEngine(
+            starting_balance=balance,
+            fee_rate=fee_rate,
+            margin_rate=margin_rate,
+            maint_margin_rate=maint_margin_rate,
+        )
+        session.trading = fresh
         session.history = []
-        return snapshot(session.trading)
+
+        if replay_index >= 0:
+            market = previous_trading.get_latest_market(symbol)
+            if market is not None and market.get("index") == replay_index:
+                candle = market["candle"]
+            else:
+                candle = session.replay.candles[replay_index]
+
+            fresh.on_candle(candle, replay_index, symbol)
+            session.record(
+                "candle",
+                replay_index,
+                {"candle": deepcopy(candle), "index": replay_index, "symbol": symbol},
+            )
+
+        return snapshot(fresh)
     try:
         return atomic_session(request, reset_engine)
     except StateInvariantError as exc:
