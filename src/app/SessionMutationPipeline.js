@@ -21,13 +21,16 @@ export class SessionMutationPipeline {
     apply = null,
     scope = 'default',
     serialize = true,
+    canExecute = null,
   } = {}) {
     if (this._destroyed) return Promise.resolve({ applied: false, stale: true, response: null });
 
     const sequence = ++this._nextSequence;
     this._latestSequence.set(scope, sequence);
     const execute = async () => {
-      if (this._destroyed) return { applied: false, stale: true, response: null };
+      if (this._destroyed || (typeof canExecute === 'function' && !canExecute())) {
+        return { applied: false, stale: true, response: null };
+      }
 
       const response = await operation();
       const latestSequence = this._latestSequence.get(scope) || 0;
