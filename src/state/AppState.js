@@ -15,9 +15,6 @@ export class AppState extends EventEmitter {
     super();
     this.symbol = 'BTCUSDT';
     this.timeframe = '1m';
-    // Legacy compatibility slot only. Canonical candle data lives exclusively
-    // in CandleStore and this array must remain empty.
-    this._candles = [];
     this._store = candleStore;
     this.loading = false;
     this.loadingState = LoadingState.IDLE;
@@ -58,7 +55,6 @@ export class AppState extends EventEmitter {
       throw new TypeError('AppState.setCandleStore requires a CandleStore-compatible object');
     }
     this._store = store;
-    this._candles = [];
     this.emit('candles', this.candles);
     this.emit('change', this.snapshot());
   }
@@ -106,7 +102,6 @@ export class AppState extends EventEmitter {
     const store = this._ensureStore();
     if (!candles?.length) store.clear();
     else store.load(candles, metadata || {});
-    this._candles = [];
     this.emit('candles', this.candles);
     this.emit('change', this.snapshot());
   }
