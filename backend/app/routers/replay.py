@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..models import CandleBatch
 from ..services.paper_engine import PaperTradingEngine
-from ..services.replay_timeline import ReplayDivergenceError, latest_market_event_symbol, rebuild_trading
+from ..services.replay_timeline import ReplayDivergenceError, rebuild_trading
 from ..services.session_manager import atomic_session, get_session
 
 router = APIRouter()
@@ -29,7 +29,7 @@ def require_pristine_trading(session, action, *, allow_replay_progress=False):
 
 def _replay_symbol(session, fallback="BTCUSDT"):
     try:
-        return latest_market_event_symbol(session.history)
+        return session.timeline.latest_market_event_symbol()
     except ReplayDivergenceError:
         return fallback
 
@@ -42,7 +42,7 @@ def _active_replay_symbol(session, requested_symbol=None):
         return requested
 
     try:
-        return latest_market_event_symbol(session.history)
+        return session.timeline.latest_market_event_symbol()
     except ReplayDivergenceError as exc:
         raise HTTPException(409, "Start the replay before advancing or seeking it") from exc
 

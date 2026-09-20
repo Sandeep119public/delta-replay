@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.paper_engine import PaperTradingEngine
 from app.services.replay_service import ReplayService
-from app.services.replay_timeline import ReplayDivergenceError, latest_market_step_symbol, rebuild_trading
+from app.services.replay_timeline import ReplayDivergenceError, ReplayTimeline, rebuild_trading
 
 
 client = TestClient(app)
@@ -193,13 +193,13 @@ def test_manual_candle_same_symbol_retry_does_not_duplicate_history():
 
 
 def test_latest_market_step_symbol_follows_explicit_symbol_switch():
-    history = [
+    timeline = ReplayTimeline([
         {"type": "market_step", "replayIndex": 0, "payload": {"symbol": "BTCUSDT"}},
         {"type": "candle", "replayIndex": 0, "payload": {"candle": candle(1, 200), "index": 0, "symbol": "ETHUSDT"}},
         {"type": "market_step", "replayIndex": 1, "payload": {"symbol": "ETHUSDT"}},
-    ]
+    ])
 
-    assert latest_market_step_symbol(history) == "ETHUSDT"
+    assert timeline.latest_market_step_symbol() == "ETHUSDT"
 
 
 def test_trading_candle_without_symbol_uses_latest_replay_symbol_after_switch():
