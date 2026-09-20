@@ -114,3 +114,13 @@ def test_timeline_truncate_preserves_validated_ownership():
     snapshot = timeline.snapshot()
     snapshot[0]["payload"]["symbol"] = "ETHUSDT"
     assert timeline.snapshot() == [event("market_step", 0)]
+
+
+def test_timeline_iteration_returns_a_fresh_snapshot_each_time():
+    timeline = ReplayTimeline([event("market_step", 0)])
+
+    first = next(iter(timeline))
+    second = next(iter(timeline))
+
+    assert first is not second
+    assert first == second
