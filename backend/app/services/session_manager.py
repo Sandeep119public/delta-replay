@@ -1,43 +1,16 @@
-from dataclasses import dataclass, field
 import os
 from threading import RLock
 from uuid import UUID
 
 from fastapi import HTTPException, Request
 
-from .paper_engine import PaperTradingEngine
-from .replay_service import ReplayService
+from .replay_session import ReplaySession
 from .replay_timeline import ReplayTimeline
 from .session_repository import InMemorySessionRepository, SessionRepository
 from .session_state import restore_session_bundle, serialize_session
 
 
 SESSION_HEADER = "X-Session-ID"
-
-
-@dataclass
-class SessionState:
-    replay: ReplayService = field(default_factory=ReplayService)
-    trading: PaperTradingEngine = field(default_factory=PaperTradingEngine)
-    _timeline: ReplayTimeline = field(default_factory=ReplayTimeline, repr=False)
-
-    @property
-    def history(self) -> list[dict]:
-        return self._timeline.snapshot()
-
-    @history.setter
-    def history(self, events):
-        self._timeline.replace(events)
-
-    @property
-    def timeline(self) -> ReplayTimeline:
-        return self._timeline
-
-    def record(self, command_type: str, replay_index: int, payload: dict):
-        self._timeline.record(command_type, replay_index, payload)
-
-    def truncate_future_history(self, replay_index: int):
-        self._timeline.truncate_after(replay_index)
 
 
 class SessionManager:
@@ -66,7 +39,7 @@ class SessionManager:
         with self._lock:
             return self._session_locks.setdefault(session_id, RLock())
 
-    def get(self, session_id: str) -> SessionState:
+    def get(self, session_id: str) -> ReplaySession:
         self._validate_session_id(session_id)
         session_lock = self._lock_for(session_id)
         with session_lock:
@@ -79,7 +52,7 @@ class SessionManager:
 
             document = self.repository.get(session_id)
             if document is None:
-                session = SessionState()
+                session = ReplaySession()
                 self.repository.save(
                     session_id,
                     serialize_session(session.replay, session.trading, session.history),
@@ -94,12 +67,12 @@ class SessionManager:
             return session
 
     @staticmethod
-    def _restore(document) -> SessionState:
+    def _restore(document) -> ReplaySession:
         try:
             replay, trading, history = restore_session_bundle(document)
         except (TypeError, ValueError, KeyError, RuntimeError) as exc:
             raise RuntimeError(f"unable to restore session state: {exc}") from exc
-        return SessionState(replay=replay, trading=trading, _timeline=ReplayTimeline(history))
+        return ReplaySession(replay=replay, trading=trading, _timeline=ReplayTimeline(history))
 
     def atomic(self, session_id: str, operation):
         """Run a session mutation with one serialized repository commit."""
@@ -128,7 +101,7 @@ class SessionManager:
 
     def _ensure_exists(self, session_id: str) -> None:
         if self.repository.get(session_id) is None:
-            session = SessionState()
+            session = ReplaySession()
             self.repository.save(
                 session_id,
                 serialize_session(session.replay, session.trading, session.history),
@@ -158,7 +131,7 @@ def _session_id(request: Request) -> str:
     return session_id
 
 
-def get_session(request: Request) -> SessionState:
+def get_session(request: Request) -> ReplaySession:
     return manager.get(_session_id(request))
 
 
