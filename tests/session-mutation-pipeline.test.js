@@ -38,7 +38,7 @@ describe('session mutation pipeline', () => {
 
   it('rejects unsupported ordering modes', () => {
     const pipeline = new SessionMutationPipeline();
-    expect(() => pipeline.run(async () => 'ok', { mode: 'parallel' })).toThrow(/serial or latest/);
+    expect(() => pipeline.run(async () => 'ok', { mode: 'parallel' })).toThrow(/Unsupported session mutation mode/);
   });
 
   it('keeps latest-only responses generation-safe', async () => {
