@@ -199,7 +199,7 @@ def test_latest_market_step_symbol_follows_explicit_symbol_switch():
         {"type": "market_step", "replayIndex": 1, "payload": {"symbol": "ETHUSDT"}},
     ])
 
-    assert timeline.latest_market_step_symbol() == "ETHUSDT"
+    assert timeline.latest_replay_symbol() == "ETHUSDT"
 
 
 def test_trading_candle_without_symbol_uses_latest_replay_symbol_after_switch():

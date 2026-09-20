@@ -166,30 +166,32 @@ describe('remote contracts', () => {
     expect(engine.getAccountSnapshot().equity).toBe(12000);
   });
 
-  it('returns canonical state when an older action response arrives late', async () => {
-    let resolveOld;
-    let resolveNew;
-    const old = new Promise((resolve) => { resolveOld = resolve; });
-    const newer = new Promise((resolve) => { resolveNew = resolve; });
+  it('serializes trading mutations instead of allowing stale action responses', async () => {
+    let resolveFirst;
+    const firstResponse = new Promise((resolve) => { resolveFirst = resolve; });
     let requestCount = 0;
     const client = {
       request: vi.fn((path) => {
         if (path === '/state') return { account: { startingBalance: 10000, equity: 10000 }, positions: [], orders: [], trades: [] };
         requestCount += 1;
-        return requestCount === 1 ? old : newer;
+        return requestCount === 1
+          ? firstResponse
+          : Promise.resolve({ account: { startingBalance: 10000, equity: 12000 }, positions: [], orders: [], trades: [] });
       }),
     };
     const engine = new RemoteTradingEngine(client);
     await engine._refreshPromise;
+
     const first = engine.setStartingBalance(9000);
     const second = engine.setStartingBalance(12000);
-    resolveNew({ account: { startingBalance: 12000, equity: 12000 }, positions: [], orders: [], trades: [] });
+
+    expect(client.request).toHaveBeenCalledTimes(2);
+    resolveFirst({ account: { startingBalance: 9000, equity: 9000 }, positions: [], orders: [], trades: [] });
+    await first;
     await second;
-    resolveOld({ account: { startingBalance: 9000, equity: 9000 }, positions: [], orders: [], trades: [] });
-    const stale = await first;
-    expect(stale.stale).toBe(true);
-    expect(stale.account.equity).toBe(12000);
+
     expect(engine.getAccountSnapshot().equity).toBe(12000);
+    expect(client.request).toHaveBeenCalledTimes(3);
   });
 
   it('returns defensive trading snapshots', async () => {
@@ -215,7 +217,7 @@ describe('remote contracts', () => {
   it('maps trading actions to canonical API payloads', async () => {
     const client = api({ '/order': { account: {}, positions: [], orders: [], trades: [] } });
     const engine = new RemoteTradingEngine(client);
-    const result = await engine.submitMarketOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 1 });
+    const result = await engine.submitOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 1, type: 'market' });
     expect(result.success).toBe(true);
     expect(client.request).toHaveBeenCalledWith('/order', expect.objectContaining({ method: 'POST', body: expect.stringContaining('BTCUSDT') }));
   });
@@ -231,16 +233,12 @@ describe('remote contracts', () => {
       getLatestCandle: () => candle,
       hasOpenPosition: () => false,
       on: () => () => {},
-      submitMarketOrder: vi.fn(),
-      placeLimitOrder: vi.fn(),
-      placeStopOrder: vi.fn(),
-      flattenPosition: vi.fn(),
-      updateRisk: vi.fn(),
-      setStopLoss: vi.fn(),
-      setTakeProfit: vi.fn(),
+      submitOrder: vi.fn(),
+      closePosition: vi.fn(),
+      setRisk: vi.fn(),
       clearRisk: vi.fn(),
       cancelOrder: vi.fn(),
-      resetAccount: vi.fn(),
+      reset: vi.fn(),
       setStartingBalance: vi.fn(),
       setFeeRate: vi.fn(),
     };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SessionMutationPipeline } from '../src/app/SessionMutationPipeline.js';
 
 describe('session mutation pipeline', () => {
-  it('runs session operations in submission order', async () => {
+  it('runs serial session operations in submission order', async () => {
     const pipeline = new SessionMutationPipeline();
     const events = [];
     let releaseFirst;
@@ -46,4 +46,30 @@ describe('session mutation pipeline', () => {
     await expect(stale).resolves.toMatchObject({ applied: false, response: 'stale' });
     expect(applied).toEqual([]);
   });
+
+
+  it('allows latest-only reads to complete independently while applying only the newest response', async () => {
+    const pipeline = new SessionMutationPipeline();
+    const applied = [];
+    let resolveOld;
+    let resolveNew;
+    const old = new Promise((resolve) => { resolveOld = resolve; });
+    const newer = new Promise((resolve) => { resolveNew = resolve; });
+
+    const first = pipeline.run(() => old, { mode: 'latest', scope: 'state', apply: (value) => applied.push(value) });
+    const second = pipeline.run(() => newer, { mode: 'latest', scope: 'state', apply: (value) => applied.push(value) });
+
+    resolveNew('new');
+    await second;
+    resolveOld('old');
+    await first;
+
+    expect(applied).toEqual(['new']);
+  });
+
+  it('rejects unknown mutation modes', () => {
+    const pipeline = new SessionMutationPipeline();
+    expect(() => pipeline.run(() => Promise.resolve(), { mode: 'parallel' })).toThrow(/serial or latest/);
+  });
+
 });

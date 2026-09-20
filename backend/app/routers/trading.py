@@ -109,7 +109,7 @@ def _internal_http_error(exc: StateInvariantError) -> HTTPException:
 
 def _replay_symbol(session):
     try:
-        return session.timeline.latest_market_step_symbol()
+        return session.timeline.latest_replay_symbol()
     except ReplayDivergenceError as exc:
         raise HTTPException(409, "Start the replay before processing a market candle") from exc
 

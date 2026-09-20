@@ -23,7 +23,7 @@ class ReplayTimeline:
     def snapshot(self) -> list[dict]:
         return deepcopy(self._events)
 
-    def latest_market_step_symbol(self) -> str:
+    def latest_replay_symbol(self) -> str:
         """Return the most recent canonical replay market-step symbol."""
         for command in reversed(self._events):
             if command.get("type") != "market_step":
@@ -33,7 +33,7 @@ class ReplayTimeline:
                 return symbol.strip().upper()
         raise ReplayDivergenceError("replay history has no canonical market symbol")
 
-    def latest_market_event_symbol(self) -> str:
+    def latest_market_context_symbol(self) -> str:
         """Return the most recent canonical market-event symbol."""
         for command in reversed(self._events):
             if command.get("type") not in MARKET_EVENT_TYPES:

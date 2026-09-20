@@ -20,10 +20,15 @@ export class SessionMutationPipeline {
     generation = this._generation,
     apply = null,
     scope = 'default',
-    serialize = true,
+    mode = 'serial',
     canExecute = null,
   } = {}) {
-    if (this._destroyed) return Promise.resolve({ applied: false, stale: true, response: null });
+    if (mode !== 'serial' && mode !== 'latest') {
+      throw new TypeError('session mutation mode must be serial or latest');
+    }
+    if (this._destroyed) {
+      return Promise.resolve({ applied: false, stale: true, response: null });
+    }
 
     const sequence = ++this._nextSequence;
     const execute = async () => {
@@ -33,26 +38,20 @@ export class SessionMutationPipeline {
 
       const response = await operation();
       const latestSequence = this._latestSequence.get(scope) || 0;
-      const stale = !serialize && sequence < latestSequence;
+      const stale = mode === 'latest' && sequence < latestSequence;
       const applied = !this._destroyed && !stale && generation === this._generation;
 
-      if (!stale && !this._destroyed) this._latestSequence.set(scope, sequence);
+      if (mode === 'latest' && !stale && !this._destroyed) {
+        this._latestSequence.set(scope, sequence);
+      }
       if (applied && typeof apply === 'function') apply(response);
       return { applied, stale, response };
     };
 
-    if (!serialize) return execute();
+    if (mode === 'latest') return execute();
 
-    if (!this._tail) {
-      const next = execute();
-      const tracked = next.catch(() => undefined);
-      this._tail = tracked;
-      return next;
-    }
-
-    const next = this._tail.then(execute, execute);
-    const tracked = next.catch(() => undefined);
-    this._tail = tracked;
+    const next = this._tail ? this._tail.then(execute, execute) : execute();
+    this._tail = next.catch(() => undefined);
     return next;
   }
 

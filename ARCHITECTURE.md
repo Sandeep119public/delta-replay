@@ -101,3 +101,16 @@ A small behavior change should normally have a small diff. If an experiment requ
 - Do not silently swallow new errors unless the surrounding contract explicitly requires it.
 - Add a regression test when fixing a previously observed bug.
 - Keep commits focused enough to revert independently.
+
+## Simplification invariants
+
+The runtime keeps one canonical owner for each mutable concern:
+
+- ReplaySession owns replay lifecycle and session history; ReplayTimeline owns ordered event history.
+- PaperTradingEngine owns trading state and execution behavior.
+- RemoteTradingEngine exposes canonical remote commands: submitOrder, closePosition, setRisk, clearRisk, cancelOrder, cancelAll, reset, setStartingBalance, and setFeeRate.
+- TradingPresentationAdapter is the only place where UI intent names are translated to those remote commands.
+- SessionMutationPipeline has two explicit concurrency modes: serial for state mutations and latest for independently refreshable reads/market-candle updates. Generation invalidation remains the lifecycle boundary.
+- Replay symbol queries are named by intent: latest_replay_symbol means the most recent replay step, while latest_market_context_symbol means the most recent market context event. They are intentionally distinct because supplemental symbol candles can change market context without changing replay identity.
+
+These rules are architectural constraints, not compatibility shims. New callers should use the canonical APIs rather than adding aliases.
