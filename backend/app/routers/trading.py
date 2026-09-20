@@ -302,22 +302,42 @@ def clear_risk(request: Request, symbol: str, target: Literal["all", "stopLoss",
 @router.post("/candle")
 def process(request: Request, command: MarketCandleRequest | None = None):
     command = command or MarketCandleRequest()
+
     def process_candle(session):
         replay_index = session.replay.state()["index"]
         if replay_index < 0:
             raise HTTPException(409, "Load data and start replay before processing a market candle")
-        symbol = _active_symbol(session, command.symbol)
+
+        active_symbol = _active_symbol(session, None)
+        if command.symbol is not None:
+            requested_symbol = str(command.symbol).strip().upper()
+            if requested_symbol != active_symbol:
+                raise HTTPException(
+                    409,
+                    "candle symbol must match the active replay symbol for deterministic history",
+                )
         if command.index is not None and command.index != replay_index:
             raise HTTPException(409, "candle index must match replay index for deterministic history")
-        raw = command.candle.model_dump() if command.candle is not None else replay_candle(session, symbol)
-        candle = normalize_candle(raw)
+
+        expected = session.replay.candles[replay_index]
+        if command.candle is None:
+            candle = normalize_candle(expected)
+        else:
+            candle = normalize_candle(command.candle.model_dump())
+            if candle != expected:
+                raise HTTPException(
+                    409,
+                    "candle data must match the immutable replay candle for deterministic history",
+                )
+
         index = replay_index
-        existing = session.trading.get_latest_market(symbol)
+        existing = session.trading.get_latest_market(active_symbol)
         is_same_index_retry = existing is not None and existing.get("index") == index
-        events = session.trading.on_candle(candle, index, symbol)
+        events = session.trading.on_candle(candle, index, active_symbol)
         if not is_same_index_retry:
-            session.record("candle", replay_index, {"candle": candle, "index": index, "symbol": symbol})
+            session.record("candle", replay_index, {"candle": candle, "index": index, "symbol": active_symbol})
         return {"events": events, "candle": candle, **snapshot(session.trading)}
+
     try:
         return atomic_session(request, process_candle)
     except StateInvariantError as exc:
