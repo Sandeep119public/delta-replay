@@ -110,7 +110,7 @@ def validate_history(history, *, replay_index_limit=None) -> None:
         if isinstance(index, bool) or not isinstance(index, int) or index < -1:
             raise ReplayDivergenceError("session history replayIndex is invalid")
         if index < last_replay_index:
-            raise ReplayDivergenceError("session history must be ordered by replayIndex")
+            raise ReplayDivergenceError("session history is not ordered by replayIndex")
         if replay_index_limit is not None and index > replay_index_limit:
             raise ReplayDivergenceError("session history contains an event beyond replay index")
         payload = command.get("payload")
