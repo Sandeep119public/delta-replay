@@ -36,7 +36,21 @@ describe('session mutation pipeline', () => {
     await expect(after).resolves.toMatchObject({ applied: true, response: 'ok' });
   });
 
-  it('rejects unsupported ordering modes', () => {\n    const pipeline = new SessionMutationPipeline();\n    expect(() => pipeline.run(async () => 'ok', { mode: 'parallel' })).toThrow(/Unsupported session mutation mode/);\n  });\n\n  it('keeps latest-only responses generation-safe', async () => {\n    const pipeline = new SessionMutationPipeline();\n    const first = pipeline.run(async () => 'first', { mode: MUTATION_MODE.LATEST, scope: 'trading' });\n    const second = pipeline.run(async () => 'second', { mode: MUTATION_MODE.LATEST, scope: 'trading' });\n    await expect(first).resolves.toMatchObject({ applied: true });\n    await expect(second).resolves.toMatchObject({ applied: true });\n  });\n\n  it('marks an invalidated response stale without dropping the queued command', async () => {
+  it('rejects unsupported ordering modes', () => {
+    const pipeline = new SessionMutationPipeline();
+    expect(() => pipeline.run(async () => 'ok', { mode: 'parallel' })).toThrow(/serial or latest/);
+  });
+
+  it('keeps latest-only responses generation-safe', async () => {
+    const pipeline = new SessionMutationPipeline();
+    const first = pipeline.run(async () => 'first', { mode: MUTATION_MODE.LATEST, scope: 'trading' });
+    const second = pipeline.run(async () => 'second', { mode: MUTATION_MODE.LATEST, scope: 'trading' });
+
+    await expect(first).resolves.toMatchObject({ applied: true });
+    await expect(second).resolves.toMatchObject({ applied: true });
+  });
+
+  it('marks an invalidated response stale without dropping the queued command', async () => {
     const pipeline = new SessionMutationPipeline();
     const generation = pipeline.generation();
     const applied = [];
