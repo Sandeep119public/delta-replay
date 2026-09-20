@@ -200,7 +200,7 @@
 @media (max-width: 640px) {
   :root {
     --phase1-header: 96px;
-    --phase1-timeline: 108px;
+    --phase1-timeline: 136px;
   }
 
   .topbar {
