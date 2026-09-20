@@ -1,19 +1,16 @@
-import { SessionRequestQueue } from './SessionRequestQueue.js';
-
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const API_REQUEST_TIMEOUT_MS = 30_000;
 
 export class BackendService {
-  constructor(path, sessionId, requestQueue = new SessionRequestQueue()) {
+  constructor(path, sessionId) {
     if (!path) throw new TypeError('BackendService path is required');
     if (!sessionId) throw new TypeError('BackendService sessionId is required');
     this.path = path;
     this.sessionId = sessionId;
-    this.requestQueue = requestQueue;
   }
 
   request(endpoint = '', options = {}) {
-    return this.requestQueue.enqueue(async () => {
+    return (async () => {
       const controller = options.signal ? null : new AbortController();
       const timeout = controller ? setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS) : null;
       try {
@@ -49,6 +46,6 @@ export class BackendService {
       } finally {
         if (timeout) clearTimeout(timeout);
       }
-    });
+    })();
   }
 }
