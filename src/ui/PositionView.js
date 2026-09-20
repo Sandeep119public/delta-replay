@@ -62,7 +62,7 @@ export class PositionView {
   closePosition() {
     const position = this._activePosition();
     if (!position) { const message = 'No open position to close'; this.onError?.(message); return Promise.resolve({ success: false, message }); }
-    return this._run(() => this.trading.actions.flattenPosition(position.symbol));
+    return this._run(() => this.trading.actions.closePosition(position.symbol));
   }
 
   setRisk() {
