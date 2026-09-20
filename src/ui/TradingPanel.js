@@ -45,40 +45,37 @@ export class TradingPanel {
   }
 
   _bindSidebarTabs() {
-    try {
-      const tabBtns = [...document.querySelectorAll('.panel-tab-btn')];
-      const activate = (btn, focus = false) => {
-        const targetTab = btn.getAttribute('data-tab');
-        tabBtns.forEach((tab) => {
-          const selected = tab === btn;
-          tab.classList.toggle('active', selected);
-          tab.setAttribute('aria-selected', String(selected));
-          tab.tabIndex = selected ? 0 : -1;
-        });
-        document.querySelectorAll('.tab-panel').forEach((panel) => {
-          const selected = panel.id === `tab-view-${targetTab}`;
-          panel.classList.toggle('active', selected);
-          panel.hidden = !selected;
-        });
-        if (focus) btn.focus();
-      };
-      tabBtns.forEach((btn, index) => {
-        const onClick = () => activate(btn);
-        const onKeyDown = (event) => {
-          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-          event.preventDefault();
-          const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabBtns.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabBtns.length) % tabBtns.length;
-          activate(tabBtns[nextIndex], true);
-        };
-        btn.addEventListener('click', onClick);
-        btn.addEventListener('keydown', onKeyDown);
-        this._tabBindings.push([btn, onClick, onKeyDown]);
+    const tabBtns = [...document.querySelectorAll('.panel-tab-btn')];
+    const activate = (btn, focus = false) => {
+      const targetTab = btn.getAttribute('data-tab');
+      tabBtns.forEach((tab) => {
+        const selected = tab === btn;
+        tab.classList.toggle('active', selected);
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
       });
-      const selected = tabBtns.find((btn) => btn.getAttribute('aria-selected') === 'true') || tabBtns[0];
-      if (selected) activate(selected);
-    } catch {}
+      document.querySelectorAll('.tab-panel').forEach((panel) => {
+        const selected = panel.id === `tab-view-${targetTab}`;
+        panel.classList.toggle('active', selected);
+        panel.hidden = !selected;
+      });
+      if (focus) btn.focus();
+    };
+    tabBtns.forEach((btn, index) => {
+      const onClick = () => activate(btn);
+      const onKeyDown = (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabBtns.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabBtns.length) % tabBtns.length;
+        activate(tabBtns[nextIndex], true);
+      };
+      btn.addEventListener('click', onClick);
+      btn.addEventListener('keydown', onKeyDown);
+      this._tabBindings.push([btn, onClick, onKeyDown]);
+    });
+    const selected = tabBtns.find((btn) => btn.getAttribute('aria-selected') === 'true') || tabBtns[0];
+    if (selected) activate(selected);
   }
-
   _bindEngineEvents() {
     const trading = this.trading;
     const on = this.tradingEvents?.on || trading?.on?.bind(trading);
@@ -139,32 +136,69 @@ export class TradingPanel {
   }
 
   _renderTicketState(positions = [], trades = []) {
-    try {
-      const p = this._activePosition(positions);
-      const inPos = Boolean(p);
-      const ticket = document.getElementById('order-ticket'), hint = document.getElementById('ticket-state-hint'), pill = document.getElementById('pos-state-pill');
-      const flatSummary = document.getElementById('ticket-flatten-summary'), fEntry = document.getElementById('flatten-entry'), fMark = document.getElementById('flatten-mark'), fPnl = document.getElementById('flatten-pnl');
-      if (ticket) { ticket.classList.toggle('is-flat', !inPos); ticket.classList.toggle('is-in-position', inPos); ticket.classList.remove('is-long', 'is-short'); if (inPos) ticket.classList.add(`is-${String(p.side || '').toLowerCase()}`); }
-      if (document.body) { document.body.classList.toggle('has-position', inPos); document.body.classList.toggle('is-flat', !inPos); }
-      if (pill) { pill.textContent = inPos ? p.side : 'FLAT'; pill.className = `pos-state-pill ${inPos ? (p.side === 'LONG' ? 'is-long' : 'is-short') : 'is-flat'}`; }
-      if (hint) hint.textContent = inPos ? `${p.side} ${p.quantity} · uPnL ${Number(p.unrealizedPnL) >= 0 ? '+' : ''}$${Number(p.unrealizedPnL).toFixed(2)}` : 'FLAT • Pick a size';
-      const fmt = (v) => { const n = Number(v); return Number.isFinite(n) ? `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}` : '—'; };
-      const riskDetails = document.querySelector('.risk-details');
-      if (riskDetails) riskDetails.open = inPos;
-      if (flatSummary) flatSummary.classList.toggle('hidden', !inPos);
-      if (inPos) { if (fEntry) fEntry.textContent = fmt(p.entryPrice); if (fMark) fMark.textContent = fmt(p.currentPrice); if (fPnl) { fPnl.textContent = `${Number(p.unrealizedPnL) >= 0 ? '+' : ''}${fmt(p.unrealizedPnL)}`; fPnl.className = `num ${Number(p.unrealizedPnL) >= 0 ? 'pnl-pos' : 'pnl-neg'}`; } }
-      if (this.closeBtn) this.closeBtn.textContent = inPos ? `FLATTEN ${p.side} ${p.quantity}` : 'CLOSE POSITION';
-      const fillsEl = document.getElementById('ticket-fills-list');
-      if (fillsEl) {
-        const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-        fillsEl.innerHTML = trades.length ? trades.slice(-3).reverse().map((t) => {
-          const net = Number(t.netPnL ?? t.realizedPnL ?? 0);
-          const safeNet = Number.isFinite(net) ? net : 0;
-          const qty = Number(t.quantity);
-          const cls = safeNet >= 0 ? 'pnl-pos' : 'pnl-neg';
-          return `<div class="trade-row"><span class="num">${esc(t.symbol)} ${esc(t.side)} ${Number.isFinite(qty) ? qty : '—'}</span><span class="num ${cls}">${safeNet >= 0 ? '+' : '-'}$${Math.abs(safeNet).toFixed(2)}</span></div>`;
-        }).join('') : '<span class="empty-hint">No fills yet</span>';
-      }
-    } catch {}
+    const position = this._activePosition(positions);
+    this._renderTicketPositionState(position);
+    this._renderFlattenSummary(position);
+    this._renderRecentFills(trades);
   }
-}
+
+  _renderTicketPositionState(position) {
+    const inPos = Boolean(position);
+    const ticket = document.getElementById('order-ticket');
+    const hint = document.getElementById('ticket-state-hint');
+    const pill = document.getElementById('pos-state-pill');
+    if (ticket) {
+      ticket.classList.toggle('is-flat', !inPos);
+      ticket.classList.toggle('is-in-position', inPos);
+      ticket.classList.remove('is-long', 'is-short');
+      if (inPos) ticket.classList.add(`is-${String(position.side || '').toLowerCase()}`);
+    }
+    document.body?.classList.toggle('has-position', inPos);
+    document.body?.classList.toggle('is-flat', !inPos);
+    if (pill) {
+      pill.textContent = inPos ? position.side : 'FLAT';
+      pill.className = `pos-state-pill ${inPos ? (position.side === 'LONG' ? 'is-long' : 'is-short') : 'is-flat'}`;
+    }
+    if (hint) {
+      hint.textContent = inPos
+        ? `${position.side} ${position.quantity} · uPnL ${Number(position.unrealizedPnL) >= 0 ? '+' : ''}$${Number(position.unrealizedPnL).toFixed(2)}`
+        : 'FLAT • Pick a size';
+    }
+    document.querySelector('.risk-details')?.open = inPos;
+    if (this.closeBtn) this.closeBtn.textContent = inPos ? `FLATTEN ${position.side} ${position.quantity}` : 'CLOSE POSITION';
+  }
+
+  _renderFlattenSummary(position) {
+    const summary = document.getElementById('ticket-flatten-summary');
+    summary?.classList.toggle('hidden', !position);
+    if (!position) return;
+    const fmt = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}` : '—';
+    };
+    const entry = document.getElementById('flatten-entry');
+    const mark = document.getElementById('flatten-mark');
+    const pnl = document.getElementById('flatten-pnl');
+    if (entry) entry.textContent = fmt(position.entryPrice);
+    if (mark) mark.textContent = fmt(position.currentPrice);
+    if (pnl) {
+      const value = Number(position.unrealizedPnL);
+      pnl.textContent = `${value >= 0 ? '+' : ''}${fmt(value)}`;
+      pnl.className = `num ${value >= 0 ? 'pnl-pos' : 'pnl-neg'}`;
+    }
+  }
+
+  _renderRecentFills(trades = []) {
+    const fillsEl = document.getElementById('ticket-fills-list');
+    if (!fillsEl) return;
+    const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    fillsEl.innerHTML = trades.length
+      ? trades.slice(-3).reverse().map((trade) => {
+        const net = Number(trade.netPnL ?? trade.realizedPnL ?? 0);
+        const safeNet = Number.isFinite(net) ? net : 0;
+        const quantity = Number(trade.quantity);
+        const cls = safeNet >= 0 ? 'pnl-pos' : 'pnl-neg';
+        return `<div class="trade-row"><span class="num">${escape(trade.symbol)} ${escape(trade.side)} ${Number.isFinite(quantity) ? quantity : '—'}</span><span class="num ${cls}">${safeNet >= 0 ? '+' : '-'}$${Math.abs(safeNet).toFixed(2)}</span></div>`;
+      }).join('')
+      : '<span class="empty-hint">No fills yet</span>';
+  }}
