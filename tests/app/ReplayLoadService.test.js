@@ -96,19 +96,26 @@ describe('ReplayLoadService', () => {
 
   it('stages candles outside the shared store until the remote replay load succeeds', async () => {
     const candles = [{ time: 1, open: 100, high: 101, low: 99, close: 100 }];
+    const sharedStore = new (await import('../../src/data/CandleStore.js')).CandleStore();
+    sharedStore.load(
+      [{ time: 999, open: 90, high: 91, low: 89, close: 90 }],
+      { symbol: 'BTCUSDT', timeframe: '1m' },
+    );
     let stagingStore = null;
     const d = deps(vi.fn(async ({ store }) => {
       stagingStore = store;
       store.load(candles, { symbol: 'BTCUSDT', timeframe: '1m' });
       return { candles, metadata: store.getMetadata() };
-    }));
+    }), { candleStore: sharedStore });
     d.replayEngine.load = vi.fn().mockRejectedValue(new Error('remote replay load failed'));
 
     await createReplayLoadService(d).loadAndPrepareReplay({ targetSec: 1 });
 
-    expect(stagingStore).not.toBe(d.candleStore);
+    expect(stagingStore).not.toBe(sharedStore);
     expect(stagingStore.getCount()).toBe(1);
-    expect(d.candleStore.load).not.toHaveBeenCalled();
+    expect(sharedStore.getAll()).toEqual([
+      { time: 999, open: 90, high: 91, low: 89, close: 90, volume: undefined },
+    ]);
     expect(d.appState.setCandles).not.toHaveBeenCalled();
   });
 
