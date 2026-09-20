@@ -47,17 +47,13 @@ export class SessionMutationPipeline {
     if (!this._tail) {
       const next = execute();
       const tracked = next.catch(() => undefined);
-      this._tail = tracked.finally(() => {
-        if (this._tail === tracked) this._tail = null;
-      });
+      this._tail = tracked;
       return next;
     }
 
     const next = this._tail.then(execute, execute);
     const tracked = next.catch(() => undefined);
-    this._tail = tracked.finally(() => {
-      if (this._tail === tracked) this._tail = null;
-    });
+    this._tail = tracked;
     return next;
   }
 
