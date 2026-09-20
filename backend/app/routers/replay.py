@@ -91,7 +91,7 @@ def seek(request: Request, index: int, symbol: str | None = None):
 def reset(request: Request):
     def reset_session(session):
         symbol = _replay_symbol(session)
-        replay = session.reset(symbol)
+        replay = session.reset_replay(symbol)
         return {**replay, "trading": trading_api_snapshot(session.trading)}
     try:
         return atomic_session(request, reset_session)
