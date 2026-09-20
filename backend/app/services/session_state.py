@@ -5,7 +5,8 @@ from typing import Any, Dict
 
 from .paper_engine import PaperTradingEngine
 from .replay_service import ReplayService
-from .replay_timeline import ReplayDivergenceError, validate_history
+from .replay_session import ReplaySession
+from .replay_timeline import ReplayDivergenceError, ReplayTimeline, validate_history
 
 
 SESSION_STATE_VERSION = 2
@@ -64,12 +65,14 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
             raise ValueError(f"market context for {symbol} predates its open position")
 
 
-def serialize_session(
-    replay: ReplayService,
-    trading: PaperTradingEngine,
-    history: list[dict] | None = None,
-) -> Dict[str, Any]:
-    """Return the canonical JSON-compatible session persistence document."""
+def serialize_replay_session(session: ReplaySession) -> Dict[str, Any]:
+    """Serialize one aggregate without exposing its child ownership to callers."""
+    if not isinstance(session, ReplaySession):
+        raise TypeError("session must be a ReplaySession")
+    return _serialize_components(session.replay, session.trading, session.history)
+
+
+def _serialize_components(replay: ReplayService, trading: PaperTradingEngine, history: list[dict] | None = None) -> Dict[str, Any]:
     history = deepcopy(history or [])
     _validate_history(history, replay_index=replay.index)
     document = {
@@ -84,43 +87,16 @@ def serialize_session(
     return document
 
 
-def restore_session_bundle(document: Dict[str, Any]):
-    """Restore replay, trading, and command history in one validation pass."""
-    if not isinstance(document, dict):
-        raise ValueError("session document must be an object")
-    version = document.get("version")
-    if version not in SUPPORTED_SESSION_STATE_VERSIONS:
-        raise ValueError("unsupported session state version")
-    _validate_json_safety(document)
-
-    try:
-        replay = ReplayService.from_state(document.get("replay"))
-        trading = PaperTradingEngine.from_state(document.get("trading"))
-        market_state = document.get("tradingMarket", {})
-        _validate_market_state(replay, trading, market_state)
-        trading.restore_market_state(market_state)
-    except (KeyError, TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(f"invalid session state: {exc}") from exc
-
-    history = [] if version == 1 else deepcopy(document.get("history", []))
-    _validate_history(history, replay_index=replay.index)
-    return replay, trading, history
+def restore_replay_session(document: Dict[str, Any]) -> ReplaySession:
+    replay, trading, history = restore_session_bundle(document)
+    return ReplaySession(replay=replay, trading=trading, _timeline=ReplayTimeline(history))
 
 
-def restore_session(document: Dict[str, Any]):
-    """Rehydrate replay and trading services using the legacy two-value contract."""
-    return restore_session_bundle(document)[:2]
+def serialize_session(
+    replay: ReplayService,
+    trading: PaperTradingEngine,
+    history: list[dict] | None = None,
+) -> Dict[str, Any]:
+    """Legacy compatibility wrapper for callers migrating to the aggregate API."""
+    return _serialize_components(replay, trading, history)
 
-
-def extract_history(document: Dict[str, Any]) -> list[dict]:
-    """Return validated deterministic user commands from a persisted session."""
-    try:
-        _, _, history = restore_session_bundle(document)
-    except (KeyError, TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(f"invalid session history: {exc}") from exc
-    return history
-
-
-def clone_session_document(document: Dict[str, Any]) -> Dict[str, Any]:
-    """Make defensive copies at the repository boundary."""
-    return deepcopy(document)
