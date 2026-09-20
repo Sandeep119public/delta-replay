@@ -84,11 +84,7 @@ class SessionManager:
             def mutate(document):
                 session = self._restore(document)
                 result = operation(session)
-                return serialize_session(
-                    session.replay,
-                    session.trading,
-                    session.history,
-                ), (result, session)
+                return serialize_replay_session(session), (result, session)
 
             result, session = self.repository.atomic_update(session_id, mutate)
             if not self.repository.durable:
