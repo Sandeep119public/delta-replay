@@ -17,7 +17,7 @@ function state(extra = {}) {
 }
 
 describe('RemoteTradingEngine state ordering', () => {
-  it('applies every successful response in serialized completion order', async () => {
+  it('serializes trading mutations so later responses include earlier state', async () => {
     const queue = [];
     const api = { request: vi.fn((path) => new Promise((resolve, reject) => queue.push({ path, resolve, reject }))) };
     const engine = new RemoteTradingEngine(api);
@@ -27,11 +27,15 @@ describe('RemoteTradingEngine state ordering', () => {
     queue.shift().resolve(state());
     await engine._refreshPromise;
 
-    const first = engine.submitMarketOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 1 });
+    const first = engine.submitOrder({ symbol: 'BTCUSDT', side: 'BUY', quantity: 1, type: 'market' });
     const second = engine.setFeeRate(0.001);
 
-    expect(queue).toHaveLength(2);
+    expect(queue).toHaveLength(1);
     queue.shift().resolve(state({ orders: [{ id: 1, symbol: 'BTCUSDT', status: 'PENDING' }], pendingOrders: [{ id: 1, symbol: 'BTCUSDT', status: 'PENDING' }] }));
+    await first;
+
+    await Promise.resolve();
+    expect(queue).toHaveLength(1);
     queue.shift().reject(new Error('configuration rejected'));
 
     const firstResult = await first;
