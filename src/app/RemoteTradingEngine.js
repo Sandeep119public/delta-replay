@@ -99,25 +99,48 @@ export class RemoteTradingEngine {
   getPerformanceStats() { const trades = this.data.trades; const wins = trades.filter((trade) => Number(trade.netPnL ?? 0) > 0); const grossWin = wins.reduce((sum, trade) => sum + Number(trade.netPnL || 0), 0); const grossLoss = Math.abs(trades.filter((trade) => Number(trade.netPnL ?? 0) < 0).reduce((sum, trade) => sum + Number(trade.netPnL || 0), 0)); const net = trades.reduce((sum, trade) => sum + Number(trade.netPnL || 0), 0); const starting = Number(this.data.account.startingBalance || 0); return { totalTrades: trades.length, winRate: trades.length ? (wins.length / trades.length) * 100 : 0, profitFactor: grossLoss ? grossWin / grossLoss : (grossWin ? Infinity : 0), netReturn: starting > 0 ? (net / starting) * 100 : 0 }; }
   async refresh() { if (this._destroyed) return this.getStateSnapshot(); const result = await this._request('/state', {}, 'refresh'); return result.response; }
   async _action(path, options, action) { if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; try { const result = await this._request(path, options, action); if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; if (!result.applied) return { success: true, ...this.getStateSnapshot(), stale: true }; return { success: true, ...result.response }; } catch (error) { return { success: false, message: error?.message || 'Trading request failed', status: error?.status, error }; } }
-  submitMarketOrder(order) { return this._action('/order', { method: 'POST', body: JSON.stringify({ symbol: order.symbol, side: String(order.side).toLowerCase(), quantity: order.quantity, type: 'market' }) }, 'place'); }
-  placeLimitOrder(order) { return this._action('/order', { method: 'POST', body: JSON.stringify({ symbol: order.symbol, side: String(order.side).toLowerCase(), quantity: order.quantity, type: 'limit', limitPrice: order.limitPrice }) }, 'place'); }
-  placeStopOrder(order) { return this._action('/order', { method: 'POST', body: JSON.stringify({ symbol: order.symbol, side: String(order.side).toLowerCase(), quantity: order.quantity, type: 'stop_market', stopPrice: order.stopPrice }) }, 'place'); }
-  placeOrder(order) { return this.submitMarketOrder(order); }
-  flattenPosition(symbol) { return this._action('/close', { method: 'POST', body: JSON.stringify({ symbol: String(symbol).toUpperCase() }) }, 'close'); }
-  closePosition(symbol) { return this.flattenPosition(symbol); }
-  updateRisk({ symbol, stopLoss, takeProfit }) { return this._action('/risk', { method: 'POST', body: JSON.stringify({ symbol: String(symbol).toUpperCase(), stopLoss, takeProfit }) }, 'risk'); }
-  setRisk({ symbol, stopLoss, takeProfit }) { return this.updateRisk({ symbol, stopLoss, takeProfit }); }
-  setStopLoss(symbol, price) { const position = this.getPositions().find((candidate) => candidate.symbol === String(symbol).toUpperCase()); return this.updateRisk({ symbol, stopLoss: price, takeProfit: position?.takeProfitPrice ?? null }); }
-  setTakeProfit(symbol, price) { const position = this.getPositions().find((candidate) => candidate.symbol === String(symbol).toUpperCase()); return this.updateRisk({ symbol, stopLoss: position?.stopLossPrice ?? null, takeProfit: price }); }
-  clearRisk(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}`, { method: 'POST' }, 'risk'); }
-  clearStopLoss(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}&target=stopLoss`, { method: 'POST' }, 'risk'); }
-  clearTakeProfit(symbol) { return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}&target=takeProfit`, { method: 'POST' }, 'risk'); }
-  clearPendingOrders(reason = null) { const query = reason ? `?reason=${encodeURIComponent(String(reason))}` : ''; return this._action(`/orders/cancel-all${query}`, { method: 'POST' }, 'cancel'); }
-  cancelOrder(id) { return this._action(`/orders/${id}/cancel`, { method: 'POST' }, 'cancel'); }
-  resetAccount() { return this._action('/reset', { method: 'POST' }, 'reset'); }
-  setStartingBalance(balance) { return this._action('/account/capital', { method: 'POST', body: JSON.stringify({ balance }) }, 'capital'); }
-  setCapital(balance) { return this.setStartingBalance(balance); }
-  setFeeRate(rate) { return this._action('/account/fee-rate', { method: 'POST', body: JSON.stringify({ rate }) }, 'fee'); }
+  submitOrder(order) {
+    if (!order || typeof order !== 'object') throw new TypeError('submitOrder requires an order');
+    const type = String(order.type || 'market').toLowerCase();
+    if (!['market', 'limit', 'stop_market'].includes(type)) throw new TypeError(`Unsupported order type: ${type}`);
+    const body = {
+      symbol: String(order.symbol || '').toUpperCase(),
+      side: String(order.side || '').toLowerCase(),
+      quantity: order.quantity,
+      type,
+    };
+    if (type === 'limit') body.limitPrice = order.limitPrice;
+    if (type === 'stop_market') body.stopPrice = order.stopPrice;
+    return this._action('/order', { method: 'POST', body: JSON.stringify(body) }, 'place');
+  }
+  closePosition(symbol) {
+    return this._action('/close', { method: 'POST', body: JSON.stringify({ symbol: String(symbol).toUpperCase() }) }, 'close');
+  }
+  setRisk({ symbol, stopLoss = null, takeProfit = null }) {
+    return this._action('/risk', {
+      method: 'POST',
+      body: JSON.stringify({ symbol: String(symbol).toUpperCase(), stopLoss, takeProfit }),
+    }, 'risk');
+  }
+  clearRisk(symbol) {
+    return this._action(`/risk/clear?symbol=${encodeURIComponent(String(symbol).toUpperCase())}`, { method: 'POST' }, 'risk');
+  }
+  cancelAll(reason = null) {
+    const query = reason ? `?reason=${encodeURIComponent(String(reason))}` : '';
+    return this._action(`/orders/cancel-all${query}`, { method: 'POST' }, 'cancel');
+  }
+  cancelOrder(id) {
+    return this._action(`/orders/${id}/cancel`, { method: 'POST' }, 'cancel');
+  }
+  reset() {
+    return this._action('/reset', { method: 'POST' }, 'reset');
+  }
+  setStartingBalance(balance) {
+    return this._action('/account/capital', { method: 'POST', body: JSON.stringify({ balance }) }, 'capital');
+  }
+  setFeeRate(rate) {
+    return this._action('/account/fee-rate', { method: 'POST', body: JSON.stringify({ rate }) }, 'fee');
+  }
   async onMarketCandle(payload = null) { if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' }; const candle = payload?.candle || null; const body = candle ? JSON.stringify({ symbol: String(payload.symbol || candle.symbol || 'BTCUSDT').toUpperCase(), candle, index: payload.index ?? null }) : undefined; try { const result = await this._request('/candle', { method: 'POST', ...(body ? { body } : {}) }, 'candle'); return this._destroyed ? { success: false, message: 'Trading engine is destroyed' } : result.applied ? result.response : { success: true, ...this.getStateSnapshot(), stale: true }; } catch (error) { return { success: false, message: error?.message || 'Trading request failed', error }; }
   }
   destroy() { if (this._destroyed) return; this._destroyed = true; this.events = new Events(); this.latestCandle = null; }
