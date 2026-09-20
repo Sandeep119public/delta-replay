@@ -1,5 +1,7 @@
 """Deterministic reconstruction of trading state from the persisted event timeline."""
 
+from copy import deepcopy
+
 from .paper_engine import PaperTradingEngine
 
 
@@ -31,6 +33,47 @@ def latest_market_event_symbol(history):
 
 class ReplayDivergenceError(ValueError):
     """Raised when persisted commands cannot reproduce the trading state."""
+
+class ReplayTimeline:
+    """Canonical ordered event history for a replay session."""
+
+    def __init__(self, events=None):
+        self._events = [deepcopy(event) for event in (events or [])]
+        validate_history(self._events)
+
+    def snapshot(self):
+        return deepcopy(self._events)
+
+    def replace(self, events):
+        candidate = [deepcopy(event) for event in (events or [])]
+        validate_history(candidate)
+        self._events = candidate
+
+    def truncate_after(self, replay_index):
+        self._events = [
+            event for event in self._events
+            if event.get("replayIndex", -1) <= replay_index
+        ]
+
+    def record(self, command_type, replay_index, payload):
+        candidate = self.snapshot()
+        candidate = [
+            event for event in candidate
+            if event.get("replayIndex", -1) <= replay_index
+        ]
+        candidate.append({
+            "type": command_type,
+            "replayIndex": int(replay_index),
+            "payload": deepcopy(payload),
+        })
+        validate_history(candidate)
+        self._events = candidate
+
+    def __iter__(self):
+        return iter(self._events)
+
+    def __len__(self):
+        return len(self._events)
 
 
 def _apply_command(engine: PaperTradingEngine, command: dict, replay=None) -> None:
