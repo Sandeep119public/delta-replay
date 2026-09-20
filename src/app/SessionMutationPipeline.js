@@ -17,7 +17,7 @@ export class SessionMutationPipeline {
   run(operation, { generation = this._generation, apply = null } = {}) {
     if (this._destroyed) return Promise.resolve({ applied: false, response: null });
     const execute = async () => {
-      if (this._destroyed || generation !== this._generation) {
+      if (this._destroyed) {
         return { applied: false, response: null };
       }
       const response = await operation();
