@@ -71,22 +71,32 @@ class ReplaySession:
         self.record("market_step", result["index"], {"symbol": symbol})
         return result, events
 
-    def seek(self, index: int, symbol: str) -> dict:
-        """Seek and deterministically reconstruct trading state at that bar."""
-        result = self.replay.seek(index)
-        filtered_history = [event for event in self.history if event.get("replayIndex", -1) <= result["index"]]
+    def reconstruct_trading(self, target_index: int, symbol: str, history=None) -> PaperTradingEngine:
+        """Rebuild trading state from one canonical history prefix."""
         current = self.trading
-        self.replace_trading(rebuild_trading(
+        source_history = self.history if history is None else history
+        filtered_history = [
+            deepcopy(event) for event in source_history
+            if event.get("replayIndex", -1) <= target_index
+        ]
+        rebuilt = rebuild_trading(
             self.replay,
             filtered_history,
-            result["index"],
+            target_index,
             default_symbol=symbol,
             starting_balance=current.account.starting_balance,
             fee_rate=current.fee_rate,
             margin_rate=current.margin_rate,
             maint_margin_rate=current.maint_margin_rate,
-        ))
+        )
+        self.replace_trading(rebuilt)
         self.replace_history(filtered_history)
+        return rebuilt
+
+    def seek(self, index: int, symbol: str) -> dict:
+        """Seek and deterministically reconstruct trading state at that bar."""
+        result = self.replay.seek(index)
+        self.reconstruct_trading(result["index"], symbol)
         return result
 
     def reset_replay(self, symbol: str) -> dict:
@@ -129,17 +139,7 @@ class ReplaySession:
                 "replayIndex": replay_index,
                 "payload": {"candle": deepcopy(candle), "index": replay_index, "symbol": symbol},
             })
-        self.replace_trading(rebuild_trading(
-            self.replay,
-            market_history,
-            replay_index,
-            default_symbol=symbol,
-            starting_balance=balance,
-            fee_rate=fee_rate,
-            margin_rate=margin_rate,
-            maint_margin_rate=maint_margin_rate,
-        ))
-        self.replace_history(market_history)
+        self.reconstruct_trading(replay_index, symbol, market_history)
 
     def reset(self, symbol: str) -> dict:
         """Compatibility alias for a full replay reset."""
