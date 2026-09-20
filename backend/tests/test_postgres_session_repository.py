@@ -8,8 +8,13 @@ import pytest
 from app.services.paper_engine import PaperTradingEngine
 from app.services.postgres_session_repository import PostgresSessionRepository
 from app.services.replay_service import ReplayService
+from app.services.replay_session import ReplaySession
 from app.services.session_manager import SessionManager
 from app.services.session_state import serialize_replay_session
+
+
+def serialize_components(replay, trading):
+    return serialize_replay_session(ReplaySession(replay=replay, trading=trading))
 
 
 pytestmark = pytest.mark.skipif(
@@ -42,7 +47,7 @@ def test_dataset_write_locks_before_existence_check():
 
     replay = ReplayService()
     replay.load([candle(100, 105, 95, 102)])
-    document = serialize_replay_session(replay, PaperTradingEngine())
+    document = serialize_components(replay, PaperTradingEngine())
     connection = Connection()
 
     prepared = PostgresSessionRepository._prepare_storage_document(connection, document)
@@ -60,7 +65,7 @@ def test_postgres_round_trip_and_revisioning():
     replay.load([candle(100, 105, 95, 102)])
     replay.start(0)
     trading = PaperTradingEngine(starting_balance=25000)
-    document = serialize_replay_session(replay, trading)
+    document = serialize_components(replay, trading)
 
     try:
         repository.save(session_id, document)
@@ -89,7 +94,7 @@ def test_postgres_session_row_excludes_immutable_candle_payload():
     session_id = str(uuid4())
     replay = ReplayService()
     replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
-    document = serialize_replay_session(replay, PaperTradingEngine())
+    document = serialize_components(replay, PaperTradingEngine())
 
     try:
         repository.save(session_id, document)
@@ -112,7 +117,7 @@ def test_postgres_identical_datasets_are_deduplicated():
     second_id = str(uuid4())
     replay = ReplayService()
     replay.load([candle(100, 105, 95, 102), candle(102, 106, 101, 104, 2)])
-    document = serialize_replay_session(replay, PaperTradingEngine())
+    document = serialize_components(replay, PaperTradingEngine())
 
     try:
         repository.save(first_id, document)
@@ -133,7 +138,7 @@ def test_postgres_legacy_inline_dataset_is_migrated_on_next_write():
     session_id = str(uuid4())
     replay = ReplayService()
     replay.load([candle(100, 105, 95, 102)])
-    document = serialize_replay_session(replay, PaperTradingEngine())
+    document = serialize_components(replay, PaperTradingEngine())
     legacy_replay = dict(document["replay"])
     legacy_replay.pop("datasetId")
     document["replay"] = legacy_replay
@@ -226,7 +231,7 @@ def test_postgres_reclaims_dataset_after_session_delete():
     session_id = str(uuid4())
     replay = ReplayService()
     replay.load([candle(100, 105, 95, 102)])
-    document = serialize_replay_session(replay, PaperTradingEngine())
+    document = serialize_components(replay, PaperTradingEngine())
 
     try:
         repository.save(session_id, document)
@@ -245,10 +250,10 @@ def test_postgres_reclaims_replaced_dataset_but_keeps_shared_dataset():
     second_id = str(uuid4())
     first_replay = ReplayService()
     first_replay.load([candle(100, 105, 95, 102)])
-    first_document = serialize_replay_session(first_replay, PaperTradingEngine())
+    first_document = serialize_components(first_replay, PaperTradingEngine())
     second_replay = ReplayService()
     second_replay.load([candle(200, 205, 195, 202)])
-    second_document = serialize_replay_session(second_replay, PaperTradingEngine())
+    second_document = serialize_components(second_replay, PaperTradingEngine())
 
     try:
         repository.save(first_id, first_document)
