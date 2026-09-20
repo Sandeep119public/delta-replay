@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from app.routers.replay import _active_replay_symbol, _replay_symbol
+from app.services.replay_timeline import ReplayTimeline
 
 
 def market_step(index, symbol):
@@ -32,10 +33,10 @@ def candle_event(index, symbol):
 
 def test_reset_uses_latest_active_symbol_after_explicit_switch():
     session = SimpleNamespace(
-        history=[
+        timeline=ReplayTimeline([
             market_step(0, "BTCUSDT"),
             market_step(1, "ETHUSDT"),
-        ],
+        ]),
     )
 
     assert _replay_symbol(session) == "ETHUSDT"
@@ -64,6 +65,6 @@ def test_active_replay_symbol_uses_latest_canonical_market_event():
 
 
 def test_reset_symbol_falls_back_when_no_market_history_exists():
-    session = SimpleNamespace(history=[])
+    session = SimpleNamespace(timeline=ReplayTimeline())
 
     assert _replay_symbol(session) == "BTCUSDT"
