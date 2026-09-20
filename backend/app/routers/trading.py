@@ -377,12 +377,21 @@ def reset(request: Request):
             ]
             return snapshot(session.trading)
 
-        symbol = _replay_symbol(session)
         market_history = [
             deepcopy(event)
             for event in session.history
             if event.get("type") in {"market_step", "candle"}
         ]
+        symbol = next(
+            (
+                event["payload"]["symbol"]
+                for event in reversed(market_history)
+                if isinstance(event.get("payload"), dict)
+                and isinstance(event["payload"].get("symbol"), str)
+                and event["payload"]["symbol"].strip()
+            ),
+            "BTCUSDT",
+        )
 
         has_current_context = any(
             event.get("replayIndex") == replay_index
