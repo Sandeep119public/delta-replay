@@ -164,7 +164,8 @@ export class TradingPanel {
         ? `${position.side} ${position.quantity} · uPnL ${Number(position.unrealizedPnL) >= 0 ? '+' : ''}$${Number(position.unrealizedPnL).toFixed(2)}`
         : 'FLAT • Pick a size';
     }
-    document.querySelector('.risk-details')?.open = inPos;
+    const riskDetails = document.querySelector('.risk-details');
+    if (riskDetails) riskDetails.open = inPos;
     if (this.closeBtn) this.closeBtn.textContent = inPos ? `FLATTEN ${position.side} ${position.quantity}` : 'CLOSE POSITION';
   }
 
