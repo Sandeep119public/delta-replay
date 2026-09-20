@@ -72,17 +72,18 @@ def test_trading_reset_reanchors_to_current_replay_timeline():
     assert reset_body["positions"] == []
     trading = manager.get(str(session)).trading
     assert trading.index == 2
-    assert manager.get(str(session)).history == [
-        {
-            "type": "candle",
-            "replayIndex": 2,
-            "payload": {
-                "candle": candles[2],
-                "index": 2,
-                "symbol": "BTCUSDT",
-            },
-        }
-    ]
+    history = manager.get(str(session)).history
+    assert [event["type"] for event in history] == ["market_step", "market_step", "market_step"]
+    assert [event["replayIndex"] for event in history] == [0, 1, 2]
+
+    seek = client.post("/api/v1/replay/seek/1", headers=headers)
+    assert seek.status_code == 200
+    assert seek.json()["index"] == 1
+    assert manager.get(str(session)).history[-1]["replayIndex"] == 1
+
+    stepped_back_to_current = client.post("/api/v1/replay/step", headers=headers)
+    assert stepped_back_to_current.status_code == 200
+    assert stepped_back_to_current.json()["index"] == 2
 
     placed = client.post(
         "/api/v1/trading/order",
