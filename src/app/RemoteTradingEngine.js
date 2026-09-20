@@ -37,12 +37,13 @@ export class RemoteTradingEngine {
   on(event, handler) { return this._destroyed ? () => {} : this.events.on(event, handler); }
   async _request(path, options = {}, action = null) {
     if (this._destroyed) return { applied: false, response: null };
+    const mode = action === 'refresh' || action === 'candle' ? MUTATION_MODE.LATEST : MUTATION_MODE.SERIAL;
     return this.mutationPipeline.run(
       () => this.api.request(path, options),
       {
         generation: this.mutationPipeline.generation(),
         scope: 'trading',
-        mode: MUTATION_MODE.LATEST,
+        mode,
         canExecute: () => !this._destroyed,
         apply: (response) => this._sync(response, action, this.data),
       },
