@@ -29,7 +29,7 @@ export const TRADING_PRESENTATION_EVENTS = Object.freeze({
 
 export const TRADING_PRESENTATION_ACTION_NAMES = Object.freeze([
   'submitOrder', 'closePosition', 'setRisk', 'clearRisk', 'cancelOrder',
-  'cancelAll', 'reset', 'setStartingBalance', 'setFeeRate', 'hasOpenPosition',
+  'cancelAll', 'reset', 'setCapital', 'setFeeRate', 'hasOpenPosition',
 ]);
 
 const SNAPSHOT_KEYS = Object.freeze([
