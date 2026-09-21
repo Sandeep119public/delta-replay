@@ -58,7 +58,7 @@ function deps() {
     appState: { symbol: 'BTCUSDT', timeframe: '1m' },
   });
 
-  return { port, candleStore, candleCache, dataManager, getStagedStore: () => stagedStore };
+  return { port, candleStore, candleCache, datasetRepository, dataManager, getStagedStore: () => stagedStore };
 }
 
 describe('data workspace cache boundary', () => {
