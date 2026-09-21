@@ -1,7 +1,7 @@
 import { card, escapeText, header } from './shared.js';
 
 export function dashboard(snapshot, storage) {
-  return `<div class="data-page">${header('WORKSPACE','Overview','A control room for live market data, saved replay datasets and research jobs.')}<div class="data-card-grid">${card('Loaded candles',Number(snapshot.count||0).toLocaleString())}${card('Current dataset',snapshot.symbol?`${escapeText(snapshot.symbol)} · ${escapeText(snapshot.timeframe)}`:'None')}${card('Cache intervals',snapshot.coverage?.length||0)}${card('Browser storage',storage?.usage!=null?`${(storage.usage/1073741824).toFixed(2)} GB`:'Unavailable')}</div><section class="data-panel"><h2>Quick actions</h2><div class="data-action-grid"><a href="#downloads">Download historical data</a><a href="#datasets">Manage datasets</a><a href="#validation">Validate current data</a><a href="#storage">Inspect storage</a></div></section><section class="data-panel"><h2>Current dataset</h2><dl class="data-detail-grid"><div><dt>Symbol</dt><dd>${escapeText(snapshot.symbol||'None')}</dd></div><div><dt>Timeframe</dt><dd>${escapeText(snapshot.timeframe||'None')}</dd></div><div><dt>Rows</dt><dd>${Number(snapshot.count||0).toLocaleString()}</dd></div><div><dt>Quality</dt><dd>${escapeText(snapshot.metadata?.quality||'Unknown')}</dd></div></dl></section></div>`;
+  return `<div class="data-page">${header('WORKSPACE','Overview','A control room for live market data, GitHub-backed replay datasets and research jobs.')}<div class="data-card-grid">${card('Loaded candles',Number(snapshot.count||0).toLocaleString())}${card('Current dataset',snapshot.symbol?`${escapeText(snapshot.symbol)} · ${escapeText(snapshot.timeframe)}`:'None')}${card('Cache intervals',snapshot.coverage?.length||0)}${card('Dataset storage',storage?.usage!=null?`${(storage.usage/1073741824).toFixed(2)} GB`:'Unavailable')}</div><section class="data-panel"><h2>Quick actions</h2><div class="data-action-grid"><a href="#downloads">Download and publish historical data</a><a href="#datasets">Manage GitHub datasets</a><a href="#validation">Validate current data</a><a href="#storage">Inspect storage</a></div></section><section class="data-panel"><h2>Current dataset</h2><dl class="data-detail-grid"><div><dt>Symbol</dt><dd>${escapeText(snapshot.symbol||'None')}</dd></div><div><dt>Timeframe</dt><dd>${escapeText(snapshot.timeframe||'None')}</dd></div><div><dt>Rows</dt><dd>${Number(snapshot.count||0).toLocaleString()}</dd></div><div><dt>Quality</dt><dd>${escapeText(snapshot.metadata?.quality||'Unknown')}</dd></div></dl></section></div>`;
 }
 
 export function downloads(snapshot, download, dates) {
@@ -12,7 +12,7 @@ export function downloads(snapshot, download, dates) {
     ? `<div class="download-progress"><div class="progress-track"><span style="width:${Math.max(0,Math.min(100,Number(download.pct)||0))}%"></span></div><div><strong>${Number(download.pct||0).toFixed(0)}%</strong><span>${Number(download.loaded||0).toLocaleString()} / ${Number(download.total||0).toLocaleString()} candles</span></div></div>`
     : '';
   const timeframes = ['1m','5m','15m','30m','1h','4h','1d'];
-  return `<div class="data-page">${header('DATA / DOWNLOADS','Download Center','Download validated historical Binance candles and save them as a replay dataset.')}${error}<section class="data-panel"><form class="data-form" novalidate><label>Symbol<input id="data-symbol" value="${escapeText(symbol)}" autocomplete="off" spellcheck="false"></label><label>Timeframe<select id="data-timeframe">${timeframes.map((tf)=>`<option value="${tf}" ${tf===timeframe?'selected':''}>${tf}</option>`).join('')}</select></label><label>Start<input id="data-from" type="datetime-local" value="${dates.start}"></label><label>End<input id="data-to" type="datetime-local" value="${dates.end}"></label><button class="data-primary" type="button" data-data-action="download" ${['running','starting'].includes(download.status)?'disabled':''}>${download.status==='complete'?'Download again':'Start download'}</button></form>${progress}<p class="data-note">Downloads use Binance historical klines, cache reuse, retry and integrity checks. A completed download is saved locally as a replay dataset.</p></section><section class="data-panel"><h2>Download lifecycle</h2><ol class="data-steps"><li>Normalize the requested candle range.</li><li>Reuse clean cached coverage where possible.</li><li>Fetch missing ranges with retry and integrity checks.</li><li>Save the validated candles as a local CSV replay dataset.</li></ol></section></div>`;
+  return `<div class="data-page">${header('DATA / DOWNLOADS','Download Center','Download validated historical Binance candles and publish them as an immutable replay dataset to GitHub.')}${error}<section class="data-panel"><form class="data-form" novalidate><label>Symbol<input id="data-symbol" value="${escapeText(symbol)}" autocomplete="off" spellcheck="false"></label><label>Timeframe<select id="data-timeframe">${timeframes.map((tf)=>`<option value="${tf}" ${tf===timeframe?'selected':''}>${tf}</option>`).join('')}</select></label><label>Start<input id="data-from" type="datetime-local" value="${dates.start}"></label><label>End<input id="data-to" type="datetime-local" value="${dates.end}"></label><button class="data-primary" type="button" data-data-action="download" ${['running','starting'].includes(download.status)?'disabled':''}>${download.status==='complete'?'Download again':'Start download'}</button></form>${progress}<p class="data-note">Downloads use Binance historical klines, cache reuse, retry and integrity checks. A completed download is saved locally as a replay dataset.</p></section><section class="data-panel"><h2>Download lifecycle</h2><ol class="data-steps"><li>Normalize the requested candle range.</li><li>Reuse clean cached coverage where possible.</li><li>Fetch missing ranges with retry and integrity checks.</li><li>Save the validated candles as a local CSV replay dataset.</li></ol></section></div>`;
 }
 
 export function datasets(snapshot, savedDatasets = []) {
@@ -28,18 +28,18 @@ export function datasets(snapshot, savedDatasets = []) {
           <div class="dataset-actions">
             <button type="button" data-data-action="open-replay" data-dataset-id="${escapeText(dataset.id)}">Replay</button>
             <button type="button" data-data-action="export-dataset" data-dataset-id="${escapeText(dataset.id)}">Export CSV</button>
-            <button type="button" data-data-action="delete-dataset" data-dataset-id="${escapeText(dataset.id)}">Delete</button>
+            <button type="button" 
           </div>
         </td>
       </tr>`).join('')
-    : '<tr><td colspan="6">No saved replay datasets. Go to Downloads and create one.</td></tr>';
+    : '<tr><td colspan="6">No GitHub replay datasets. Go to Downloads and publish one.</td></tr>';
 
-  return `<div class="data-page">${header('DATA / DATASETS','Saved replay datasets','These are the datasets replay is allowed to consume. Downloads and live market data are separate from this list.')}
+  return `<div class="data-page">${header('DATA / DATASETS','GitHub replay datasets','These are the immutable GitHub datasets replay is allowed to consume. Downloads and live market data are separate from this list.')}
     <section class="data-panel">
       <div class="data-card-grid">
         ${card('Saved datasets', savedDatasets.length.toLocaleString())}
         ${card('Active replay', snapshot.replayDatasetId ? 'Selected' : 'None')}
-        ${card('Storage', snapshot.cacheEnabled ? 'IndexedDB' : 'Memory only')}
+        ${card('Authority', 'GitHub')}
         ${card('Format', 'CSV')}
       </div>
     </section>
@@ -64,7 +64,7 @@ export function storage(snapshot, storageEstimate) {
   const usage = storageEstimate?.usage;
   const quota = storageEstimate?.quota;
   const percentage = usage && quota ? usage / quota * 100 : null;
-  return `<div class="data-page">${header('DATA / STORAGE','Storage','Understand how much browser storage is available to saved replay datasets and the download cache.')}<div class="data-card-grid">${card('Used',usage!=null?`${(usage/1073741824).toFixed(2)} GB`:'Unavailable')}${card('Quota',quota!=null?`${(quota/1073741824).toFixed(2)} GB`:'Unavailable')}${card('Usage',percentage!=null?`${percentage.toFixed(1)}%`:'Unavailable')}${card('Cache',snapshot.cacheEnabled?'IndexedDB enabled':'Memory only')}</div><section class="data-panel"><h2>Storage policy</h2><p>Saved replay datasets live in the browser's IndexedDB. CandleCache is a separate download accelerator. The Export CSV action creates a normal file for archival or external storage.</p></section></div>`;
+  return `<div class="data-page">${header('DATA / STORAGE','Storage','Understand how much browser storage is available to saved replay datasets and the download cache.')}<div class="data-card-grid">${card('Used',usage!=null?`${(usage/1073741824).toFixed(2)} GB`:'Unavailable')}${card('Quota',quota!=null?`${(quota/1073741824).toFixed(2)} GB`:'Unavailable')}${card('Usage',percentage!=null?`${percentage.toFixed(1)}%`:'Unavailable')}${card('Cache',snapshot.cacheEnabled?'IndexedDB enabled':'Memory only')}</div><section class="data-panel"><h2>Storage policy</h2><p>GitHub is the durable replay dataset authority. Browser IndexedDB is only a download accelerator. Export CSV is an interoperability action, not replay storage.</p></section></div>`;
 }
 
 export function jobs(jobsState) {
