@@ -24,7 +24,7 @@ def test_csv_is_canonical_and_round_trips():
 def test_manifest_defaults_to_empty(monkeypatch):
     repo = GitHubDatasetRepository()
     monkeypatch.setattr(repo, "_get_raw", lambda path, token=None: None)
-    assert repo._read_manifest() == {"schemaVersion": 1, "datasets": []}
+    assert repo._read_manifest() == {"schemaVersion": 2, "datasets": []}
 
 
 def test_publish_rejects_missing_token():
@@ -34,5 +34,15 @@ def test_publish_rejects_missing_token():
 
 
 def test_manifest_schema_is_stable():
-    manifest = {"schemaVersion": 1, "datasets": []}
+    manifest = {"schemaVersion": 2, "datasets": []}
     assert json.loads(json.dumps(manifest))["schemaVersion"] == 1
+
+
+def test_partitions_keep_each_file_small(monkeypatch):
+    repo = GitHubDatasetRepository()
+    monkeypatch.setattr(repo, "_csv_bytes", lambda values: b"x")
+    candles = []
+    for index in range(80_001):
+        candles.append({"time": index + 1, "open": 10, "high": 11, "low": 9, "close": 10, "volume": 1})
+    partitions = repo._partition(candles)
+    assert [len(chunk) for _, chunk, _ in partitions] == [80_000, 1]
