@@ -1,7 +1,7 @@
 import { bindApplicationLifecycle } from './bindApplicationLifecycle.js';
 import { bindDatasetSelectors } from './bindDatasetSelectors.js';
 import { bindMobileNavigation } from './bindMobileNavigation.js';
-import { createPaperUI } from '../ui/PaperUI.js';
+import { createTerminalUI } from '../ui/TerminalUI.js';
 import { ChartManager } from '../chart/ChartManager.js';
 import { ChartAdapter } from '../chart/ChartAdapter.js';
 import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
@@ -84,7 +84,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   };
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
   const mobileNavBinding = bindMobileNavigation();
-  const ui = createPaperUI({
+  const ui = createTerminalUI({
     mount,
     replayPort,
     commandPort,
