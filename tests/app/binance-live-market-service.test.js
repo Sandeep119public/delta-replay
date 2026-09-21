@@ -57,13 +57,15 @@ describe('BinanceLiveMarketService', () => {
   it('stops the WebSocket and aborts the bootstrap request', async () => {
     const chartManager = { setRevealedMax: vi.fn(), setData: vi.fn(), update: vi.fn() };
     const socket = { close: vi.fn() };
-    const client = { fetchCandles: vi.fn(() => new Promise(() => {})) };
+    const client = { fetchCandles: vi.fn(({ signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    })) };
     const service = new BinanceLiveMarketService({ client, chartManager, wsFactory: () => socket });
 
     const pending = service.start({ symbol: 'BTCUSDT', timeframe: '1m' });
     service.stop();
 
+    await expect(pending).resolves.toBeUndefined();
     expect(socket.close).toHaveBeenCalledTimes(0);
-    await Promise.resolve(pending);
   });
 });
