@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 from ..services.binance_dataset_download import BinanceDatasetDownloadService
 from ..services.github_dataset_repository import GitHubDatasetRepository
+from ..services.experiment_fingerprint import fingerprint
 
 
 router = APIRouter()
@@ -70,6 +71,27 @@ def _load(dataset_id):
 def get_dataset(dataset_id: str):
     result = _load(dataset_id)
     return {"metadata": result["metadata"]}
+
+
+@router.get("/{dataset_id}/fingerprint")
+def get_dataset_fingerprint(
+    dataset_id: str,
+    feature_version: str = "unknown",
+    model_version: str = "unknown",
+    code_commit: str | None = None,
+    seed: int | None = None,
+):
+    result = repository.get_partitions(dataset_id)
+    if result is None:
+        raise HTTPException(404, "Dataset not found")
+    return fingerprint(
+        dataset_content_id=result["metadata"]["contentId"],
+        feature_version=feature_version,
+        model_version=model_version,
+        code_commit=code_commit,
+        configuration={"symbol": result["metadata"].get("symbol"), "timeframe": result["metadata"].get("timeframe")},
+        seed=seed,
+    )
 
 
 @router.get("/{dataset_id}/partitions")
