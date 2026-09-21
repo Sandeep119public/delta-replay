@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from threading import RLock
 
 import httpx
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from .dataset_identity import dataset_id
 
@@ -99,6 +101,25 @@ class GitHubDatasetRepository:
         return output.getvalue().encode("utf-8")
 
     @staticmethod
+    def _parquet_bytes(candles):
+        table = pa.Table.from_pylist(candles, schema=pa.schema([
+            pa.field("time", pa.int64()),
+            pa.field("open", pa.float64()),
+            pa.field("high", pa.float64()),
+            pa.field("low", pa.float64()),
+            pa.field("close", pa.float64()),
+            pa.field("volume", pa.float64()),
+        ]))
+        sink = pa.BufferOutputStream()
+        pq.write_table(table, sink, compression="zstd")
+        return sink.getvalue().to_pybytes()
+
+    @staticmethod
+    def _parse_parquet(data):
+        table = pq.read_table(pa.BufferReader(data))
+        return GitHubDatasetRepository._normalize_candles(table.to_pylist())
+
+    @staticmethod
     def _parse_csv(data):
         reader = csv.DictReader(io.StringIO(data.decode("utf-8")))
         if tuple(reader.fieldnames or ()) != CSV_HEADER:
@@ -176,7 +197,7 @@ class GitHubDatasetRepository:
                     raise RuntimeError("manifest references a missing dataset partition")
                 if hashlib.sha256(raw).hexdigest() != partition["sha256"]:
                     raise RuntimeError("dataset partition checksum does not match manifest")
-                part_candles = self._parse_csv(raw)
+                part_candles = self._parse_parquet(raw) if metadata.get("format") == "PARQUET" else self._parse_csv(raw)
                 if len(part_candles) != int(partition["count"]):
                     raise RuntimeError("dataset partition row count does not match manifest")
                 candles.extend(part_candles)
@@ -186,7 +207,7 @@ class GitHubDatasetRepository:
                 raise RuntimeError("manifest references a missing dataset file")
             if hashlib.sha256(raw).hexdigest() != metadata.get("sha256"):
                 raise RuntimeError("dataset checksum does not match manifest")
-            candles = self._parse_csv(raw)
+            candles = self._parse_parquet(raw) if metadata.get("format") == "PARQUET" else self._parse_csv(raw)
         if len(candles) != int(metadata["count"]):
             raise RuntimeError("dataset row count does not match manifest")
         if dataset_id(candles) != metadata["contentId"]:
@@ -217,7 +238,8 @@ class GitHubDatasetRepository:
                 raise RuntimeError("manifest references a missing dataset partition")
             if hashlib.sha256(raw).hexdigest() != partition["sha256"]:
                 raise RuntimeError("dataset partition checksum does not match manifest")
-            for candle in self._parse_csv(raw):
+            parser = self._parse_parquet if metadata.get("format") == "PARQUET" else self._parse_csv
+            for candle in parser(raw):
                 if from_time is not None and candle["time"] < int(from_time):
                     continue
                 if to_time is not None and candle["time"] > int(to_time):
@@ -230,7 +252,7 @@ class GitHubDatasetRepository:
                     return {"metadata": dict(metadata), "candles": result, "nextOffset": offset + skipped + len(result)}
         return {"metadata": dict(metadata), "candles": result, "nextOffset": None}
 
-    def _partition(self, candles):
+    def _partition(self, candles, format_name="CSV"):
         groups = []
         current_key = None
         current = []
@@ -246,7 +268,7 @@ class GitHubDatasetRepository:
 
         parts = []
         for number, (month, chunk) in enumerate(groups, start=1):
-            raw = self._csv_bytes(chunk)
+            raw = self._parquet_bytes(chunk) if format_name == "PARQUET" else self._csv_bytes(chunk)
             if len(raw) > MAX_FILE_BYTES:
                 raise ValueError("dataset partition exceeds GitHub size safety limit")
             parts.append((f"{month}-{number:04d}", chunk, raw))
@@ -286,6 +308,9 @@ class GitHubDatasetRepository:
         if timeframe not in _TIMEFRAME_SECONDS:
             raise ValueError("unsupported dataset timeframe")
         normalized = self._normalize_candles(candles)
+        format_name = str(os.getenv("DATASET_FORMAT", "CSV")).strip().upper()
+        if format_name not in {"CSV", "PARQUET"}:
+            raise ValueError("DATASET_FORMAT must be CSV or PARQUET")
         content_id = dataset_id(normalized)
         existing = next((item for item in self._read_manifest(active_token)["datasets"] if item.get("contentId") == content_id), None)
         if existing:
@@ -307,7 +332,7 @@ class GitHubDatasetRepository:
             "from": start,
             "to": end,
             "count": len(normalized),
-            "format": "CSV",
+            "format": format_name,
             "source": "binance",
             "status": "validated",
             "qualityReport": quality,
@@ -319,8 +344,8 @@ class GitHubDatasetRepository:
             **(metadata or {}),
         }
         entries = []
-        for partition_key, chunk, raw in self._partition(normalized):
-            path = f"datasets/{symbol}/{timeframe}/{content_id[:16]}/{partition_key}.csv"
+        for partition_key, chunk, raw in self._partition(normalized, format_name):
+            path = f"datasets/{symbol}/{timeframe}/{content_id[:16]}/{partition_key}.{"parquet" if format_name == "PARQUET" else "csv"}"
             record["partitions"].append({
                 "id": f"{record['id']}-{partition_key}",
                 "path": path,
