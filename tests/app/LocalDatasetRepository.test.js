@@ -41,8 +41,9 @@ describe('LocalDatasetRepository', () => {
 
   it('accepts a replay-compatible downloaded filename with the content identity suffix', async () => {
     const repository = new LocalDatasetRepository();
-    const metadata = await repository.importFile(file('BTCUSDT-1m-0000000000000000.csv'));
-    expect(metadata.id).toMatch(/^local-/);
+    const first = await repository.importFile(file());
+    const second = await repository.importFile(file('BTCUSDT-1m-' + first.contentId + '.csv'));
+    expect(second.id).toBe(first.id);
   });
 
   it('rejects malformed datasets before storing them', async () => {
