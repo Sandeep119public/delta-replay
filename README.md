@@ -2,6 +2,47 @@
 
 Delta Replay is a browser trading replay application backed by a FastAPI trading engine.
 
+## Market data and replay storage
+
+The app is **live by default**. The normal chart starts with recent Binance USDⓈ-M Futures candles and then receives live kline updates.
+
+Historical data is a separate workflow:
+
+```text
+Binance Futures
+      |
+      v
+Download workflow
+      |
+      v
+local Parquet files
+      |
+      v
+StoredDatasetProvider
+      |
+      v
+Replay engine
+```
+
+Replay never downloads missing candles from Binance. It can only consume a dataset that was already downloaded and stored.
+
+Parquet is the canonical historical format because it is designed for efficient structured reads. CSV remains useful for interchange, but it is not the primary replay format.
+
+### Download historical data
+
+Install the backend dependencies, then run the downloader:
+
+```bash
+python -m pip install -r backend/requirements.txt
+python backend/scripts/download_binance_dataset.py --symbol SOLUSDT --timeframe 15m --start 2026-01-01T00:00:00Z --end 2026-02-01T00:00:00Z
+```
+
+By default, datasets are written to `backend/datasets`. Set `DATASET_DIR` to use another local directory.
+
+The Data Center download page uses the same backend dataset service. A download creates an immutable Parquet file plus a JSON manifest describing its symbol, timeframe, range, row count and content identity.
+
+The browser's IndexedDB cache is only an acceleration layer. Clearing it does not remove the canonical Parquet dataset.
+
 ## Simulation model
 
 `PaperTradingEngine` is the single canonical paper-trading and execution engine. Replay and backtest paths share the same OHLC fill rules and ambiguity policy through `backend/app/domain/execution.py`.
@@ -22,7 +63,7 @@ CORS_ORIGINS=https://your-frontend.example.com
 SESSION_RETENTION_HOURS=168
 ```
 
-The persistence schema is defined in `backend/migrations/001_create_replay_sessions.sql` and `backend/migrations/002_add_replay_events.sql`. Apply all migrations before starting a PostgreSQL-backed application:
+The persistence schema is defined in `backend/migrations/001_create_replay_sessions.sql` and `backend/migrations/002_add_replay_events.sql`. Session persistence is separate from the local historical-data store: Parquet files provide reusable historical data, while the replay session stores the current simulation state and deterministic event history. Apply all migrations before starting a PostgreSQL-backed application:
 
 ```bash
 DATABASE_URL='postgresql://user:password@host:5432/delta_replay' python backend/scripts/migrate.py
