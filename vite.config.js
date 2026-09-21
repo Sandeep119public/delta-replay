@@ -1,8 +1,12 @@
 import { defineConfig } from 'vite';
 
+const githubPagesBase = process.env.GITHUB_ACTIONS === 'true' ? '/delta-replay/' : '/';
+const base = process.env.VITE_BASE_PATH || githubPagesBase;
+
 export default defineConfig({
-  // Cloudflare Workers serves the app from the domain root.
-  base: '/',
+  // GitHub Pages serves this repository at /delta-replay/. Local development
+  // and alternate deployments can override the path with VITE_BASE_PATH.
+  base,
   server: {
     port: 5174,
     open: false,
@@ -20,10 +24,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.js'],
-    // tests/architecture uses the built-in node:test runner (via `npm run test:architecture`),
-    // not vitest. Without this, `vitest run` fails with "No test suite found".
     exclude: ['**/node_modules/**', '**/dist/**', 'tests/architecture/**'],
-
     globals: false
   }
 });
