@@ -91,8 +91,8 @@ def start_download(payload: DatasetRangeRequest, authorization: str | None = Hea
         return downloads.start(
             symbol=payload.symbol,
             timeframe=payload.timeframe,
-            from_ms=int(payload.from_ms),
-            to_ms=int(payload.to_ms),
+            from_ms=int(payload.from_ms) * 1000,
+            to_ms=int(payload.to_ms) * 1000,
         )
     except (TypeError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
