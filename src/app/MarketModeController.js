@@ -13,6 +13,7 @@ export class MarketModeController {
     datasetRepository,
     replayCapabilities,
     chartManager = null,
+    pauseReplay = null,
     dataStatus = null,
   } = {}) {
     if (!page || !appState || !liveMarket || !datasetRepository || !replayCapabilities) {
@@ -31,14 +32,19 @@ export class MarketModeController {
     this.datasetRepository = datasetRepository;
     this.replayCapabilities = replayCapabilities;
     this.chartManager = chartManager;
+    this.pauseReplay = pauseReplay;
     this.dataStatus = dataStatus;
     this.mode = 'live';
     this.destroyed = false;
     this._listeners = [];
     this._pageChangeHandler = (event) => {
       if (this.destroyed) return;
-      if (event?.detail?.page === 'replay') void this.setMode(this.mode, { force: true });
-      else this.liveMarket.stop();
+      if (event?.detail?.page === 'replay') {
+        if (this.mode !== 'replay') void this.setMode('replay');
+        else void this.refreshDatasets();
+      } else {
+        this.liveMarket.stop();
+      }
     };
     this._datasetChangedHandler = () => {
       if (this.mode === 'replay') void this.refreshDatasets();
@@ -95,6 +101,7 @@ export class MarketModeController {
     this._syncButtons();
 
     if (mode === 'live') {
+      await this.pauseReplay?.();
       this.liveMarket.stop();
       this._setStatus('LIVE · connecting…');
       try {
@@ -153,6 +160,7 @@ export class MarketModeController {
       return;
     }
 
+    await this.pauseReplay?.();
     this.appState.setReplayDatasetId(dataset.id);
     this.appState.symbol = dataset.symbol;
     this.appState.timeframe = dataset.timeframe;
