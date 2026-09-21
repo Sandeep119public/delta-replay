@@ -59,9 +59,34 @@ export class StoredDatasetRepository {
       const request = this.indexedDBFactory.open(this.dbName, DB_VERSION);
       request.onupgradeneeded = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE, { keyPath: 'id' });
-        if (!db.objectStoreNames.contains(CANDLE_STORE)) db.createObjectStore(CANDLE_STORE, { keyPath: 'id' });
-        if (!db.objectStoreNames.contains(FILE_STORE)) db.createObjectStore(FILE_STORE, { keyPath: 'id' });
+        const upgradeTransaction = request.transaction;
+        if (!db.objectStoreNames.contains(META_STORE)) {
+          db.createObjectStore(META_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(CANDLE_STORE)) {
+          db.createObjectStore(CANDLE_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(FILE_STORE)) {
+          db.createObjectStore(FILE_STORE, { keyPath: 'id' });
+        }
+
+        // Version 1 stored metadata, candles and CSV in one object. Move the
+        // heavy payloads into dedicated stores so replay can read candles
+        // without loading the archival CSV text.
+        const legacyStore = upgradeTransaction?.objectStore?.(META_STORE);
+        if (!legacyStore?.getAll) return;
+        const candleStore = upgradeTransaction.objectStore(CANDLE_STORE);
+        const fileStore = upgradeTransaction.objectStore(FILE_STORE);
+        const requestAll = legacyStore.getAll();
+        requestAll.onsuccess = () => {
+          for (const record of requestAll.result || []) {
+            if (!record?.id) continue;
+            const { candles, csv, ...metadata } = record;
+            if (Array.isArray(candles) && candles.length) candleStore.put({ id: record.id, candles });
+            if (typeof csv === 'string' && csv) fileStore.put({ id: record.id, csv });
+            legacyStore.put(metadata);
+          }
+        };
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error || new Error('Unable to open local dataset storage'));
