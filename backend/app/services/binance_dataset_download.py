@@ -162,14 +162,24 @@ class BinanceDatasetDownloadService:
             if key in self._cancelled:
                 return
 
-            persisted_chunks = self.job_repository.load_chunks(job_id) if not self.job_repository.durable else []
-            candles = [candle for chunk in persisted_chunks for candle in chunk]
-            sequence = self.job_repository.chunk_count(job_id) if self.job_repository.durable else len(persisted_chunks)
-            loaded = int(job.get("loaded", len(candles)))
-            cursor = int(job.get("cursor", job["from"]))
             interval_ms = _INTERVAL_MS[job["timeframe"]]
-            if candles:
-                cursor = max(cursor, candles[-1]["time"] * 1000 + interval_ms)
+            if self.job_repository.durable:
+                chunk_state = self.job_repository.chunk_state(job_id)
+                persisted_chunks = []
+                candles = []
+                sequence = chunk_state["count"]
+                loaded = max(int(job.get("loaded", 0)), chunk_state["candleCount"])
+                cursor = int(job.get("cursor", job["from"]))
+                if chunk_state["lastToMs"] is not None:
+                    cursor = max(cursor, chunk_state["lastToMs"] + interval_ms)
+            else:
+                persisted_chunks = self.job_repository.load_chunks(job_id)
+                candles = [candle for chunk in persisted_chunks for candle in chunk]
+                sequence = len(persisted_chunks)
+                loaded = int(job.get("loaded", len(candles)))
+                cursor = int(job.get("cursor", job["from"]))
+                if candles:
+                    cursor = max(cursor, candles[-1]["time"] * 1000 + interval_ms)
 
             self._update(job_id, worker_id=self._worker_id, status="running")
 
