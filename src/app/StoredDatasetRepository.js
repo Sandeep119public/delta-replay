@@ -1,5 +1,8 @@
-const DB_VERSION = 1;
-const STORE_NAME = 'datasets';
+const DB_VERSION = 2;
+const META_STORE = 'datasets';
+const CANDLE_STORE = 'dataset_candles';
+const FILE_STORE = 'dataset_files';
+
 export const STORED_DATASET_DB = 'delta-replay-datasets-v1';
 export const DATASET_FORMAT = 'CSV';
 
@@ -51,15 +54,19 @@ export class StoredDatasetRepository {
     if (this._destroyed) throw new Error('StoredDatasetRepository is closed');
     if (!this.indexedDBFactory) throw new Error('IndexedDB is not available in this browser');
     if (this._dbPromise) return this._dbPromise;
+
     this._dbPromise = new Promise((resolve, reject) => {
       const request = this.indexedDBFactory.open(this.dbName, DB_VERSION);
       request.onupgradeneeded = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(META_STORE)) db.createObjectStore(META_STORE, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(CANDLE_STORE)) db.createObjectStore(CANDLE_STORE, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(FILE_STORE)) db.createObjectStore(FILE_STORE, { keyPath: 'id' });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error || new Error('Unable to open local dataset storage'));
     });
+
     return this._dbPromise;
   }
 
@@ -72,9 +79,12 @@ export class StoredDatasetRepository {
   }
 
   _metadata(record) {
-    if (!record) return null;
-    const { candles, csv, ...metadata } = record;
-    return clone(metadata);
+    return record ? clone(record) : null;
+  }
+
+  async _getRecord(storeName, id) {
+    const db = await this._open();
+    return this._request(db.transaction(storeName, 'readonly').objectStore(storeName).get(String(id)));
   }
 
   async save({ symbol, timeframe, from, to, candles, metadata = {} } = {}) {
@@ -86,9 +96,9 @@ export class StoredDatasetRepository {
     const normalizedCandles = normalizeCandles(candles);
     const csv = candlesToCsv(normalizedCandles);
     const id = makeId({ symbol: normalizedSymbol, timeframe: normalizedTimeframe, from, to });
-    const existing = await this.get(id);
+    const existing = await this._getRecord(META_STORE, id);
     const now = Date.now();
-    const record = {
+    const meta = {
       id,
       symbol: normalizedSymbol,
       timeframe: normalizedTimeframe,
@@ -102,44 +112,77 @@ export class StoredDatasetRepository {
       updatedAt: now,
       quality: metadata.quality || metadata.integrityStatus || 'VALID',
       coverageType: metadata.coverageType || 'CONTIGUOUS',
-      csv,
-      candles: normalizedCandles,
     };
 
     const db = await this._open();
-    await this._request(db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(record));
-    return this._metadata(record);
+    const tx = db.transaction([META_STORE, CANDLE_STORE, FILE_STORE], 'readwrite');
+    await Promise.all([
+      this._request(tx.objectStore(META_STORE).put(meta)),
+      this._request(tx.objectStore(CANDLE_STORE).put({ id, candles: normalizedCandles })),
+      this._request(tx.objectStore(FILE_STORE).put({ id, csv })),
+    ]);
+    return this._metadata(meta);
   }
 
   async list() {
     const db = await this._open();
-    const records = await this._request(db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll());
-    return records.map((record) => this._metadata(record)).sort((a, b) => b.updatedAt - a.updatedAt);
+    const values = await this._request(db.transaction(META_STORE, 'readonly').objectStore(META_STORE).getAll());
+    return values.map((record) => this._metadata(record)).sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
   async get(id) {
     if (!id) return null;
-    const db = await this._open();
-    const record = await this._request(db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(String(id)));
-    return record ? clone(record) : null;
+    const metadata = await this._getRecord(META_STORE, id);
+    if (!metadata) return null;
+    const candles = await this._getRecord(CANDLE_STORE, id);
+    const file = await this._getRecord(FILE_STORE, id);
+    return {
+      ...clone(metadata),
+      candles: clone(candles?.candles || []),
+      csv: String(file?.csv || ''),
+    };
   }
 
   async getCandles(id) {
-    const record = await this.get(id);
-    if (!record) throw new Error('Saved replay dataset not found');
-    return { metadata: this._metadata(record), candles: clone(record.candles) };
+    const metadata = await this._getRecord(META_STORE, id);
+    if (!metadata) throw new Error('Saved replay dataset not found');
+    const data = await this._getRecord(CANDLE_STORE, id);
+    if (!Array.isArray(data?.candles) || !data.candles.length) throw new Error('Saved replay dataset is empty');
+    return {
+      metadata: this._metadata(metadata),
+      candles: clone(data.candles),
+    };
   }
 
   async getCsv(id) {
-    const record = await this.get(id);
-    if (!record) throw new Error('Saved replay dataset not found');
-    return { metadata: this._metadata(record), csv: String(record.csv || '') };
+    const metadata = await this._getRecord(META_STORE, id);
+    if (!metadata) throw new Error('Saved replay dataset not found');
+    const file = await this._getRecord(FILE_STORE, id);
+    return {
+      metadata: this._metadata(metadata),
+      csv: String(file?.csv || ''),
+    };
   }
 
   async remove(id) {
     if (!id) return;
     const db = await this._open();
-    await this._request(db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete(String(id)));
+    const tx = db.transaction([META_STORE, CANDLE_STORE, FILE_STORE], 'readwrite');
+    await Promise.all([
+      this._request(tx.objectStore(META_STORE).delete(String(id))),
+      this._request(tx.objectStore(CANDLE_STORE).delete(String(id))),
+      this._request(tx.objectStore(FILE_STORE).delete(String(id))),
+    ]);
+  }
+
+  async clear() {
+    const db = await this._open();
+    const tx = db.transaction([META_STORE, CANDLE_STORE, FILE_STORE], 'readwrite');
+    await Promise.all([
+      this._request(tx.objectStore(META_STORE).clear()),
+      this._request(tx.objectStore(CANDLE_STORE).clear()),
+      this._request(tx.objectStore(FILE_STORE).clear()),
+    ]);
   }
 
   close() {
