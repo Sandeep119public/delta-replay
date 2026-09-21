@@ -8,7 +8,6 @@
 export const VENUES = Object.freeze({
   BINANCE_FUTURES: 'BINANCE_FUTURES',
   BINANCE_SPOT: 'BINANCE_SPOT',
-  DELTA_EXCHANGE: 'DELTA_EXCHANGE',
   LOCAL: 'LOCAL',
 });
 
@@ -20,7 +19,6 @@ export const INSTRUMENTS = Object.freeze({
     venues: {
       [VENUES.BINANCE_FUTURES]: { symbol: 'BTCUSDT', contractType: 'PERPETUAL' },
       [VENUES.BINANCE_SPOT]: { symbol: 'BTCUSDT', contractType: 'SPOT' },
-      [VENUES.DELTA_EXCHANGE]: { symbol: 'BTCUSD', contractType: 'PERPETUAL' },
       [VENUES.LOCAL]: { symbol: 'BTCUSD', contractType: 'LOCAL' },
     },
   },
@@ -31,7 +29,6 @@ export const INSTRUMENTS = Object.freeze({
     venues: {
       [VENUES.BINANCE_FUTURES]: { symbol: 'ETHUSDT', contractType: 'PERPETUAL' },
       [VENUES.BINANCE_SPOT]: { symbol: 'ETHUSDT', contractType: 'SPOT' },
-      [VENUES.DELTA_EXCHANGE]: { symbol: 'ETHUSD', contractType: 'PERPETUAL' },
       [VENUES.LOCAL]: { symbol: 'ETHUSD', contractType: 'LOCAL' },
     },
   },
@@ -42,7 +39,6 @@ export const INSTRUMENTS = Object.freeze({
     venues: {
       [VENUES.BINANCE_FUTURES]: { symbol: 'SOLUSDT', contractType: 'PERPETUAL' },
       [VENUES.BINANCE_SPOT]: { symbol: 'SOLUSDT', contractType: 'SPOT' },
-      [VENUES.DELTA_EXCHANGE]: { symbol: 'SOLUSD', contractType: 'PERPETUAL' },
       [VENUES.LOCAL]: { symbol: 'SOLUSD', contractType: 'LOCAL' },
     },
   },
@@ -53,7 +49,6 @@ export const INSTRUMENTS = Object.freeze({
     venues: {
       [VENUES.BINANCE_FUTURES]: { symbol: 'XRPUSDT', contractType: 'PERPETUAL' },
       [VENUES.BINANCE_SPOT]: { symbol: 'XRPUSDT', contractType: 'SPOT' },
-      [VENUES.DELTA_EXCHANGE]: { symbol: 'XRPUSD', contractType: 'PERPETUAL' },
       [VENUES.LOCAL]: { symbol: 'XRPUSD', contractType: 'LOCAL' },
     },
   },
@@ -64,7 +59,6 @@ export const INSTRUMENTS = Object.freeze({
     venues: {
       [VENUES.BINANCE_FUTURES]: { symbol: 'DOGEUSDT', contractType: 'PERPETUAL' },
       [VENUES.BINANCE_SPOT]: { symbol: 'DOGEUSDT', contractType: 'SPOT' },
-      [VENUES.DELTA_EXCHANGE]: { symbol: 'DOGEUSD', contractType: 'PERPETUAL' },
       [VENUES.LOCAL]: { symbol: 'DOGEUSD', contractType: 'LOCAL' },
     },
   },
