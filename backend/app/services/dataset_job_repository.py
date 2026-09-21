@@ -167,6 +167,25 @@ class DatasetJobRepository:
             ).fetchone()
         return int(row["count"])
 
+    def chunk_state(self, job_id):
+        if not self.durable:
+            return {"count": 0, "candleCount": 0, "lastToMs": None}
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT
+                       COUNT(*) AS count,
+                       COALESCE(SUM(jsonb_array_length(candles)), 0) AS candle_count,
+                       MAX(to_ms) AS last_to_ms
+                   FROM dataset_download_chunks
+                   WHERE job_id=%s""",
+                (UUID(str(job_id)),),
+            ).fetchone()
+        return {
+            "count": int(row["count"]),
+            "candleCount": int(row["candle_count"]),
+            "lastToMs": int(row["last_to_ms"]) if row["last_to_ms"] is not None else None,
+        }
+
     def iter_chunks(self, job_id):
         if not self.durable:
             return
