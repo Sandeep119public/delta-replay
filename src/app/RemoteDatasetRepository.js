@@ -1,6 +1,6 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const REQUEST_TIMEOUT_MS = 120_000;
-const PUBLISH_TOKEN_KEY = 'delta-replay.github-publish-token';
+const PUBLISH_SECRET_KEY = 'delta-replay.dataset-publish-secret';
 
 function request(endpoint, options = {}) {
   return (async () => {
@@ -30,23 +30,41 @@ function request(endpoint, options = {}) {
   })();
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export class RemoteDatasetRepository {
   constructor({ storage = globalThis.sessionStorage } = {}) {
     this.storage = storage;
   }
 
-  _publishToken() {
-    return this.storage?.getItem?.(PUBLISH_TOKEN_KEY) || '';
+  _publishSecret() {
+    return this.storage?.getItem?.(PUBLISH_SECRET_KEY) || '';
   }
 
-  setPublishToken(token) {
-    const value = String(token || '').trim();
-    if (!value) this.storage?.removeItem?.(PUBLISH_TOKEN_KEY);
-    else this.storage?.setItem?.(PUBLISH_TOKEN_KEY, value);
+  setPublishSecret(secret) {
+    const value = String(secret || '').trim();
+    if (!value) this.storage?.removeItem?.(PUBLISH_SECRET_KEY);
+    else this.storage?.setItem?.(PUBLISH_SECRET_KEY, value);
   }
 
-  clearPublishToken() {
-    this.storage?.removeItem?.(PUBLISH_TOKEN_KEY);
+  clearPublishSecret() {
+    this.storage?.removeItem?.(PUBLISH_SECRET_KEY);
+  }
+
+  async _authorizedRequest(endpoint, options = {}) {
+    let secret = this._publishSecret();
+    if (!secret && typeof globalThis.prompt === 'function') {
+      secret = String(globalThis.prompt('Dataset publish secret:') || '').trim();
+      if (secret) this.setPublishSecret(secret);
+    }
+    if (!secret) throw new Error('Dataset publish secret is required');
+    return request(endpoint, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        ...(options.headers || {}),
+      },
+    });
   }
 
   async list() {
@@ -74,16 +92,27 @@ export class RemoteDatasetRepository {
     return { metadata: dataset.metadata, csv: dataset.csv };
   }
 
-  async save({ symbol, timeframe, from, to, candles, metadata = {} }) {
-    let token = this._publishToken();
-    if (!token && typeof globalThis.prompt === 'function') {
-      token = String(globalThis.prompt('GitHub publish token (Contents: write for this repository):') || '').trim();
-      if (token) this.setPublishToken(token);
-    }
-    if (!token) throw new Error('GitHub publish token is required to save a dataset');
-    return request('/publish', {
+  async download({ symbol, timeframe, from, to, onProgress = null }) {
+    const job = await this._authorizedRequest('/download', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ symbol, timeframe, from, to }),
+    });
+    if (!job?.jobId) throw new Error('Dataset download job was not created');
+
+    let state = job;
+    while (!['complete', 'failed'].includes(state.status)) {
+      onProgress?.(state);
+      await sleep(1000);
+      state = await request(`/downloads/${encodeURIComponent(job.jobId)}`);
+    }
+    onProgress?.(state);
+    if (state.status !== 'complete') throw new Error(state.error || 'Dataset download failed');
+    return state.dataset;
+  }
+
+  async save({ symbol, timeframe, from, to, candles, metadata = {} }) {
+    return this._authorizedRequest('/publish', {
+      method: 'POST',
       body: JSON.stringify({ symbol, timeframe, from, to, candles, metadata }),
     });
   }
@@ -97,6 +126,6 @@ export class RemoteDatasetRepository {
   }
 
   async destroy() {
-    this.clearPublishToken();
+    this.clearPublishSecret();
   }
 }
