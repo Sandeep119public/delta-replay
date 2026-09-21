@@ -214,6 +214,10 @@ export class TradingPanel {
 
   _renderRiskDisclosure(inPosition) {
     const riskDetails = document.querySelector('.risk-details');
-    if (riskDetails) riskDetails.open = inPosition;
+    if (!riskDetails) return;
+    if (this._lastRiskPositionState === undefined || this._lastRiskPositionState !== inPosition) {
+      riskDetails.open = inPosition;
+      this._lastRiskPositionState = inPosition;
+    }
   }
 }
