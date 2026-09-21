@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BinanceCandleProvider } from '../src/data/BinanceCandleProvider.js';
+import { StoredDatasetProvider } from '../src/data/StoredDatasetProvider.js';
 import { CandleCache } from '../src/data/CandleCache.js';
 
 function candle(time, close = 100) {
@@ -35,14 +35,11 @@ describe('deep-audit refactor regressions', () => {
     expect(result.missing).toEqual([]);
   });
 
-  it('Binance provider legacy getCandles returns the same array contract as fetchChunk', async () => {
-    const fetchCandles = vi.fn(async () => [candle(1000)]);
-    const provider = new BinanceCandleProvider({ client: { fetchCandles } });
-
+  it('stored replay provider reads only the stored dataset API', async () => {
+    const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ source: 'BINANCE_PARQUET', candles: [candle(1000)] }) }));
+    const provider = new StoredDatasetProvider({ fetchFn, baseUrl: 'http://localhost:8000' });
     const result = await provider.getCandles({ symbol: 'BTCUSDT', timeframe: '1m', from: 1000, to: 1060 });
-
-    expect(Array.isArray(result)).toBe(true);
-    expect(result).toHaveLength(1);
-    expect(fetchCandles).toHaveBeenCalledTimes(1);
-  });
-});
+    expect(result).toEqual([candle(1000)]);
+    expect(fetchFn).toHaveBeenCalledOnce();
+    expect(fetchFn.mock.calls[0][0]).toContain('/api/v1/data/candles');
+  });});
