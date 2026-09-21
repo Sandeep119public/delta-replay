@@ -13,7 +13,7 @@ class PublishDatasetRequest(BaseModel):
     timeframe: str
     from_ms: int | None = Field(default=None, alias="from")
     to_ms: int | None = Field(default=None, alias="to")
-    candles: list[dict]
+    candles: list[dict] = Field(min_length=1, max_length=100_000)
     metadata: dict = Field(default_factory=dict)
 
     model_config = {"populate_by_name": True}
