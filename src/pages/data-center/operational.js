@@ -15,13 +15,44 @@ export function downloads(snapshot, download, dates) {
   return `<div class="data-page">${header('DATA / DOWNLOADS','Download Center','Fetch validated historical candles into the shared replay cache.')}${error}<section class="data-panel"><form class="data-form" novalidate><label>Symbol<input id="data-symbol" value="${escapeText(symbol)}" autocomplete="off" spellcheck="false"></label><label>Timeframe<select id="data-timeframe">${timeframes.map((tf)=>`<option value="${tf}" ${tf===timeframe?'selected':''}>${tf}</option>`).join('')}</select></label><label>Start<input id="data-from" type="datetime-local" value="${dates.start}"></label><label>End<input id="data-to" type="datetime-local" value="${dates.end}"></label><button class="data-primary" type="button" data-data-action="download" ${['running','starting'].includes(download.status)?'disabled':''}>${download.status==='complete'?'Download again':'Start download'}</button></form>${progress}<p class="data-note">Downloads use HistoricalDataManager, including cache reuse, retry and integrity checks.</p></section><section class="data-panel"><h2>Download lifecycle</h2><ol class="data-steps"><li>Normalize the requested candle range.</li><li>Reuse clean cached coverage where possible.</li><li>Fetch missing ranges with retry and integrity checks.</li><li>Persist the validated coverage to the replay cache.</li></ol></section></div>`;
 }
 
-export function datasets(snapshot) {
-  const rows = snapshot.coverage?.length
-    ? snapshot.coverage.map((interval)=>`<tr><td>${new Date(interval.from*1000).toISOString()}</td><td>${new Date(interval.to*1000).toISOString()}</td><td>${escapeText(snapshot.timeframe||'—')}</td></tr>`).join('')
-    : '<tr><td colspan="3">No cached coverage for the current dataset.</td></tr>';
-  return `<div class="data-page">${header('DATA / DATASETS','Dataset Manager','Inspect the active dataset and the cache coverage that backs it.')}<section class="data-panel"><div class="data-card-grid">${card('Symbol',escapeText(snapshot.symbol||'None'))}${card('Timeframe',escapeText(snapshot.timeframe||'None'))}${card('Rows',Number(snapshot.count||0).toLocaleString())}${card('Quality',escapeText(snapshot.metadata?.quality||'Unknown'))}</div></section><section class="data-panel"><div class="data-panel-head"><h2>Cached intervals</h2><button type="button" data-data-action="clear-current">Clear cached coverage</button></div><div class="data-table-wrap"><table><thead><tr><th>From</th><th>To</th><th>Timeframe</th></tr></thead><tbody>${rows}</tbody></table></div></section></div>`;
-}
+export function datasets(snapshot, savedDatasets = []) {
+  const rows = savedDatasets.length
+    ? savedDatasets.map((dataset) => `
+      <tr>
+        <td><strong>${escapeText(dataset.symbol)}</strong></td>
+        <td>${escapeText(dataset.timeframe)}</td>
+        <td>${Number(dataset.count || 0).toLocaleString()}</td>
+        <td>${(Number(dataset.byteLength || 0) / 1048576).toFixed(2)} MB</td>
+        <td>${dataset.quality === 'VALID' ? 'VALID' : escapeText(dataset.quality || 'UNKNOWN')}</td>
+        <td>
+          <div class="dataset-actions">
+            <button type="button" data-data-action="open-replay" data-dataset-id="${escapeText(dataset.id)}">Replay</button>
+            <button type="button" data-data-action="export-dataset" data-dataset-id="${escapeText(dataset.id)}">Export CSV</button>
+            <button type="button" data-data-action="delete-dataset" data-dataset-id="${escapeText(dataset.id)}">Delete</button>
+          </div>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="6">No saved replay datasets. Go to Downloads and create one.</td></tr>';
 
+  return `<div class="data-page">${header('DATA / DATASETS','Saved replay datasets','These are the datasets replay is allowed to consume. Downloads and live market data are separate from this list.')}
+    <section class="data-panel">
+      <div class="data-card-grid">
+        ${card('Saved datasets', savedDatasets.length.toLocaleString())}
+        ${card('Active replay', snapshot.replayDatasetId ? 'Selected' : 'None')}
+        ${card('Storage', snapshot.cacheEnabled ? 'IndexedDB' : 'Memory only')}
+        ${card('Format', 'CSV')}
+      </div>
+    </section>
+    <section class="data-panel">
+      <div class="data-table-wrap">
+        <table>
+          <thead><tr><th>Symbol</th><th>TF</th><th>Candles</th><th>Size</th><th>Quality</th><th>Actions</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </section>
+  </div>`;
+}
 export function validation(snapshot, validationState) {
   const status = validationState?.status || (snapshot.metadata?.quality === 'VALID' ? 'valid' : snapshot.count ? 'not-run' : 'empty');
   const label = status === 'valid' ? 'VALID' : status === 'issues' ? 'ISSUES FOUND' : status === 'empty' ? 'NO DATA' : 'NOT RUN';
