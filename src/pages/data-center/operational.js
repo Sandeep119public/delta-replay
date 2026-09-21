@@ -1,7 +1,7 @@
 import { card, escapeText, header } from './shared.js';
 
 export function dashboard(snapshot, storage) {
-  return `<div class="data-page">${header('WORKSPACE','Overview','A control room for live market data, GitHub-backed replay datasets and research jobs.')}<div class="data-card-grid">${card('Loaded candles',Number(snapshot.count||0).toLocaleString())}${card('Current dataset',snapshot.symbol?`${escapeText(snapshot.symbol)} · ${escapeText(snapshot.timeframe)}`:'None')}${card('Cache intervals',snapshot.coverage?.length||0)}${card('Dataset storage',storage?.usage!=null?`${(storage.usage/1073741824).toFixed(2)} GB`:'Unavailable')}</div><section class="data-panel"><h2>Quick actions</h2><div class="data-action-grid"><a href="#downloads">Download and publish historical data</a><a href="#datasets">Manage GitHub datasets</a><a href="#validation">Validate current data</a><a href="#storage">Inspect storage</a></div></section><section class="data-panel"><h2>Current dataset</h2><dl class="data-detail-grid"><div><dt>Symbol</dt><dd>${escapeText(snapshot.symbol||'None')}</dd></div><div><dt>Timeframe</dt><dd>${escapeText(snapshot.timeframe||'None')}</dd></div><div><dt>Rows</dt><dd>${Number(snapshot.count||0).toLocaleString()}</dd></div><div><dt>Quality</dt><dd>${escapeText(snapshot.metadata?.quality||'Unknown')}</dd></div></dl></section></div>`;
+  return `<div class="data-page">${header('WORKSPACE','Overview','A control room for live market data, GitHub-backed replay datasets and research jobs.')}<div class="data-card-grid">${card('Loaded candles',Number(snapshot.count||0).toLocaleString())}${card('Current dataset',snapshot.symbol?`${escapeText(snapshot.symbol)} · ${escapeText(snapshot.timeframe)}`:'None')}${card('Cache intervals',snapshot.coverage?.length||0)}${card('Dataset authority','GitHub')}</div><section class="data-panel"><h2>Quick actions</h2><div class="data-action-grid"><a href="#downloads">Download and publish historical data</a><a href="#datasets">Manage GitHub datasets</a><a href="#validation">Validate current data</a><a href="#storage">Inspect storage</a></div></section><section class="data-panel"><h2>Current dataset</h2><dl class="data-detail-grid"><div><dt>Symbol</dt><dd>${escapeText(snapshot.symbol||'None')}</dd></div><div><dt>Timeframe</dt><dd>${escapeText(snapshot.timeframe||'None')}</dd></div><div><dt>Rows</dt><dd>${Number(snapshot.count||0).toLocaleString()}</dd></div><div><dt>Quality</dt><dd>${escapeText(snapshot.metadata?.quality||'Unknown')}</dd></div></dl></section></div>`;
 }
 
 export function downloads(snapshot, download, dates) {
@@ -23,7 +23,7 @@ export function datasets(snapshot, savedDatasets = []) {
         <td>${escapeText(dataset.timeframe)}</td>
         <td>${Number(dataset.count || 0).toLocaleString()}</td>
         <td>${(Number(dataset.byteLength || 0) / 1048576).toFixed(2)} MB</td>
-        <td>${dataset.quality === 'VALID' ? 'VALID' : escapeText(dataset.quality || 'UNKNOWN')}</td>
+        <td>${dataset.status === 'validated' ? 'VALID' : escapeText(dataset.status || 'UNKNOWN')}</td>
         <td>
           <div class="dataset-actions">
             <button type="button" data-data-action="open-replay" data-dataset-id="${escapeText(dataset.id)}">Replay</button>
@@ -35,7 +35,7 @@ export function datasets(snapshot, savedDatasets = []) {
   return `<div class="data-page">${header('DATA / DATASETS','GitHub replay datasets','These are the immutable GitHub datasets replay is allowed to consume. Downloads and live market data are separate from this list.')}
     <section class="data-panel">
       <div class="data-card-grid">
-        ${card('Saved datasets', savedDatasets.length.toLocaleString())}
+        ${card('Published datasets', savedDatasets.length.toLocaleString())}
         ${card('Active replay', snapshot.replayDatasetId ? 'Selected' : 'None')}
         ${card('Authority', 'GitHub')}
         ${card('Format', 'CSV')}
@@ -62,7 +62,7 @@ export function storage(snapshot, storageEstimate) {
   const usage = storageEstimate?.usage;
   const quota = storageEstimate?.quota;
   const percentage = usage && quota ? usage / quota * 100 : null;
-  return `<div class="data-page">${header('DATA / STORAGE','Storage','Understand how much browser storage is available to saved replay datasets and the download cache.')}<div class="data-card-grid">${card('Used',usage!=null?`${(usage/1073741824).toFixed(2)} GB`:'Unavailable')}${card('Quota',quota!=null?`${(quota/1073741824).toFixed(2)} GB`:'Unavailable')}${card('Usage',percentage!=null?`${percentage.toFixed(1)}%`:'Unavailable')}${card('Authority','GitHub')}</div><section class="data-panel"><h2>Storage policy</h2><p>GitHub is the durable replay dataset authority. Browser IndexedDB is only a download accelerator. Export CSV is an interoperability action, not replay storage.</p></section></div>`;
+  return `<div class="data-page">${header('DATA / STORAGE','Storage','Inspect the optional browser cache used to accelerate downloads. GitHub remains the replay dataset authority.')}<div class="data-card-grid">${card('Used',usage!=null?`${(usage/1073741824).toFixed(2)} GB`:'Unavailable')}${card('Quota',quota!=null?`${(quota/1073741824).toFixed(2)} GB`:'Unavailable')}${card('Usage',percentage!=null?`${percentage.toFixed(1)}%`:'Unavailable')}${card('Authority','GitHub')}</div><section class="data-panel"><h2>Storage policy</h2><p>GitHub is the durable replay dataset authority. Browser IndexedDB is only a download accelerator. Server-side dataset jobs fetch Binance data, validate it, partition it, and publish one immutable dataset version. Export CSV is an interoperability action, not replay storage.</p></section></div>`;
 }
 
 export function jobs(jobsState) {
@@ -73,5 +73,5 @@ export function jobs(jobsState) {
 }
 
 export function system(snapshot) {
-  return `<div class="data-page">${header('SYSTEM','System','Runtime capabilities and data-service health.')}<div class="data-card-grid">${card('Replay data service','Ready')}${card('IndexedDB',snapshot.cacheEnabled?'Available':'Unavailable')}${card('Candle store',`${Number(snapshot.count||0).toLocaleString()} rows`)}${card('Session','Browser local')}</div><section class="data-panel"><h2>Architecture</h2><p>Page actions use the application data port. Binance historical fetching belongs to HistoricalDataManager; saved replay datasets belong to StoredDatasetRepository; replay never fetches historical market data.</p></section></div>`;
+  return `<div class="data-page">${header('SYSTEM','System','Runtime capabilities and data-service health.')}<div class="data-card-grid">${card('Replay data service','Ready')}${card('IndexedDB',snapshot.cacheEnabled?'Available':'Unavailable')}${card('Candle store',`${Number(snapshot.count||0).toLocaleString()} rows`)}${card('Session','Browser local')}</div><section class="data-panel"><h2>Architecture</h2><p>Page actions use the application data port. Binance historical fetching belongs to HistoricalDataManager; saved replay datasets belong to RemoteDatasetRepository and GitHub; replay never fetches historical market data.</p></section></div>`;
 }
