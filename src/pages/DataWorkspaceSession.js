@@ -31,8 +31,8 @@ export class DataWorkspaceSession {
       this._notify();
     });
     subscribe(DATA_WORKSPACE_EVENTS.READY, (payload) => {
-      const count = payload?.candles?.length ?? this._download.loaded;
-      this._download = { ...this._download, status: 'complete', loaded: count, total: payload?.candles?.length ?? this._download.total, pct: 100, error: null };
+      const count = payload?.dataset?.count ?? payload?.candles?.length ?? this._download.loaded;
+      this._download = { ...this._download, status: 'complete', loaded: count, total: payload?.dataset?.count ?? payload?.candles?.length ?? this._download.total, pct: 100, error: null };
       this._job('Historical data download', 'complete', 100);
       this._notify();
     });
