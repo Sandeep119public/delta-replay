@@ -3,7 +3,6 @@ import { HistoricalDataManager } from '../src/data/HistoricalDataManager.js';
 import { CandleStore } from '../src/data/CandleStore.js';
 import { CandleCache } from '../src/data/CandleCache.js';
 import { CandleIntegrity } from '../src/data/CandleIntegrity.js';
-import { BinanceClient } from '../src/data/BinanceClient.js';
 import { BinanceCandleProvider } from '../src/data/BinanceCandleProvider.js';
 
 function candle(time, close) { return { time, open: close, high: close+1, low: close-1, close, volume: 10 }; }
@@ -109,7 +108,7 @@ describe('HistoricalDataManager — fetching', () => {
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const client = mockClient({ '*': [c(1000,100), c(1060,101)] });
-    const provider = new BinanceCandleProvider({ client, maxCandles: 100000, chunkSize: 2000 });
+    const provider = new BinanceCandleProvider({ client, chunkSize: 2000 });
     const mgr = new HistoricalDataManager({ provider, store, cache, concurrency: 1 });
     const { candles, metadata } = await mgr.load({ symbol: 'BTCUSD', timeframe: '1m', from: 1000, to: 1100 });
     expect(candles.length).toBe(2);
@@ -132,7 +131,7 @@ describe('HistoricalDataManager — fetching', () => {
         return res;
       }
     };
-    const provider = new BinanceCandleProvider({ client, maxCandles: 100000, chunkSize: 2 });
+    const provider = new BinanceCandleProvider({ client, chunkSize: 2 });
     const mgr = new HistoricalDataManager({ provider, store, cache, concurrency: 2, chunkSize: 2 });
     const { candles } = await mgr.load({ symbol: 'BTCUSD', timeframe: '1m', from: 1000, to: 1180 });
     // 1000,1060,1120,1180 =4
