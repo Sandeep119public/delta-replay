@@ -8,3 +8,5 @@ coverage/
 __pycache__/
 *.pyc
 .pytest_cache/
+backend/datasets/*.parquet
+backend/datasets/*.json
