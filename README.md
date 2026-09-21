@@ -24,9 +24,9 @@ Datasets are immutable and content-addressed:
 
 The manifest records symbol, timeframe, range, row count, format, source, byte size, SHA-256 and content identity.
 
-Publishing requires a fine-grained GitHub token restricted to the dataset repository with Contents: write permission. The frontend keeps the operator token in session storage and sends it only to Render. Do not put the token in VITE_* environment variables.
+Publishing is server-authorized. Render holds the GitHub token in DATASET_GITHUB_TOKEN and the operator-only DATASET_PUBLISH_SECRET protects dataset jobs. Never put the GitHub token in VITE_* variables or browser storage.
 
-GitHub blocks regular files larger than 100 MiB, so the publisher refuses files above a 90 MiB safety threshold. Split large historical ranges before publishing. GitHub also recommends keeping repositories small and moving genuinely large generated data to Git LFS or object storage.
+GitHub blocks regular files larger than 100 MiB, so the publisher uses immutable partitions capped at 80,000 candles and a 90 MiB safety threshold. A logical dataset has one content identity and a manifest list of partition files. GitHub also recommends keeping repositories small and moving genuinely large generated data to Git LFS or object storage.
 
 ## Simulation model
 
@@ -72,7 +72,7 @@ The cleanup job uses a PostgreSQL transaction-scoped advisory lock so overlappin
 
 ## Scale behavior
 
-The server accepts at most 100,000 candles per dataset and CSV upload is bounded by 10 MiB. Replay UI state exposes a sliding 2,000-candle window while retaining the full immutable dataset for persistence and reconstruction.
+The dataset API accepts at most 100,000 candles for the legacy direct-publish endpoint. Normal historical downloads run as server-owned jobs and partition the resulting dataset before publishing. Replay UI state exposes a sliding 2,000-candle window while retaining the full immutable dataset for persistence and reconstruction.
 
 ## Development quick start
 
@@ -183,4 +183,4 @@ The dataset manifest records the dataset identity and SHA-256. The backend verif
 
 ### Important ownership rule
 
-Do not connect Binance directly to the replay engine. If replay needs a new data capability, add it to the dataset/download side and keep the replay side dependent on `StoredDatasetRepository`. Do not create another replay engine, dataset store, or historical-data abstraction.
+Do not connect Binance directly to the replay engine. Replay depends only on `RemoteDatasetRepository`. Browser IndexedDB is a disposable acceleration cache. Do not create another replay engine, dataset store, or historical-data abstraction.
