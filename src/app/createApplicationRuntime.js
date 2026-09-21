@@ -135,6 +135,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     datasetRepository,
     replayCapabilities,
     chartManager,
+    pauseReplay: () => commandController?.pause(),
     dataStatus: ui.el('data-status'),
   });
   const commandSurface = createCommandSurface({ focusTradePanel: mobileDrawer?.focusTradingPanel });
