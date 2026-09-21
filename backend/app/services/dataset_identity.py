@@ -19,10 +19,30 @@ def _canonical_value(value: Any):
     raise TypeError(f"unsupported replay dataset value: {type(value).__name__}")
 
 
-def dataset_id(candles) -> str:
+def _canonical_json_bytes(value: Any) -> bytes:
+    return json.dumps(
+        _canonical_value(value),
+        separators=(",", ":"),
+        sort_keys=True,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def dataset_id_iter(values) -> str:
+    hasher = hashlib.sha256()
+    hasher.update(b"[")
+    first = True
     try:
-        canonical = _canonical_value(candles)
-        encoded = json.dumps(canonical, separators=(",", ":"), sort_keys=True, allow_nan=False)
+        for value in values:
+            if not first:
+                hasher.update(b",")
+            hasher.update(_canonical_json_bytes(value))
+            first = False
     except (TypeError, ValueError) as exc:
         raise ValueError(f"replay dataset is not JSON-safe: {exc}") from exc
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    hasher.update(b"]")
+    return hasher.hexdigest()
+
+
+def dataset_id(candles) -> str:
+    return dataset_id_iter(candles)
