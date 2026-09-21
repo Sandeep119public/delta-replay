@@ -26,6 +26,8 @@ class BinanceDatasetDownloadService:
         self._jobs = {}
         self._lock = threading.RLock()
         self._cancelled = set()
+        self._running_jobs = set()
+        self._worker_id = uuid.uuid4().hex
         self._workers = threading.BoundedSemaphore(max(1, int(os.getenv('DATASET_DOWNLOAD_CONCURRENCY', '1'))))
         self._recover()
 
@@ -45,8 +47,13 @@ class BinanceDatasetDownloadService:
             raise ValueError("invalid dataset download range")
         existing = self.job_repository.active(symbol, timeframe, start, end)
         if existing:
-            with self._lock: self._jobs[existing['jobId']] = existing
-            threading.Thread(target=self._run, args=(existing['jobId'],), daemon=True).start()
+            with self._lock:
+                self._jobs[existing['jobId']] = existing
+                running = existing['jobId'] in self._running_jobs
+            if not running:
+                with self._lock:
+                    self._running_jobs.add(existing['jobId'])
+                threading.Thread(target=self._run, args=(existing['jobId'],), daemon=True).start()
             return existing
         durable = self.job_repository.create(symbol=symbol, timeframe=timeframe, from_ms=start, to_ms=end, total=max(1, (end-start)//_INTERVAL_MS[timeframe]))
         job_id = durable['jobId'] if durable else uuid.uuid4().hex
@@ -65,6 +72,8 @@ class BinanceDatasetDownloadService:
                 "dataset": None,
                 "createdAt": int(time.time() * 1000),
             }
+        with self._lock:
+            self._running_jobs.add(job_id)
         thread = threading.Thread(target=self._run, args=(job_id,), daemon=True)
         thread.start()
         return self.get(job_id)
@@ -123,23 +132,29 @@ class BinanceDatasetDownloadService:
 
     def _run(self, job_id):
         job = self.get(job_id)
-        persisted_chunks = self.job_repository.load_chunks(job_id)
+        if not job:
+            with self._lock:
+                self._running_jobs.discard(str(job_id))
+            return
+        acquired = False
+        try:
+            acquired = self._workers.acquire()
+            if not acquired:
+                return
+            if not self.job_repository.claim(job_id, self._worker_id):
+                return
+            persisted_chunks = self.job_repository.load_chunks(job_id)
         candles = [candle for chunk in persisted_chunks for candle in chunk]
         cursor = int(job.get('cursor', job['from']))
         interval_ms = _INTERVAL_MS[job["timeframe"]]
         if candles:
             cursor = max(cursor, candles[-1]['time'] * 1000 + interval_ms)
-        acquired = self._workers.acquire(timeout=30)
-        if not acquired:
-            self._update(job_id, status='failed', pct=100, error='Download concurrency limit reached')
+        if str(job_id) in self._cancelled:
             return
-        try:
-            if str(job_id) in self._cancelled:
-                return
-            self._update(job_id, status="running")
+        self._update(job_id, worker_id=self._worker_id, status="running")
             with httpx.Client(timeout=60.0, follow_redirects=True) as client:
                 while cursor < job["to"]:
-                    if str(job_id) in self._cancelled:
+                    if str(job_id) in self._cancelled or not self.job_repository.claim(job_id, self._worker_id):
                         return
                     rows = self._fetch_page(client, {
                         "symbol": job["symbol"],
@@ -174,6 +189,7 @@ class BinanceDatasetDownloadService:
                     cursor = next_cursor
                     self._update(
                         job_id,
+                        worker_id=self._worker_id,
                         cursor=cursor,
                         loaded=len(candles),
                         pct=min(99, (cursor - job["from"]) / max(1, job["to"] - job["from"]) * 100),
@@ -196,11 +212,16 @@ class BinanceDatasetDownloadService:
                 candles=candles,
                 metadata={"downloadedBy": "server", "candleSource": "binance-futures"},
             )
-            self._update(job_id, status="complete", loaded=len(candles), pct=100, dataset=dataset)
+            if not self.job_repository.claim(job_id, self._worker_id):
+                return
+            self._update(job_id, worker_id=self._worker_id, status="complete", loaded=len(candles), pct=100, dataset=dataset)
             self.job_repository.clear_chunks(job_id)
         except Exception as exc:
-            self._update(job_id, status="failed", pct=100, error=str(exc))
+            self._update(job_id, worker_id=self._worker_id, status="failed", pct=100, error=str(exc))
         finally:
-            self._workers.release()
+            if acquired:
+                self._workers.release()
+            self.job_repository.release(job_id, self._worker_id)
             with self._lock:
                 self._cancelled.discard(str(job_id))
+                self._running_jobs.discard(str(job_id))
