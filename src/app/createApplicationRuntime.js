@@ -19,7 +19,7 @@ import { BinanceLiveMarketService } from './BinanceLiveMarketService.js';
 import { MarketModeController } from './MarketModeController.js';
 
 export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
-  const { appState, candleStore, engine, candleCache, dataManager, datasetRepository, tradingEngine, mutationPipeline } = services;
+  const { appState, candleStore, engine, candleCache, datasetRepository, tradingEngine, mutationPipeline } = services;
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
