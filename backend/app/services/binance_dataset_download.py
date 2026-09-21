@@ -106,8 +106,6 @@ class BinanceDatasetDownloadService:
         persisted_chunks = self.job_repository.load_chunks(job_id)
         candles = [candle for chunk in persisted_chunks for candle in chunk]
         cursor = int(job.get('cursor', job['from']))
-        if candles:
-            cursor = max(cursor, candles[-1]['time'] * 1000 + interval_ms if 'interval_ms' in locals() else cursor)
         interval_ms = _INTERVAL_MS[job["timeframe"]]
         if candles:
             cursor = max(cursor, candles[-1]['time'] * 1000 + interval_ms)
