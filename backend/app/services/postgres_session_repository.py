@@ -59,7 +59,7 @@ class PostgresSessionRepository(SessionRepository):
             "replay_datasets": {"dataset_id", "candles"},
             "replay_sessions": {"session_id", "state", "revision", "updated_at"},
             "replay_events": {"session_id", "sequence", "replay_index", "event_type", "payload"},
-            "dataset_download_jobs": {"job_id", "symbol", "timeframe", "from_ms", "to_ms", "cursor_ms", "status"},
+            "dataset_download_jobs": {"job_id", "symbol", "timeframe", "from_ms", "to_ms", "cursor_ms", "status", "worker_id", "lease_until"},
             "dataset_download_chunks": {"job_id", "sequence", "candles"},
         }
         observed = {}
@@ -79,6 +79,7 @@ class PostgresSessionRepository(SessionRepository):
             "001_create_replay_sessions",
             "002_add_replay_events",
             "003_add_dataset_download_jobs",
+            "004_add_dataset_download_leases",
         }
         applied_versions = {str(row["version"]) for row in migration_rows}
         if not required_migrations.issubset(applied_versions):
