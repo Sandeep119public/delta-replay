@@ -3,8 +3,18 @@ import { ReplayCommandController } from './ReplayCommandController.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { createApplicationActions } from './ApplicationActions.js';
 
-export function createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView }) {
-  const { appState, candleStore, engine, dataManager, tradingEngine } = services;
+export function createReplayRuntime({
+  services,
+  ui,
+  replayPort,
+  replayRuntime,
+  statusView,
+  onBeforeReplayLoad = null,
+  liveMarket = null,
+  isReplayMode = () => true,
+  onEnterLive = null,
+}) {
+  const { appState, candleStore, replayDataManager, tradingEngine } = services;
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
     hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
@@ -13,10 +23,10 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
   });
 
   const coordinator = new ReplayCoordinator({
-    dataManager,
+    dataManager: replayDataManager,
     candleStore,
     appState,
-    replayEngine: engine,
+    replayEngine: services.engine,
     tradingCapabilities: replayTradingCapabilities,
     statusView,
     chartManager: ui.chartManager,
@@ -31,11 +41,12 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
   replayRuntime.attach(coordinator);
 
   const commandController = new ReplayCommandController({
-    engine,
+    engine: services.engine,
     appState,
     candleStore,
     headerBtn: ui.getReplayPorts().headerStartReplayBtn,
     tradingCapabilities: replayTradingCapabilities,
+    onBeforeLoad: onBeforeReplayLoad,
     onLoad: ({ autoStart }) => replayRuntime.capabilities.load({ autoStart }),
     onPreview: (index) => replayRuntime.capabilities.preview(index),
     onError: (msg) => coordinator.showTradingError(msg),
@@ -55,9 +66,13 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
       timeline: ui.timeline,
       controls: ui.controls,
       errorPanel: ui.errorPanel,
+      liveMarket,
+      isReplayMode,
+      onBeforeReplayLoad,
+      onEnterLive,
     }),
     replayLifecycle: bindReplayLifecycle({
-      engine,
+      engine: services.engine,
       appState,
       candleStore,
       statusView,
