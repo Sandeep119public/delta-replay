@@ -28,6 +28,26 @@
   overflow: hidden;
 }
 
+/* Live is the default market screen. Replay controls and paper-trading dock
+   appear only after the user explicitly enters replay mode. */
+#page-replay[data-mode="live"] {
+  grid-template-rows: var(--phase1-header) 0 minmax(0, 1fr) 0;
+}
+
+#page-replay[data-mode="live"] .timeline-section,
+#page-replay[data-mode="live"] .controls-section,
+#page-replay[data-mode="live"] .trading-section {
+  display: none;
+}
+
+#page-replay[data-mode="live"] .main-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#page-replay[data-mode="live"] .date-group {
+  display: none;
+}
+
 .topbar {
   min-width: 0;
   padding: 0 20px;
