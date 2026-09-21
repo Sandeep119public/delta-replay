@@ -47,7 +47,7 @@ class GitHubDatasetRepository:
     def _headers(self, token=None, accept="application/vnd.github.raw+json"):
         headers = {
             "Accept": accept,
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": "2026-03-10",
             "User-Agent": "delta-replay-dataset-service",
         }
         active = token or self.token
