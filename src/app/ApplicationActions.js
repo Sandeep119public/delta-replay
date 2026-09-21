@@ -1,4 +1,4 @@
-/**
+/** 
  * Application intent bridge. Presentation dispatches intent; injected
  * capabilities own the concrete effects.
  */
@@ -12,6 +12,10 @@ export function createApplicationActions({
   timeline,
   controls,
   errorPanel,
+  liveMarket = null,
+  isReplayMode = () => true,
+  onBeforeReplayLoad = null,
+  onEnterLive = null,
 }) {
   if (!replay || typeof replay !== 'object') throw new TypeError('createApplicationActions requires replay capabilities');
   if (!commandController || typeof commandController !== 'object') throw new TypeError('createApplicationActions requires command capabilities');
@@ -25,6 +29,7 @@ export function createApplicationActions({
 
   return Object.freeze({
     changeDataset(kind, value, sourceEl) {
+      if (!isReplayMode()) return liveMarket?.restartForSelection(kind, value) ?? false;
       return replay.changeDataset(kind, value, sourceEl);
     },
     previewTimeline(index) {
@@ -70,6 +75,15 @@ export function createApplicationActions({
         context: {},
       }, { severity: 'critical', onPause: () => commandController.pause() });
     },
-    load() { return replay.load(); },
+    load() {
+      return onBeforeReplayLoad?.() ?? Promise.resolve();
+    },
+    async loadReplay(options = {}) {
+      await onBeforeReplayLoad?.();
+      return replay.load(options);
+    },
+    live() {
+      return onEnterLive?.() ?? liveMarket?.start?.() ?? false;
+    },
   });
 }
