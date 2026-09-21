@@ -4,4 +4,5 @@ pydantic>=2.13,<3
 httpx>=0.28.1,<1
 python-multipart>=0.0.32,<1
 psycopg[binary]>=3.3,<4
+pyarrow>=19,<24
 pytest>=9.1.1,<10
