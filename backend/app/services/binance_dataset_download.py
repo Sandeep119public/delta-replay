@@ -202,7 +202,6 @@ class BinanceDatasetDownloadService:
                             })
 
                     if page_candles:
-                        sequence = len(persisted_chunks)
                         self.job_repository.append_chunk(
                             job_id,
                             sequence,
