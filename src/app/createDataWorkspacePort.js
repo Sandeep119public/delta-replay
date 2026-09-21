@@ -25,18 +25,22 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
 
   const port = {
     snapshot() {
-      const metadata = candleStore.getMetadata() || {};
-      const symbol = appState.symbol || candleStore.getSymbol() || null;
-      const timeframe = appState.timeframe || candleStore.getTimeframe() || null;
-      const coverageSymbol = candleStore.getSymbol() || symbol;
-      const coverageTimeframe = candleStore.getTimeframe() || timeframe;
-      const coverage = coverageSymbol && coverageTimeframe
-        ? candleCache.getCoverage(coverageSymbol, coverageTimeframe, { timeframeSec: metadata.timeframeSec })
+      const replayActive = appState.mode === 'replay';
+      const metadata = replayActive ? (candleStore.getMetadata() || {}) : {};
+      const symbol = replayActive
+        ? (metadata.symbol || candleStore.getSymbol() || null)
+        : (appState.symbol || null);
+      const timeframe = replayActive
+        ? (metadata.timeframe || candleStore.getTimeframe() || null)
+        : (appState.timeframe || null);
+      const coverage = replayActive && symbol && timeframe
+        ? candleCache.getCoverage(symbol, timeframe, { timeframeSec: metadata.timeframeSec })
         : [];
       return Object.freeze({
+        mode: appState.mode,
         symbol,
         timeframe,
-        count: candleStore.getCount(),
+        count: replayActive ? candleStore.getCount() : 0,
         metadata,
         coverage,
         cacheEnabled: candleCache.enableIDB,
