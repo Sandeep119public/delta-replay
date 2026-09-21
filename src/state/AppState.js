@@ -15,6 +15,8 @@ export class AppState extends EventEmitter {
     super();
     this.symbol = 'BTCUSDT';
     this.timeframe = '1m';
+    this.mode = 'live';
+    this.replayDatasetId = null;
     this._store = candleStore;
     this.loading = false;
     this.loadingState = LoadingState.IDLE;
@@ -75,6 +77,19 @@ export class AppState extends EventEmitter {
     this.emit('change', this.snapshot());
   }
 
+  setMode(mode) {
+    if (mode !== 'live' && mode !== 'replay') throw new TypeError('AppState mode must be live or replay');
+    this.mode = mode;
+    this.emit('modeChanged', mode);
+    this.emit('change', this.snapshot());
+  }
+
+  setReplayDatasetId(id) {
+    this.replayDatasetId = id ? String(id) : null;
+    this.emit('replayDatasetChanged', this.replayDatasetId);
+    this.emit('change', this.snapshot());
+  }
+
   setPendingStartIndex(idx) {
     this.pendingStartIndex = Number(idx) || 0;
     this.emit('pendingStartIndexChanged', this.pendingStartIndex);
@@ -116,6 +131,8 @@ export class AppState extends EventEmitter {
     return freezeValue({
       symbol: this.symbol,
       timeframe: this.timeframe,
+      mode: this.mode,
+      replayDatasetId: this.replayDatasetId,
       total: this.totalCandles,
       loading: this.loading,
       loadingState: this.loadingState,
