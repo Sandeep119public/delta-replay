@@ -1,4 +1,3 @@
-import { DataEvents } from '../data/HistoricalDataManager.js';
 import { CandleStore } from '../data/CandleStore.js';
 import { CandleIntegrity } from '../data/CandleIntegrity.js';
 import { DATA_WORKSPACE_EVENTS, assertDataWorkspacePort } from '../ports/DataWorkspacePort.js';
