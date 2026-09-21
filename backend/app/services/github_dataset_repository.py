@@ -6,6 +6,8 @@ import json
 import os
 import re
 import time
+from collections import OrderedDict
+from urllib.parse import quote
 from datetime import datetime, timezone
 from threading import RLock
 
@@ -45,6 +47,8 @@ class GitHubDatasetRepository:
             raise ValueError("DATASET_GITHUB_BRANCH is required")
         self._lock = RLock()
         self._cache = {}
+        self._partition_cache = OrderedDict()
+        self._partition_cache_limit = max(16, int(os.getenv("DATASET_PARTITION_CACHE_SIZE", "64")))
         self._cache_ttl = max(5, int(os.getenv("DATASET_CACHE_TTL_SECONDS", "60")))
 
     def _headers(self, token=None, accept="application/vnd.github.raw+json"):
@@ -136,9 +140,17 @@ class GitHubDatasetRepository:
             })
         return GitHubDatasetRepository._normalize_candles(candles)
 
-    def _request(self, method, path, *, token=None, **kwargs):
+    def _request(self, method, path, *, token=None, headers=None, **kwargs):
+        request_headers = self._headers(token)
+        if headers:
+            request_headers.update(headers)
         with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-            response = client.request(method, self._url(path), headers=self._headers(token), **kwargs)
+            response = client.request(
+                method,
+                self._url(path),
+                headers=request_headers,
+                **kwargs,
+            )
         if response.status_code == 404:
             return None
         if response.status_code in (409, 422):
@@ -147,7 +159,13 @@ class GitHubDatasetRepository:
         return response
 
     def _get_raw(self, path, token=None):
-        response = self._request("GET", f"contents/{path.lstrip('/')}", token=token, headers=self._headers(token, "application/vnd.github.raw+json"))
+        ref = quote(self.branch, safe="")
+        response = self._request(
+            "GET",
+            f"contents/{path.lstrip('/')}?ref={ref}",
+            token=token,
+            headers={"Accept": "application/vnd.github.raw+json"},
+        )
         if response is None:
             return None
         if len(response.content) > MAX_FILE_BYTES:
@@ -155,7 +173,13 @@ class GitHubDatasetRepository:
         return response.content
 
     def _get_json(self, path, token=None):
-        response = self._request("GET", f"contents/{path.lstrip('/')}", token=token, headers=self._headers(token, "application/vnd.github.object+json"))
+        ref = quote(self.branch, safe="")
+        response = self._request(
+            "GET",
+            f"contents/{path.lstrip('/')}?ref={ref}",
+            token=token,
+            headers={"Accept": "application/vnd.github.object+json"},
+        )
         return None if response is None else response.json()
 
     def _read_manifest(self, token=None):
@@ -180,6 +204,27 @@ class GitHubDatasetRepository:
 
     def _invalidate_cache(self):
         self._cache.clear()
+        self._partition_cache.clear()
+
+    def _partition_bytes(self, partition, token=None):
+        cache_key = partition["sha256"]
+        if token is None:
+            cached = self._partition_cache.get(cache_key)
+            if cached is not None:
+                self._partition_cache.move_to_end(cache_key)
+                return cached
+        raw = self._get_raw(partition["path"], token)
+        if raw is None:
+            raise RuntimeError("manifest references a missing dataset partition")
+        digest = hashlib.sha256(raw).hexdigest()
+        if digest != partition["sha256"]:
+            raise RuntimeError("dataset partition checksum does not match manifest")
+        if token is None:
+            self._partition_cache[cache_key] = raw
+            self._partition_cache.move_to_end(cache_key)
+            while len(self._partition_cache) > self._partition_cache_limit:
+                self._partition_cache.popitem(last=False)
+        return raw
 
     def list(self, token=None):
         manifest = self._manifest_cached() if token is None else self._read_manifest(token)
@@ -192,16 +237,13 @@ class GitHubDatasetRepository:
         if metadata.get("partitions"):
             candles = []
             for partition in metadata["partitions"]:
-                raw = self._get_raw(partition["path"], token)
-                if raw is None:
-                    raise RuntimeError("manifest references a missing dataset partition")
-                if hashlib.sha256(raw).hexdigest() != partition["sha256"]:
-                    raise RuntimeError("dataset partition checksum does not match manifest")
+                raw = self._partition_bytes(partition, token)
                 part_candles = self._parse_parquet(raw) if metadata.get("format") == "PARQUET" else self._parse_csv(raw)
                 if len(part_candles) != int(partition["count"]):
                     raise RuntimeError("dataset partition row count does not match manifest")
                 candles.extend(part_candles)
         else:
+            ref = quote(self.branch, safe="")
             raw = self._get_raw(metadata["path"], token)
             if raw is None:
                 raise RuntimeError("manifest references a missing dataset file")
@@ -233,11 +275,7 @@ class GitHubDatasetRepository:
                 continue
             if to_time is not None and int(partition["from"]) > int(to_time):
                 continue
-            raw = self._get_raw(partition["path"], token)
-            if raw is None:
-                raise RuntimeError("manifest references a missing dataset partition")
-            if hashlib.sha256(raw).hexdigest() != partition["sha256"]:
-                raise RuntimeError("dataset partition checksum does not match manifest")
+            raw = self._partition_bytes(partition, token)
             parser = self._parse_parquet if metadata.get("format") == "PARQUET" else self._parse_csv
             for candle in parser(raw):
                 if from_time is not None and candle["time"] < int(from_time):
