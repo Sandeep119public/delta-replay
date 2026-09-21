@@ -68,7 +68,10 @@ export function createReplayLoadService({
       const loadResult = await replayEngine.loadDataset(selectedId);
       const total = Number(loadResult.total || loadResult.totalCandles || metadata.count || 0);
       if (!total) throw new Error('Saved replay dataset is empty');
-      const candles = Array.isArray(loadResult.visibleCandles) ? loadResult.visibleCandles : [];
+      const preview = typeof datasetRepository.getRange === 'function'
+        ? await datasetRepository.getRange(selectedId, { offset: 0, limit: 2000 })
+        : { candles: Array.isArray(loadResult.visibleCandles) ? loadResult.visibleCandles : [] };
+      const candles = preview.candles;
 
       if (token !== loadToken || destroyed) return null;
       if (!Array.isArray(candles) || !candles.length) throw new Error('Saved replay dataset is empty');
