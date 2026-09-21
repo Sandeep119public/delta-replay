@@ -10,11 +10,20 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
 
   let operationTail = Promise.resolve();
   const readyListeners = new Set();
+  const loadingListeners = new Set();
+  const progressListeners = new Set();
+  const errorListeners = new Set();
 
   function enqueue(operation) {
     const next = operationTail.then(operation, operation);
     operationTail = next.catch(() => undefined);
     return next;
+  }
+
+  function emit(eventSet, payload) {
+    for (const listener of [...eventSet]) {
+      try { listener(payload); } catch (error) { console.warn('[DataWorkspace] listener failed', error); }
+    }
   }
 
   function emitReady(payload) {
@@ -50,6 +59,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
 
     async download(params) {
       return enqueue(async () => {
+        emit(loadingListeners, { symbol: params.symbol, timeframe: params.timeframe });
         const emitProgress = (state) => {
           globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-dataset-download-progress', { detail: state }));
         };
@@ -67,6 +77,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
                 pct: Number(state.pct || 0),
               };
               emitProgress(progress);
+              emit(progressListeners, progress);
               globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-data-progress', { detail: progress }));
             },
           });
@@ -75,6 +86,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
           globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-datasets-changed'));
           return { candles: [], metadata, quality: 'VALID', savedDataset: dataset };
         } catch (error) {
+          emit(errorListeners, error);
           globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-data-error', { detail: error }));
           throw error;
         }
@@ -119,16 +131,19 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
         readyListeners.add(handler);
         return () => readyListeners.delete(handler);
       }
-
-      const mapping = new Map([
-        [DATA_WORKSPACE_EVENTS.LOADING_STARTED, DataEvents.LOADING_STARTED],
-        [DATA_WORKSPACE_EVENTS.PROGRESS, DataEvents.PROGRESS],
-        [DATA_WORKSPACE_EVENTS.ERROR, DataEvents.ERROR],
-      ]);
-      const mapped = mapping.get(event);
-      if (!mapped) throw new Error(`Unsupported data workspace event: ${event}`);
-      if (dataManager?.on) return dataManager.on(mapped, handler);
-      return () => {};
+      if (event === DATA_WORKSPACE_EVENTS.LOADING_STARTED) {
+        loadingListeners.add(handler);
+        return () => loadingListeners.delete(handler);
+      }
+      if (event === DATA_WORKSPACE_EVENTS.PROGRESS) {
+        progressListeners.add(handler);
+        return () => progressListeners.delete(handler);
+      }
+      if (event === DATA_WORKSPACE_EVENTS.ERROR) {
+        errorListeners.add(handler);
+        return () => errorListeners.delete(handler);
+      }
+      throw new Error(`Unsupported data workspace event: ${event}`);
     },
 
     listDatasets() {
