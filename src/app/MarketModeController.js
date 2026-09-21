@@ -185,7 +185,7 @@ export class MarketModeController {
       : null;
     const selected = current && ((current.source === 'local' && localDatasets.some((item) => item.id === current.id)) || (current.source === 'github' && datasets.some((item) => item.id === current.id)))
       ? current
-      : (localDatasets[0] ? { source: 'local', id: localDatasets[0].id } : { source: 'github', id: datasets[0].id });
+      : (datasets[0] ? { source: 'github', id: datasets[0].id } : { source: 'local', id: localDatasets[0].id });
 
     if (this.datasetSelect) this.datasetSelect.value = selected.source + ':' + selected.id;
     await this.selectDataset(selected.source + ':' + selected.id);
