@@ -4,6 +4,8 @@ import { bindMobileNavigation } from './bindMobileNavigation.js';
 import { createPaperUI } from '../ui/PaperUI.js';
 import { ChartManager } from '../chart/ChartManager.js';
 import { ChartAdapter } from '../chart/ChartAdapter.js';
+import { BinanceLiveMarketClient } from '../data/BinanceLiveMarketClient.js';
+import { LiveMarketSession } from './LiveMarketSession.js';
 import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createCommandSurface } from '../ui/CommandSurface.js';
@@ -17,7 +19,15 @@ import { createReplayRuntime } from './createReplayRuntime.js';
 import { createTradingRuntime } from './createTradingRuntime.js';
 
 export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
-  const { appState, candleStore, engine, candleCache, dataManager, tradingEngine, mutationPipeline } = services;
+  const {
+    appState,
+    candleStore,
+    engine,
+    candleCache,
+    tradingEngine,
+    mutationPipeline,
+  } = services;
+
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
@@ -28,9 +38,39 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const statusView = createReplayStatusView({ engine, appState, candleStore });
   const replayRuntime = createReplayCapabilities();
   const replayCapabilities = replayRuntime.capabilities;
+
   let coordinator = null;
   let commandController = null;
   let chartManager = null;
+  let liveMarket = null;
+  let replayMode = false;
+
+  const chartContainer = requireElement('chart-container', mount.ownerDocument || document);
+  const replayPage = requireElement('page-replay', mount.ownerDocument || document);
+  chartManager = new ChartManager(chartContainer);
+  const chartAdapter = new ChartAdapter(replayPort, chartManager);
+  const mobileNavBinding = bindMobileNavigation();
+
+  function markLiveMode() {
+    replayMode = false;
+    replayPage.dataset.mode = 'live';
+    chartManager.clear();
+    chartManager.setRevealedMax(null);
+  }
+
+  async function enterLiveMode() {
+    if (!liveMarket) return false;
+    markLiveMode();
+    return liveMarket.start();
+  }
+
+  async function enterReplayMode() {
+    replayMode = true;
+    replayPage.dataset.mode = 'replay';
+    liveMarket?.stop();
+    chartManager.clear();
+    chartManager.setRevealedMax(null);
+  }
 
   const callbacks = {
     onRetry: () => replayCapabilities.load({ autoStart: false }),
@@ -44,16 +84,15 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       coordinator?.applyWindowedChart(idx);
       chartManager.followCurrent();
     },
-    onLoadReplay: ({ targetSec } = {}) => replayCapabilities.load({ targetSec, autoStart: false }),
+    onLoadReplay: async ({ targetSec } = {}) => {
+      await enterReplayMode();
+      return replayCapabilities.load({ targetSec, autoStart: false });
+    },
     onPreviewWindow: (idx) => replayCapabilities.preview(idx),
     onSeek: (idx) => commandController?.trySeek(idx),
     onTimeframeChange: (timeframe) => { appState.timeframe = timeframe; },
   };
 
-  const chartContainer = requireElement('chart-container', mount.ownerDocument || document);
-  chartManager = new ChartManager(chartContainer);
-  const chartAdapter = new ChartAdapter(replayPort, chartManager);
-  const mobileNavBinding = bindMobileNavigation();
   const ui = createPaperUI({
     mount,
     replayPort,
@@ -66,7 +105,24 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     callbacks,
   });
 
-  const replay = createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView });
+  liveMarket = new LiveMarketSession({
+    client: new BinanceLiveMarketClient(),
+    chartManager,
+    appState,
+    statusEl: ui.getReplayPorts().dataStatusEl,
+  });
+
+  const replay = createReplayRuntime({
+    services,
+    ui,
+    replayPort,
+    replayRuntime,
+    statusView,
+    onBeforeReplayLoad: enterReplayMode,
+    liveMarket,
+    isReplayMode: () => replayMode,
+    onEnterLive: enterLiveMode,
+  });
   coordinator = replay.coordinator;
   commandController = replay.commandController;
   commandBridge.bind(commandController);
@@ -82,19 +138,49 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     onTimeframeChange: callbacks.onTimeframeChange,
     ...form,
   });
+
   const selectorBindings = bindDatasetSelectors(ui, replay.actions);
-  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, actions: replay.actions });
-  const tradingRuntime = createTradingRuntime({ trading, tradingEvents, actions: replay.actions, ui, views, form, coordinator });
+  const timelineBindings = bindTimelineInteractions({
+    timeline: ui.timeline,
+    candles,
+    trading,
+    tradingEvents,
+    actions: replay.actions,
+  });
+  const tradingRuntime = createTradingRuntime({
+    trading,
+    tradingEvents,
+    actions: replay.actions,
+    ui,
+    views,
+    form,
+    coordinator,
+  });
+
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
-  const loadBtn = ui.getReplayPorts().loadBtn;
-  const onLoadClick = () => replay.actions.load();
+  const ports = ui.getReplayPorts();
+  const loadBtn = ports.loadBtn;
+  const liveMarketBtn = ports.liveMarketBtn;
+
+  const onLoadClick = () => replay.actions.loadReplay({ autoStart: false });
+  const onLiveClick = () => { void replay.actions.live(); };
   loadBtn?.addEventListener('click', onLoadClick);
-  const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
+  liveMarketBtn?.addEventListener('click', onLiveClick);
+
+  const loadBinding = {
+    destroy() {
+      loadBtn?.removeEventListener?.('click', onLoadClick);
+      liveMarketBtn?.removeEventListener?.('click', onLiveClick);
+    },
+  };
+
   const mobileDrawer = bindMobileDrawer();
   const commandSurface = createCommandSurface({ focusTradePanel: mobileDrawer?.focusTradingPanel });
+
   const destroy = bindApplicationLifecycle({
     unbindKeyboardShortcuts: replay.unbindKeyboardShortcuts,
     onDestroy: () => {
+      liveMarket?.destroy();
       onDestroy?.();
       router.destroy();
     },
@@ -109,6 +195,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       tradingRuntime.tradingStateBridge,
       replay.replayLifecycle,
       replay.commandController,
+      liveMarket,
       mobileDrawer,
       commandSurface,
       loadBinding,
@@ -130,15 +217,26 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     ],
     extraCleanup: [unbindAutoFollow, commandBridge],
   });
+
   const lifecycle = createLifecycleGuard({
     start() {
-      ui.modeBanner.update(statusView.snapshot());
-      Promise.resolve(replayCapabilities.load({ autoStart: false })).catch((error) => {
-        if (!lifecycle.destroyed) coordinator?.showTradingError?.(error?.message || 'Failed to load replay');
+      markLiveMode();
+      Promise.resolve(enterLiveMode()).catch((error) => {
+        if (!lifecycle.destroyed) {
+          ui.getReplayPorts().dataStatusEl.textContent = `LIVE · ERROR · ${error?.message || 'Unable to connect to Binance'}`;
+        }
       });
     },
     destroy,
   });
 
-  return { start: lifecycle.start, destroy: lifecycle.destroy, ui, coordinator, mobileDrawer, commandSurface };
+  return {
+    start: lifecycle.start,
+    destroy: lifecycle.destroy,
+    ui,
+    coordinator,
+    liveMarket,
+    mobileDrawer,
+    commandSurface,
+  };
 }
