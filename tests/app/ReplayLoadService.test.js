@@ -87,22 +87,20 @@ describe('ReplayLoadService', () => {
     expect(d.tradingErrorView.show).toHaveBeenCalledWith(expect.stringContaining('trading activity'));
   });
 
-  it('validates the stored candles before handing them to replay', async () => {
+  it('rejects a server-side dataset load failure before changing replay state', async () => {
     const d = deps({
-      datasetRepository: {
-        list: vi.fn(async () => [{ id: 'bad', symbol: 'BTCUSDT', timeframe: '1m', count: 2 }]),
-        get: vi.fn(async () => ({ id: 'bad', symbol: 'BTCUSDT', timeframe: '1m', count: 2 })),
-        getRange: vi.fn(async () => ({ metadata: { id: 'bad', symbol: 'BTCUSDT', timeframe: '1m' }, candles: [
-            { time: 60, open: 100, high: 101, low: 99, close: 100, volume: 1 },
-            { time: 180, open: 100, high: 102, low: 99, close: 101, volume: 1 },
-          ] })),
+      replayEngine: {
+        loadDataset: vi.fn(async () => { throw new Error('dataset integrity failure'); }),
+        getState: vi.fn(() => ({ status: 'ready', totalCandles: 0, currentIndex: -1, startIndex: -1 })),
+        start: vi.fn(async () => undefined),
       },
     });
 
     await expect(createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'bad' }))
-      .rejects.toThrow();
-    expect(d.replayEngine.loadDataset).not.toHaveBeenCalled();
+      .rejects.toThrow(/integrity failure/i);
+    expect(d.appState.setReplayDatasetId).not.toHaveBeenCalled();
   });
+
 
   it('publishes the committed replay dataset after remote replay load succeeds', async () => {
     const d = deps();
