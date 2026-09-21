@@ -170,8 +170,8 @@ export class MarketModeController {
     this._setStatus(`REPLAY · ${dataset.symbol} · ${dataset.timeframe} · loading saved data…`);
 
     try {
-      await this.replayCapabilities.load({ datasetId: dataset.id, autoStart: false });
-      if (!this.destroyed && this.mode === 'replay') {
+      const loaded = await this.replayCapabilities.load({ datasetId: dataset.id, autoStart: false });
+      if (loaded && !this.destroyed && this.mode === 'replay') {
         this._setStatus(`REPLAY · ${dataset.symbol} · ${dataset.timeframe} · ready`);
       }
     } catch (error) {
