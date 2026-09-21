@@ -6,6 +6,7 @@ import json
 import os
 import re
 import time
+from datetime import datetime, timezone
 from threading import RLock
 
 import httpx
@@ -193,13 +194,25 @@ class GitHubDatasetRepository:
         return {"metadata": dict(metadata), "candles": candles, "csv": self._csv_bytes(candles).decode("utf-8")}
 
     def _partition(self, candles):
+        groups = []
+        current_key = None
+        current = []
+        for candle in candles:
+            key = datetime.fromtimestamp(candle["time"], tz=timezone.utc).strftime("%Y-%m")
+            if current and (key != current_key or len(current) >= MAX_PARTITION_CANDLES):
+                groups.append((current_key, current))
+                current = []
+            current_key = key
+            current.append(candle)
+        if current:
+            groups.append((current_key, current))
+
         parts = []
-        for offset in range(0, len(candles), MAX_PARTITION_CANDLES):
-            chunk = candles[offset:offset + MAX_PARTITION_CANDLES]
+        for number, (month, chunk) in enumerate(groups, start=1):
             raw = self._csv_bytes(chunk)
             if len(raw) > MAX_FILE_BYTES:
                 raise ValueError("dataset partition exceeds GitHub size safety limit")
-            parts.append((offset // MAX_PARTITION_CANDLES + 1, chunk, raw))
+            parts.append((f"{month}-{number:04d}", chunk, raw))
         return parts
 
     def publish(self, *, symbol, timeframe, from_ms, to_ms, candles, token=None, metadata=None):
@@ -241,10 +254,10 @@ class GitHubDatasetRepository:
             **(metadata or {}),
         }
         entries = []
-        for number, chunk, raw in self._partition(normalized):
-            path = f"datasets/{symbol}/{timeframe}/{content_id[:16]}/part-{number:04d}.csv"
+        for partition_key, chunk, raw in self._partition(normalized):
+            path = f"datasets/{symbol}/{timeframe}/{content_id[:16]}/{partition_key}.csv"
             record["partitions"].append({
-                "id": f"{record['id']}-p{number:04d}",
+                "id": f"{record['id']}-{partition_key}",
                 "path": path,
                 "from": chunk[0]["time"],
                 "to": chunk[-1]["time"],
