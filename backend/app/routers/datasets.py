@@ -170,7 +170,8 @@ def cancel_download(job_id: str, authorization: str | None = Header(default=None
 
 
 @router.get("/downloads/{job_id}")
-def download_status(job_id: str):
+def download_status(job_id: str, authorization: str | None = Header(default=None)):
+    _require_publish_secret(authorization)
     result = downloads.get(job_id)
     if result is None:
         raise HTTPException(404, "Download job not found")
