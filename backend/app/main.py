@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import backtest, data, health, replay, trading
+from .routers import backtest, data, datasets, health, replay, trading
 
 
 origins = [
@@ -15,7 +15,7 @@ origins = [
     if value.strip()
 ]
 
-app = FastAPI(title="Delta Replay API", version="2.2.0")
+app = FastAPI(title="Delta Replay API", version="2.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -28,4 +28,4 @@ app.include_router(health.router)
 app.include_router(replay.router, prefix="/api/v1/replay", tags=["replay"])
 app.include_router(trading.router, prefix="/api/v1/trading", tags=["trading"])
 app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
-app.include_router(data.router, prefix="/api/v1/data", tags=["data"])
+app.include_router(data.router, prefix="/api/v1/data", tags=["data"])\napp.include_router(datasets.router, prefix="/api/v1/datasets", tags=["datasets"])
