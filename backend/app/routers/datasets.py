@@ -160,6 +160,15 @@ def start_download(payload: DatasetRangeRequest, authorization: str | None = Hea
         raise HTTPException(502, f"Unable to start Binance download: {exc}") from exc
 
 
+@router.post("/downloads/{job_id}/cancel")
+def cancel_download(job_id: str, authorization: str | None = Header(default=None)):
+    _require_publish_secret(authorization)
+    result = downloads.cancel(job_id)
+    if result is None:
+        raise HTTPException(404, "Download job not found")
+    return result
+
+
 @router.get("/downloads/{job_id}")
 def download_status(job_id: str):
     result = downloads.get(job_id)
