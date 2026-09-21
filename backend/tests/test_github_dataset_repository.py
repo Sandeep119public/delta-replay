@@ -35,7 +35,7 @@ def test_publish_rejects_missing_token():
 
 def test_manifest_schema_is_stable():
     manifest = {"schemaVersion": 2, "datasets": []}
-    assert json.loads(json.dumps(manifest))["schemaVersion"] == 1
+    assert json.loads(json.dumps(manifest))["schemaVersion"] == 2
 
 
 def test_partitions_keep_each_file_small(monkeypatch):
