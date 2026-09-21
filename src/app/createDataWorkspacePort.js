@@ -1,27 +1,28 @@
-import { DataEvents } from '../data/HistoricalDataManager.js';
 import { CandleStore } from '../data/CandleStore.js';
 import { CandleIntegrity } from '../data/CandleIntegrity.js';
 import { DATA_WORKSPACE_EVENTS, assertDataWorkspacePort } from '../ports/DataWorkspacePort.js';
 
-const EVENT_MAP = new Map([
-  [DATA_WORKSPACE_EVENTS.LOADING_STARTED, DataEvents.LOADING_STARTED],
-  [DATA_WORKSPACE_EVENTS.PROGRESS, DataEvents.PROGRESS],
-  [DATA_WORKSPACE_EVENTS.READY, DataEvents.READY],
-  [DATA_WORKSPACE_EVENTS.READY_DEGRADED, DataEvents.READY_DEGRADED],
-  [DATA_WORKSPACE_EVENTS.ERROR, DataEvents.ERROR],
-]);
-
-export function createDataWorkspacePort({ dataManager, candleStore, candleCache, appState }) {
-  if (!dataManager || !candleStore || !candleCache || !appState) {
-    throw new TypeError('createDataWorkspacePort requires dataManager, candleStore, candleCache, and appState');
+export function createDataWorkspacePort({ replayDataManager, datasetService, candleStore, candleCache, appState }) {
+  if (!replayDataManager || !datasetService || !candleStore || !candleCache || !appState) {
+    throw new TypeError('createDataWorkspacePort requires replayDataManager, datasetService, candleStore, candleCache, and appState');
   }
 
   let operationTail = Promise.resolve();
+  let catalog = [];
 
   function enqueue(operation) {
     const next = operationTail.then(operation, operation);
     operationTail = next.catch(() => undefined);
     return next;
+  }
+
+  async function refreshCatalog() {
+    const result = await datasetService.list({
+      symbol: appState.symbol,
+      timeframe: appState.timeframe,
+    });
+    catalog = Array.isArray(result?.datasets) ? result.datasets : [];
+    return catalog;
   }
 
   const port = {
@@ -38,30 +39,31 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
         count: candleStore.getCount(),
         metadata,
         coverage,
+        datasets: catalog.map((item) => ({ ...item })),
         cacheEnabled: candleCache.enableIDB,
       });
     },
 
     /**
-     * The Data Center is an acquisition/cache surface, not an alternate
-     * replay publisher. Stage the result in a private store so an in-flight
-     * download can never replace the active replay dataset.
+     * Acquisition is deliberately separate from replay.
+     * This writes an immutable Parquet file through the dataset downloader.
+     * It never populates the replay engine or the active candle store.
      */
     download(params) {
-      return enqueue(() => {
-        const stagingStore = new CandleStore();
-        return dataManager.load({
-          ...params,
-          strict: true,
-          store: stagingStore,
-        });
+      return enqueue(async () => {
+        const result = await datasetService.download(params);
+        await refreshCatalog();
+        return result;
       });
     },
 
+    listDatasets() {
+      return enqueue(() => refreshCatalog());
+    },
+
     /**
-     * Clearing Data Center coverage must not invalidate the active replay
-     * workspace. Replay owns the canonical CandleStore; the Data Center only
-     * owns persisted cache coverage.
+     * This only clears the browser acceleration cache.
+     * Canonical Parquet datasets remain on disk.
      */
     clearCurrent() {
       return enqueue(async () => {
@@ -80,7 +82,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
         const candles = candleStore.getAll();
         const metadata = candleStore.getMetadata() || {};
         if (!candles.length) {
-          return { status: 'empty', message: 'No dataset is currently loaded.' };
+          return { status: 'empty', message: 'No replay dataset is currently loaded.' };
         }
         const result = CandleIntegrity.process(candles, {
           timeframeSec: metadata.timeframeSec,
@@ -97,9 +99,17 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
     },
 
     on(event, handler) {
-      const mapped = EVENT_MAP.get(event);
+      if (!replayDataManager.on) throw new Error('Replay data manager does not expose events');
+      const eventMap = new Map([
+        [DATA_WORKSPACE_EVENTS.LOADING_STARTED, 'dataLoadingStarted'],
+        [DATA_WORKSPACE_EVENTS.PROGRESS, 'dataProgress'],
+        [DATA_WORKSPACE_EVENTS.READY, 'dataReady'],
+        [DATA_WORKSPACE_EVENTS.READY_DEGRADED, 'dataReadyDegraded'],
+        [DATA_WORKSPACE_EVENTS.ERROR, 'dataError'],
+      ]);
+      const mapped = eventMap.get(event);
       if (!mapped) throw new Error(`Unsupported data workspace event: ${event}`);
-      return dataManager.on(mapped, handler);
+      return replayDataManager.on(mapped, handler);
     },
 
     storageEstimate() {
@@ -108,5 +118,6 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
     },
   };
 
+  void refreshCatalog().catch(() => {});
   return assertDataWorkspacePort(port);
 }
