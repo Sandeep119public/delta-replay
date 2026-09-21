@@ -38,6 +38,7 @@ export class DataCenterPage {
     const target = event.target.closest?.('[data-data-action]');
     const datasetId = target?.dataset?.datasetId;
     if (action === 'download' && this.pageName === 'downloads') void this.startDownload();
+    else if (action === 'cancel-download' && this.pageName === 'downloads') void this.session.cancelDownload?.();
     else if (action === 'clear-current' && this.pageName === 'datasets') void this.clearCurrent();
     else if (action === 'validate' && this.pageName === 'validation') void this.validate();
     else if (action === 'delete-dataset' && datasetId) void this.deleteDataset(datasetId);
