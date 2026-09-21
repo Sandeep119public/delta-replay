@@ -3,7 +3,30 @@
 Delta Replay is a browser trading workstation backed by a FastAPI paper-trading engine. It has two deliberately separate market-data workflows:
 
 - **Live:** Binance market data is displayed directly on the chart. Live candles never enter the replay dataset or replay timeline.
-- **Replay data:** historical Binance klines are downloaded in the Data Center, validated, saved locally as a named CSV dataset in IndexedDB, and later replayed from that saved dataset. Replay does not fetch Binance data.
+- **Replay data:** historical Binance klines are downloaded in the Data Center, validated, published to GitHub as immutable datasets, and later replayed through the backend dataset API. Replay does not fetch Binance historical data.
+
+## GitHub-backed replay datasets
+
+GitHub is the durable source of truth for replay datasets. Browser IndexedDB is only a download accelerator and is never authoritative for replay.
+
+Configure the dataset repository with:
+
+    DATASET_GITHUB_REPO=Sandeep119public/delta-replay
+    DATASET_GITHUB_BRANCH=master
+
+Datasets are immutable and content-addressed:
+
+    datasets/
+      manifest.json
+      SOLUSDT/
+        15m/
+          <content-id>.csv
+
+The manifest records symbol, timeframe, range, row count, format, source, byte size, SHA-256 and content identity.
+
+Publishing requires a fine-grained GitHub token restricted to the dataset repository with Contents: write permission. The frontend keeps the operator token in session storage and sends it only to Render. Do not put the token in VITE_* environment variables.
+
+GitHub blocks regular files larger than 100 MiB, so the publisher refuses files above a 90 MiB safety threshold. Split large historical ranges before publishing. GitHub also recommends keeping repositories small and moving genuinely large generated data to Git LFS or object storage.
 
 ## Simulation model
 
@@ -113,19 +136,19 @@ Historical data is a separate process:
         ↓
     normalize / validate / repair
         ↓
-    StoredDatasetRepository
+    RemoteDatasetRepository
         ↓
-    IndexedDB: delta-replay-datasets-v1
+    POST /api/v1/datasets/publish
         ↓
-    named CSV dataset + parsed candles
+    GitHub manifest + immutable CSV
 
 Replay is a separate process:
 
     Replay mode
         ↓
-    select saved dataset
+    select GitHub dataset
         ↓
-    StoredDatasetRepository.getCandles()
+    GET /api/v1/datasets/{id}
         ↓
     strict integrity validation
         ↓
@@ -137,15 +160,15 @@ Replay is a separate process:
         ↓
     ReplayService + PaperTradingEngine + ReplayTimeline
 
-The replay path contains **no historical-data provider** and therefore has no Binance download dependency. The browser cache (`CandleCache`) remains an accelerator for downloads; it is not the authoritative source for replay.
+The replay path contains **no historical-data provider** and therefore has no Binance download dependency. The browser cache (`CandleCache`) remains an accelerator for Binance downloads; GitHub is the authoritative replay dataset store.
 
 ### Saved dataset format
 
-Saved datasets are represented as canonical CSV with:
+Published datasets are represented as immutable canonical CSV with:
 
     time,open,high,low,close,volume
 
-The same saved record also keeps parsed candles in IndexedDB so the replay path can load structured candles directly without reparsing the CSV on every session. The Data Center can export the CSV as a normal file for manual archival, sharing, or committing selected datasets to another free storage location such as a Git repository.
+The dataset manifest records the dataset identity and SHA-256. The backend verifies both before returning candles to replay. The Data Center can export the CSV for interoperability.
 
 ### Recommended user workflow
 
@@ -156,7 +179,7 @@ The same saved record also keeps parsed candles in IndexedDB so the replay path 
 5. Return to **Replay** and switch the mode selector to **REPLAY**.
 6. Select the saved dataset.
 7. Start/seek/play the replay. All replay trading state is handled by the backend session and event timeline.
-8. Use **Export CSV** from the Data Center when a durable file outside the browser is needed.
+8. Use **Export CSV** from the Data Center when a local copy is needed.
 
 ### Important ownership rule
 
