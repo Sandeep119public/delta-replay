@@ -1,4 +1,4 @@
-/** 
+/**
  * Application intent bridge. Presentation dispatches intent; injected
  * capabilities own the concrete effects.
  */
@@ -75,8 +75,9 @@ export function createApplicationActions({
         context: {},
       }, { severity: 'critical', onPause: () => commandController.pause() });
     },
-    load() {
-      return onBeforeReplayLoad?.() ?? Promise.resolve();
+    async load(options = {}) {
+      await onBeforeReplayLoad?.();
+      return replay.load(options);
     },
     async loadReplay(options = {}) {
       await onBeforeReplayLoad?.();
