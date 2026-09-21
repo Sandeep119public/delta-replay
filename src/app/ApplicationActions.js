@@ -12,6 +12,7 @@ export function createApplicationActions({
   timeline,
   controls,
   errorPanel,
+  liveDatasetChange = null,
 }) {
   if (!replay || typeof replay !== 'object') throw new TypeError('createApplicationActions requires replay capabilities');
   if (!commandController || typeof commandController !== 'object') throw new TypeError('createApplicationActions requires command capabilities');
@@ -25,6 +26,9 @@ export function createApplicationActions({
 
   return Object.freeze({
     changeDataset(kind, value, sourceEl) {
+      if (appState.mode === 'live' && typeof liveDatasetChange === 'function') {
+        return liveDatasetChange(kind, value, sourceEl);
+      }
       return replay.changeDataset(kind, value, sourceEl);
     },
     previewTimeline(index) {
@@ -70,6 +74,6 @@ export function createApplicationActions({
         context: {},
       }, { severity: 'critical', onPause: () => commandController.pause() });
     },
-    load() { return replay.load(); },
+    load(options = {}) { return replay.load(options); },
   });
 }
