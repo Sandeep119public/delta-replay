@@ -1,13 +1,12 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const REQUEST_TIMEOUT_MS = 120_000;
-const PUBLISH_SECRET_KEY = 'delta-replay.dataset-publish-secret';
 
 function request(endpoint, options = {}) {
   return (async () => {
     const controller = options.signal ? null : new AbortController();
     const timeout = controller ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : null;
     try {
-      const response = await fetch(`${API_BASE}/api/v1/datasets${endpoint}`, {
+      const response = await fetch(API_BASE + '/api/v1/datasets' + endpoint, {
         ...options,
         ...(controller ? { signal: controller.signal } : {}),
         headers: {
@@ -17,10 +16,10 @@ function request(endpoint, options = {}) {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        const message = body?.detail || body?.message || `Dataset API failed: ${response.status}`;
+        const message = body?.detail || body?.message || 'Dataset API failed: ' + response.status;
         const error = new Error(typeof message === 'string' ? message : JSON.stringify(message));
         error.status = response.status;
-        error.code = `HTTP_${response.status}`;
+        error.code = 'HTTP_' + response.status;
         throw error;
       }
       return body;
@@ -33,35 +32,34 @@ function request(endpoint, options = {}) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class RemoteDatasetRepository {
-  constructor({ storage = globalThis.sessionStorage } = {}) {
-    this.storage = storage;
+  constructor({ prompt = globalThis.prompt } = {}) {
+    this._prompt = typeof prompt === 'function' ? prompt : null;
+    this._publishSecretValue = '';
   }
 
   _publishSecret() {
-    return this.storage?.getItem?.(PUBLISH_SECRET_KEY) || '';
+    return this._publishSecretValue;
   }
 
   setPublishSecret(secret) {
-    const value = String(secret || '').trim();
-    if (!value) this.storage?.removeItem?.(PUBLISH_SECRET_KEY);
-    else this.storage?.setItem?.(PUBLISH_SECRET_KEY, value);
+    this._publishSecretValue = String(secret || '').trim();
   }
 
   clearPublishSecret() {
-    this.storage?.removeItem?.(PUBLISH_SECRET_KEY);
+    this._publishSecretValue = '';
   }
 
   async _authorizedRequest(endpoint, options = {}) {
     let secret = this._publishSecret();
-    if (!secret && typeof globalThis.prompt === 'function') {
-      secret = String(globalThis.prompt('Dataset publish secret:') || '').trim();
+    if (!secret && this._prompt) {
+      secret = String(this._prompt('Dataset publish secret:') || '').trim();
       if (secret) this.setPublishSecret(secret);
     }
     if (!secret) throw new Error('Dataset publish secret is required');
     return request(endpoint, {
       ...options,
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: 'Bearer ' + secret,
         ...(options.headers || {}),
       },
     });
@@ -80,7 +78,7 @@ export class RemoteDatasetRepository {
 
   async getCandles(id) {
     if (!id) throw new Error('Dataset id is required');
-    const dataset = await request(`/${encodeURIComponent(id)}/candles`);
+    const dataset = await request('/' + encodeURIComponent(id) + '/candles');
     if (!dataset?.metadata || !Array.isArray(dataset.candles)) throw new Error('Remote replay dataset is invalid');
     return { metadata: dataset.metadata, candles: dataset.candles };
   }
@@ -92,14 +90,14 @@ export class RemoteDatasetRepository {
     if (to != null) params.set('to_time', String(to));
     params.set('offset', String(offset));
     params.set('limit', String(limit));
-    const dataset = await request(`/${encodeURIComponent(id)}/range?${params}`);
+    const dataset = await request('/' + encodeURIComponent(id) + '/range?' + params);
     if (!dataset?.metadata || !Array.isArray(dataset.candles)) throw new Error('Remote dataset range is invalid');
     return dataset;
   }
 
   async getCsv(id) {
     if (!id) throw new Error('Dataset id is required');
-    const dataset = await request(`/${encodeURIComponent(id)}/csv`);
+    const dataset = await request('/' + encodeURIComponent(id) + '/csv');
     if (!dataset?.metadata || typeof dataset.csv !== 'string') throw new Error('Remote replay dataset is invalid');
     return { metadata: dataset.metadata, csv: dataset.csv };
   }
@@ -112,10 +110,10 @@ export class RemoteDatasetRepository {
     if (!job?.jobId) throw new Error('Dataset download job was not created');
 
     let state = job;
-    while (!['complete', 'failed'].includes(state.status)) {
+    while (!['complete', 'failed', 'cancelled'].includes(state.status)) {
       onProgress?.(state);
       await sleep(1000);
-      state = await request(`/downloads/${encodeURIComponent(job.jobId)}`);
+      state = await this._authorizedRequest('/downloads/' + encodeURIComponent(job.jobId));
     }
     onProgress?.(state);
     if (state.status !== 'complete') throw new Error(state.error || 'Dataset download failed');
@@ -123,7 +121,7 @@ export class RemoteDatasetRepository {
   }
 
   async cancelDownload(jobId) {
-    return this._authorizedRequest(`/downloads/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', body: '{}' });
+    return this._authorizedRequest('/downloads/' + encodeURIComponent(jobId) + '/cancel', { method: 'POST', body: '{}' });
   }
 
   async save({ symbol, timeframe, from, to, candles, metadata = {} }) {
