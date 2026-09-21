@@ -9,7 +9,7 @@ const candles = [
 function deps(overrides = {}) {
   return {
     datasetRepository: {
-      list: vi.fn(async () => [{ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2 }]),
+      list: vi.fn(async () => [{ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV' }]),
       get: vi.fn(async () => ({ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV', from: 60, to: 120 })),
       getRange: vi.fn(async () => ({ metadata: { id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', format: 'CSV' }, candles })),
     },
