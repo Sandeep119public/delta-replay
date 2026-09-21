@@ -12,6 +12,7 @@ export class MarketModeController {
     liveMarket,
     datasetRepository,
     replayCapabilities,
+    chartManager = null,
     dataStatus = null,
   } = {}) {
     if (!page || !appState || !liveMarket || !datasetRepository || !replayCapabilities) {
@@ -29,6 +30,7 @@ export class MarketModeController {
     this.liveMarket = liveMarket;
     this.datasetRepository = datasetRepository;
     this.replayCapabilities = replayCapabilities;
+    this.chartManager = chartManager;
     this.dataStatus = dataStatus;
     this.mode = 'live';
     this.destroyed = false;
@@ -74,7 +76,7 @@ export class MarketModeController {
     this.datasetRefresh && (this.datasetRefresh.disabled = !replay);
     this.page.classList.toggle('live-mode', !replay);
     this.page.classList.toggle('replay-mode', replay);
-    this.controls?.setEnabledForPreview(replay);
+    this.controls?.setEnabledForPreview(false);
   }
 
   async setMode(mode, { force = false } = {}) {
@@ -98,6 +100,8 @@ export class MarketModeController {
     }
 
     this.liveMarket.stop();
+    this.chartManager?.clear?.();
+    this.chartManager?.setRevealedMax?.(null);
     this._setStatus('REPLAY · selecting saved dataset…');
     await this.refreshDatasets();
   }
@@ -123,8 +127,9 @@ export class MarketModeController {
     }
 
     if (!datasets.length) {
-      this.replayCapabilities.preview?.(0);
+      this.chartManager?.clear?.();
       this._setStatus('REPLAY · no saved dataset · use Downloads');
+      this.controls?.setEnabledForPreview(false);
       return;
     }
 
