@@ -76,7 +76,7 @@ export class DataCenterPage {
     try {
       await this.data.deleteDataset(id);
     } catch (error) {
-      this.session.setError?.(errorMessage(error));
+      this.session.setError?.(error?.message || String(error));
     }
     await this.render();
   }
@@ -94,7 +94,7 @@ export class DataCenterPage {
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (error) {
-      this.session._validation = { status: 'error', message: errorMessage(error) };
+      this.session.setError?.(error?.message || String(error));
       await this.render();
     }
   }
