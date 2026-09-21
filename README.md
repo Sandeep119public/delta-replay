@@ -1,6 +1,9 @@
 # Delta Replay
 
-Delta Replay is a browser trading replay application backed by a FastAPI trading engine.
+Delta Replay is a browser trading workstation backed by a FastAPI paper-trading engine. It has two deliberately separate market-data workflows:
+
+- **Live:** Binance market data is displayed directly on the chart. Live candles never enter the replay dataset or replay timeline.
+- **Replay data:** historical Binance klines are downloaded in the Data Center, validated, saved locally as a named CSV dataset in IndexedDB, and later replayed from that saved dataset. Replay does not fetch Binance data.
 
 ## Simulation model
 
@@ -95,3 +98,66 @@ npm run vibe:check
 ```
 
 Recommended rhythm: edit → vibe:fast → inspect → repeat → vibe:check before push.
+
+## Market-data workflow
+
+The normal application starts in **LIVE** mode. The selected symbol/timeframe is bootstrapped from Binance Futures REST and then updated from Binance's market WebSocket stream.
+
+Historical data is a separate process:
+
+    Download Center
+        ↓
+    Binance REST klines
+        ↓
+    HistoricalDataManager
+        ↓
+    normalize / validate / repair
+        ↓
+    StoredDatasetRepository
+        ↓
+    IndexedDB: delta-replay-datasets-v1
+        ↓
+    named CSV dataset + parsed candles
+
+Replay is a separate process:
+
+    Replay mode
+        ↓
+    select saved dataset
+        ↓
+    StoredDatasetRepository.getCandles()
+        ↓
+    strict integrity validation
+        ↓
+    RemoteReplayEngine
+        ↓
+    POST /api/v1/replay/load
+        ↓
+    ReplaySession
+        ↓
+    ReplayService + PaperTradingEngine + ReplayTimeline
+
+The replay path contains **no historical-data provider** and therefore has no Binance download dependency. The browser cache (`CandleCache`) remains an accelerator for downloads; it is not the authoritative source for replay.
+
+### Saved dataset format
+
+Saved datasets are represented as canonical CSV with:
+
+    time,open,high,low,close,volume
+
+The same saved record also keeps parsed candles in IndexedDB so the replay path can load structured candles directly without reparsing the CSV on every session. The Data Center can export the CSV as a normal file for manual archival, sharing, or committing selected datasets to another free storage location such as a Git repository.
+
+### Recommended user workflow
+
+1. Open the app. It starts in **LIVE** mode.
+2. Go to **Downloads**.
+3. Choose Binance symbol, timeframe, start and end.
+4. Start the download. The app validates the returned candles and saves a named local replay dataset.
+5. Return to **Replay** and switch the mode selector to **REPLAY**.
+6. Select the saved dataset.
+7. Start/seek/play the replay. All replay trading state is handled by the backend session and event timeline.
+8. Use **Export CSV** from the Data Center when a durable file outside the browser is needed.
+
+### Important ownership rule
+
+Do not connect Binance directly to the replay engine. If replay needs a new data capability, add it to the dataset/download side and keep the replay side dependent on `StoredDatasetRepository`. Do not create another replay engine, dataset store, or historical-data abstraction.

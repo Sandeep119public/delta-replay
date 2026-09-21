@@ -703,3 +703,120 @@
   }
 }
 
+
+
+/* Market mode layer: LIVE is the default workstation; REPLAY is an explicit
+   offline dataset mode. The live chart must never share the replay viewport. */
+.mode-group {
+  display: inline-flex;
+  flex-direction: row;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--phase1-border);
+  border-radius: 8px;
+  background: var(--phase2-subtle);
+}
+.mode-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--paper-muted);
+  background: transparent;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+.mode-btn.active {
+  color: var(--paper-ink);
+  background: var(--phase2-surface);
+  box-shadow: 0 2px 7px rgba(77,64,42,.08);
+}
+.mode-btn:focus-visible,
+#replay-dataset-refresh:focus-visible {
+  outline: 2px solid var(--paper-blue);
+  outline-offset: 2px;
+}
+.replay-dataset-group {
+  display: none;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+}
+.replay-dataset-group label {
+  grid-column: 1 / -1;
+}
+.replay-dataset-group select {
+  min-width: 180px;
+}
+#replay-dataset-refresh {
+  min-width: 32px;
+  padding: 0;
+  border: 1px solid var(--phase1-border);
+  border-radius: 7px;
+  color: var(--paper-muted);
+  background: var(--phase2-surface);
+  cursor: pointer;
+}
+.replay-only-control,
+.replay-mode .replay-dataset-group {
+  display: inline-flex;
+}
+.replay-mode .date-group {
+  display: none !important;
+}
+.live-mode .replay-only-control,
+.live-mode .replay-dataset-group,
+.live-mode .timeline-section,
+.live-mode .controls-section {
+  display: none !important;
+}
+.live-mode .main-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+.live-mode .trading-section {
+  display: none !important;
+}
+.live-mode .chart-stage,
+.live-mode .chart-container,
+.live-mode #chart-container {
+  height: 100%;
+}
+.replay-mode .replay-dataset-group {
+  display: inline-grid;
+}
+.replay-mode .symbol-group,
+.replay-mode .tf-group {
+  opacity: .68;
+}
+#page-replay.live-mode .topbar {
+  border-bottom-color: color-mix(in srgb, var(--paper-blue) 18%, var(--phase1-border));
+}
+@media (max-width: 1180px) {
+  .mode-btn { padding-inline: 8px; }
+  .replay-dataset-group select { min-width: 140px; }
+}
+@media (max-width: 840px) and (min-width: 641px) {
+  .replay-dataset-group { min-width: 170px; }
+  .replay-dataset-group select { min-width: 120px; }
+}
+@media (max-width: 640px) {
+  .mode-group { grid-column: 1; grid-row: 1; }
+  .topbar-left { grid-column: 2; }
+  .topbar-right { grid-column: 3; }
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .topbar-center .selector-group label { display: none; }
+  .replay-dataset-group {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .replay-dataset-group select { min-width: 0; flex: 1; }
+  .replay-mode .symbol-group,
+  .replay-mode .tf-group {
+    display: none;
+  }
+  .live-mode .mode-group {
+    grid-column: 1;
+  }
+}

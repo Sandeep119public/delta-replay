@@ -24,6 +24,17 @@ function deps() {
     persist: vi.fn(async () => undefined),
   };
 
+  const datasetRepository = {
+    save: vi.fn(async ({ symbol, timeframe, from, to, candles: savedCandles, metadata }) => ({
+      id: `${symbol}__${timeframe}__${from}__${to}`,
+      symbol, timeframe, from, to, count: savedCandles.length, format: 'CSV', quality: metadata.quality,
+    })),
+    list: vi.fn(async () => []),
+    get: vi.fn(),
+    getCandles: vi.fn(),
+    getCsv: vi.fn(),
+    remove: vi.fn(),
+  };
   let stagedStore = null;
   const dataManager = {
     load: vi.fn(async ({ store }) => {
@@ -43,10 +54,11 @@ function deps() {
     dataManager,
     candleStore,
     candleCache,
+    datasetRepository,
     appState: { symbol: 'BTCUSDT', timeframe: '1m' },
   });
 
-  return { port, candleStore, candleCache, dataManager, getStagedStore: () => stagedStore };
+  return { port, candleStore, candleCache, datasetRepository, dataManager, getStagedStore: () => stagedStore };
 }
 
 describe('data workspace cache boundary', () => {
@@ -70,6 +82,7 @@ describe('data workspace cache boundary', () => {
     expect(d.getStagedStore().getAll()).toEqual(candles);
     expect(d.candleStore.getAll()).toEqual(candles);
     expect(result.quality).toBe('VALID');
+    expect(d.datasetRepository.save).toHaveBeenCalledWith(expect.objectContaining({ symbol: 'ETHUSDT', timeframe: '5m', candles }));
   });
 
   it('clears cached coverage without destroying the active replay dataset', async () => {

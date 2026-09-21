@@ -3,8 +3,8 @@ import { ReplayCommandController } from './ReplayCommandController.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { createApplicationActions } from './ApplicationActions.js';
 
-export function createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView }) {
-  const { appState, candleStore, engine, dataManager, tradingEngine } = services;
+export function createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView, liveDatasetChange = null }) {
+  const { appState, candleStore, engine, datasetRepository, tradingEngine } = services;
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
     hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
@@ -13,7 +13,7 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
   });
 
   const coordinator = new ReplayCoordinator({
-    dataManager,
+    datasetRepository,
     candleStore,
     appState,
     replayEngine: engine,
@@ -55,6 +55,7 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
       timeline: ui.timeline,
       controls: ui.controls,
       errorPanel: ui.errorPanel,
+      liveDatasetChange,
     }),
     replayLifecycle: bindReplayLifecycle({
       engine,

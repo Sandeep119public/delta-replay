@@ -19,7 +19,7 @@ export class BinanceCandleProvider extends CandleProvider {
   getGridSpec() {
     return typeof this.client?.getGridSpec === 'function'
       ? this.client.getGridSpec()
-      : { origin: 0, timeframeUnit: 'seconds', alignment: 'UTC' };
+      : { origin: Number.isFinite(this.client?.gridOrigin) ? this.client.gridOrigin : 0, timeframeUnit: 'seconds', alignment: 'UTC' };
   }
 
   async fetchChunk({ symbol, timeframe, from, to, signal } = {}) {

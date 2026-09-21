@@ -6,7 +6,7 @@ export { VISIBLE_WINDOW };
 
 export class ReplayCoordinator {
   constructor({
-    dataManager, candleStore, appState, replayEngine, tradingCapabilities, statusView, chartManager,
+    datasetRepository, candleStore, appState, replayEngine, tradingCapabilities, statusView, chartManager,
     chartAdapter, timeline, controls, errorPanel, modeBanner, tradingErrorView = null,
     dataStatusEl = null, cacheBadgeEl = null, startReplayBtn = null,
     headerStartReplayBtn = null, loadBtn = null, fromDateEl = null, fromTimeEl = null,
@@ -29,7 +29,7 @@ export class ReplayCoordinator {
     this.previewService = previewService;
 
     this.loadService = createReplayLoadService({
-      dataManager,
+      datasetRepository,
       candleStore,
       appState,
       replayEngine,

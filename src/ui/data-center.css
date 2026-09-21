@@ -19,3 +19,5 @@
     outline-offset: 2px;
   }
 }
+
+.dataset-actions{display:flex;flex-wrap:wrap;gap:5px}.dataset-actions button{min-height:30px;padding:0 8px;border:1px solid var(--paper-line);border-radius:7px;color:var(--paper-blue);background:#fffdfa;font-size:8px;font-weight:900;cursor:pointer}.dataset-actions button:hover{background:var(--paper-blue-soft)}.dataset-actions button:last-child{color:var(--paper-red)}.dataset-actions button:focus-visible{outline:2px solid var(--paper-blue);outline-offset:2px}
