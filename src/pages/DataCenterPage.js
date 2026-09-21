@@ -68,9 +68,9 @@ export class DataCenterPage {
 
   _onChange = (event) => {
     if (this.pageName !== 'datasets' || event.target?.id !== 'local-dataset-input') return;
-    const file = event.target.files?.[0];
+    const files = [...(event.target.files || [])];
     event.target.value = '';
-    if (file) void this.importLocalDataset(file);
+    if (files.length) void this.importLocalDatasets(files);
   };
 
   async startDownload() {
@@ -89,9 +89,11 @@ export class DataCenterPage {
     }
   }
 
-  async importLocalDataset(file) {
+  async importLocalDatasets(files) {
     try {
-      await this.session.importLocalDataset(file);
+      for (const file of files) {
+        await this.session.importLocalDataset(file);
+      }
       if (globalThis.window?.location) globalThis.window.location.hash = 'replay';
     } catch (error) {
       this.session.setError?.(error?.message || String(error));
@@ -130,10 +132,16 @@ export class DataCenterPage {
       const result = source === 'local'
         ? await this.data.getLocalDatasetCsv(id)
         : await this.data.getDatasetCsv(id);
-      const metadata = result.metadata;
+      const metadata = result.metadata || {};
       if (!result.csv) throw new Error('Saved dataset is empty');
-      const fallback = (metadata?.symbol || 'dataset') + '-' + (metadata?.timeframe || 'data') + '.csv';
-      triggerBrowserDownload(this._element.ownerDocument, metadata?.fileName || fallback, result.csv, 'text/csv;charset=utf-8');
+      const symbol = String(metadata.symbol || 'dataset').trim().toUpperCase();
+      const timeframe = String(metadata.timeframe || 'data').trim();
+      const contentId = String(metadata.contentId || '').trim().toLowerCase();
+      const replayImportName = contentId
+        ? symbol + '-' + timeframe + '-' + contentId + '.csv'
+        : symbol + '-' + timeframe + '.csv';
+      const fileName = source === 'github' ? replayImportName : (metadata.fileName || replayImportName);
+      triggerBrowserDownload(this._element.ownerDocument, fileName, result.csv, 'text/csv;charset=utf-8');
     } catch (error) {
       this.session.setError?.(error?.message || String(error));
       await this.render();
