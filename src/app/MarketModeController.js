@@ -43,6 +43,11 @@ export class MarketModeController {
     this._datasetChangedHandler = () => {
       if (this.mode === 'replay') void this.refreshDatasets();
     };
+    this._selectReplayDatasetHandler = (event) => {
+      const datasetId = event?.detail?.datasetId;
+      if (!datasetId) return;
+      void this.setMode('replay').then(() => this.selectDataset(datasetId));
+    };
 
     this._listen(this.liveButton, 'click', () => { void this.setMode('live'); });
     this._listen(this.replayButton, 'click', () => { void this.setMode('replay'); });
@@ -52,6 +57,7 @@ export class MarketModeController {
     });
     globalThis.window?.addEventListener?.('pagechange', this._pageChangeHandler);
     globalThis.window?.addEventListener?.('delta-replay-datasets-changed', this._datasetChangedHandler);
+    globalThis.window?.addEventListener?.('select-replay-dataset', this._selectReplayDatasetHandler);
   }
 
   _listen(element, event, handler) {
@@ -173,6 +179,7 @@ export class MarketModeController {
     }
     globalThis.window?.removeEventListener?.('pagechange', this._pageChangeHandler);
     globalThis.window?.removeEventListener?.('delta-replay-datasets-changed', this._datasetChangedHandler);
+    globalThis.window?.removeEventListener?.('select-replay-dataset', this._selectReplayDatasetHandler);
     this.liveMarket.destroy();
   }
 }
