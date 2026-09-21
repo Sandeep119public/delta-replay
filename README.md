@@ -148,7 +148,7 @@ Replay is a separate process:
         ↓
     select GitHub dataset
         ↓
-    GET /api/v1/datasets/{id}
+    GET /api/v1/datasets/{id}/candles
         ↓
     strict integrity validation
         ↓
