@@ -72,6 +72,44 @@ def get_dataset(dataset_id: str):
     return {"metadata": result["metadata"]}
 
 
+@router.get("/{dataset_id}/partitions")
+def get_dataset_partitions(dataset_id: str):
+    try:
+        result = repository.get_partitions(dataset_id)
+    except Exception as exc:
+        raise HTTPException(502, f"Unable to read GitHub dataset partitions: {exc}") from exc
+    if result is None:
+        raise HTTPException(404, "Dataset not found")
+    return result
+
+
+@router.get("/{dataset_id}/range")
+def get_dataset_range(
+    dataset_id: str,
+    from_time: int | None = None,
+    to_time: int | None = None,
+    offset: int = 0,
+    limit: int = 5000,
+):
+    if offset < 0:
+        raise HTTPException(422, "offset must be non-negative")
+    try:
+        result = repository.get_candle_range(
+            dataset_id,
+            from_time=from_time,
+            to_time=to_time,
+            offset=offset,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Unable to read dataset range: {exc}") from exc
+    if result is None:
+        raise HTTPException(404, "Dataset not found")
+    return result
+
+
 @router.get("/{dataset_id}/candles")
 def get_dataset_candles(dataset_id: str):
     result = _load(dataset_id)
