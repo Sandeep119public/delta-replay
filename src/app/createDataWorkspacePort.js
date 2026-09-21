@@ -3,20 +3,13 @@ import { CandleStore } from '../data/CandleStore.js';
 import { CandleIntegrity } from '../data/CandleIntegrity.js';
 import { DATA_WORKSPACE_EVENTS, assertDataWorkspacePort } from '../ports/DataWorkspacePort.js';
 
-const EVENT_MAP = new Map([
-  [DATA_WORKSPACE_EVENTS.LOADING_STARTED, DataEvents.LOADING_STARTED],
-  [DATA_WORKSPACE_EVENTS.PROGRESS, DataEvents.PROGRESS],
-  [DATA_WORKSPACE_EVENTS.READY, DataEvents.READY],
-  [DATA_WORKSPACE_EVENTS.READY_DEGRADED, DataEvents.READY_DEGRADED],
-  [DATA_WORKSPACE_EVENTS.ERROR, DataEvents.ERROR],
-]);
-
-export function createDataWorkspacePort({ dataManager, candleStore, candleCache, appState }) {
-  if (!dataManager || !candleStore || !candleCache || !appState) {
-    throw new TypeError('createDataWorkspacePort requires dataManager, candleStore, candleCache, and appState');
+export function createDataWorkspacePort({ dataManager, candleStore, candleCache, appState, datasetRepository }) {
+  if (!dataManager || !candleStore || !candleCache || !appState || !datasetRepository) {
+    throw new TypeError('createDataWorkspacePort requires dataManager, candleStore, candleCache, appState, and datasetRepository');
   }
 
   let operationTail = Promise.resolve();
+  const readyListeners = new Set();
 
   function enqueue(operation) {
     const next = operationTail.then(operation, operation);
@@ -24,13 +17,21 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
     return next;
   }
 
+  function emitReady(payload) {
+    for (const listener of [...readyListeners]) {
+      try { listener(payload); } catch (error) { console.warn('[DataWorkspace] ready listener failed', error); }
+    }
+  }
+
   const port = {
     snapshot() {
       const metadata = candleStore.getMetadata() || {};
-      const symbol = candleStore.getSymbol() || appState.symbol || null;
-      const timeframe = candleStore.getTimeframe() || appState.timeframe || null;
-      const coverage = symbol && timeframe
-        ? candleCache.getCoverage(symbol, timeframe, { timeframeSec: metadata.timeframeSec })
+      const symbol = appState.symbol || candleStore.getSymbol() || null;
+      const timeframe = appState.timeframe || candleStore.getTimeframe() || null;
+      const coverageSymbol = candleStore.getSymbol() || symbol;
+      const coverageTimeframe = candleStore.getTimeframe() || timeframe;
+      const coverage = coverageSymbol && coverageTimeframe
+        ? candleCache.getCoverage(coverageSymbol, coverageTimeframe, { timeframeSec: metadata.timeframeSec })
         : [];
       return Object.freeze({
         symbol,
@@ -39,30 +40,41 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
         metadata,
         coverage,
         cacheEnabled: candleCache.enableIDB,
+        replayDatasetId: appState.replayDatasetId,
       });
     },
 
-    /**
-     * The Data Center is an acquisition/cache surface, not an alternate
-     * replay publisher. Stage the result in a private store so an in-flight
-     * download can never replace the active replay dataset.
-     */
-    download(params) {
-      return enqueue(() => {
+    async download(params) {
+      return enqueue(async () => {
         const stagingStore = new CandleStore();
-        return dataManager.load({
+        const result = await dataManager.load({
           ...params,
           strict: true,
+          halfOpen: true,
           store: stagingStore,
         });
+
+        const savedDataset = await datasetRepository.save({
+          symbol: params.symbol,
+          timeframe: params.timeframe,
+          from: result.metadata?.effectiveFrom ?? params.from,
+          to: result.metadata?.effectiveTo ?? params.to,
+          candles: result.candles,
+          metadata: result.metadata || {},
+        });
+
+        const payload = { ...result, savedDataset };
+        emitReady({
+          candles: result.candles,
+          metadata: result.metadata,
+          quality: result.quality || 'VALID',
+          dataset: savedDataset,
+        });
+        globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-datasets-changed'));
+        return payload;
       });
     },
 
-    /**
-     * Clearing Data Center coverage must not invalidate the active replay
-     * workspace. Replay owns the canonical CandleStore; the Data Center only
-     * owns persisted cache coverage.
-     */
     clearCurrent() {
       return enqueue(async () => {
         const symbol = candleStore.getSymbol() || appState.symbol;
@@ -79,9 +91,8 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
       return enqueue(() => {
         const candles = candleStore.getAll();
         const metadata = candleStore.getMetadata() || {};
-        if (!candles.length) {
-          return { status: 'empty', message: 'No dataset is currently loaded.' };
-        }
+        if (!candles.length) return { status: 'empty', message: 'No active replay dataset is loaded.' };
+
         const result = CandleIntegrity.process(candles, {
           timeframeSec: metadata.timeframeSec,
           from: metadata.effectiveFrom,
@@ -89,6 +100,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
           policy: 'REPAIR',
           timestampUnit: 'seconds',
         });
+
         return {
           status: result.metadata.invalidCount === 0 && result.metadata.gaps.length === 0 ? 'valid' : 'issues',
           metadata: result.metadata,
@@ -97,9 +109,35 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
     },
 
     on(event, handler) {
-      const mapped = EVENT_MAP.get(event);
+      if (event === DATA_WORKSPACE_EVENTS.READY || event === DATA_WORKSPACE_EVENTS.READY_DEGRADED) {
+        readyListeners.add(handler);
+        return () => readyListeners.delete(handler);
+      }
+
+      const mapping = new Map([
+        [DATA_WORKSPACE_EVENTS.LOADING_STARTED, DataEvents.LOADING_STARTED],
+        [DATA_WORKSPACE_EVENTS.PROGRESS, DataEvents.PROGRESS],
+        [DATA_WORKSPACE_EVENTS.ERROR, DataEvents.ERROR],
+      ]);
+      const mapped = mapping.get(event);
       if (!mapped) throw new Error(`Unsupported data workspace event: ${event}`);
       return dataManager.on(mapped, handler);
+    },
+
+    listDatasets() {
+      return datasetRepository.list();
+    },
+
+    deleteDataset(id) {
+      return enqueue(async () => {
+        await datasetRepository.remove(id);
+        if (appState.replayDatasetId === id) appState.setReplayDatasetId(null);
+        globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-datasets-changed'));
+      });
+    },
+
+    getDatasetCsv(id) {
+      return datasetRepository.getCsv(id);
     },
 
     storageEstimate() {
