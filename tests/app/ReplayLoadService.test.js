@@ -13,6 +13,9 @@ function deps(overrides = {}) {
       get: vi.fn(async () => ({ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV', from: 60, to: 120 })),
       getRange: vi.fn(async () => ({ metadata: { id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', format: 'CSV' }, candles })),
     },
+    localDatasetRepository: {
+      get: vi.fn(async () => ({ metadata: { id: 'local-abc', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV', from: 60, to: 120 }, candles })),
+    },
     candleStore: {
       get: vi.fn((index) => candles[index] || null),
       getCount: vi.fn(() => candles.length),
@@ -21,8 +24,8 @@ function deps(overrides = {}) {
       symbol: 'BTCUSDT',
       timeframe: '1m',
       replayDatasetId: null,
+      replayDatasetSource: null,
       loadingState: 'idle',
-      setMode: vi.fn(),
       transitionLoading: vi.fn(),
       setLoading: vi.fn(),
       setCandles: vi.fn(),
@@ -32,6 +35,7 @@ function deps(overrides = {}) {
     },
     replayEngine: {
       loadDataset: vi.fn(async () => ({ status: 'ready', total: 2, totalCandles: 2, currentIndex: -1, startIndex: -1, visibleCandles: [] })),
+      loadLocalDataset: vi.fn(async () => ({ status: 'ready', total: 2, totalCandles: 2, currentIndex: -1, startIndex: -1, visibleCandles: [] })),
       getState: vi.fn(() => ({ status: 'ready', totalCandles: 2, currentIndex: -1, startIndex: -1 })),
       start: vi.fn(async () => undefined),
     },
@@ -60,8 +64,20 @@ describe('ReplayLoadService', () => {
     expect(d.replayEngine.loadDataset).toHaveBeenCalledWith('BTCUSDT__1M__60__120');
   });
 
-  it('never calls a network data manager because replay loading has no data manager dependency', () => {
-    expect(() => createReplayLoadService(deps({ dataManager: { load: vi.fn() } }))).not.toThrow();
+  it('loads a browser-local dataset without contacting the GitHub dataset repository', async () => {
+    const d = deps();
+    const service = createReplayLoadService(d);
+
+    await service.loadAndPrepareReplay({ datasetId: 'local-abc', datasetSource: 'local' });
+
+    expect(d.localDatasetRepository.get).toHaveBeenCalledWith('local-abc');
+    expect(d.replayEngine.loadLocalDataset).toHaveBeenCalledWith(candles);
+    expect(d.datasetRepository.list).not.toHaveBeenCalled();
+    expect(d.appState.setReplayDatasetId).toHaveBeenCalledWith('local-abc', 'local');
+    expect(d.appState.setCandles).toHaveBeenCalledWith(
+      candles,
+      expect.objectContaining({ local: true, source: 'local-file', saved: false }),
+    );
   });
 
   it('rejects when no saved replay dataset exists', async () => {
@@ -91,6 +107,7 @@ describe('ReplayLoadService', () => {
     const d = deps({
       replayEngine: {
         loadDataset: vi.fn(async () => { throw new Error('dataset integrity failure'); }),
+        loadLocalDataset: vi.fn(async () => undefined),
         getState: vi.fn(() => ({ status: 'ready', totalCandles: 0, currentIndex: -1, startIndex: -1 })),
         start: vi.fn(async () => undefined),
       },
@@ -101,13 +118,12 @@ describe('ReplayLoadService', () => {
     expect(d.appState.setReplayDatasetId).not.toHaveBeenCalled();
   });
 
-
   it('publishes the committed replay dataset after remote replay load succeeds', async () => {
     const d = deps();
 
     await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'BTCUSDT__1M__60__120' });
 
-    expect(d.appState.setReplayDatasetId).toHaveBeenCalledWith('BTCUSDT__1M__60__120');
+    expect(d.appState.setReplayDatasetId).toHaveBeenCalledWith('BTCUSDT__1M__60__120', 'github');
     expect(d.appState.setCandles).toHaveBeenCalledWith(
       candles,
       expect.objectContaining({ saved: true, format: 'CSV' }),
