@@ -93,7 +93,8 @@ describe('data workspace cache boundary', () => {
     expect(d.candleCache.invalidate).toHaveBeenCalledWith('BTCUSDT', '1m');
     expect(d.candleCache.persist).toHaveBeenCalledOnce();
     expect(d.candleStore.getAll()).toEqual(candles);
-    expect(snapshot.count).toBe(2);
+    expect(snapshot.count).toBe(0);
+    expect(d.datasetRepository.list).not.toHaveBeenCalled();
   });
 
   it('serializes cache operations so clear cannot race an in-flight download', async () => {
