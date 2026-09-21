@@ -14,7 +14,7 @@ function requireElement(id, root = document) {
 export function createApplication() {
   const services = createCoreServices();
   const mount = requireElement('app');
-  renderPaperLayout(mount);
+  renderTerminalLayout(mount);
 
   const router = new Router();
   router.register('replay');
