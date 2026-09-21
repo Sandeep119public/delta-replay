@@ -117,11 +117,14 @@ class BinanceDatasetDownloadService:
 
     def _update(self, job_id, **changes):
         key = str(job_id)
+        persisted = self.job_repository.update(job_id, **changes)
+        if persisted is False:
+            return False
         with self._lock:
             job = self._jobs.get(key)
             if job:
                 job.update(changes)
-        self.job_repository.update(job_id, **changes)
+        return True
 
     @staticmethod
     def _fetch_page(client, params):
