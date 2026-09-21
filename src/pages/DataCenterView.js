@@ -8,12 +8,12 @@ function createDates(now = Date.now()) {
   return { start: start.toISOString().slice(0, 16), end: end.toISOString().slice(0, 16) };
 }
 
-export function renderDataCenterPage({ element, page, snapshot, storageEstimate, download, jobsState = [], validationState }) {
+export function renderDataCenterPage({ element, page, snapshot, storageEstimate, download, jobsState = [], validationState, savedDatasets = [] }) {
   const dates = createDates();
   const renderers = {
     dashboard: () => dashboard(snapshot, storageEstimate),
     downloads: () => downloads(snapshot, download, dates),
-    datasets: () => datasets(snapshot),
+    datasets: () => datasets(snapshot, savedDatasets),
     validation: () => validation(snapshot, validationState),
     storage: () => storage(snapshot, storageEstimate),
     jobs: () => jobs(jobsState),
