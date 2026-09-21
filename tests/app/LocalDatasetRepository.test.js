@@ -49,7 +49,7 @@ describe('LocalDatasetRepository', () => {
   it('rejects malformed datasets before storing them', async () => {
     const repository = new LocalDatasetRepository();
     await expect(repository.importFile(file('BTCUSDT-1m.csv', 'time,open,high,low,close,volume\n60,100,99,99,100,1\n')))
-      .rejects.toThrow(/validation|high/i);
+      .rejects.toThrow(/integrity|invalid/i);
   });
 
   it('can remove only local browser datasets', async () => {
