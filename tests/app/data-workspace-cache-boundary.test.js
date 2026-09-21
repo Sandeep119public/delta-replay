@@ -9,101 +9,53 @@ const candles = [
 
 function deps() {
   const candleStore = new CandleStore();
-  candleStore.load(candles, {
-    symbol: 'BTCUSDT',
-    timeframe: '1m',
-    timeframeSec: 60,
-    effectiveFrom: 60,
-    effectiveTo: 120,
-  });
-
+  candleStore.load(candles, { symbol: 'BTCUSDT', timeframe: '1m', timeframeSec: 60, effectiveFrom: 60, effectiveTo: 120 });
   const candleCache = {
     enableIDB: false,
     getCoverage: vi.fn(() => [{ from: 60, to: 120 }]),
     invalidate: vi.fn(),
     persist: vi.fn(async () => undefined),
   };
-
-  let stagedStore = null;
-  const dataManager = {
-    load: vi.fn(async ({ store }) => {
-      stagedStore = store;
-      store.load(candles, {
-        symbol: 'ETHUSDT',
-        timeframe: '5m',
-        timeframeSec: 300,
-        effectiveFrom: 60,
-        effectiveTo: 120,
-      });
-      return { candles, metadata: store.getMetadata(), quality: 'VALID' };
-    }),
+  const replayDataManager = { on: vi.fn(() => () => {}) };
+  const datasetService = {
+    download: vi.fn(async () => ({ datasetId: 'dataset-1', format: 'parquet', count: 2 })),
+    list: vi.fn(async () => ({ datasets: [{ datasetId: 'dataset-1', format: 'parquet', count: 2 }] })),
   };
-
-  const port = createDataWorkspacePort({
-    dataManager,
-    candleStore,
-    candleCache,
-    appState: { symbol: 'BTCUSDT', timeframe: '1m' },
-  });
-
-  return { port, candleStore, candleCache, dataManager, getStagedStore: () => stagedStore };
+  const port = createDataWorkspacePort({ replayDataManager, datasetService, candleStore, candleCache, appState: { symbol: 'BTCUSDT', timeframe: '1m' } });
+  return { port, candleStore, candleCache, datasetService };
 }
 
-describe('data workspace cache boundary', () => {
-  it('stages downloads so the active replay store is never replaced', async () => {
+describe('stored dataset workspace boundary', () => {
+  it('downloads through dataset storage without mutating replay candles', async () => {
     const d = deps();
-
-    const result = await d.port.download({
-      symbol: 'ETHUSDT',
-      timeframe: '5m',
-      from: 60,
-      to: 120,
-    });
-
-    expect(d.dataManager.load).toHaveBeenCalledWith(expect.objectContaining({
-      symbol: 'ETHUSDT',
-      timeframe: '5m',
-      strict: true,
-      store: expect.any(CandleStore),
-    }));
-    expect(d.getStagedStore()).not.toBe(d.candleStore);
-    expect(d.getStagedStore().getAll()).toEqual(candles);
+    const result = await d.port.download({ symbol: 'SOLUSDT', timeframe: '15m', from: 60, to: 120 });
+    expect(d.datasetService.download).toHaveBeenCalledWith({ symbol: 'SOLUSDT', timeframe: '15m', from: 60, to: 120 });
     expect(d.candleStore.getAll()).toEqual(candles);
-    expect(result.quality).toBe('VALID');
+    expect(result.format).toBe('parquet');
+    expect(d.datasetService.list).toHaveBeenCalled();
   });
 
-  it('clears cached coverage without destroying the active replay dataset', async () => {
+  it('clears browser cache without deleting replay candles', async () => {
     const d = deps();
-
     const snapshot = await d.port.clearCurrent();
-
     expect(d.candleCache.invalidate).toHaveBeenCalledWith('BTCUSDT', '1m');
     expect(d.candleCache.persist).toHaveBeenCalledOnce();
     expect(d.candleStore.getAll()).toEqual(candles);
     expect(snapshot.count).toBe(2);
   });
 
-  it('serializes cache operations so clear cannot race an in-flight download', async () => {
-    let releaseDownload;
-    const downloadStarted = new Promise((resolve) => { releaseDownload = resolve; });
+  it('serializes download and cache operations', async () => {
+    let release;
+    const pending = new Promise((resolve) => { release = resolve; });
     const d = deps();
-
-    d.dataManager.load = vi.fn(() => downloadStarted);
-    const downloading = d.port.download({
-      symbol: 'ETHUSDT',
-      timeframe: '5m',
-      from: 60,
-      to: 120,
-    });
+    d.datasetService.download = vi.fn(() => pending);
+    const downloading = d.port.download({ symbol: 'SOLUSDT', timeframe: '15m', from: 60, to: 120 });
     const clearing = d.port.clearCurrent();
-
     await Promise.resolve();
     expect(d.candleCache.invalidate).not.toHaveBeenCalled();
-
-    releaseDownload({ candles, metadata: {}, quality: 'VALID' });
+    release({ datasetId: 'dataset-1', format: 'parquet', count: 2 });
     await downloading;
     await clearing;
-
     expect(d.candleCache.invalidate).toHaveBeenCalledOnce();
   });
 });
