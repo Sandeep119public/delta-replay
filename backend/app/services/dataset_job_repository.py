@@ -157,6 +157,30 @@ class DatasetJobRepository:
             ).fetchall()
         return [row["candles"] for row in rows]
 
+    def chunk_count(self, job_id):
+        if not self.durable:
+            return 0
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM dataset_download_chunks WHERE job_id=%s",
+                (UUID(str(job_id)),),
+            ).fetchone()
+        return int(row["count"])
+
+    def iter_chunks(self, job_id):
+        if not self.durable:
+            return
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT sequence, candles
+                   FROM dataset_download_chunks
+                   WHERE job_id=%s
+                   ORDER BY sequence""",
+                (UUID(str(job_id)),),
+            )
+            for row in rows:
+                yield row["candles"]
+
     def active(self, symbol, timeframe, from_ms, to_ms):
         if not self.durable:
             return None
