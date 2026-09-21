@@ -125,13 +125,13 @@ export class MarketModeController {
     if (this.datasetSelect) {
       this.datasetSelect.replaceChildren();
       if (!datasets.length) {
-        const option = document.createElement('option');
+        const option = this.page.ownerDocument?.createElement?.('option') || globalThis.document?.createElement?.('option');
         option.value = '';
         option.textContent = 'No saved datasets';
         this.datasetSelect.appendChild(option);
       } else {
         for (const dataset of datasets) {
-          const option = document.createElement('option');
+          const option = this.page.ownerDocument?.createElement?.('option') || globalThis.document?.createElement?.('option');
           option.value = dataset.id;
           option.textContent = `${dataset.symbol} · ${dataset.timeframe} · ${Number(dataset.count || 0).toLocaleString()} candles`;
           this.datasetSelect.appendChild(option);
