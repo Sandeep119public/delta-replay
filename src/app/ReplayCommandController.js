@@ -104,9 +104,8 @@ export class ReplayCommandController {
 
   async togglePlayPause() {
     if (this.destroyed || this.busy) return false;
-    if (!this.hasData()) {
-      return this.run(() => this.loadReplay({ autoStart: true }));
-    }
+    if (!this.hasData()) return this.run(() => this.loadReplay({ autoStart: true }));
+
     const state = this.engine.getState();
     if (state.status === 'ready' || state.status === 'paused') {
       return this.allowed(state.status === 'ready' ? 'start' : 'resume')
@@ -220,8 +219,6 @@ export class ReplayCommandController {
       const tag = e.target?.tagName?.toUpperCase?.();
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) return;
       if (e.code === 'Escape') { e.preventDefault(); void this.pause(); return; }
-      // Keyboard transport is replay-only. The visible START REPLAY button
-      // remains the explicit entry point from live mode.
       const stateAction = e.code === 'Space'
         ? () => this.togglePlayPause()
         : e.code === 'ArrowRight'
