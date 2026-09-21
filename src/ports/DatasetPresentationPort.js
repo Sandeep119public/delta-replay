@@ -1,19 +1,14 @@
 /**
  * Neutral presentation contracts for dataset selection (symbol/timeframe),
  * candle-window reads, and replay status display.
- *
- * The UI receives these frozen view models / capability functions instead of
- * AppState, CandleStore, or ReplayCoordinator references.
  */
-
 export const DEFAULT_SYMBOLS = Object.freeze([
-  'BTCUSDT', 'BTCUSD', 'ETHUSDT', 'ETHUSD', 'SOLUSDT', 'XRPUSDT',
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'BNBUSDT', 'DOGEUSDT',
 ]);
 
-// Presentation copy of the supported resolutions. Mirrors the data-layer
-// TIMEFRAME_SECONDS keys (minus weekly); the UI must not import the
-// data layer to read them.
-export const DEFAULT_TIMEFRAMES = Object.freeze(['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '1d']);
+export const DEFAULT_TIMEFRAMES = Object.freeze([
+  '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '1d',
+]);
 
 export function assertDatasetView(dataset) {
   if (!dataset || typeof dataset !== 'object') {
@@ -28,13 +23,6 @@ export function assertDatasetView(dataset) {
   return dataset;
 }
 
-/**
- * Resolve a frozen dataset snapshot from either a plain
- * { symbol, timeframe } snapshot or a { snapshot() } provider. Always returns
- * a fresh frozen copy, so readers never retain or observe mutable state.
- * Providers are re-read on every call, giving per-read freshness without
- * holding a live store reference.
- */
 export function snapshotDataset(source) {
   const raw = typeof source?.snapshot === 'function' ? source.snapshot() : source;
   if (!raw || typeof raw !== 'object') {
