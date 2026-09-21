@@ -115,7 +115,7 @@ class BinanceDatasetService:
             payload = response.json()
             if not isinstance(payload, list):
                 raise ValueError("Binance returned an invalid kline payload")
-            page = [_map_row(row) for row in payload if isinstance(row, list) and len(row) >= 6]
+            page = [self._map_row(row) for row in payload if isinstance(row, list) and len(row) >= 6]
             if not page:
                 break
             candles.extend(page)
