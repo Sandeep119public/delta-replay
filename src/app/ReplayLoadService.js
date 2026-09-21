@@ -63,12 +63,18 @@ export function createReplayLoadService({
         throw error;
       }
 
-      const { metadata, candles } = await datasetRepository.getCandles(selectedId);
+      const metadata = datasets.find((dataset) => dataset.id === selectedId) || await datasetRepository.get(selectedId);
+      if (!metadata) throw new Error('Selected replay dataset no longer exists');
+      const loadResult = await replayEngine.loadDataset(selectedId);
+      const total = Number(loadResult.total || loadResult.totalCandles || metadata.count || 0);
+      if (!total) throw new Error('Saved replay dataset is empty');
+      const candles = Array.isArray(loadResult.visibleCandles) ? loadResult.visibleCandles : [];
+
       if (token !== loadToken || destroyed) return null;
       if (!Array.isArray(candles) || !candles.length) throw new Error('Saved replay dataset is empty');
 
-      const from = candles[0].time;
-      const to = candles[candles.length - 1].time;
+      const from = Number(metadata.from ?? candles[0]?.time ?? 0);
+      const to = Number(metadata.to ?? candles[candles.length - 1]?.time ?? from);
       const timeframeSec = metadata.timeframe === '1m' ? 60
         : metadata.timeframe === '3m' ? 180
         : metadata.timeframe === '5m' ? 300
@@ -94,19 +100,19 @@ export function createReplayLoadService({
         timestampUnit: 'seconds',
       });
 
-      await replayEngine.load(integrity.validCandles);
       if (token !== loadToken || destroyed) return null;
 
       appState.setReplayDatasetId(metadata.id);
       appState.setCandles(integrity.validCandles, {
         ...metadata,
         datasetId: metadata.id,
+        totalCandles: total,
         saved: true,
         format: metadata.format || 'CSV',
         quality: 'VALID',
       });
       appState.setReplayState(replayEngine.getState());
-      timeline?.setTotal(integrity.validCandles.length, integrity.validCandles);
+      timeline?.setTotal(total, integrity.validCandles);
       appState.setPendingStartIndex(0);
       controls?.setStartIndex(0);
       timeline?.setPosition(0);
@@ -115,7 +121,7 @@ export function createReplayLoadService({
       if (startReplayBtn) startReplayBtn.disabled = false;
       if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
       if (cacheBadgeEl) cacheBadgeEl.classList.add('hidden');
-      if (dataStatusEl) dataStatusEl.textContent = `Saved dataset: ${metadata.symbol} · ${metadata.timeframe} · ${integrity.validCandles.length.toLocaleString()} candles`;
+      if (dataStatusEl) dataStatusEl.textContent = `Saved dataset: ${metadata.symbol} · ${metadata.timeframe} · ${total.toLocaleString()} candles`;
       timeline?.setEnabled(true);
       appState.transitionLoading(LoadingState.SUCCESS);
       reportStatus();
