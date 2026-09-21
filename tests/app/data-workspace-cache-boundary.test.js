@@ -25,10 +25,10 @@ function deps() {
   };
 
   const datasetRepository = {
-    save: vi.fn(async ({ symbol, timeframe, from, to, candles: savedCandles, metadata }) => ({
-      id: `${symbol}__${timeframe}__${from}__${to}`,
-      symbol, timeframe, from, to, count: savedCandles.length, format: 'CSV', quality: metadata.quality,
-    })),
+    download: vi.fn(async ({ symbol, timeframe, onProgress }) => {
+      onProgress?.({ status: 'running', loaded: 1, total: 2, pct: 50 });
+      return { id: `${symbol}__${timeframe}__60__120`, symbol, timeframe, from: 60, to: 120, count: 2, format: 'CSV', status: 'validated' };
+    }),
     list: vi.fn(async () => []),
     get: vi.fn(),
     getCandles: vi.fn(),
@@ -36,33 +36,21 @@ function deps() {
     remove: vi.fn(),
   };
   let stagedStore = null;
-  const dataManager = {
-    load: vi.fn(async ({ store }) => {
-      stagedStore = store;
-      store.load(candles, {
-        symbol: 'ETHUSDT',
-        timeframe: '5m',
-        timeframeSec: 300,
-        effectiveFrom: 60,
-        effectiveTo: 120,
-      });
-      return { candles, metadata: store.getMetadata(), quality: 'VALID' };
-    }),
-  };
+
 
   const port = createDataWorkspacePort({
-    dataManager,
+    dataManager: null,
     candleStore,
     candleCache,
     datasetRepository,
     appState: { symbol: 'BTCUSDT', timeframe: '1m' },
   });
 
-  return { port, candleStore, candleCache, datasetRepository, dataManager, getStagedStore: () => stagedStore };
+  return { port, candleStore, candleCache, datasetRepository, getStagedStore: () => stagedStore };
 }
 
 describe('data workspace cache boundary', () => {
-  it('stages downloads so the active replay store is never replaced', async () => {
+  it('downloads through the remote dataset service without replacing the active replay store', async () => {
     const d = deps();
 
     const result = await d.port.download({
@@ -72,18 +60,18 @@ describe('data workspace cache boundary', () => {
       to: 120,
     });
 
-    expect(d.dataManager.load).toHaveBeenCalledWith(expect.objectContaining({
+    expect(d.datasetRepository.download).toHaveBeenCalledWith(expect.objectContaining({
       symbol: 'ETHUSDT',
       timeframe: '5m',
-      strict: true,
-      store: expect.any(CandleStore),
+      from: 60,
+      to: 120,
+      onProgress: expect.any(Function),
     }));
-    expect(d.getStagedStore()).not.toBe(d.candleStore);
-    expect(d.getStagedStore().getAll()).toEqual(candles);
     expect(d.candleStore.getAll()).toEqual(candles);
     expect(result.quality).toBe('VALID');
-    expect(d.datasetRepository.save).toHaveBeenCalledWith(expect.objectContaining({ symbol: 'ETHUSDT', timeframe: '5m', candles }));
+    expect(result.savedDataset.status).toBe('validated');
   });
+
 
   it('clears cached coverage without destroying the active replay dataset', async () => {
     const d = deps();
@@ -102,7 +90,7 @@ describe('data workspace cache boundary', () => {
     const downloadStarted = new Promise((resolve) => { releaseDownload = resolve; });
     const d = deps();
 
-    d.dataManager.load = vi.fn(() => downloadStarted);
+    d.datasetRepository.download = vi.fn(() => downloadStarted);
     const downloading = d.port.download({
       symbol: 'ETHUSDT',
       timeframe: '5m',
@@ -114,7 +102,7 @@ describe('data workspace cache boundary', () => {
     await Promise.resolve();
     expect(d.candleCache.invalidate).not.toHaveBeenCalled();
 
-    releaseDownload({ candles, metadata: {}, quality: 'VALID' });
+    releaseDownload({ id: 'dataset-1', status: 'complete', symbol: 'ETHUSDT', timeframe: '5m', count: 2 });
     await downloading;
     await clearing;
 
