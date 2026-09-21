@@ -12,7 +12,7 @@ GitHub is the durable source of truth for replay datasets. Browser IndexedDB is 
 Configure the dataset repository with:
 
     DATASET_GITHUB_REPO=Sandeep119public/delta-replay
-    DATASET_GITHUB_BRANCH=master
+    DATASET_GITHUB_BRANCH=datasets
 
 Datasets are immutable and content-addressed:
 
