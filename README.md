@@ -130,17 +130,15 @@ Historical data is a separate process:
 
     Download Center
         ↓
-    Binance REST klines
+    Render dataset job
         ↓
-    HistoricalDataManager
+    Binance Futures REST klines
         ↓
-    normalize / validate / repair
+    normalize / validate
         ↓
-    RemoteDatasetRepository
+    GitHubDatasetRepository
         ↓
-    POST /api/v1/datasets/publish
-        ↓
-    GitHub manifest + immutable CSV
+    atomic manifest + immutable partitions
 
 Replay is a separate process:
 
@@ -160,7 +158,7 @@ Replay is a separate process:
         ↓
     ReplayService + PaperTradingEngine + ReplayTimeline
 
-The replay path contains **no historical-data provider** and therefore has no Binance download dependency. The browser cache (`CandleCache`) remains an accelerator for Binance downloads; GitHub is the authoritative replay dataset store.
+The replay path contains **no historical-data provider** and therefore has no Binance download dependency. Render owns historical downloads. GitHub is the authoritative replay dataset store. Browser IndexedDB is not required for historical downloads.
 
 ### Saved dataset format
 
@@ -175,7 +173,7 @@ The dataset manifest records the dataset identity and SHA-256. The backend verif
 1. Open the app. It starts in **LIVE** mode.
 2. Go to **Downloads**.
 3. Choose Binance symbol, timeframe, start and end.
-4. Start the download. The app validates the returned candles and saves a named local replay dataset.
+4. Start the server-owned download. Render fetches Binance data, validates it, partitions it, and publishes one immutable GitHub dataset version.
 5. Return to **Replay** and switch the mode selector to **REPLAY**.
 6. Select the saved dataset.
 7. Start/seek/play the replay. All replay trading state is handled by the backend session and event timeline.
