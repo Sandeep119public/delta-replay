@@ -1,178 +1,159 @@
-import { DataEvents } from '../data/HistoricalDataManager.js';
-import { CandleStore } from '../data/CandleStore.js';
-import { DataError, ErrorCategory, LoadingState } from '../data/DataError.js';
-import { calculateAutoRange, findClosestCandleIndex } from '../utils/replayRange.js';
-import { isRetryableCategory as isRetryableErrorCategory } from '../ports/ErrorPresentationPort.js';
-
-const MAX_RETRIES = 3;
+import { CandleIntegrity } from '../data/CandleIntegrity.js';
+import { LoadingState } from '../data/DataError.js';
 
 export function createReplayLoadService({
-  dataManager, candleStore, appState, replayEngine, hasOpenPosition, hasPendingOrders, hasTradingActivity,
-  statusView, timeline, controls, modeBanner, errorPanel, tradingErrorView = null,
-  dataStatusEl = null, cacheBadgeEl = null, startReplayBtn = null, headerStartReplayBtn = null,
-  loadBtn = null, fromDateEl = null, fromTimeEl = null, toDateEl = null, toTimeEl = null,
+  datasetRepository,
+  candleStore,
+  appState,
+  replayEngine,
+  hasOpenPosition,
+  hasPendingOrders,
+  hasTradingActivity,
+  statusView,
+  timeline,
+  controls,
+  modeBanner,
+  errorPanel,
+  tradingErrorView = null,
+  dataStatusEl = null,
+  cacheBadgeEl = null,
+  startReplayBtn = null,
+  headerStartReplayBtn = null,
   updatePreviewWindow,
 }) {
-  const required = { dataManager, candleStore, appState, replayEngine, statusView, timeline, controls, modeBanner };
+  const required = { datasetRepository, candleStore, appState, replayEngine, statusView, timeline, controls, modeBanner };
   for (const [name, value] of Object.entries(required)) if (!value) throw new TypeError(`createReplayLoadService requires ${name}`);
   if (typeof hasOpenPosition !== 'function') throw new TypeError('createReplayLoadService requires hasOpenPosition() capability');
   if (typeof hasPendingOrders !== 'function') throw new TypeError('createReplayLoadService requires hasPendingOrders() capability');
   if (typeof hasTradingActivity !== 'function') throw new TypeError('createReplayLoadService requires hasTradingActivity() capability');
-  if (typeof statusView.snapshot !== 'function') throw new TypeError('createReplayLoadService requires statusView.snapshot()');
   if (typeof updatePreviewWindow !== 'function') throw new TypeError('createReplayLoadService requires updatePreviewWindow callback');
 
   let loadToken = 0;
-  let currentAbort = null;
-  let retryTimer = null;
-  let retryCount = 0;
-  let progressUnsubscribe = null;
   let destroyed = false;
 
-  function updateLoadButton() {
-    if (!loadBtn) return;
-    if (appState.loadingState === LoadingState.LOADING) { loadBtn.disabled = true; loadBtn.textContent = 'LOADING…'; }
-    else { loadBtn.disabled = false; loadBtn.textContent = 'LOAD DATA'; }
+  function reportStatus() {
+    modeBanner?.update?.(statusView.snapshot());
   }
-  function showTradingError(msg) { tradingErrorView?.show(msg); }
-  function reportStatus() { modeBanner?.update(statusView.snapshot()); }
-  function unsubscribeProgress(unsubscribe) {
-    if (typeof unsubscribe !== 'function') return;
-    try { unsubscribe(); } catch (error) { console.warn('[ReplayLoadService] progress unsubscribe failed', error); }
-  }
-  function makeIdempotentUnsubscribe(unsubscribe) {
-    let called = false;
-    return () => {
-      if (called) return;
-      called = true;
-      unsubscribeProgress(unsubscribe);
-    };
-  }
-  function clearProgressSubscription() {
-    const unsubscribe = progressUnsubscribe;
-    progressUnsubscribe = null;
-    unsubscribe?.();
-  }
-  function clearCurrentLoad() {
-    clearProgressSubscription();
-    if (currentAbort) { try { currentAbort.abort(); } catch (error) { console.warn('[ReplayLoadService] abort failed', error); } currentAbort = null; }
-    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
-  }
-  function invalidateCurrentLoad() { loadToken++; clearCurrentLoad(); }
-  function resetRetryState() { retryCount = 0; appState.setRetryCount(0); }
 
-  async function loadAndPrepareReplay({ targetSec = null, autoStart = false, preserveRetryState = false } = {}) {
-    if (destroyed) return;
+  async function loadAndPrepareReplay({ datasetId = null, autoStart = false } = {}) {
+    if (destroyed) return null;
     if (hasTradingActivity()) {
-      showTradingError('Cannot replace replay data after trading activity. Reset the simulation first.');
-      return;
+      tradingErrorView?.show('Cannot replace replay data after trading activity. Reset the simulation first.');
+      return null;
     }
     if (hasOpenPosition() || hasPendingOrders()) {
-      showTradingError('Cannot change replay data while a position is open or a pending order exists. Close the position and cancel pending orders first.');
-      return;
+      tradingErrorView?.show('Cannot change replay data while a position is open or a pending order exists. Close the position and cancel pending orders first.');
+      return null;
     }
-    if (!preserveRetryState) resetRetryState();
 
     const token = ++loadToken;
-    clearCurrentLoad();
-    const abortController = new AbortController();
-    currentAbort = abortController;
-    const signal = abortController.signal;
-    const symbol = appState.symbol;
-    const timeframe = appState.timeframe;
-    const resolvedTarget = Number.isFinite(targetSec) ? targetSec : Math.floor(Date.now() / 1000) - 86400;
-    const { from, to } = calculateAutoRange(resolvedTarget, timeframe);
-
-    if (fromDateEl && toDateEl) {
-      try {
-        const fromIso = new Date(from * 1000).toISOString();
-        const toIso = new Date(to * 1000).toISOString();
-        fromDateEl.value = fromIso.slice(0, 10); if (fromTimeEl) fromTimeEl.value = fromIso.slice(11, 16);
-        toDateEl.value = toIso.slice(0, 10); if (toTimeEl) toTimeEl.value = toIso.slice(11, 16);
-      } catch (error) { console.warn('[ReplayLoadService] sync date controls failed', error); }
-    }
-
     appState.transitionLoading(LoadingState.LOADING);
-    if (dataStatusEl) dataStatusEl.textContent = `Loading ${symbol} ${timeframe}...`;
-    errorPanel?.hide(); updateLoadButton(); reportStatus();
+    errorPanel?.hide();
+    if (dataStatusEl) dataStatusEl.textContent = 'Loading saved replay dataset…';
+    reportStatus();
 
-    const onProgress = ({ completed, totalChunks, pct, loaded }) => {
-      if (token !== loadToken || destroyed) return;
-      if (dataStatusEl) dataStatusEl.textContent = `Loading ${symbol} · ${timeframe} — chunk ${completed}/${totalChunks} (${pct}%) — ${loaded} candles`;
-    };
-    const sessionProgressUnsubscribe = makeIdempotentUnsubscribe(dataManager.on(DataEvents.PROGRESS, onProgress));
-    progressUnsubscribe = sessionProgressUnsubscribe;
-
-    let retryScheduled = false;
     try {
-      const stagingStore = new CandleStore();
-      const { candles, metadata } = await dataManager.load({
-        symbol,
-        timeframe,
+      const datasets = await datasetRepository.list();
+      if (token !== loadToken || destroyed) return null;
+
+      const selectedId = datasetId || appState.replayDatasetId || datasets[0]?.id;
+      if (!selectedId) {
+        const error = new Error('No saved replay dataset. Download historical Binance data first.');
+        error.code = 'NO_DATASET';
+        throw error;
+      }
+
+      const { metadata, candles } = await datasetRepository.getCandles(selectedId);
+      if (token !== loadToken || destroyed) return null;
+      if (!Array.isArray(candles) || !candles.length) throw new Error('Saved replay dataset is empty');
+
+      const from = candles[0].time;
+      const to = candles[candles.length - 1].time;
+      const timeframeSec = metadata.timeframe === '1m' ? 60
+        : metadata.timeframe === '3m' ? 180
+        : metadata.timeframe === '5m' ? 300
+        : metadata.timeframe === '15m' ? 900
+        : metadata.timeframe === '30m' ? 1800
+        : metadata.timeframe === '1h' ? 3600
+        : metadata.timeframe === '2h' ? 7200
+        : metadata.timeframe === '4h' ? 14400
+        : metadata.timeframe === '6h' ? 21600
+        : metadata.timeframe === '8h' ? 28800
+        : metadata.timeframe === '12h' ? 43200
+        : metadata.timeframe === '1d' ? 86400
+        : metadata.timeframe === '3d' ? 259200
+        : metadata.timeframe === '1w' ? 604800
+        : null;
+      const integrity = CandleIntegrity.process(candles, {
         from,
         to,
-        signal,
+        timeframeSec,
+        origin: 0,
         strict: true,
-        halfOpen: true,
-        store: stagingStore,
+        policy: 'STRICT',
+        timestampUnit: 'seconds',
       });
-      sessionProgressUnsubscribe();
-      if (progressUnsubscribe === sessionProgressUnsubscribe) progressUnsubscribe = null;
-      if (token !== loadToken || signal.aborted || destroyed) return;
-      if (!candles || !candles.length) throw Object.assign(new Error('No candles returned'), { code: 'NO_DATA' });
 
-      resetRetryState();
-      await replayEngine.load(candles);
-      if (token !== loadToken || signal.aborted || destroyed) return;
-      appState.setCandles(candles, metadata);
+      await replayEngine.load(integrity.validCandles);
+      if (token !== loadToken || destroyed) return null;
+
+      appState.setReplayDatasetId(metadata.id);
+      appState.setCandles(integrity.validCandles, {
+        ...metadata,
+        datasetId: metadata.id,
+        saved: true,
+        format: metadata.format || 'CSV',
+        quality: 'VALID',
+      });
       appState.setReplayState(replayEngine.getState());
-      timeline?.setTotal(candles.length, candles);
-      let replayIdx = findClosestCandleIndex(resolvedTarget, candleStore, candles);
-      if (replayIdx < 0) replayIdx = Math.max(0, Math.floor(candles.length * 0.25));
-      appState.setPendingStartIndex(replayIdx); controls?.setStartIndex(replayIdx); timeline?.setPosition(replayIdx); updatePreviewWindow(replayIdx);
-      if (startReplayBtn) startReplayBtn.disabled = false; if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
-      if (cacheBadgeEl) cacheBadgeEl.classList.toggle('hidden', !metadata?.cached);
-      if (dataStatusEl) dataStatusEl.textContent = `Ready: ${symbol} ${timeframe} (${candles.length.toLocaleString()} candles)${metadata?.cached ? ' [Cached]' : ''}`;
-      timeline?.setEnabled(true); appState.transitionLoading(LoadingState.SUCCESS); reportStatus();
-      if (autoStart) await replayEngine.start(replayIdx);
-    } catch (err) {
-      sessionProgressUnsubscribe();
-      if (progressUnsubscribe === sessionProgressUnsubscribe) progressUnsubscribe = null;
-      if (err?.name === 'AbortError') {
-        if (token === loadToken) { appState.transitionLoading(LoadingState.ABORTED); if (dataStatusEl) dataStatusEl.textContent = 'Load cancelled'; }
-        return;
+      timeline?.setTotal(integrity.validCandles.length, integrity.validCandles);
+      appState.setPendingStartIndex(0);
+      controls?.setStartIndex(0);
+      timeline?.setPosition(0);
+      updatePreviewWindow(0);
+
+      if (startReplayBtn) startReplayBtn.disabled = false;
+      if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
+      if (cacheBadgeEl) cacheBadgeEl.classList.add('hidden');
+      if (dataStatusEl) dataStatusEl.textContent = `Saved dataset: ${metadata.symbol} · ${metadata.timeframe} · ${integrity.validCandles.length.toLocaleString()} candles`;
+      timeline?.setEnabled(true);
+      appState.transitionLoading(LoadingState.SUCCESS);
+      reportStatus();
+
+      if (autoStart) await replayEngine.start(0, metadata.symbol);
+      return metadata;
+    } catch (error) {
+      if (token !== loadToken || destroyed) return null;
+      if (error?.code === 'NO_DATASET') {
+        appState.transitionLoading(LoadingState.EMPTY, error);
+        errorPanel?.show({ category: 'NO_DATA', userMessage: error.message, message: error.message });
+        if (dataStatusEl) dataStatusEl.textContent = 'No saved replay dataset';
+      } else {
+        appState.transitionLoading(LoadingState.INVALID_DATA, error);
+        errorPanel?.show({ category: 'INVALID_DATA', userMessage: error?.message || 'Saved dataset failed validation', message: error?.message || String(error) });
+        if (dataStatusEl) dataStatusEl.textContent = 'Saved dataset failed validation';
       }
-      if (token !== loadToken || destroyed) return;
-      let dataErr;
-      if (err instanceof DataError) dataErr = err;
-      else if (err?.category) dataErr = new DataError({ category: err.category, technicalMessage: err.message, context: err.context || {} });
-      else dataErr = DataError.fromGenericError(err);
-      dataErr.context = dataErr.context || {}; Object.assign(dataErr.context, { symbol, timeframe, start: from, end: to });
-      const stateMap = {
-        [ErrorCategory.NETWORK]: LoadingState.NETWORK_ERROR, [ErrorCategory.TIMEOUT]: LoadingState.TIMEOUT,
-        [ErrorCategory.CORS]: LoadingState.NETWORK_ERROR, [ErrorCategory.HTTP]: LoadingState.HTTP_ERROR,
-        [ErrorCategory.INVALID_RESPONSE]: LoadingState.INVALID_DATA, [ErrorCategory.INVALID_REQUEST]: LoadingState.INVALID_DATA,
-        [ErrorCategory.NO_DATA]: LoadingState.EMPTY, [ErrorCategory.ABORTED]: LoadingState.ABORTED, [ErrorCategory.UNKNOWN]: LoadingState.UNKNOWN_ERROR,
-      };
-      appState.transitionLoading(stateMap[dataErr.category] || LoadingState.UNKNOWN_ERROR, dataErr); errorPanel?.show(dataErr);
-      if (dataErr.category === ErrorCategory.NO_DATA) { if (dataStatusEl) dataStatusEl.textContent = 'No candles found for this date'; }
-      else if (dataErr.category === ErrorCategory.HTTP) { if (dataStatusEl) dataStatusEl.textContent = `HTTP ${dataErr.context.status || 'error'} — ${symbol} ${timeframe}`; }
-      else if ([ErrorCategory.NETWORK, ErrorCategory.CORS, ErrorCategory.TIMEOUT].includes(dataErr.category)) { if (dataStatusEl) dataStatusEl.textContent = `Network error — ${symbol} ${timeframe}`; }
-      else if (dataStatusEl) dataStatusEl.textContent = 'Error loading replay candles';
-      if (isRetryableErrorCategory(dataErr.category) && retryCount < MAX_RETRIES) {
-        retryCount++; appState.setRetryCount(retryCount); const backoff = Math.min(5000, Math.pow(2, retryCount - 1) * 1000);
-        if (dataStatusEl) dataStatusEl.textContent = `Retrying… ${retryCount}/${MAX_RETRIES}`; appState.transitionLoading(LoadingState.LOADING); retryScheduled = true;
-        retryTimer = setTimeout(() => { retryTimer = null; if (token === loadToken && !destroyed) loadAndPrepareReplay({ targetSec: resolvedTarget, autoStart, preserveRetryState: true }); }, backoff);
-        return;
-      }
-      resetRetryState();
+      reportStatus();
+      throw error;
     } finally {
-      if (token === loadToken) { if (!retryScheduled) appState.setLoading(false); if (currentAbort === abortController) currentAbort = null; if (!retryScheduled) updateLoadButton(); reportStatus(); }
+      if (token === loadToken && !destroyed) {
+        appState.setLoading(false);
+        reportStatus();
+      }
     }
   }
 
   return Object.freeze({
-    loadAndPrepareReplay, updateLoadButton, clearCurrentLoad, invalidateCurrentLoad,
-    destroy() { if (destroyed) return; destroyed = true; loadToken++; clearCurrentLoad(); tradingErrorView?.destroy?.(); },
-    get retryCount() { return retryCount; },
+    loadAndPrepareReplay,
+    updateLoadButton() {},
+    clearCurrentLoad() { loadToken += 1; },
+    invalidateCurrentLoad() { loadToken += 1; },
+    listDatasets: () => datasetRepository.list(),
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      loadToken += 1;
+      tradingErrorView?.destroy?.();
+    },
   });
 }
