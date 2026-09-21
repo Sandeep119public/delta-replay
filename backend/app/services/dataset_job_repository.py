@@ -69,7 +69,7 @@ class DatasetJobRepository:
             ).fetchone()
         return self._row(row)
 
-    def claim(self, job_id, worker_id, lease_seconds=120):
+    def claim(self, job_id, worker_id, lease_seconds=300):
         if not self.durable:
             return True
         lease_seconds = max(30, int(lease_seconds))
@@ -102,7 +102,7 @@ class DatasetJobRepository:
 
     def update(self, job_id, worker_id=None, **changes):
         if not self.durable:
-            return
+            return True
         allowed = {
             "cursor": "cursor_ms", "status": "status", "loaded": "loaded",
             "total": "total", "pct": "pct", "error": "error", "dataset": "dataset",
@@ -117,7 +117,7 @@ class DatasetJobRepository:
         if not fields:
             return
         if worker_id is not None:
-            fields.extend(["updated_at = NOW()", "heartbeat_at = NOW()", "lease_until = NOW() + INTERVAL '120 seconds'"])
+            fields.extend(["updated_at = NOW()", "heartbeat_at = NOW()", "lease_until = NOW() + INTERVAL '300 seconds'"])
             values.extend([UUID(str(job_id)), worker_id])
             where = "job_id = %s AND worker_id = %s AND status NOT IN ('cancelled','complete','failed')"
         else:
@@ -125,10 +125,11 @@ class DatasetJobRepository:
             values.append(UUID(str(job_id)))
             where = "job_id = %s"
         with self._connect() as connection:
-            connection.execute(
-                f"UPDATE dataset_download_jobs SET {', '.join(fields)} WHERE {where}",
+            row = connection.execute(
+                f"UPDATE dataset_download_jobs SET {', '.join(fields)} WHERE {where} RETURNING job_id",
                 values,
-            )
+            ).fetchone()
+        return row is not None
 
     def append_chunk(self, job_id, sequence, from_ms, to_ms, candles):
         if not self.durable:
