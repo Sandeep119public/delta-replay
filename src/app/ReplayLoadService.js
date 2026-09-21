@@ -73,7 +73,8 @@ export function createReplayLoadService({
         if (!record?.metadata || !Array.isArray(record.candles)) throw new Error('Local replay dataset was not found in this browser');
         metadata = record.metadata;
         candles = record.candles;
-        loadResult = await replayEngine.load(candles);
+        if (typeof replayEngine.loadLocalDataset !== 'function') throw new Error('Chunked local replay loading is unavailable');
+        loadResult = await replayEngine.loadLocalDataset(candles);
       } else {
         const datasets = await datasetRepository.list();
         if (token !== loadToken || destroyed) return null;
@@ -96,19 +97,18 @@ export function createReplayLoadService({
         }
       }
 
+      if (token !== loadToken || destroyed) return null;
       const total = Number(loadResult?.total || loadResult?.totalCandles || metadata.count || candles?.length || 0);
       if (!total) throw new Error('Replay dataset is empty');
 
-      const visible = Array.isArray(candles) ? candles.slice(0, 2000) : [];
-      const previewCandles = source === 'local' ? visible : visible;
+      const previewCandles = Array.isArray(candles) ? candles.slice(0, 2000) : [];
       if (!previewCandles.length) throw new Error('Replay dataset preview is empty');
 
-      const from = Number(metadata.from ?? previewCandles[0]?.time ?? 0);
-      const to = Number(metadata.to ?? previewCandles[previewCandles.length - 1]?.time ?? from);
+      const timeframeSec = metadata.timeframeSec || timeframeSeconds(metadata.timeframe);
       const integrity = CandleIntegrity.process(previewCandles, {
-        from,
-        to,
-        timeframeSec: metadata.timeframeSec || timeframeSeconds(metadata.timeframe),
+        from: previewCandles[0].time,
+        to: previewCandles[previewCandles.length - 1].time,
+        timeframeSec,
         origin: 0,
         strict: true,
         policy: 'STRICT',
@@ -120,7 +120,7 @@ export function createReplayLoadService({
 
       const replayMetadata = {
         ...metadata,
-        datasetId: source === 'local' ? metadata.id : metadata.id,
+        datasetId: metadata.id,
         local: source === 'local',
         saved: source !== 'local',
         source: source === 'local' ? 'local-file' : 'binance',
@@ -141,7 +141,10 @@ export function createReplayLoadService({
       if (startReplayBtn) startReplayBtn.disabled = false;
       if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
       if (cacheBadgeEl) cacheBadgeEl.classList.add('hidden');
-      if (dataStatusEl) dataStatusEl.textContent = (source === 'local' ? 'Local dataset: ' : 'Saved dataset: ') + metadata.symbol + ' · ' + metadata.timeframe + ' · ' + total.toLocaleString() + ' candles';
+      if (dataStatusEl) {
+        const label = source === 'local' ? 'Local dataset: ' : 'Saved dataset: ';
+        dataStatusEl.textContent = label + metadata.symbol + ' · ' + metadata.timeframe + ' · ' + total.toLocaleString() + ' candles';
+      }
       timeline?.setEnabled(true);
       appState.transitionLoading(LoadingState.SUCCESS);
       reportStatus();
