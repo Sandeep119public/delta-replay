@@ -63,6 +63,23 @@ class BinanceDatasetDownloadService:
             if job:
                 job.update(changes)
 
+    @staticmethod
+    def _fetch_page(client, params):
+        last_error = None
+        for attempt in range(3):
+            try:
+                response = client.get(
+                    "https://fapi.binance.com/fapi/v1/klines",
+                    params=params,
+                )
+                response.raise_for_status()
+                return response.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+        raise RuntimeError(f"Binance kline request failed after retries: {last_error}")
+
     def _run(self, job_id):
         job = self.get(job_id)
         candles = []
@@ -72,18 +89,13 @@ class BinanceDatasetDownloadService:
             self._update(job_id, status="running")
             with httpx.Client(timeout=60.0, follow_redirects=True) as client:
                 while cursor < job["to"]:
-                    response = client.get(
-                        "https://fapi.binance.com/fapi/v1/klines",
-                        params={
-                            "symbol": job["symbol"],
-                            "interval": job["timeframe"],
-                            "startTime": cursor,
-                            "endTime": job["to"] - 1,
-                            "limit": 1000,
-                        },
-                    )
-                    response.raise_for_status()
-                    rows = response.json()
+                    rows = self._fetch_page(client, {
+                        "symbol": job["symbol"],
+                        "interval": job["timeframe"],
+                        "startTime": cursor,
+                        "endTime": job["to"] - 1,
+                        "limit": 1000,
+                    })
                     if not rows:
                         break
                     for row in rows:
@@ -115,6 +127,9 @@ class BinanceDatasetDownloadService:
                 raise ValueError("Binance returned no candles for the requested range")
             if any(b["time"] <= a["time"] for a, b in zip(candles, candles[1:])):
                 raise ValueError("Binance returned duplicate or unordered candles")
+            expected_step = interval_ms // 1000
+            if any((b["time"] - a["time"]) != expected_step for a, b in zip(candles, candles[1:])):
+                raise ValueError("Binance returned a gap in the requested candle range")
             dataset = self.repository.publish(
                 symbol=job["symbol"],
                 timeframe=job["timeframe"],
