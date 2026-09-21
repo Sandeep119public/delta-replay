@@ -13,7 +13,7 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
   });
 
   const coordinator = new ReplayCoordinator({
-    dataManager,
+    dataManager: services.dataManager,
     candleStore,
     appState,
     replayEngine: engine,
