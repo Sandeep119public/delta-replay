@@ -23,7 +23,7 @@ class FakeObjectStore {
   constructor(map) { this.map = map; }
   put(value) { const request = new FakeRequest(); queueMicrotask(() => { this.map.set(value.id, structuredClone(value)); request.success(value); }); return request; }
   get(id) { const request = new FakeRequest(); queueMicrotask(() => request.success(this.map.get(id) ? structuredClone(this.map.get(id)) : undefined)); return request; }
-  getAll() { const request = new FakeRequest(); queueMicrotask(() => request.success([...this.map.values()].map(structuredClone))); return request; }
+  getAll() { const request = new FakeRequest(); queueMicrotask(() => request.success([...this.map.values()].map((value) => structuredClone(value)))); return request; }
   delete(id) { const request = new FakeRequest(); queueMicrotask(() => { this.map.delete(id); request.success(undefined); }); return request; }
 }
 
