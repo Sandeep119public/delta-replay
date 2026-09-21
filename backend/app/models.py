@@ -42,6 +42,21 @@ class CandleBatch(BaseModel):
         return self
 
 
+class DatasetDownloadRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    symbol: str = Field(min_length=1)
+    timeframe: str = Field(min_length=1)
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        if self.start >= self.end:
+            raise ValueError("end must be after start")
+        return self
+
+
 class OrderRequest(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
