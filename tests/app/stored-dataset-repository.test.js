@@ -33,7 +33,7 @@ class FakeDb {
     this.objectStoreNames = { contains: (name) => this.stores.has(name) };
   }
   createObjectStore(name) { this.stores.set(name, new Map()); return {}; }
-  transaction(name) { return { objectStore: () => new FakeObjectStore(this.stores.get(name)) }; }
+  transaction(names) { return { objectStore: (name) => new FakeObjectStore(this.stores.get(name)), names }; }
   close() {}
 }
 
@@ -44,6 +44,8 @@ class FakeIndexedDB {
     queueMicrotask(() => {
       if (!request.result) {
         if (!this.db.objectStoreNames.contains('datasets')) this.db.createObjectStore('datasets');
+        if (!this.db.objectStoreNames.contains('dataset_candles')) this.db.createObjectStore('dataset_candles');
+        if (!this.db.objectStoreNames.contains('dataset_files')) this.db.createObjectStore('dataset_files');
         request.result = this.db;
         request.onupgradeneeded?.({ target: request });
       }
