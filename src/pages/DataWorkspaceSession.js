@@ -22,7 +22,7 @@ export class DataWorkspaceSession {
     const subscribe = (event, handler) => this._unbind.push(this.data.on(event, handler));
     subscribe(DATA_WORKSPACE_EVENTS.LOADING_STARTED, (progress) => {
       this._download = { status: 'running', loaded: 0, total: 0, pct: 0, error: null, ...progress };
-      this._job('Historical data download', 'running');
+      this._job(progress?.source === 'local-file' ? 'Local dataset import' : 'Historical data download', 'running');
       this._notify();
     });
     subscribe(DATA_WORKSPACE_EVENTS.PROGRESS, (progress) => {
@@ -44,7 +44,12 @@ export class DataWorkspaceSession {
     });
     subscribe(DATA_WORKSPACE_EVENTS.ERROR, (error) => {
       this._download = { ...this._download, status: 'failed', error: errorMessage(error) };
-      this._job('Historical data download', 'failed');
+      this._job('Data operation', 'failed');
+      this._notify();
+    });
+    subscribe(DATA_WORKSPACE_EVENTS.LOCAL_DATASET_CHANGED, (metadata) => {
+      this._download = { ...this._download, status: 'complete', loaded: metadata?.count || 0, total: metadata?.count || 0, pct: 100, error: null };
+      this._job('Local dataset import', 'complete', 100);
       this._notify();
     });
     return this;
@@ -113,6 +118,25 @@ export class DataWorkspaceSession {
     this._notify();
   }
 
+  async importLocalDataset(file) {
+    try {
+      return await this.data.importLocalDataset(file);
+    } catch (error) {
+      this._download = { ...this._download, status: 'failed', error: errorMessage(error) };
+      this._job('Local dataset import', 'failed');
+      this._notify();
+      throw error;
+    }
+  }
+
+  async clearLocalDataset(id) {
+    try {
+      await this.data.deleteLocalDataset(id);
+    } catch (error) {
+      this.setError(errorMessage(error));
+    }
+  }
+
   async clearCurrent() {
     try {
       await this.data.clearCurrent();
@@ -135,12 +159,16 @@ export class DataWorkspaceSession {
     this._notify();
   }
 
+  async getLocalDatasetCsv(id) {
+    return this.data.getLocalDatasetCsv(id);
+  }
+
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
     this._initialized = false;
     for (const off of this._unbind.splice(0)) {
-      try { off?.(); } catch { /* continue cleanup */ }
+      try { off?.(); } catch {}
     }
     this._listeners.clear();
   }
