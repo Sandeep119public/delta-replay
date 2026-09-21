@@ -3,7 +3,30 @@
 Delta Replay is a browser trading workstation backed by a FastAPI paper-trading engine. It has two deliberately separate market-data workflows:
 
 - **Live:** Binance market data is displayed directly on the chart. Live candles never enter the replay dataset or replay timeline.
-- **Replay data:** historical Binance klines are downloaded in the Data Center, validated, saved locally as a named CSV dataset in IndexedDB, and later replayed from that saved dataset. Replay does not fetch Binance data.
+- **Replay data:** historical Binance klines are downloaded in the Data Center, validated, published to GitHub as immutable datasets, and later replayed through the backend dataset API. Replay does not fetch Binance historical data.
+
+## GitHub-backed replay datasets
+
+GitHub is the durable source of truth for replay datasets. Dataset commits are isolated to the dedicated `datasets` branch so publishing data does not mutate the application deployment branch. Browser IndexedDB is not authoritative for replay.
+
+Configure the dataset repository with:
+
+    DATASET_GITHUB_REPO=Sandeep119public/delta-replay
+    DATASET_GITHUB_BRANCH=datasets
+
+Datasets are immutable and content-addressed:
+
+    datasets/
+      manifest.json
+      SOLUSDT/
+        15m/
+          <content-id>/\n            2026-01.csv\n            2026-02.csv
+
+The manifest records symbol, timeframe, range, row count, format, source, byte size, SHA-256 and content identity.
+
+Publishing is server-authorized. Render holds the GitHub token in DATASET_GITHUB_TOKEN and the operator-only DATASET_PUBLISH_SECRET protects dataset jobs. Never put the GitHub token in VITE_* variables or browser storage.
+
+GitHub blocks regular files larger than 100 MiB, so the publisher uses immutable partitions capped at 80,000 candles and a 90 MiB safety threshold. A logical dataset has one content identity and a manifest list of partition files. GitHub also recommends keeping repositories small and moving genuinely large generated data to Git LFS or object storage.
 
 ## Simulation model
 
@@ -49,7 +72,7 @@ The cleanup job uses a PostgreSQL transaction-scoped advisory lock so overlappin
 
 ## Scale behavior
 
-The server accepts at most 100,000 candles per dataset and CSV upload is bounded by 10 MiB. Replay UI state exposes a sliding 2,000-candle window while retaining the full immutable dataset for persistence and reconstruction.
+The dataset API accepts at most 100,000 candles for the legacy direct-publish endpoint. Normal historical downloads run as server-owned jobs and partition the resulting dataset before publishing. Replay UI state exposes a sliding 2,000-candle window while retaining the full immutable dataset for persistence and reconstruction.
 
 ## Development quick start
 
@@ -107,25 +130,23 @@ Historical data is a separate process:
 
     Download Center
         ↓
-    Binance REST klines
+    Render dataset job
         ↓
-    HistoricalDataManager
+    Binance Futures REST klines
         ↓
-    normalize / validate / repair
+    normalize / validate
         ↓
-    StoredDatasetRepository
+    GitHubDatasetRepository
         ↓
-    IndexedDB: delta-replay-datasets-v1
-        ↓
-    named CSV dataset + parsed candles
+    atomic manifest + immutable partitions
 
 Replay is a separate process:
 
     Replay mode
         ↓
-    select saved dataset
+    select GitHub dataset
         ↓
-    StoredDatasetRepository.getCandles()
+    GET /api/v1/datasets/{id}/candles
         ↓
     strict integrity validation
         ↓
@@ -137,27 +158,27 @@ Replay is a separate process:
         ↓
     ReplayService + PaperTradingEngine + ReplayTimeline
 
-The replay path contains **no historical-data provider** and therefore has no Binance download dependency. The browser cache (`CandleCache`) remains an accelerator for downloads; it is not the authoritative source for replay.
+The replay path contains **no historical-data provider** and therefore has no Binance download dependency. Render owns historical downloads. GitHub is the authoritative replay dataset store. Browser IndexedDB is not required for historical downloads.
 
 ### Saved dataset format
 
-Saved datasets are represented as canonical CSV with:
+Published datasets are represented as immutable canonical CSV with:
 
     time,open,high,low,close,volume
 
-The same saved record also keeps parsed candles in IndexedDB so the replay path can load structured candles directly without reparsing the CSV on every session. The Data Center can export the CSV as a normal file for manual archival, sharing, or committing selected datasets to another free storage location such as a Git repository.
+The dataset manifest records the dataset identity and SHA-256. The backend verifies both before returning candles to replay. The Data Center can export the CSV for interoperability.
 
 ### Recommended user workflow
 
 1. Open the app. It starts in **LIVE** mode.
 2. Go to **Downloads**.
 3. Choose Binance symbol, timeframe, start and end.
-4. Start the download. The app validates the returned candles and saves a named local replay dataset.
+4. Start the server-owned download. Render fetches Binance data, validates it, partitions it, and publishes one immutable GitHub dataset version.
 5. Return to **Replay** and switch the mode selector to **REPLAY**.
 6. Select the saved dataset.
 7. Start/seek/play the replay. All replay trading state is handled by the backend session and event timeline.
-8. Use **Export CSV** from the Data Center when a durable file outside the browser is needed.
+8. Use **Export CSV** from the Data Center when a local copy is needed.
 
 ### Important ownership rule
 
-Do not connect Binance directly to the replay engine. If replay needs a new data capability, add it to the dataset/download side and keep the replay side dependent on `StoredDatasetRepository`. Do not create another replay engine, dataset store, or historical-data abstraction.
+Do not connect Binance directly to the replay engine. Replay depends only on `RemoteDatasetRepository`. Browser IndexedDB is a disposable acceleration cache. Do not create another replay engine, dataset store, or historical-data abstraction.

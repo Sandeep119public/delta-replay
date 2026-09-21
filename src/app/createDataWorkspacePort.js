@@ -1,20 +1,28 @@
-import { DataEvents } from '../data/HistoricalDataManager.js';
 import { CandleStore } from '../data/CandleStore.js';
 import { CandleIntegrity } from '../data/CandleIntegrity.js';
 import { DATA_WORKSPACE_EVENTS, assertDataWorkspacePort } from '../ports/DataWorkspacePort.js';
 
 export function createDataWorkspacePort({ dataManager, candleStore, candleCache, appState, datasetRepository }) {
-  if (!dataManager || !candleStore || !candleCache || !appState || !datasetRepository) {
-    throw new TypeError('createDataWorkspacePort requires dataManager, candleStore, candleCache, appState, and datasetRepository');
+  if (!candleStore || !candleCache || !appState || !datasetRepository) {
+    throw new TypeError('createDataWorkspacePort requires candleStore, candleCache, appState, and datasetRepository');
   }
 
   let operationTail = Promise.resolve();
   const readyListeners = new Set();
+  const loadingListeners = new Set();
+  const progressListeners = new Set();
+  const errorListeners = new Set();
 
   function enqueue(operation) {
     const next = operationTail.then(operation, operation);
     operationTail = next.catch(() => undefined);
     return next;
+  }
+
+  function emit(eventSet, payload) {
+    for (const listener of [...eventSet]) {
+      try { listener(payload); } catch (error) { console.warn('[DataWorkspace] listener failed', error); }
+    }
   }
 
   function emitReady(payload) {
@@ -50,32 +58,37 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
 
     async download(params) {
       return enqueue(async () => {
-        const stagingStore = new CandleStore();
-        const result = await dataManager.load({
-          ...params,
-          strict: true,
-          halfOpen: true,
-          store: stagingStore,
-        });
-
-        const savedDataset = await datasetRepository.save({
-          symbol: params.symbol,
-          timeframe: params.timeframe,
-          from: result.metadata?.effectiveFrom ?? params.from,
-          to: result.metadata?.effectiveTo ?? params.to,
-          candles: result.candles,
-          metadata: result.metadata || {},
-        });
-
-        const payload = { ...result, savedDataset };
-        emitReady({
-          candles: result.candles,
-          metadata: result.metadata,
-          quality: result.quality || 'VALID',
-          dataset: savedDataset,
-        });
-        globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-datasets-changed'));
-        return payload;
+        emit(loadingListeners, { symbol: params.symbol, timeframe: params.timeframe });
+        const emitProgress = (state) => {
+          globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-dataset-download-progress', { detail: state }));
+        };
+        try {
+          const dataset = await datasetRepository.download({
+            symbol: params.symbol,
+            timeframe: params.timeframe,
+            from: params.from,
+            to: params.to,
+            onProgress: (state) => {
+              const progress = {
+                status: state.status,
+                loaded: Number(state.loaded || 0),
+                total: Number(state.total || 0),
+                pct: Number(state.pct || 0),
+              };
+              emitProgress(progress);
+              emit(progressListeners, progress);
+              globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-data-progress', { detail: progress }));
+            },
+          });
+          const metadata = { ...dataset, quality: 'VALID', source: 'binance', persisted: true };
+          emitReady({ candles: [], metadata, quality: 'VALID', dataset });
+          globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-datasets-changed'));
+          return { candles: [], metadata, quality: 'VALID', savedDataset: dataset };
+        } catch (error) {
+          emit(errorListeners, error);
+          globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-data-error', { detail: error }));
+          throw error;
+        }
       });
     },
 
@@ -117,15 +130,19 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
         readyListeners.add(handler);
         return () => readyListeners.delete(handler);
       }
-
-      const mapping = new Map([
-        [DATA_WORKSPACE_EVENTS.LOADING_STARTED, DataEvents.LOADING_STARTED],
-        [DATA_WORKSPACE_EVENTS.PROGRESS, DataEvents.PROGRESS],
-        [DATA_WORKSPACE_EVENTS.ERROR, DataEvents.ERROR],
-      ]);
-      const mapped = mapping.get(event);
-      if (!mapped) throw new Error(`Unsupported data workspace event: ${event}`);
-      return dataManager.on(mapped, handler);
+      if (event === DATA_WORKSPACE_EVENTS.LOADING_STARTED) {
+        loadingListeners.add(handler);
+        return () => loadingListeners.delete(handler);
+      }
+      if (event === DATA_WORKSPACE_EVENTS.PROGRESS) {
+        progressListeners.add(handler);
+        return () => progressListeners.delete(handler);
+      }
+      if (event === DATA_WORKSPACE_EVENTS.ERROR) {
+        errorListeners.add(handler);
+        return () => errorListeners.delete(handler);
+      }
+      throw new Error(`Unsupported data workspace event: ${event}`);
     },
 
     listDatasets() {
