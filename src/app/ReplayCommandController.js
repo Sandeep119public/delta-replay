@@ -32,6 +32,7 @@ export class ReplayCommandController {
     tradingCapabilities = null,
     onError = null,
     headerBtn = null,
+    isReplayMode = () => true,
   }) {
     this.engine = engine;
     this.appState = appState;
@@ -39,7 +40,7 @@ export class ReplayCommandController {
     this.onLoad = onLoad;
     this.onPreview = onPreview;
     this.onBeforeLoad = onBeforeLoad;
-    this.isReplayMode = typeof arguments[0]?.isReplayMode === 'function' ? arguments[0].isReplayMode : () => true;
+    this.isReplayMode = typeof isReplayMode === 'function' ? isReplayMode : () => true;
     this.canExecute = canExecute || createReplayCommandPolicy(tradingCapabilities).canExecute;
     this.onError = onError;
     this.headerBtn = headerBtn;
@@ -219,6 +220,7 @@ export class ReplayCommandController {
     const handler = e => {
       const tag = e.target?.tagName?.toUpperCase?.();
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) return;
+      if (!this.isReplayMode()) return;
       if (e.code === 'Escape') { e.preventDefault(); void this.pause(); return; }
       const stateAction = e.code === 'Space'
         ? () => this.togglePlayPause()
