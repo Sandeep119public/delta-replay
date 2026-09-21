@@ -63,12 +63,20 @@ def test_replay_read_does_not_call_binance(tmp_path: Path):
         def get(self, *args, **kwargs):
             raise AssertionError("Replay must never call Binance")
 
-    service = BinanceDatasetService(root=tmp_path, http_client=ExplodingClient())
-    candles = service.read_candles(
+    writer = BinanceDatasetService(root=tmp_path, http_client=FakeHTTPClient())
+    writer.download(
         symbol="BTCUSDT",
         timeframe="1m",
         start=1000,
         end=1060,
     )
 
-    assert candles == []
+    reader = BinanceDatasetService(root=tmp_path, http_client=ExplodingClient())
+    candles = reader.read_candles(
+        symbol="BTCUSDT",
+        timeframe="1m",
+        start=1000,
+        end=1060,
+    )
+
+    assert len(candles) == 2
