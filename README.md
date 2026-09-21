@@ -254,3 +254,16 @@ The repository boundary supports canonical CSV and Parquet partitions. Parquet u
            |
            v
       experiment fingerprint
+
+
+## GitHub Pages deployment
+
+The application is deployed from the `master` branch to GitHub Pages under the repository path `/delta-replay/`. The Vite build uses that path automatically in GitHub Actions.
+
+The backend API is a separate deployment. Before merging a change that will deploy `master`, configure the GitHub repository variable:
+
+    DELTA_REPLAY_API_BASE_URL=https://<your-api-host>
+
+The Pages build injects that value as `VITE_API_BASE_URL` and the deployment gate fails rather than publishing a frontend that silently points `/api` at GitHub Pages.
+
+Dataset operator secrets are kept in browser memory only and are cleared when the page is destroyed. GitHub dataset reads and writes always target `DATASET_GITHUB_BRANCH`; the application branch is never used as the dataset catalog.

@@ -5,7 +5,11 @@ import io
 import json
 import os
 import re
+import tempfile
 import time
+from pathlib import Path
+from collections import OrderedDict
+from urllib.parse import quote
 from datetime import datetime, timezone
 from threading import RLock
 
@@ -13,7 +17,7 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from .dataset_identity import dataset_id
+from .dataset_identity import dataset_id, dataset_id_iter
 
 
 MAX_FILE_BYTES = 90 * 1024 * 1024
@@ -45,6 +49,8 @@ class GitHubDatasetRepository:
             raise ValueError("DATASET_GITHUB_BRANCH is required")
         self._lock = RLock()
         self._cache = {}
+        self._partition_cache = OrderedDict()
+        self._partition_cache_limit = max(16, int(os.getenv("DATASET_PARTITION_CACHE_SIZE", "64")))
         self._cache_ttl = max(5, int(os.getenv("DATASET_CACHE_TTL_SECONDS", "60")))
 
     def _headers(self, token=None, accept="application/vnd.github.raw+json"):
@@ -136,9 +142,17 @@ class GitHubDatasetRepository:
             })
         return GitHubDatasetRepository._normalize_candles(candles)
 
-    def _request(self, method, path, *, token=None, **kwargs):
+    def _request(self, method, path, *, token=None, headers=None, **kwargs):
+        request_headers = self._headers(token)
+        if headers:
+            request_headers.update(headers)
         with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-            response = client.request(method, self._url(path), headers=self._headers(token), **kwargs)
+            response = client.request(
+                method,
+                self._url(path),
+                headers=request_headers,
+                **kwargs,
+            )
         if response.status_code == 404:
             return None
         if response.status_code in (409, 422):
@@ -147,7 +161,13 @@ class GitHubDatasetRepository:
         return response
 
     def _get_raw(self, path, token=None):
-        response = self._request("GET", f"contents/{path.lstrip('/')}", token=token, headers=self._headers(token, "application/vnd.github.raw+json"))
+        ref = quote(self.branch, safe="")
+        response = self._request(
+            "GET",
+            f"contents/{path.lstrip('/')}?ref={ref}",
+            token=token,
+            headers={"Accept": "application/vnd.github.raw+json"},
+        )
         if response is None:
             return None
         if len(response.content) > MAX_FILE_BYTES:
@@ -155,7 +175,13 @@ class GitHubDatasetRepository:
         return response.content
 
     def _get_json(self, path, token=None):
-        response = self._request("GET", f"contents/{path.lstrip('/')}", token=token, headers=self._headers(token, "application/vnd.github.object+json"))
+        ref = quote(self.branch, safe="")
+        response = self._request(
+            "GET",
+            f"contents/{path.lstrip('/')}?ref={ref}",
+            token=token,
+            headers={"Accept": "application/vnd.github.object+json"},
+        )
         return None if response is None else response.json()
 
     def _read_manifest(self, token=None):
@@ -180,6 +206,27 @@ class GitHubDatasetRepository:
 
     def _invalidate_cache(self):
         self._cache.clear()
+        self._partition_cache.clear()
+
+    def _partition_bytes(self, partition, token=None):
+        cache_key = partition["sha256"]
+        if token is None:
+            cached = self._partition_cache.get(cache_key)
+            if cached is not None:
+                self._partition_cache.move_to_end(cache_key)
+                return cached
+        raw = self._get_raw(partition["path"], token)
+        if raw is None:
+            raise RuntimeError("manifest references a missing dataset partition")
+        digest = hashlib.sha256(raw).hexdigest()
+        if digest != partition["sha256"]:
+            raise RuntimeError("dataset partition checksum does not match manifest")
+        if token is None:
+            self._partition_cache[cache_key] = raw
+            self._partition_cache.move_to_end(cache_key)
+            while len(self._partition_cache) > self._partition_cache_limit:
+                self._partition_cache.popitem(last=False)
+        return raw
 
     def list(self, token=None):
         manifest = self._manifest_cached() if token is None else self._read_manifest(token)
@@ -192,16 +239,13 @@ class GitHubDatasetRepository:
         if metadata.get("partitions"):
             candles = []
             for partition in metadata["partitions"]:
-                raw = self._get_raw(partition["path"], token)
-                if raw is None:
-                    raise RuntimeError("manifest references a missing dataset partition")
-                if hashlib.sha256(raw).hexdigest() != partition["sha256"]:
-                    raise RuntimeError("dataset partition checksum does not match manifest")
+                raw = self._partition_bytes(partition, token)
                 part_candles = self._parse_parquet(raw) if metadata.get("format") == "PARQUET" else self._parse_csv(raw)
                 if len(part_candles) != int(partition["count"]):
                     raise RuntimeError("dataset partition row count does not match manifest")
                 candles.extend(part_candles)
         else:
+            ref = quote(self.branch, safe="")
             raw = self._get_raw(metadata["path"], token)
             if raw is None:
                 raise RuntimeError("manifest references a missing dataset file")
@@ -233,11 +277,7 @@ class GitHubDatasetRepository:
                 continue
             if to_time is not None and int(partition["from"]) > int(to_time):
                 continue
-            raw = self._get_raw(partition["path"], token)
-            if raw is None:
-                raise RuntimeError("manifest references a missing dataset partition")
-            if hashlib.sha256(raw).hexdigest() != partition["sha256"]:
-                raise RuntimeError("dataset partition checksum does not match manifest")
+            raw = self._partition_bytes(partition, token)
             parser = self._parse_parquet if metadata.get("format") == "PARQUET" else self._parse_csv
             for candle in parser(raw):
                 if from_time is not None and candle["time"] < int(from_time):
@@ -296,6 +336,184 @@ class GitHubDatasetRepository:
             "lastTime": candles[-1]["time"],
             "expectedIntervalSec": step,
         }
+
+    def publish_chunks(self, *, symbol, timeframe, from_ms, to_ms, chunks, token=None, metadata=None):
+        """Publish a validated iterable of candle chunks without retaining the full dataset in RAM."""
+        active_token = (token or self.token).strip()
+        if not active_token:
+            raise PermissionError("DATASET_GITHUB_TOKEN is not configured")
+
+        symbol = str(symbol or "").strip().upper()
+        timeframe = str(timeframe or "").strip()
+        if not re.fullmatch(r"[A-Z0-9._-]{2,32}", symbol):
+            raise ValueError("invalid dataset symbol")
+        if timeframe not in _TIMEFRAME_SECONDS:
+            raise ValueError("unsupported dataset timeframe")
+
+        format_name = str(os.getenv("DATASET_FORMAT", "CSV")).strip().upper()
+        if format_name not in {"CSV", "PARQUET"}:
+            raise ValueError("DATASET_FORMAT must be CSV or PARQUET")
+
+        step = _TIMEFRAME_SECONDS[timeframe]
+        previous = None
+        first_time = None
+        last_time = None
+        count = 0
+        duplicate_count = 0
+        gaps = []
+        temp_partitions = []
+
+        with tempfile.TemporaryDirectory(prefix="delta-replay-dataset-") as temp_dir:
+            current = []
+            current_month = None
+
+            def finalize_partition():
+                nonlocal current, current_month
+                if not current:
+                    return
+                extension = "parquet" if format_name == "PARQUET" else "csv"
+                raw = self._parquet_bytes(current) if format_name == "PARQUET" else self._csv_bytes(current)
+                if len(raw) > MAX_FILE_BYTES:
+                    raise ValueError("dataset partition exceeds GitHub size safety limit")
+                index = len(temp_partitions) + 1
+                temp_path = Path(temp_dir) / f"partition-{index:06d}.{extension}"
+                temp_path.write_bytes(raw)
+                temp_partitions.append({
+                    "month": current_month,
+                    "from": current[0]["time"],
+                    "to": current[-1]["time"],
+                    "count": len(current),
+                    "byteLength": len(raw),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "tempPath": temp_path,
+                })
+                current = []
+                current_month = None
+
+            for chunk in chunks:
+                normalized_chunk = self._normalize_candles(chunk)
+                for candle in normalized_chunk:
+                    if previous is not None:
+                        delta = candle["time"] - previous["time"]
+                        if delta <= 0:
+                            if delta == 0:
+                                duplicate_count += 1
+                            raise ValueError("dataset contains duplicate or unordered candles")
+                        if delta != step:
+                            gaps.append({
+                                "from": previous["time"],
+                                "to": candle["time"],
+                                "delta": delta,
+                            })
+                            if len(gaps) >= 100:
+                                raise ValueError("dataset contains gaps; refusing to publish")
+                    if first_time is None:
+                        first_time = candle["time"]
+                    last_time = candle["time"]
+                    count += 1
+                    month = datetime.fromtimestamp(candle["time"], tz=timezone.utc).strftime("%Y-%m")
+                    if current and (month != current_month or len(current) >= MAX_PARTITION_CANDLES):
+                        finalize_partition()
+                    if current_month is None:
+                        current_month = month
+                    current.append(candle)
+                    previous = candle
+
+            finalize_partition()
+
+            if not count:
+                raise ValueError("dataset must contain at least one candle")
+            if gaps:
+                raise ValueError("dataset integrity report contains gaps or duplicates")
+
+            def partition_candles():
+                for partition in temp_partitions:
+                    raw = partition["tempPath"].read_bytes()
+                    if format_name == "PARQUET":
+                        parsed = self._parse_parquet(raw)
+                    else:
+                        parsed = self._parse_csv(raw)
+                    yield from parsed
+
+            content_id = dataset_id_iter(partition_candles())
+            existing = next(
+                (item for item in self._read_manifest(active_token)["datasets"] if item.get("contentId") == content_id),
+                None,
+            )
+            if existing:
+                return existing
+
+            start = int(from_ms if from_ms is not None else first_time)
+            end = int(to_ms if to_ms is not None else last_time)
+            now = int(time.time() * 1000)
+            quality = {
+                "status": "validated",
+                "rowCount": count,
+                "invalidCount": 0,
+                "duplicateCount": duplicate_count,
+                "gapCount": 0,
+                "gaps": [],
+                "firstTime": first_time,
+                "lastTime": last_time,
+                "expectedIntervalSec": step,
+            }
+            record = {
+                "id": f"{symbol}-{timeframe}-{content_id[:16]}",
+                "contentId": content_id,
+                "schemaVersion": 2,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "timeframeSec": step,
+                "from": start,
+                "to": end,
+                "count": count,
+                "format": format_name,
+                "source": "binance",
+                "status": "validated",
+                "qualityReport": quality,
+                "validationVersion": 1,
+                "version": 1,
+                "createdAt": now,
+                "updatedAt": now,
+                "partitions": [],
+                **(metadata or {}),
+            }
+
+            entries = []
+            extension = "parquet" if format_name == "PARQUET" else "csv"
+            for number, partition in enumerate(temp_partitions, start=1):
+                partition_key = f"{partition['month']}-{number:04d}"
+                path = f"datasets/{symbol}/{timeframe}/{content_id[:16]}/{partition_key}.{extension}"
+                record["partitions"].append({
+                    "id": f"{record['id']}-{partition_key}",
+                    "path": path,
+                    "from": partition["from"],
+                    "to": partition["to"],
+                    "count": partition["count"],
+                    "byteLength": partition["byteLength"],
+                    "sha256": partition["sha256"],
+                })
+                entries.append((path, partition["tempPath"]))
+
+            with self._lock:
+                latest = self._read_manifest(active_token)
+                existing = next(
+                    (item for item in latest["datasets"] if item.get("contentId") == content_id),
+                    None,
+                )
+                if existing:
+                    return existing
+                latest["schemaVersion"] = 2
+                latest["datasets"].append(record)
+                latest["datasets"].sort(key=lambda item: item.get("updatedAt", 0), reverse=True)
+                manifest_raw = (json.dumps(latest, indent=2, sort_keys=True) + "\n").encode("utf-8")
+                self._atomic_commit_files(
+                    entries + [(MANIFEST_PATH, manifest_raw)],
+                    f"data: publish dataset {record['id']}",
+                    active_token,
+                )
+                self._invalidate_cache()
+            return record
 
     def publish(self, *, symbol, timeframe, from_ms, to_ms, candles, token=None, metadata=None):
         active_token = (token or self.token).strip()
@@ -370,6 +588,47 @@ class GitHubDatasetRepository:
             self._atomic_commit(entries + [(MANIFEST_PATH, manifest_raw)], f"data: publish dataset {record['id']}", active_token)
             self._invalidate_cache()
         return record
+
+    def _atomic_commit_files(self, entries, message, token):
+        for attempt in range(3):
+            ref = self._request("GET", f"git/ref/heads/{self.branch}", token=token)
+            if ref is None:
+                raise RuntimeError(f"GitHub branch not found: {self.branch}")
+            parent_sha = ref["object"]["sha"]
+            parent = self._request("GET", f"git/commits/{parent_sha}", token=token).json()
+            base_tree = parent["tree"]["sha"]
+            tree_entries = []
+            for path, source in entries:
+                if isinstance(source, Path):
+                    raw = source.read_bytes()
+                else:
+                    raw = source
+                blob = self._request(
+                    "POST",
+                    "git/blobs",
+                    token=token,
+                    json={"content": base64.b64encode(raw).decode("ascii"), "encoding": "base64"},
+                ).json()
+                tree_entries.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+            tree = self._request("POST", "git/trees", token=token, json={"base_tree": base_tree, "tree": tree_entries}).json()
+            commit = self._request(
+                "POST",
+                "git/commits",
+                token=token,
+                json={"message": message, "tree": tree["sha"], "parents": [parent_sha]},
+            ).json()
+            try:
+                self._request(
+                    "PATCH",
+                    f"git/refs/heads/{self.branch}",
+                    token=token,
+                    json={"sha": commit["sha"], "force": False},
+                )
+                return commit["sha"]
+            except RuntimeError:
+                if attempt == 2:
+                    raise
+        raise RuntimeError("GitHub atomic dataset commit failed")
 
     def _atomic_commit(self, entries, message, token):
         for attempt in range(3):

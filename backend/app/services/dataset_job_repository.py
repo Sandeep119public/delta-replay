@@ -36,6 +36,9 @@ class DatasetJobRepository:
         result["total"] = int(result["total"])
         result["pct"] = float(result["pct"])
         result["dataset"] = result.get("dataset")
+        result["workerId"] = result.pop("worker_id", None)
+        lease_until = result.pop("lease_until", None)
+        result["leaseUntil"] = lease_until.isoformat() if lease_until else None
         return result
 
     def create(self, *, symbol, timeframe, from_ms, to_ms, total):
@@ -66,9 +69,40 @@ class DatasetJobRepository:
             ).fetchone()
         return self._row(row)
 
-    def update(self, job_id, **changes):
+    def claim(self, job_id, worker_id, lease_seconds=300):
+        if not self.durable:
+            return True
+        lease_seconds = max(30, int(lease_seconds))
+        with self._connect() as connection:
+            row = connection.execute(
+                """UPDATE dataset_download_jobs
+                   SET worker_id=%s,
+                       lease_until=NOW() + (%s * INTERVAL '1 second'),
+                       status=CASE WHEN status='starting' THEN 'running' ELSE status END,
+                       updated_at=NOW(),
+                       heartbeat_at=NOW()
+                   WHERE job_id=%s
+                     AND status IN ('starting','running','publishing')
+                     AND (worker_id IS NULL OR lease_until IS NULL OR lease_until < NOW() OR worker_id=%s)
+                   RETURNING job_id""",
+                (worker_id, lease_seconds, UUID(str(job_id)), worker_id),
+            ).fetchone()
+        return row is not None
+
+    def release(self, job_id, worker_id):
         if not self.durable:
             return
+        with self._connect() as connection:
+            connection.execute(
+                """UPDATE dataset_download_jobs
+                   SET worker_id=NULL, lease_until=NULL, heartbeat_at=NOW(), updated_at=NOW()
+                   WHERE job_id=%s AND worker_id=%s""",
+                (UUID(str(job_id)), worker_id),
+            )
+
+    def update(self, job_id, worker_id=None, **changes):
+        if not self.durable:
+            return True
         allowed = {
             "cursor": "cursor_ms", "status": "status", "loaded": "loaded",
             "total": "total", "pct": "pct", "error": "error", "dataset": "dataset",
@@ -82,13 +116,20 @@ class DatasetJobRepository:
             values.append(json.dumps(value, separators=(",", ":")) if key == "dataset" else value)
         if not fields:
             return
-        fields.extend(["updated_at = NOW()", "heartbeat_at = NOW()"])
-        values.append(UUID(str(job_id)))
+        if worker_id is not None:
+            fields.extend(["updated_at = NOW()", "heartbeat_at = NOW()", "lease_until = NOW() + INTERVAL '300 seconds'"])
+            values.extend([UUID(str(job_id)), worker_id])
+            where = "job_id = %s AND worker_id = %s AND status NOT IN ('cancelled','complete','failed')"
+        else:
+            fields.extend(["updated_at = NOW()", "heartbeat_at = NOW()"])
+            values.append(UUID(str(job_id)))
+            where = "job_id = %s"
         with self._connect() as connection:
-            connection.execute(
-                f"UPDATE dataset_download_jobs SET {', '.join(fields)} WHERE job_id = %s",
+            row = connection.execute(
+                f"UPDATE dataset_download_jobs SET {', '.join(fields)} WHERE {where} RETURNING job_id",
                 values,
-            )
+            ).fetchone()
+        return row is not None
 
     def append_chunk(self, job_id, sequence, from_ms, to_ms, candles):
         if not self.durable:
@@ -116,6 +157,49 @@ class DatasetJobRepository:
             ).fetchall()
         return [row["candles"] for row in rows]
 
+    def chunk_count(self, job_id):
+        if not self.durable:
+            return 0
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM dataset_download_chunks WHERE job_id=%s",
+                (UUID(str(job_id)),),
+            ).fetchone()
+        return int(row["count"])
+
+    def chunk_state(self, job_id):
+        if not self.durable:
+            return {"count": 0, "candleCount": 0, "lastToMs": None}
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT
+                       COUNT(*) AS count,
+                       COALESCE(SUM(jsonb_array_length(candles)), 0) AS candle_count,
+                       MAX(to_ms) AS last_to_ms
+                   FROM dataset_download_chunks
+                   WHERE job_id=%s""",
+                (UUID(str(job_id)),),
+            ).fetchone()
+        return {
+            "count": int(row["count"]),
+            "candleCount": int(row["candle_count"]),
+            "lastToMs": int(row["last_to_ms"]) if row["last_to_ms"] is not None else None,
+        }
+
+    def iter_chunks(self, job_id):
+        if not self.durable:
+            return
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT sequence, candles
+                   FROM dataset_download_chunks
+                   WHERE job_id=%s
+                   ORDER BY sequence""",
+                (UUID(str(job_id)),),
+            )
+            for row in rows:
+                yield row["candles"]
+
     def active(self, symbol, timeframe, from_ms, to_ms):
         if not self.durable:
             return None
@@ -136,6 +220,7 @@ class DatasetJobRepository:
             rows = connection.execute(
                 """SELECT * FROM dataset_download_jobs
                    WHERE status IN ('starting','running','publishing')
+                     AND (worker_id IS NULL OR lease_until IS NULL OR lease_until < NOW())
                    ORDER BY created_at""",
             ).fetchall()
         return [self._row(row) for row in rows]

@@ -143,15 +143,34 @@ export function createDataWorkspacePort({ candleStore, candleCache, appState, da
     },
 
     validateCurrent() {
-      return enqueue(() => {
-        const candles = candleStore.getAll();
-        const metadata = candleStore.getMetadata() || {};
+      return enqueue(async () => {
+        let candles = candleStore.getAll();
+        let metadata = candleStore.getMetadata() || {};
+
+        if (appState.mode === 'replay' && appState.replayDatasetId) {
+          if (appState.replayDatasetSource === 'local') {
+            const record = await localDatasetRepository.get(appState.replayDatasetId);
+            if (!record?.metadata || !Array.isArray(record.candles)) {
+              return { status: 'empty', message: 'The active browser-local replay dataset is no longer available.' };
+            }
+            candles = record.candles;
+            metadata = record.metadata;
+          } else if (typeof datasetRepository.getCandles === 'function') {
+            const record = await datasetRepository.getCandles(appState.replayDatasetId);
+            if (!record?.metadata || !Array.isArray(record.candles)) {
+              return { status: 'empty', message: 'The active GitHub replay dataset is no longer available.' };
+            }
+            candles = record.candles;
+            metadata = record.metadata;
+          }
+        }
+
         if (!candles.length) return { status: 'empty', message: 'No active replay dataset is loaded.' };
 
         const result = CandleIntegrity.process(candles, {
           timeframeSec: metadata.timeframeSec,
-          from: metadata.effectiveFrom,
-          to: metadata.effectiveTo,
+          from: metadata.effectiveFrom ?? metadata.from ?? candles[0].time,
+          to: metadata.effectiveTo ?? metadata.to ?? candles[candles.length - 1].time,
           policy: 'REPAIR',
           timestampUnit: 'seconds',
         });

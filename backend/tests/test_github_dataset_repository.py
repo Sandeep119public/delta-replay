@@ -46,3 +46,38 @@ def test_partitions_keep_each_file_small(monkeypatch):
         candles.append({"time": index + 1, "open": 10, "high": 11, "low": 9, "close": 10, "volume": 1})
     partitions = repo._partition(candles)
     assert [len(chunk) for _, chunk, _ in partitions] == [80_000, 1]
+
+
+def test_streaming_publish_builds_partition_manifest_without_full_dataset_entry(monkeypatch):
+    repo = GitHubDatasetRepository(repo="owner/repo", branch="datasets", token="secret")
+    captured = {}
+
+    monkeypatch.setattr(repo, "_read_manifest", lambda token=None: {"schemaVersion": 2, "datasets": []})
+
+    def fake_commit(entries, message, token):
+        captured["entries"] = list(entries)
+        captured["message"] = message
+        captured["token"] = token
+
+    monkeypatch.setattr(repo, "_atomic_commit_files", fake_commit)
+    chunks = [
+        [
+            {"time": 60, "open": 10, "high": 11, "low": 9, "close": 10.5, "volume": 2},
+        ],
+        [
+            {"time": 120, "open": 10.5, "high": 12, "low": 10, "close": 11, "volume": 3},
+        ],
+    ]
+
+    result = repo.publish_chunks(
+        symbol="BTCUSDT",
+        timeframe="1m",
+        from_ms=60,
+        to_ms=120,
+        chunks=iter(chunks),
+    )
+
+    assert result["count"] == 2
+    assert len(result["partitions"]) == 1
+    assert result["contentId"]
+    assert [path for path, _ in captured["entries"]][-1] == "datasets/manifest.json"
