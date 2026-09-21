@@ -7,7 +7,7 @@ Delta Replay is a browser trading workstation backed by a FastAPI paper-trading 
 
 ## GitHub-backed replay datasets
 
-GitHub is the durable source of truth for replay datasets. Browser IndexedDB is only a download accelerator and is never authoritative for replay.
+GitHub is the durable source of truth for replay datasets. Dataset commits are isolated to the dedicated `datasets` branch so publishing data does not mutate the application deployment branch. Browser IndexedDB is not authoritative for replay.
 
 Configure the dataset repository with:
 
@@ -20,7 +20,7 @@ Datasets are immutable and content-addressed:
       manifest.json
       SOLUSDT/
         15m/
-          <content-id>.csv
+          <content-id>/\n            2026-01.csv\n            2026-02.csv
 
 The manifest records symbol, timeframe, range, row count, format, source, byte size, SHA-256 and content identity.
 
