@@ -27,8 +27,7 @@ def list_datasets():
         raise HTTPException(502, f"Unable to read GitHub datasets: {exc}") from exc
 
 
-@router.get("/{dataset_id}")
-def get_dataset(dataset_id: str):
+def _load(dataset_id):
     try:
         result = repository.get(dataset_id)
     except Exception as exc:
@@ -36,6 +35,24 @@ def get_dataset(dataset_id: str):
     if result is None:
         raise HTTPException(404, "Dataset not found")
     return result
+
+
+@router.get("/{dataset_id}")
+def get_dataset(dataset_id: str):
+    result = _load(dataset_id)
+    return {"metadata": result["metadata"]}
+
+
+@router.get("/{dataset_id}/candles")
+def get_dataset_candles(dataset_id: str):
+    result = _load(dataset_id)
+    return {"metadata": result["metadata"], "candles": result["candles"]}
+
+
+@router.get("/{dataset_id}/csv")
+def get_dataset_csv(dataset_id: str):
+    result = _load(dataset_id)
+    return {"metadata": result["metadata"], "csv": result["csv"]}
 
 
 @router.post("/publish")
