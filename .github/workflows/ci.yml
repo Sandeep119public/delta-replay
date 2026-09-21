@@ -51,6 +51,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify production API configuration
+        env:
+          VITE_API_BASE_URL: ${{ vars.DELTA_REPLAY_API_BASE_URL }}
+        run: test -n "$VITE_API_BASE_URL"
+
       - name: Check architecture graph
         run: npm run test:architecture:graph
 
@@ -64,6 +69,8 @@ jobs:
         run: npm test
 
       - name: Build frontend
+        env:
+          VITE_API_BASE_URL: ${{ vars.DELTA_REPLAY_API_BASE_URL }}
         run: npm run build
 
       - name: Upload validated Pages artifact
