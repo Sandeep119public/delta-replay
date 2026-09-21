@@ -1,7 +1,7 @@
 import { createCoreServices } from './createCoreServices.js';
 import { createDataFeature } from './createDataFeature.js';
 import { createApplicationRuntime } from './createApplicationRuntime.js';
-import { renderPaperLayout } from '../ui/paper/PaperLayout.js';
+import { renderTerminalLayout } from '../ui/TerminalLayout.js';
 import { Router } from '../router/Router.js';
 
 export { requireElement };
