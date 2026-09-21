@@ -17,6 +17,7 @@ export class AppState extends EventEmitter {
     this.timeframe = '1m';
     this.mode = 'live';
     this.replayDatasetId = null;
+    this.replayDatasetSource = null;
     this._store = candleStore;
     this.loading = false;
     this.loadingState = LoadingState.IDLE;
@@ -84,9 +85,16 @@ export class AppState extends EventEmitter {
     this.emit('change', this.snapshot());
   }
 
-  setReplayDatasetId(id) {
+  setReplayDatasetId(id, source = this.replayDatasetSource) {
     this.replayDatasetId = id ? String(id) : null;
-    this.emit('replayDatasetChanged', this.replayDatasetId);
+    this.replayDatasetSource = this.replayDatasetId ? (source || 'github') : null;
+    this.emit('replayDatasetChanged', { id: this.replayDatasetId, source: this.replayDatasetSource });
+    this.emit('change', this.snapshot());
+  }
+
+  setReplayDatasetSource(source) {
+    if (source !== null && source !== 'github' && source !== 'local') throw new TypeError('Replay dataset source must be github, local, or null');
+    this.replayDatasetSource = source;
     this.emit('change', this.snapshot());
   }
 
@@ -133,6 +141,7 @@ export class AppState extends EventEmitter {
       timeframe: this.timeframe,
       mode: this.mode,
       replayDatasetId: this.replayDatasetId,
+      replayDatasetSource: this.replayDatasetSource,
       total: this.totalCandles,
       loading: this.loading,
       loadingState: this.loadingState,
