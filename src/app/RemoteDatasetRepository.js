@@ -122,6 +122,10 @@ export class RemoteDatasetRepository {
     return state.dataset;
   }
 
+  async cancelDownload(jobId) {
+    return this._authorizedRequest(`/downloads/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', body: '{}' });
+  }
+
   async save({ symbol, timeframe, from, to, candles, metadata = {} }) {
     return this._authorizedRequest('/publish', {
       method: 'POST',
