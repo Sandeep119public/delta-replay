@@ -21,10 +21,12 @@ class FakeElement {
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   addEventListener(type, handler) { this.listeners.set(type, handler); }
   removeEventListener(type, handler) { if (this.listeners.get(type) === handler) this.listeners.delete(type); }
+  appendChild(child) { this.children.push(child); }
   replaceChildren(...children) { this.children = children.flat(); }
 }
 
 function deps() {
+  globalThis.document = { createElement: () => new FakeElement() };
   const page = new FakeElement();
   const datasetSelect = new FakeElement();
   const liveButton = new FakeElement();
