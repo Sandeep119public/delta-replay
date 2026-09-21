@@ -33,6 +33,18 @@ Prefer this flow:
 
 Avoid making UI components reach directly into backend services or low-level engines when an existing port/adapter exists.
 
+## Market data boundary
+
+The application has three deliberately separate market-data paths:
+
+1. **Live mode** uses `BinanceLiveMarketClient` + `LiveMarketSession` to read current Binance Futures market data. This is the default screen.
+2. **Acquisition** uses `DatasetService` plus `BinanceDatasetService` to download historical Binance Futures candles and write immutable local Parquet files under `DATASET_DIR`.
+3. **Replay** uses `StoredDatasetProvider` to read only datasets already stored by acquisition. It does not call Binance.
+
+This is an invariant: changing replay position, seeking, stepping, or replaying must never trigger a historical Binance request.
+
+The local Parquet dataset is the source-of-truth historical artifact. IndexedDB may accelerate repeated browser reads, but deleting browser cache data must not delete the Parquet dataset.
+
 ## DOM contracts
 
 DOM IDs and ARIA relationships are public contracts between markup and controllers.
@@ -113,6 +125,9 @@ The runtime keeps one canonical owner for each mutable concern:
 - SessionMutationPipeline has two explicit concurrency modes: serial for state mutations and latest for independently refreshable reads/market-candle updates. Generation invalidation remains the lifecycle boundary.
 - Replay symbol queries are named by intent: latest_replay_symbol means the most recent replay step, while latest_market_context_symbol means the most recent market context event. They are intentionally distinct because supplemental symbol candles can change market context without changing replay identity.
 - Session persistence is exposed through ReplaySession: serialize_replay_session and restore_replay_session. Component-level compatibility wrappers are not part of the public persistence API.
+- LiveMarketSession owns the live Binance lifecycle; it must never become a replay data provider.
+- BinanceDatasetService owns historical acquisition and Parquet persistence; replay code must not import it.
+- StoredDatasetProvider owns the replay-facing historical read boundary; it must not fall back to Binance.
 - UI styles are organized into semantic layers: replay.css, trading.css, mobile.css, system.css, and responsive.css. Historical phase filenames are implementation history, not new extension points.
 
 These rules are architectural constraints, not compatibility shims. New callers should use the canonical APIs rather than adding aliases.
