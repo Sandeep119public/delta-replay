@@ -69,7 +69,13 @@ class BinanceDatasetDownloadService:
     def get(self, job_id):
         with self._lock:
             job = self._jobs.get(str(job_id))
-            return dict(job) if job else None
+        if job:
+            return dict(job)
+        durable = self.job_repository.get(job_id)
+        if durable:
+            with self._lock: self._jobs[str(job_id)] = durable
+            return dict(durable)
+        return None
 
     def _update(self, job_id, **changes):
         with self._lock:
@@ -100,7 +106,11 @@ class BinanceDatasetDownloadService:
         persisted_chunks = self.job_repository.load_chunks(job_id)
         candles = [candle for chunk in persisted_chunks for candle in chunk]
         cursor = int(job.get('cursor', job['from']))
+        if candles:
+            cursor = max(cursor, candles[-1]['time'] * 1000 + interval_ms if 'interval_ms' in locals() else cursor)
         interval_ms = _INTERVAL_MS[job["timeframe"]]
+        if candles:
+            cursor = max(cursor, candles[-1]['time'] * 1000 + interval_ms)
         try:
             self._update(job_id, status="running")
             with httpx.Client(timeout=60.0, follow_redirects=True) as client:
