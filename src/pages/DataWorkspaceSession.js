@@ -65,6 +65,11 @@ export class DataWorkspaceSession {
     });
   }
 
+  setError(message) {
+    this._validation = { status: 'error', message: errorMessage({ message }) };
+    this._notify();
+  }
+
   _notify() {
     for (const listener of [...this._listeners]) listener(this.snapshot());
   }
