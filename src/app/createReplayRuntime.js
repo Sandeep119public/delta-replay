@@ -47,6 +47,7 @@ export function createReplayRuntime({
     headerBtn: ui.getReplayPorts().headerStartReplayBtn,
     tradingCapabilities: replayTradingCapabilities,
     onBeforeLoad: onBeforeReplayLoad,
+    isReplayMode,
     onLoad: ({ autoStart }) => replayRuntime.capabilities.load({ autoStart }),
     onPreview: (index) => replayRuntime.capabilities.preview(index),
     onError: (msg) => coordinator.showTradingError(msg),
