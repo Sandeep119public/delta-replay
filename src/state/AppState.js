@@ -88,13 +88,17 @@ export class AppState extends EventEmitter {
   setReplayDatasetId(id, source = this.replayDatasetSource) {
     this.replayDatasetId = id ? String(id) : null;
     this.replayDatasetSource = this.replayDatasetId ? (source || 'github') : null;
-    this.emit('replayDatasetChanged', { id: this.replayDatasetId, source: this.replayDatasetSource });
+    this.emit('replayDatasetChanged', this.replayDatasetId);
+    this.emit('replayDatasetSourceChanged', this.replayDatasetSource);
     this.emit('change', this.snapshot());
   }
 
   setReplayDatasetSource(source) {
-    if (source !== null && source !== 'github' && source !== 'local') throw new TypeError('Replay dataset source must be github, local, or null');
+    if (source !== null && source !== 'github' && source !== 'local') {
+      throw new TypeError('Replay dataset source must be github, local, or null');
+    }
     this.replayDatasetSource = source;
+    this.emit('replayDatasetSourceChanged', source);
     this.emit('change', this.snapshot());
   }
 
