@@ -76,7 +76,7 @@ export class DataCenterPage {
     try {
       await this.data.deleteDataset(id);
     } catch (error) {
-      this.session._validation = { status: 'error', message: errorMessage(error) };
+      this.session.setError?.(errorMessage(error));
     }
     await this.render();
   }
@@ -105,7 +105,7 @@ export class DataCenterPage {
     const sessionState = this.session.snapshot();
     const snapshot = this.data.snapshot();
     const storageEstimate = await this.data.storageEstimate();
-    const savedDatasets = await this.data.listDatasets?.() || [];
+    const savedDatasets = this.pageName === 'datasets' ? await this.data.listDatasets() : [];
     if (!this._initialized || token !== this._renderToken) return;
     renderDataCenterPage({
       element: this._element,
