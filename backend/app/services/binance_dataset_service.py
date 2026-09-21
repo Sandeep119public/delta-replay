@@ -195,30 +195,41 @@ class BinanceDatasetService:
         candidates = [
             item
             for item in self.list_datasets(symbol=symbol, timeframe=timeframe)
-            if int(item["end"]) >= start and int(item["start"]) <= end
+            if int(item["start"]) <= start and int(item["end"]) >= end
         ]
-        by_time: dict[int, dict] = {}
-        for manifest in candidates:
-            path = self.root / manifest["path"]
-            table = pq.read_table(
-                path,
-                filters=[
-                    ("time", ">=", int(start)),
-                    ("time", "<=", int(end)),
-                ],
+        if not candidates:
+            raise ValueError(
+                f"No single stored Binance dataset covers {symbol.upper()} {timeframe} "
+                f"between {start} and {end}"
             )
-            data = table.to_pylist()
-            for row in data:
-                candle = {
-                    "time": int(row["time"]),
-                    "open": float(row["open"]),
-                    "high": float(row["high"]),
-                    "low": float(row["low"]),
-                    "close": float(row["close"]),
-                    "volume": float(row["volume"]),
-                }
-                by_time[candle["time"]] = candle
 
-        candles = [by_time[key] for key in sorted(by_time)]
-        self._validate_candles(candles) if candles else None
+        # A replay load is tied to one immutable dataset. When multiple files
+        # overlap, choose deterministically rather than silently merging them.
+        candidates.sort(
+            key=lambda item: (
+                -(int(item["end"]) - int(item["start"])),
+                str(item["datasetId"]),
+            )
+        )
+        manifest = candidates[0]
+        path = self.root / manifest["path"]
+        table = pq.read_table(
+            path,
+            filters=[
+                ("time", ">=", int(start)),
+                ("time", "<=", int(end)),
+            ],
+        )
+        candles = [
+            {
+                "time": int(row["time"]),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row["volume"]),
+            }
+            for row in table.to_pylist()
+        ]
+        self._validate_candles(candles)
         return candles
