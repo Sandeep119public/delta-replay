@@ -38,7 +38,7 @@ export function datasets(snapshot, savedDatasets = []) {
         ${card('Published datasets', savedDatasets.length.toLocaleString())}
         ${card('Active replay', snapshot.replayDatasetId ? 'Selected' : 'None')}
         ${card('Authority', 'GitHub')}
-        ${card('Format', 'CSV')}
+        ${card('Formats', 'CSV / Parquet')}
       </div>
     </section>
     <section class="data-panel">
@@ -73,5 +73,5 @@ export function jobs(jobsState) {
 }
 
 export function system(snapshot) {
-  return `<div class="data-page">${header('SYSTEM','System','Runtime capabilities and data-service health.')}<div class="data-card-grid">${card('Replay data service','Ready')}${card('IndexedDB',snapshot.cacheEnabled?'Available':'Unavailable')}${card('Candle store',`${Number(snapshot.count||0).toLocaleString()} rows`)}${card('Session','Browser local')}</div><section class="data-panel"><h2>Architecture</h2><p>Page actions use the application data port. Binance historical fetching belongs to HistoricalDataManager; saved replay datasets belong to RemoteDatasetRepository and GitHub; replay never fetches historical market data.</p></section></div>`;
+  return `<div class="data-page">${header('SYSTEM','System','Runtime capabilities and data-service health.')}<div class="data-card-grid">${card('Replay data service','Ready')}${card('IndexedDB',snapshot.cacheEnabled?'Available':'Unavailable')}${card('Candle store',`${Number(snapshot.count||0).toLocaleString()} rows`)}${card('Session','Browser local')}</div><section class="data-panel"><h2>Architecture</h2><p>Page actions use the application data port. Binance historical fetching belongs to the server dataset job; saved replay datasets belong to RemoteDatasetRepository and GitHub; replay never fetches Binance historical data.</p></section></div>`;
 }
