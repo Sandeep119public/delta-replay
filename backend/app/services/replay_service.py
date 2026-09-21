@@ -4,7 +4,6 @@ from math import isfinite
 from ..models import Candle
 from .dataset_identity import dataset_id
 
-
 MAX_VISIBLE_CANDLES = 2000
 
 
@@ -49,6 +48,20 @@ class ReplayService:
         self.index = -1
         self.start_index = -1
         self.status = "ready" if self.candles else "idle"
+        return self.state()
+
+    def append(self, candles):
+        if self.index >= 0 or self.start_index >= 0 or self.status not in {"idle", "ready"}:
+            raise ValueError("cannot append replay data after replay has started")
+        validated = [Candle.model_validate(candle) for candle in candles]
+        if not validated:
+            raise ValueError("replay chunk must contain at least one candle")
+        self._validate_chronology(validated)
+        if self.candles and validated[0].time <= self.candles[-1]["time"]:
+            raise ValueError("replay chunk must start after the existing dataset")
+        self.candles.extend(candle.model_dump() for candle in validated)
+        self.dataset_id = self._dataset_id(self.candles)
+        self.status = "ready"
         return self.state()
 
     def start(self, index=0):
@@ -104,7 +117,6 @@ class ReplayService:
         }
 
     def export_state(self):
-        """Return all replay state required to reconstruct this service."""
         return {
             "candles": deepcopy(self.candles),
             "datasetId": self.dataset_id or self._dataset_id(self.candles),
