@@ -345,7 +345,8 @@ class GitHubDatasetRepository:
         }
         entries = []
         for partition_key, chunk, raw in self._partition(normalized, format_name):
-            path = f"datasets/{symbol}/{timeframe}/{content_id[:16]}/{partition_key}.{"parquet" if format_name == "PARQUET" else "csv"}"
+            extension = "parquet" if format_name == "PARQUET" else "csv"
+            path = f"datasets/{symbol}/{timeframe}/{content_id[:16]}/{partition_key}.{extension}"
             record["partitions"].append({
                 "id": f"{record['id']}-{partition_key}",
                 "path": path,
