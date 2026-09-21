@@ -193,6 +193,43 @@ class GitHubDatasetRepository:
             raise RuntimeError("dataset content identity does not match manifest")
         return {"metadata": dict(metadata), "candles": candles, "csv": self._csv_bytes(candles).decode("utf-8")}
 
+    def get_partitions(self, dataset_id_value, token=None):
+        metadata = next((item for item in self.list(token) if item.get("id") == dataset_id_value), None)
+        if metadata is None:
+            return None
+        return {"metadata": dict(metadata), "partitions": list(metadata.get("partitions", []))}
+
+    def get_candle_range(self, dataset_id_value, *, from_time=None, to_time=None, offset=0, limit=5000, token=None):
+        if limit < 1 or limit > 20_000:
+            raise ValueError("limit must be between 1 and 20000")
+        metadata = next((item for item in self.list(token) if item.get("id") == dataset_id_value), None)
+        if metadata is None:
+            return None
+        result = []
+        skipped = 0
+        for partition in metadata.get("partitions", []):
+            if from_time is not None and int(partition["to"]) < int(from_time):
+                continue
+            if to_time is not None and int(partition["from"]) > int(to_time):
+                continue
+            raw = self._get_raw(partition["path"], token)
+            if raw is None:
+                raise RuntimeError("manifest references a missing dataset partition")
+            if hashlib.sha256(raw).hexdigest() != partition["sha256"]:
+                raise RuntimeError("dataset partition checksum does not match manifest")
+            for candle in self._parse_csv(raw):
+                if from_time is not None and candle["time"] < int(from_time):
+                    continue
+                if to_time is not None and candle["time"] > int(to_time):
+                    continue
+                if skipped < offset:
+                    skipped += 1
+                    continue
+                result.append(candle)
+                if len(result) >= limit:
+                    return {"metadata": dict(metadata), "candles": result, "nextOffset": offset + skipped + len(result)}
+        return {"metadata": dict(metadata), "candles": result, "nextOffset": None}
+
     def _partition(self, candles):
         groups = []
         current_key = None
