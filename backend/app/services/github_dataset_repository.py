@@ -252,6 +252,29 @@ class GitHubDatasetRepository:
             parts.append((f"{month}-{number:04d}", chunk, raw))
         return parts
 
+    @staticmethod
+    def _quality_report(candles, timeframe):
+        step = _TIMEFRAME_SECONDS[timeframe]
+        gaps = []
+        duplicates = 0
+        for previous, current in zip(candles, candles[1:]):
+            delta = current["time"] - previous["time"]
+            if delta == 0:
+                duplicates += 1
+            elif delta != step:
+                gaps.append({"from": previous["time"], "to": current["time"], "delta": delta})
+        return {
+            "status": "validated" if not gaps and duplicates == 0 else "issues",
+            "rowCount": len(candles),
+            "invalidCount": 0,
+            "duplicateCount": duplicates,
+            "gapCount": len(gaps),
+            "gaps": gaps[:100],
+            "firstTime": candles[0]["time"],
+            "lastTime": candles[-1]["time"],
+            "expectedIntervalSec": step,
+        }
+
     def publish(self, *, symbol, timeframe, from_ms, to_ms, candles, token=None, metadata=None):
         active_token = (token or self.token).strip()
         if not active_token:
@@ -271,6 +294,9 @@ class GitHubDatasetRepository:
         start = int(from_ms if from_ms is not None else normalized[0]["time"])
         end = int(to_ms if to_ms is not None else normalized[-1]["time"])
         now = int(time.time() * 1000)
+        quality = self._quality_report(normalized, timeframe)
+        if quality["status"] != "validated":
+            raise ValueError("dataset integrity report contains gaps or duplicates")
         record = {
             "id": f"{symbol}-{timeframe}-{content_id[:16]}",
             "contentId": content_id,
@@ -284,6 +310,8 @@ class GitHubDatasetRepository:
             "format": "CSV",
             "source": "binance",
             "status": "validated",
+            "qualityReport": quality,
+            "validationVersion": 1,
             "version": 1,
             "createdAt": now,
             "updatedAt": now,
