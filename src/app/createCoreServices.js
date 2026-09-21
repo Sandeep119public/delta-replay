@@ -7,7 +7,7 @@ import { RemoteReplayEngine } from './RemoteReplayEngine.js';
 import { RemoteTradingEngine } from './RemoteTradingEngine.js';
 import { BackendService } from './BackendService.js';
 import { SessionMutationPipeline } from './SessionMutationPipeline.js';
-import { StoredDatasetRepository } from './StoredDatasetRepository.js';
+import { RemoteDatasetRepository } from './RemoteDatasetRepository.js';
 import { getSessionId } from './sessionId.js';
 
 export function createCoreServices() {
@@ -25,7 +25,7 @@ export function createCoreServices() {
     strictMode: true,
   });
   const mutationPipeline = new SessionMutationPipeline();
-  const datasetRepository = new StoredDatasetRepository();
+  const datasetRepository = new RemoteDatasetRepository();
   const replayApi = new BackendService('replay', sessionId);
   const tradingApi = new BackendService('trading', sessionId);
   const backtestApi = new BackendService('backtest', sessionId);
