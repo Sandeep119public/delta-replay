@@ -55,7 +55,7 @@ export function datasets(snapshot, savedDatasets = [], localDatasets = []) {
     card('Local datasets', localDatasets.length.toLocaleString()) +
     card('Active replay', snapshot.replayDatasetId ? escapeText(snapshot.replayDatasetSource || 'Selected') : 'None') +
     card('Local storage', 'IndexedDB') +
-    '</div><div class="data-action-grid"><button type="button" class="data-primary" data-data-action="open-local-file">Open local CSV</button><input id="local-dataset-input" type="file" accept=".csv,text/csv" hidden></div>' +
+    '</div><div class="data-action-grid"><button type="button" class="data-primary" data-data-action="open-local-file">Open local CSV</button><input id="local-dataset-input" type="file" accept=".csv,text/csv" multiple hidden></div>' +
     '<p class="data-note">Use <strong>Download CSV</strong> on a GitHub dataset to save the actual file through your current browser. Later, <strong>Open local CSV</strong> imports that file into this browser. Local replay does not fetch historical candles from GitHub.</p></section>' +
     '<section class="data-panel"><h2>GitHub datasets</h2><div class="data-table-wrap"><table><thead><tr><th>Symbol</th><th>TF</th><th>Candles</th><th>Size</th><th>Quality</th><th>Actions</th></tr></thead><tbody>' + remoteRows + '</tbody></table></div></section>' +
     '<section class="data-panel"><h2>Browser-local datasets</h2><div class="data-table-wrap"><table><thead><tr><th>Symbol</th><th>TF</th><th>Candles</th><th>Storage</th><th>Quality</th><th>Actions</th></tr></thead><tbody>' + localRows + '</tbody></table></div></section></div>';
