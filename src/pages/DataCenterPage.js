@@ -35,9 +35,17 @@ export class DataCenterPage {
   _onClick = (event) => {
     const action = event.target.closest?.('[data-data-action]')?.dataset.dataAction;
     if (!action || !this._element?.contains(event.target)) return;
+    const target = event.target.closest?.('[data-data-action]');
+    const datasetId = target?.dataset?.datasetId;
     if (action === 'download' && this.pageName === 'downloads') void this.startDownload();
     else if (action === 'clear-current' && this.pageName === 'datasets') void this.clearCurrent();
     else if (action === 'validate' && this.pageName === 'validation') void this.validate();
+    else if (action === 'delete-dataset' && datasetId) void this.deleteDataset(datasetId);
+    else if (action === 'export-dataset' && datasetId) void this.exportDataset(datasetId);
+    else if (action === 'open-replay' && datasetId) {
+      globalThis.window?.dispatchEvent?.(new CustomEvent('select-replay-dataset', { detail: { datasetId } }));
+      if (globalThis.window?.location) globalThis.window.location.hash = 'replay';
+    }
   };
 
   async startDownload() {
@@ -64,12 +72,40 @@ export class DataCenterPage {
     if (this.pageName === 'validation') await this.session.validate();
   }
 
+  async deleteDataset(id) {
+    try {
+      await this.data.deleteDataset(id);
+    } catch (error) {
+      this.session._validation = { status: 'error', message: errorMessage(error) };
+    }
+    await this.render();
+  }
+
+  async exportDataset(id) {
+    try {
+      const { metadata, csv } = await this.data.getDatasetCsv(id);
+      if (!csv) throw new Error('Saved dataset is empty');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = this._element?.ownerDocument?.createElement('a');
+      if (!anchor) throw new Error('Unable to create export link');
+      anchor.href = url;
+      anchor.download = metadata?.fileName || 'delta-replay-dataset.csv';
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      this.session._validation = { status: 'error', message: errorMessage(error) };
+      await this.render();
+    }
+  }
+
   async render() {
     if (!this._initialized || !this._element) return;
     const token = ++this._renderToken;
     const sessionState = this.session.snapshot();
     const snapshot = this.data.snapshot();
     const storageEstimate = await this.data.storageEstimate();
+    const savedDatasets = await this.data.listDatasets?.() || [];
     if (!this._initialized || token !== this._renderToken) return;
     renderDataCenterPage({
       element: this._element,
@@ -79,6 +115,7 @@ export class DataCenterPage {
       download: sessionState.download,
       jobsState: sessionState.jobs,
       validationState: sessionState.validation,
+      savedDatasets,
     });
   }
 
