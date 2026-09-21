@@ -45,12 +45,12 @@ function parseCsv(text) {
 
 function inferIdentity(fileName) {
   const name = String(fileName || '').replace(/\.csv$/i, '');
-  const match = name.match(/^([A-Z0-9._-]{2,32})-(1m|3m|5m|15m|30m|1h|2h|4h|6h|8h|12h|1d|3d|1w)-([a-f0-9]{16,64})$/i);
-  if (!match) throw new Error('Local dataset filename must be SYMBOL-TIMEFRAME-CONTENTID.csv');
+  const match = name.match(/^([A-Z0-9._-]{2,32})-(1m|3m|5m|15m|30m|1h|2h|4h|6h|8h|12h|1d|3d|1w)(?:-([a-f0-9]{16,64}))?$/i);
+  if (!match) throw new Error('Local dataset filename must be SYMBOL-TIMEFRAME.csv or SYMBOL-TIMEFRAME-CONTENTID.csv');
   return {
     symbol: match[1].toUpperCase(),
     timeframe: match[2],
-    contentIdPrefix: match[3].toLowerCase(),
+    contentIdPrefix: match[3]?.toLowerCase() || '',
   };
 }
 
