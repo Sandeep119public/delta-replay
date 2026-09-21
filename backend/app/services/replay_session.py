@@ -51,6 +51,14 @@ class ReplaySession:
         self.replace_history([])
         return self.replay.state()
 
+    def append_replay_data(self, candles) -> dict:
+        """Append validated replay data before replay or trading has started."""
+        if self.replay.index >= 0 or self.replay.start_index >= 0:
+            raise ValueError("cannot append replay data after replay has started")
+        if self.trading.has_open_position() or self.trading.pending_orders() or self.trading.trades or self.trading.orders or self.trading.funding:
+            raise ValueError("reset the simulation before appending replay data")
+        return self.replay.append(candles)
+
     def start(self, index: int, symbol: str) -> dict:
         """Start the replay and record its first market context."""
         if self.trading.has_open_position() or self.trading.pending_orders() or self.trading.trades or self.trading.orders or self.trading.funding:

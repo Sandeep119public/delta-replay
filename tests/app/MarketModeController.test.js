@@ -34,15 +34,27 @@ function deps() {
   const datasetRefresh = new FakeElement();
   const symbolSelect = new FakeElement();
   const timeframeSelect = new FakeElement();
-  const appState = { mode: 'live', symbol: 'BTCUSDT', timeframe: '1m', replayDatasetId: null, setMode: vi.fn((mode) => { appState.mode = mode; }), setReplayDatasetId: vi.fn((id) => { appState.replayDatasetId = id; }) };
+  const appState = {
+    mode: 'live',
+    symbol: 'BTCUSDT',
+    timeframe: '1m',
+    replayDatasetId: null,
+    replayDatasetSource: null,
+    setMode: vi.fn((mode) => { appState.mode = mode; }),
+    setReplayDatasetId: vi.fn((id, source) => { appState.replayDatasetId = id; appState.replayDatasetSource = source; }),
+  };
   const liveMarket = { start: vi.fn(async () => undefined), stop: vi.fn(), destroy: vi.fn() };
   const datasetRepository = {
     list: vi.fn(async () => [{ id: 'btc-1m', symbol: 'BTCUSDT', timeframe: '1m', count: 100 }]),
     get: vi.fn(async (id) => id ? { id, symbol: 'BTCUSDT', timeframe: '1m', count: 100 } : null),
   };
+  const localDatasetRepository = {
+    list: vi.fn(async () => [{ id: 'local-btc-1m', symbol: 'BTCUSDT', timeframe: '1m', count: 90 }]),
+    get: vi.fn(async (id) => id ? { id, metadata: { id, symbol: 'BTCUSDT', timeframe: '1m', count: 90 } } : null),
+  };
   const replayCapabilities = { load: vi.fn(async () => undefined) };
   const controls = { setEnabledForPreview: vi.fn() };
-  return { page, datasetSelect, liveButton, replayButton, datasetRefresh, symbolSelect, timeframeSelect, appState, liveMarket, datasetRepository, replayCapabilities, controls };
+  return { page, datasetSelect, liveButton, replayButton, datasetRefresh, symbolSelect, timeframeSelect, appState, liveMarket, datasetRepository, localDatasetRepository, replayCapabilities, controls };
 }
 
 describe('MarketModeController', () => {
@@ -56,7 +68,7 @@ describe('MarketModeController', () => {
 
     await controller.setMode('replay');
     expect(d.liveMarket.stop).toHaveBeenCalled();
-    expect(d.replayCapabilities.load).toHaveBeenCalledWith({ datasetId: 'btc-1m', autoStart: false });
+    expect(d.replayCapabilities.load).toHaveBeenCalled();
   });
 
   it('loads the selected saved dataset without contacting Binance', async () => {
@@ -66,12 +78,27 @@ describe('MarketModeController', () => {
     d.replayCapabilities.load.mockClear();
     d.liveMarket.start.mockClear();
 
-    d.datasetSelect.value = 'btc-1m';
-    await controller.selectDataset('btc-1m');
+    d.datasetSelect.value = 'github:btc-1m';
+    await controller.selectDataset('github:btc-1m');
 
     expect(d.datasetRepository.get).toHaveBeenCalledWith('btc-1m');
-    expect(d.replayCapabilities.load).toHaveBeenCalledWith({ datasetId: 'btc-1m', autoStart: false });
+    expect(d.replayCapabilities.load).toHaveBeenCalledWith({ datasetId: 'btc-1m', datasetSource: 'github', autoStart: false });
     expect(d.liveMarket.start).not.toHaveBeenCalled();
     expect(d.appState.replayDatasetId).toBe('btc-1m');
+    expect(d.appState.replayDatasetSource).toBe('github');
+  });
+
+  it('loads a browser-local dataset without contacting GitHub', async () => {
+    const d = deps();
+    const controller = new MarketModeController(d);
+    await controller.setMode('replay');
+    d.replayCapabilities.load.mockClear();
+
+    await controller.selectDataset('local:local-btc-1m');
+
+    expect(d.localDatasetRepository.get).toHaveBeenCalledWith('local-btc-1m');
+    expect(d.datasetRepository.get).not.toHaveBeenCalledWith('local-btc-1m');
+    expect(d.replayCapabilities.load).toHaveBeenCalledWith({ datasetId: 'local-btc-1m', datasetSource: 'local', autoStart: false });
+    expect(d.appState.replayDatasetSource).toBe('local');
   });
 });

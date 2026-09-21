@@ -17,11 +17,11 @@ export const headerMarkup = () => `<header class="topbar">
       <select id="timeframe-select" aria-label="Timeframe"></select>
     </div>
     <div class="selector-group replay-dataset-group">
-      <label for="replay-dataset-select">Saved dataset</label>
-      <select id="replay-dataset-select" aria-label="Saved replay dataset">
-        <option value="">No saved datasets</option>
+      <label for="replay-dataset-select">Replay dataset</label>
+      <select id="replay-dataset-select" aria-label="Replay dataset">
+        <option value="">No datasets</option>
       </select>
-      <button id="replay-dataset-refresh" type="button" aria-label="Refresh saved replay datasets">↻</button>
+      <button id="replay-dataset-refresh" type="button" aria-label="Refresh replay datasets">↻</button>
     </div>
     <button id="header-start-replay-btn" class="btn btn-primary replay-only-control" type="button" aria-keyshortcuts="Space">START REPLAY</button>
     <div class="selector-group date-group compat-control">

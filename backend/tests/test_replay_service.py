@@ -88,3 +88,23 @@ def test_from_state_rejects_invalid_timeline_cursor():
 
     with pytest.raises(ValueError, match="outside candle range"):
         ReplayService.from_state(state)
+
+
+def test_append_extends_replay_before_start_and_recomputes_dataset_identity():
+    service = ReplayService()
+    service.load([candle(0), candle(1)])
+
+    state = service.append([candle(2), candle(3)])
+
+    assert state["total"] == 4
+    assert state["status"] == "ready"
+    assert state["index"] == -1
+    assert service.candles[-1]["time"] == 4
+
+
+def test_append_rejects_out_of_order_chunks():
+    service = ReplayService()
+    service.load([candle(0), candle(1)])
+
+    with pytest.raises(ValueError, match="start after the existing dataset"):
+        service.append([candle(1), candle(2)])

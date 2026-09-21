@@ -8,12 +8,12 @@ function createDates(now = Date.now()) {
   return { start: start.toISOString().slice(0, 16), end: end.toISOString().slice(0, 16) };
 }
 
-export function renderDataCenterPage({ element, page, snapshot, storageEstimate, download, jobsState = [], validationState, savedDatasets = [] }) {
+export function renderDataCenterPage({ element, page, snapshot, storageEstimate, download, jobsState = [], validationState, savedDatasets = [], localDatasets = [] }) {
   const dates = createDates();
   const renderers = {
     dashboard: () => dashboard(snapshot, storageEstimate),
     downloads: () => downloads(snapshot, download, dates),
-    datasets: () => datasets(snapshot, savedDatasets),
+    datasets: () => datasets(snapshot, savedDatasets, localDatasets),
     validation: () => validation(snapshot, validationState),
     storage: () => storage(snapshot, storageEstimate),
     jobs: () => jobs(jobsState),
@@ -21,6 +21,6 @@ export function renderDataCenterPage({ element, page, snapshot, storageEstimate,
     ...researchPages,
   };
   const render = renderers[page];
-  if (!render) throw new Error(`Unknown data page: ${page}`);
+  if (!render) throw new Error('Unknown data page: ' + page);
   setPage(element, render());
 }

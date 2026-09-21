@@ -1,13 +1,14 @@
 # Delta Replay
 
-Delta Replay is a browser trading workstation backed by a FastAPI paper-trading engine. It has two deliberately separate market-data workflows:
+Delta Replay is a browser trading workstation backed by a FastAPI paper-trading engine. It has deliberately separate market-data workflows:
 
 - **Live:** Binance market data is displayed directly on the chart. Live candles never enter the replay dataset or replay timeline.
-- **Replay data:** historical Binance klines are downloaded in the Data Center, validated, published to GitHub as immutable datasets, and later replayed through the backend dataset API. Replay does not fetch Binance historical data.
+- **Download:** historical Binance klines are downloaded in the Data Center, validated, and published to GitHub as immutable datasets.
+- **Replay:** replay can use either a GitHub dataset or a browser-local CSV copy. The local copy is validated, stored in IndexedDB for that browser, and loaded into the replay session without fetching historical candles from Binance.
 
 ## GitHub-backed replay datasets
 
-GitHub is the durable source of truth for replay datasets. Dataset commits are isolated to the dedicated `datasets` branch so publishing data does not mutate the application deployment branch. Browser IndexedDB is not authoritative for replay.
+GitHub is the durable source of truth for published replay datasets. Dataset commits are isolated to the dedicated `datasets` branch so publishing data does not mutate the application deployment branch. Browser IndexedDB can also hold explicit local replay copies, but those copies are user-controlled and are not the canonical published dataset.
 
 Configure the dataset repository with:
 
@@ -168,7 +169,7 @@ Published datasets are represented as immutable canonical CSV with:
 
     time,open,high,low,close,volume
 
-The dataset manifest records the dataset identity and SHA-256. The backend verifies both before returning candles to replay. The Data Center can export the CSV for interoperability.
+The dataset manifest records the dataset identity and SHA-256. The backend verifies both before returning candles to replay. The Data Center can export the CSV for interoperability and local browser replay.
 
 ### Recommended user workflow
 
@@ -176,14 +177,26 @@ The dataset manifest records the dataset identity and SHA-256. The backend verif
 2. Go to **Downloads**.
 3. Choose Binance symbol, timeframe, start and end.
 4. Start the server-owned download. Render fetches Binance data, validates it, partitions it, and publishes one immutable GitHub dataset version.
-5. Return to **Replay** and switch the mode selector to **REPLAY**.
-6. Select the saved dataset.
-7. Start/seek/play the replay. All replay trading state is handled by the backend session and event timeline.
-8. Use **Export CSV** from the Data Center when a local copy is needed.
+5. In **Data Center → Datasets**, choose **Download CSV** on the GitHub dataset. Your current browser downloads the actual replay file.
+6. To use that file in this or another browser, open **Data Center → Datasets → Open local CSV** and select the file. The app validates it and stores a browser-local copy in IndexedDB.
+7. Switch to **REPLAY** and select either **GitHub** or **Browser local** as the dataset source.
+8. Start/seek/play the replay. Replay execution remains on the backend, while the selected candle dataset source is explicit.
+
+### Local browser replay
+
+Local replay is intentionally file-based. The browser receives a canonical CSV, validates its candle schema, chronology and timeframe integrity, computes its content identity, then stores the validated dataset in IndexedDB. The browser-local dataset can be reused after reloads and can be moved between browsers by exporting the CSV and importing it there.
+
+The local file name produced by the Data Center is compatible with import:
+
+    SYMBOL-TIMEFRAME-CONTENTID.csv
+
+A shorter `SYMBOL-TIMEFRAME.csv` name is also accepted when the file has been renamed. When a content ID is present in the file name, the importer verifies that it matches the file content.
+
+The replay selector keeps GitHub and Browser local as separate sources. GitHub remains the default when both exist, so the durable published workflow is unchanged.
 
 ### Important ownership rule
 
-Do not connect Binance directly to the replay engine. Replay depends only on `RemoteDatasetRepository`. Browser IndexedDB is a disposable acceleration cache. Do not create another replay engine, dataset store, or historical-data abstraction.
+Do not connect Binance historical fetching directly to the replay engine. GitHub datasets are managed by `RemoteDatasetRepository`; explicit local replay copies are managed by `LocalDatasetRepository`. Live Binance streaming remains a separate path. Do not create another replay engine or another source-of-truth dataset store.
 
 
 ## Research reproducibility
@@ -201,7 +214,7 @@ The backend exposes /api/v1/datasets/{id}/fingerprint and implements the same ca
 
 ## Storage formats
 
-The repository boundary supports canonical CSV and Parquet partitions. Parquet uses typed columns and Zstandard compression for server-side reads. CSV remains the export/interoperability format. The replay API returns bounded JSON windows rather than requiring the browser to download an entire historical dataset.
+The repository boundary supports canonical CSV and Parquet partitions. Parquet uses typed columns and Zstandard compression for server-side reads. CSV remains the export/interoperability format. The replay API returns bounded JSON windows for GitHub-backed replay. Local CSV replay is imported by the browser and then sent to the replay session in validated chunks, avoiding the 100,000-candle batch ceiling of the generic direct-load endpoint.
 
 ## Dataset lifecycle
 

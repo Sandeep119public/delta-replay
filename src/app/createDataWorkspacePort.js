@@ -1,10 +1,9 @@
-import { CandleStore } from '../data/CandleStore.js';
 import { CandleIntegrity } from '../data/CandleIntegrity.js';
 import { DATA_WORKSPACE_EVENTS, assertDataWorkspacePort } from '../ports/DataWorkspacePort.js';
 
-export function createDataWorkspacePort({ dataManager, candleStore, candleCache, appState, datasetRepository }) {
-  if (!candleStore || !candleCache || !appState || !datasetRepository) {
-    throw new TypeError('createDataWorkspacePort requires candleStore, candleCache, appState, and datasetRepository');
+export function createDataWorkspacePort({ candleStore, candleCache, appState, datasetRepository, localDatasetRepository }) {
+  if (!candleStore || !candleCache || !appState || !datasetRepository || !localDatasetRepository) {
+    throw new TypeError('createDataWorkspacePort requires candleStore, candleCache, appState, datasetRepository, and localDatasetRepository');
   }
 
   let operationTail = Promise.resolve();
@@ -12,6 +11,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
   const loadingListeners = new Set();
   const progressListeners = new Set();
   const errorListeners = new Set();
+  const localDatasetListeners = new Set();
 
   function enqueue(operation) {
     const next = operationTail.then(operation, operation);
@@ -22,12 +22,6 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
   function emit(eventSet, payload) {
     for (const listener of [...eventSet]) {
       try { listener(payload); } catch (error) { console.warn('[DataWorkspace] listener failed', error); }
-    }
-  }
-
-  function emitReady(payload) {
-    for (const listener of [...readyListeners]) {
-      try { listener(payload); } catch (error) { console.warn('[DataWorkspace] ready listener failed', error); }
     }
   }
 
@@ -53,6 +47,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
         coverage,
         cacheEnabled: candleCache.enableIDB,
         replayDatasetId: appState.replayDatasetId,
+        replayDatasetSource: appState.replayDatasetSource,
       });
     },
 
@@ -76,6 +71,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
             onProgress: (state) => {
               const progress = {
                 status: state.status,
+                jobId: state.jobId,
                 loaded: Number(state.loaded || 0),
                 total: Number(state.total || 0),
                 pct: Number(state.pct || 0),
@@ -86,7 +82,7 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
             },
           });
           const metadata = { ...dataset, quality: 'VALID', source: 'binance', persisted: true };
-          emitReady({ candles: [], metadata, quality: 'VALID', dataset });
+          emit(readyListeners, { candles: [], metadata, quality: 'VALID', dataset });
           globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-datasets-changed'));
           return { candles: [], metadata, quality: 'VALID', savedDataset: dataset };
         } catch (error) {
@@ -95,6 +91,43 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
           throw error;
         }
       });
+    },
+
+    async importLocalDataset(file) {
+      return enqueue(async () => {
+        emit(loadingListeners, { source: 'local-file', name: file?.name || 'local dataset' });
+        try {
+          const metadata = await localDatasetRepository.importFile(file);
+          emit(localDatasetListeners, metadata);
+          globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-local-datasets-changed', { detail: metadata }));
+          globalThis.window?.dispatchEvent?.(new CustomEvent('select-replay-dataset', {
+            detail: { datasetId: metadata.id, source: 'local' },
+          }));
+          return metadata;
+        } catch (error) {
+          emit(errorListeners, error);
+          globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-data-error', { detail: error }));
+          throw error;
+        }
+      });
+    },
+
+    async clearLocalDataset(id) {
+      return enqueue(async () => {
+        await localDatasetRepository.remove(id);
+        if (appState.replayDatasetId === id && appState.replayDatasetSource === 'local') {
+          appState.setReplayDatasetId(null);
+        }
+        globalThis.window?.dispatchEvent?.(new CustomEvent('delta-replay-local-datasets-changed'));
+      });
+    },
+
+    async getLocalDataset(id) {
+      return localDatasetRepository.get(id);
+    },
+
+    snapshotLocalDatasets() {
+      return localDatasetRepository.list();
     },
 
     clearCurrent() {
@@ -131,27 +164,26 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
     },
 
     on(event, handler) {
-      if (event === DATA_WORKSPACE_EVENTS.READY || event === DATA_WORKSPACE_EVENTS.READY_DEGRADED) {
-        readyListeners.add(handler);
-        return () => readyListeners.delete(handler);
-      }
-      if (event === DATA_WORKSPACE_EVENTS.LOADING_STARTED) {
-        loadingListeners.add(handler);
-        return () => loadingListeners.delete(handler);
-      }
-      if (event === DATA_WORKSPACE_EVENTS.PROGRESS) {
-        progressListeners.add(handler);
-        return () => progressListeners.delete(handler);
-      }
-      if (event === DATA_WORKSPACE_EVENTS.ERROR) {
-        errorListeners.add(handler);
-        return () => errorListeners.delete(handler);
-      }
-      throw new Error(`Unsupported data workspace event: ${event}`);
+      const mapping = {
+        [DATA_WORKSPACE_EVENTS.READY]: readyListeners,
+        [DATA_WORKSPACE_EVENTS.READY_DEGRADED]: readyListeners,
+        [DATA_WORKSPACE_EVENTS.LOADING_STARTED]: loadingListeners,
+        [DATA_WORKSPACE_EVENTS.PROGRESS]: progressListeners,
+        [DATA_WORKSPACE_EVENTS.ERROR]: errorListeners,
+        [DATA_WORKSPACE_EVENTS.LOCAL_DATASET_CHANGED]: localDatasetListeners,
+      };
+      const eventSet = mapping[event];
+      if (!eventSet) throw new Error(`Unsupported data workspace event: ${event}`);
+      eventSet.add(handler);
+      return () => eventSet.delete(handler);
     },
 
     listDatasets() {
       return datasetRepository.list();
+    },
+
+    listLocalDatasets() {
+      return localDatasetRepository.list();
     },
 
     deleteDataset(id) {
@@ -162,8 +194,16 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
       });
     },
 
+    deleteLocalDataset(id) {
+      return port.clearLocalDataset(id);
+    },
+
     getDatasetCsv(id) {
       return datasetRepository.getCsv(id);
+    },
+
+    getLocalDatasetCsv(id) {
+      return localDatasetRepository.getCsv(id);
     },
 
     storageEstimate() {

@@ -70,6 +70,19 @@ def load(request: Request, batch: CandleBatch):
     return atomic_session(request, replace)
 
 
+@router.post("/load-chunk")
+def load_chunk(request: Request, batch: CandleBatch, reset: bool = False):
+    def append_chunk(session):
+        candles = [c.model_dump() for c in batch.candles]
+        result = session.load(candles) if reset else session.append_replay_data(candles)
+        return replay_snapshot(session, result)
+
+    try:
+        return atomic_session(request, append_chunk)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.post("/start/{index}")
 def start(request: Request, index: int, symbol: str = "BTCUSDT"):
     symbol = str(symbol).strip().upper()

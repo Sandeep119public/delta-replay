@@ -19,7 +19,7 @@ import { BinanceLiveMarketService } from './BinanceLiveMarketService.js';
 import { MarketModeController } from './MarketModeController.js';
 
 export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
-  const { appState, candleStore, engine, candleCache, datasetRepository, tradingEngine, mutationPipeline } = services;
+  const { appState, candleStore, engine, candleCache, datasetRepository, localDatasetRepository, tradingEngine, mutationPipeline } = services;
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
@@ -59,8 +59,8 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     chartManager,
     onStatus: ({ status, detail, symbol, timeframe }) => {
       if (!mount.isConnected) return;
-      const label = symbol && timeframe ? `LIVE · ${symbol} · ${timeframe}` : 'LIVE';
-      const suffix = status === 'live' ? '' : detail ? ` · ${detail}` : ` · ${status}`;
+      const label = symbol && timeframe ? 'LIVE · ' + symbol + ' · ' + timeframe : 'LIVE';
+      const suffix = status === 'live' ? '' : detail ? ' · ' + detail : ' · ' + status;
       uiStatusEl?.(label + suffix);
     },
   });
@@ -78,7 +78,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       await liveMarket.start({ symbol: appState.symbol, timeframe: appState.timeframe });
       return true;
     } catch (error) {
-      uiStatusEl(`LIVE · ${error?.message || 'unable to load market data'}`);
+      uiStatusEl('LIVE · ' + (error?.message || 'unable to load market data'));
       return false;
     }
   };
@@ -133,6 +133,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     appState,
     liveMarket,
     datasetRepository,
+    localDatasetRepository,
     replayCapabilities,
     chartManager,
     pauseReplay: () => commandController?.pause(),
@@ -158,6 +159,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       replay.commandController,
       modeController,
       datasetRepository,
+      localDatasetRepository,
       mobileDrawer,
       commandSurface,
       loadBinding,

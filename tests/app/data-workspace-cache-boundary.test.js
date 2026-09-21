@@ -35,6 +35,12 @@ function deps() {
     getCsv: vi.fn(),
     remove: vi.fn(),
   };
+  const localDatasetRepository = {
+    importFile: vi.fn(),
+    list: vi.fn(async () => []),
+    get: vi.fn(),
+    remove: vi.fn(),
+  };
   let stagedStore = null;
 
 
@@ -43,6 +49,7 @@ function deps() {
     candleStore,
     candleCache,
     datasetRepository,
+    localDatasetRepository,
     appState: { symbol: 'BTCUSDT', timeframe: '1m' },
   });
 

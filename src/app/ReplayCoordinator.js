@@ -6,7 +6,7 @@ export { VISIBLE_WINDOW };
 
 export class ReplayCoordinator {
   constructor({
-    datasetRepository, candleStore, appState, replayEngine, tradingCapabilities, statusView, chartManager,
+    datasetRepository, localDatasetRepository = null, candleStore, appState, replayEngine, tradingCapabilities, statusView, chartManager,
     chartAdapter, timeline, controls, errorPanel, modeBanner, tradingErrorView = null,
     dataStatusEl = null, cacheBadgeEl = null, startReplayBtn = null,
     headerStartReplayBtn = null, loadBtn = null, fromDateEl = null, fromTimeEl = null,
@@ -17,7 +17,7 @@ export class ReplayCoordinator {
     }
     for (const capability of ['hasOpenPosition', 'hasPendingOrders', 'hasTradingActivity']) {
       if (typeof tradingCapabilities[capability] !== 'function') {
-        throw new TypeError(`ReplayCoordinator requires tradingCapabilities.${capability}()`);
+        throw new TypeError('ReplayCoordinator requires tradingCapabilities.' + capability + '()');
       }
     }
     if (!statusView || typeof statusView.snapshot !== 'function') {
@@ -30,6 +30,7 @@ export class ReplayCoordinator {
 
     this.loadService = createReplayLoadService({
       datasetRepository,
+      localDatasetRepository,
       candleStore,
       appState,
       replayEngine,
@@ -73,8 +74,8 @@ export class ReplayCoordinator {
   }
 
   updateLoadButton() { return this.loadService.updateLoadButton(); }
-  updatePreviewWindow(idx) { this.previewService.updatePreviewWindow(idx); }
-  applyWindowedChart(idx) { this.previewService.applyWindowedChart(idx); }
+  updatePreviewWindow(idx) { return this.previewService.updatePreviewWindow(idx); }
+  applyWindowedChart(idx) { return this.previewService.applyWindowedChart(idx); }
   handleSymbolTimeframeChange(kind, newValue, selectElement) { return this.datasetChangeService.handleSymbolTimeframeChange(kind, newValue, selectElement); }
   showTradingError(msg) { this.tradingErrorView?.show(msg); }
   destroy() { this.loadService.destroy(); }
