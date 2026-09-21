@@ -162,8 +162,10 @@ class BinanceDatasetDownloadService:
             if key in self._cancelled:
                 return
 
-            persisted_chunks = self.job_repository.load_chunks(job_id)
+            persisted_chunks = self.job_repository.load_chunks(job_id) if not self.job_repository.durable else []
             candles = [candle for chunk in persisted_chunks for candle in chunk]
+            sequence = self.job_repository.chunk_count(job_id) if self.job_repository.durable else len(persisted_chunks)
+            loaded = int(job.get("loaded", len(candles)))
             cursor = int(job.get("cursor", job["from"]))
             interval_ms = _INTERVAL_MS[job["timeframe"]]
             if candles:
@@ -208,8 +210,11 @@ class BinanceDatasetDownloadService:
                             page_candles[-1]["time"] * 1000,
                             page_candles,
                         )
-                        persisted_chunks.append(page_candles)
-                        candles.extend(page_candles)
+                        sequence += 1
+                        if not self.job_repository.durable:
+                            persisted_chunks.append(page_candles)
+                            candles.extend(page_candles)
+                        loaded += len(page_candles)
 
                     last_time = int(rows[-1][0])
                     next_cursor = last_time + interval_ms
@@ -221,34 +226,47 @@ class BinanceDatasetDownloadService:
                         job_id,
                         worker_id=self._worker_id,
                         cursor=cursor,
-                        loaded=len(candles),
+                        loaded=loaded,
                         pct=min(99, (cursor - job["from"]) / max(1, job["to"] - job["from"]) * 100),
                     )
 
                     if len(rows) < 1000:
                         break
 
-            if not candles:
-                raise ValueError("Binance returned no candles for the requested range")
-            if any(b["time"] <= a["time"] for a, b in zip(candles, candles[1:])):
-                raise ValueError("Binance returned duplicate or unordered candles")
-
-            expected_step = interval_ms // 1000
-            if any((b["time"] - a["time"]) != expected_step for a, b in zip(candles, candles[1:])):
-                raise ValueError("Binance returned a gap in the requested candle range")
+            if self.job_repository.durable:
+                if loaded <= 0:
+                    raise ValueError("Binance returned no candles for the requested range")
+            else:
+                if not candles:
+                    raise ValueError("Binance returned no candles for the requested range")
+                if any(b["time"] <= a["time"] for a, b in zip(candles, candles[1:])):
+                    raise ValueError("Binance returned duplicate or unordered candles")
+                expected_step = interval_ms // 1000
+                if any((b["time"] - a["time"]) != expected_step for a, b in zip(candles, candles[1:])):
+                    raise ValueError("Binance returned a gap in the requested candle range")
 
             if not self.job_repository.claim(job_id, self._worker_id):
                 return
 
             self._update(job_id, worker_id=self._worker_id, status="publishing")
-            dataset = self.repository.publish(
-                symbol=job["symbol"],
-                timeframe=job["timeframe"],
-                from_ms=job["from"] // 1000,
-                to_ms=job["to"] // 1000,
-                candles=candles,
-                metadata={"downloadedBy": "server", "candleSource": "binance-futures"},
-            )
+            if self.job_repository.durable:
+                dataset = self.repository.publish_chunks(
+                    symbol=job["symbol"],
+                    timeframe=job["timeframe"],
+                    from_ms=job["from"] // 1000,
+                    to_ms=job["to"] // 1000,
+                    chunks=self.job_repository.iter_chunks(job_id),
+                    metadata={"downloadedBy": "server", "candleSource": "binance-futures"},
+                )
+            else:
+                dataset = self.repository.publish(
+                    symbol=job["symbol"],
+                    timeframe=job["timeframe"],
+                    from_ms=job["from"] // 1000,
+                    to_ms=job["to"] // 1000,
+                    candles=candles,
+                    metadata={"downloadedBy": "server", "candleSource": "binance-futures"},
+                )
 
             if not self.job_repository.claim(job_id, self._worker_id):
                 return
@@ -256,7 +274,7 @@ class BinanceDatasetDownloadService:
                 job_id,
                 worker_id=self._worker_id,
                 status="complete",
-                loaded=len(candles),
+                loaded=loaded,
                 pct=100,
                 dataset=dataset,
             )
