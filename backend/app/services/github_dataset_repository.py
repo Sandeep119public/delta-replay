@@ -35,7 +35,7 @@ class GitHubDatasetRepository:
 
     def __init__(self, repo=None, branch=None, token=None):
         self.repo = (repo or os.getenv("DATASET_GITHUB_REPO", "Sandeep119public/delta-replay")).strip()
-        self.branch = (branch or os.getenv("DATASET_GITHUB_BRANCH", "master")).strip()
+        self.branch = (branch or os.getenv("DATASET_GITHUB_BRANCH", "datasets")).strip()
         self.token = (token or os.getenv("DATASET_GITHUB_TOKEN", "")).strip()
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", self.repo):
             raise ValueError("DATASET_GITHUB_REPO must be owner/name")
