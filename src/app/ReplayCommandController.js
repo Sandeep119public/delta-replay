@@ -39,6 +39,7 @@ export class ReplayCommandController {
     this.onLoad = onLoad;
     this.onPreview = onPreview;
     this.onBeforeLoad = onBeforeLoad;
+    this.isReplayMode = typeof arguments[0]?.isReplayMode === 'function' ? arguments[0].isReplayMode : () => true;
     this.canExecute = canExecute || createReplayCommandPolicy(tradingCapabilities).canExecute;
     this.onError = onError;
     this.headerBtn = headerBtn;
