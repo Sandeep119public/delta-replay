@@ -1,4 +1,4 @@
-import { DATA_WORKSPACE_EVENTS, assertDataWorkspacePort } from '../ports/DataWorkspacePort.js';
+import { assertDataWorkspacePort } from '../ports/DataWorkspacePort.js';
 
 function errorMessage(error) {
   return error?.message || String(error);
@@ -11,7 +11,6 @@ export class DataWorkspaceSession {
     this._validation = null;
     this._jobs = [];
     this._listeners = new Set();
-    this._unbind = [];
     this._destroyed = false;
     this._initialized = false;
   }
@@ -19,34 +18,6 @@ export class DataWorkspaceSession {
   init() {
     if (this._destroyed || this._initialized) return this;
     this._initialized = true;
-    const subscribe = (event, handler) => this._unbind.push(this.data.on(event, handler));
-    subscribe(DATA_WORKSPACE_EVENTS.LOADING_STARTED, (progress) => {
-      this._download = { status: 'running', loaded: 0, total: 0, pct: 0, error: null, ...progress };
-      this._job('Historical data download', 'running');
-      this._notify();
-    });
-    subscribe(DATA_WORKSPACE_EVENTS.PROGRESS, (progress) => {
-      this._download = { ...this._download, status: 'running', ...progress };
-      this._job('Historical data download', 'running', progress?.pct);
-      this._notify();
-    });
-    subscribe(DATA_WORKSPACE_EVENTS.READY, (payload) => {
-      const count = payload?.candles?.length ?? this._download.loaded;
-      this._download = { ...this._download, status: 'complete', loaded: count, total: payload?.candles?.length ?? this._download.total, pct: 100, error: null };
-      this._job('Historical data download', 'complete', 100);
-      this._notify();
-    });
-    subscribe(DATA_WORKSPACE_EVENTS.READY_DEGRADED, (payload) => {
-      const count = payload?.candles?.length ?? 0;
-      this._download = { ...this._download, status: 'degraded', loaded: count, total: count, pct: 100 };
-      this._job('Historical data download', 'degraded', 100);
-      this._notify();
-    });
-    subscribe(DATA_WORKSPACE_EVENTS.ERROR, (error) => {
-      this._download = { ...this._download, status: 'failed', error: errorMessage(error) };
-      this._job('Historical data download', 'failed');
-      this._notify();
-    });
     return this;
   }
 
@@ -80,27 +51,49 @@ export class DataWorkspaceSession {
     if (['running', 'starting'].includes(this._download.status)) return;
     if (params?.error) {
       this._download = { ...this._download, ...params, status: 'failed', error: params.error };
-      this._job('Historical data download', 'failed');
+      this._job('Binance dataset download', 'failed');
       this._notify();
       return;
     }
-    this._download = { status: 'starting', loaded: 0, total: 0, pct: 0, error: null, ...params };
+
+    const countHint = params?.from != null && params?.to != null ? 0 : 0;
+    this._download = {
+      status: 'running',
+      loaded: 0,
+      total: countHint,
+      pct: 0,
+      error: null,
+      ...params,
+    };
+    this._job('Binance dataset download', 'running');
     this._notify();
+
     try {
-      await this.data.download(params);
+      const manifest = await this.data.download(params);
+      const count = Number(manifest?.count || 0);
+      this._download = {
+        ...this._download,
+        status: 'complete',
+        loaded: count,
+        total: count,
+        pct: 100,
+        error: null,
+        manifest,
+      };
+      this._job('Binance dataset download', 'complete', 100);
     } catch (error) {
       this._download = { ...this._download, status: 'failed', error: errorMessage(error) };
-      this._job('Historical data download', 'failed');
-      this._notify();
+      this._job('Binance dataset download', 'failed');
     }
+    this._notify();
   }
 
   async clearCurrent() {
     try {
       await this.data.clearCurrent();
-      this._job('Clear current dataset', 'complete', 100);
+      this._job('Clear browser replay cache', 'complete', 100);
     } catch (error) {
-      this._job('Clear current dataset', 'failed');
+      this._job('Clear browser replay cache', 'failed');
       this._download = { ...this._download, error: errorMessage(error) };
     }
     this._notify();
@@ -109,10 +102,10 @@ export class DataWorkspaceSession {
   async validate() {
     try {
       this._validation = await this.data.validateCurrent();
-      this._job('Dataset validation', 'complete', 100);
+      this._job('Replay dataset validation', 'complete', 100);
     } catch (error) {
       this._validation = { status: 'error', message: errorMessage(error) };
-      this._job('Dataset validation', 'failed');
+      this._job('Replay dataset validation', 'failed');
     }
     this._notify();
   }
@@ -121,9 +114,6 @@ export class DataWorkspaceSession {
     if (this._destroyed) return;
     this._destroyed = true;
     this._initialized = false;
-    for (const off of this._unbind.splice(0)) {
-      try { off?.(); } catch { /* continue cleanup */ }
-    }
     this._listeners.clear();
   }
 }
