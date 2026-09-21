@@ -36,6 +36,9 @@ class DatasetJobRepository:
         result["total"] = int(result["total"])
         result["pct"] = float(result["pct"])
         result["dataset"] = result.get("dataset")
+        result["workerId"] = result.pop("worker_id", None)
+        lease_until = result.pop("lease_until", None)
+        result["leaseUntil"] = lease_until.isoformat() if lease_until else None
         return result
 
     def create(self, *, symbol, timeframe, from_ms, to_ms, total):
@@ -66,7 +69,38 @@ class DatasetJobRepository:
             ).fetchone()
         return self._row(row)
 
-    def update(self, job_id, **changes):
+    def claim(self, job_id, worker_id, lease_seconds=120):
+        if not self.durable:
+            return True
+        lease_seconds = max(30, int(lease_seconds))
+        with self._connect() as connection:
+            row = connection.execute(
+                """UPDATE dataset_download_jobs
+                   SET worker_id=%s,
+                       lease_until=NOW() + (%s * INTERVAL '1 second'),
+                       status=CASE WHEN status='starting' THEN 'running' ELSE status END,
+                       updated_at=NOW(),
+                       heartbeat_at=NOW()
+                   WHERE job_id=%s
+                     AND status IN ('starting','running','publishing')
+                     AND (worker_id IS NULL OR lease_until IS NULL OR lease_until < NOW() OR worker_id=%s)
+                   RETURNING job_id""",
+                (worker_id, lease_seconds, UUID(str(job_id)), worker_id),
+            ).fetchone()
+        return row is not None
+
+    def release(self, job_id, worker_id):
+        if not self.durable:
+            return
+        with self._connect() as connection:
+            connection.execute(
+                """UPDATE dataset_download_jobs
+                   SET worker_id=NULL, lease_until=NULL, heartbeat_at=NOW(), updated_at=NOW()
+                   WHERE job_id=%s AND worker_id=%s""",
+                (UUID(str(job_id)), worker_id),
+            )
+
+    def update(self, job_id, worker_id=None, **changes):
         if not self.durable:
             return
         allowed = {
@@ -82,11 +116,17 @@ class DatasetJobRepository:
             values.append(json.dumps(value, separators=(",", ":")) if key == "dataset" else value)
         if not fields:
             return
-        fields.extend(["updated_at = NOW()", "heartbeat_at = NOW()"])
-        values.append(UUID(str(job_id)))
+        if worker_id is not None:
+            fields.extend(["updated_at = NOW()", "heartbeat_at = NOW()", "lease_until = NOW() + INTERVAL '120 seconds'"])
+            values.extend([UUID(str(job_id)), worker_id])
+            where = "job_id = %s AND worker_id = %s AND status NOT IN ('cancelled','complete','failed')"
+        else:
+            fields.extend(["updated_at = NOW()", "heartbeat_at = NOW()"])
+            values.append(UUID(str(job_id)))
+            where = "job_id = %s"
         with self._connect() as connection:
             connection.execute(
-                f"UPDATE dataset_download_jobs SET {', '.join(fields)} WHERE job_id = %s",
+                f"UPDATE dataset_download_jobs SET {', '.join(fields)} WHERE {where}",
                 values,
             )
 
@@ -136,6 +176,7 @@ class DatasetJobRepository:
             rows = connection.execute(
                 """SELECT * FROM dataset_download_jobs
                    WHERE status IN ('starting','running','publishing')
+                     AND (worker_id IS NULL OR lease_until IS NULL OR lease_until < NOW())
                    ORDER BY created_at""",
             ).fetchall()
         return [self._row(row) for row in rows]
