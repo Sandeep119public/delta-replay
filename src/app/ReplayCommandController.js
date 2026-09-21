@@ -219,7 +219,10 @@ export class ReplayCommandController {
     const handler = e => {
       const tag = e.target?.tagName?.toUpperCase?.();
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) return;
-      const f = e.code === 'Space'
+      if (e.code === 'Escape') { e.preventDefault(); void this.pause(); return; }
+      // Keyboard transport is replay-only. The visible START REPLAY button
+      // remains the explicit entry point from live mode.
+      const stateAction = e.code === 'Space'
         ? () => this.togglePlayPause()
         : e.code === 'ArrowRight'
           ? () => e.shiftKey ? this.jumpBy(10) : this.stepForward()
@@ -227,10 +230,8 @@ export class ReplayCommandController {
             ? () => e.shiftKey ? this.jumpBy(-10) : this.stepBackward()
             : e.code === 'KeyR'
               ? () => this.reset()
-              : e.code === 'Escape'
-                ? () => this.pause()
-                : null;
-      if (f) { e.preventDefault(); void f(); }
+              : null;
+      if (stateAction) { e.preventDefault(); void stateAction(); }
       if (e.code === 'KeyZ') this.cycleSpeed(-1);
       if (e.code === 'KeyX') this.cycleSpeed(1);
     };
