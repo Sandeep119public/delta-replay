@@ -56,17 +56,20 @@ export class RemoteDatasetRepository {
 
   async get(id) {
     if (!id) return null;
-    return request(`/${encodeURIComponent(id)}`);
+    const datasets = await this.list();
+    return datasets.find((dataset) => dataset.id === id) || null;
   }
 
   async getCandles(id) {
-    const dataset = await this.get(id);
+    if (!id) throw new Error('Dataset id is required');
+    const dataset = await request(`/${encodeURIComponent(id)}/candles`);
     if (!dataset?.metadata || !Array.isArray(dataset.candles)) throw new Error('Remote replay dataset is invalid');
     return { metadata: dataset.metadata, candles: dataset.candles };
   }
 
   async getCsv(id) {
-    const dataset = await this.get(id);
+    if (!id) throw new Error('Dataset id is required');
+    const dataset = await request(`/${encodeURIComponent(id)}/csv`);
     if (!dataset?.metadata || typeof dataset.csv !== 'string') throw new Error('Remote replay dataset is invalid');
     return { metadata: dataset.metadata, csv: dataset.csv };
   }
