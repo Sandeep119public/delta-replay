@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+import time
 from threading import RLock
 
 import httpx
@@ -13,6 +14,7 @@ from .dataset_identity import dataset_id
 
 
 MAX_FILE_BYTES = 90 * 1024 * 1024
+MAX_PARTITION_CANDLES = 80_000
 MANIFEST_PATH = "datasets/manifest.json"
 GITHUB_API = "https://api.github.com"
 CSV_HEADER = ("time", "open", "high", "low", "close", "volume")
@@ -26,36 +28,35 @@ _TIMEFRAME_SECONDS = {
 class GitHubDatasetRepository:
     """Immutable replay datasets backed by GitHub repository files.
 
-    The repository is configured with DATASET_GITHUB_REPO (owner/name).
-    Reads work for public repositories without a token. Writes require a
-    caller-supplied fine-grained GitHub token with Contents: write permission.
+    GitHub is the durable source of truth. Writes use the server-side
+    DATASET_GITHUB_TOKEN and are committed atomically with the manifest.
     """
 
-    def __init__(self, repo=None, branch=None):
+    def __init__(self, repo=None, branch=None, token=None):
         self.repo = (repo or os.getenv("DATASET_GITHUB_REPO", "Sandeep119public/delta-replay")).strip()
         self.branch = (branch or os.getenv("DATASET_GITHUB_BRANCH", "master")).strip()
+        self.token = (token or os.getenv("DATASET_GITHUB_TOKEN", "")).strip()
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", self.repo):
             raise ValueError("DATASET_GITHUB_REPO must be owner/name")
         if not self.branch:
             raise ValueError("DATASET_GITHUB_BRANCH is required")
-        self._manifest_lock = RLock()
-
-    @property
-    def configured(self):
-        return bool(self.repo and self.branch)
+        self._lock = RLock()
+        self._cache = {}
+        self._cache_ttl = max(5, int(os.getenv("DATASET_CACHE_TTL_SECONDS", "60")))
 
     def _headers(self, token=None, accept="application/vnd.github.raw+json"):
         headers = {
             "Accept": accept,
-            "X-GitHub-Api-Version": "2026-03-10",
+            "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "delta-replay-dataset-service",
         }
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        active = token or self.token
+        if active:
+            headers["Authorization"] = f"Bearer {active}"
         return headers
 
     def _url(self, path):
-        return f"{GITHUB_API}/repos/{self.repo}/contents/{path.lstrip('/')}"
+        return f"{GITHUB_API}/repos/{self.repo}/{path.lstrip('/')}"
 
     @staticmethod
     def _normalize_candles(candles):
@@ -113,61 +114,98 @@ class GitHubDatasetRepository:
             })
         return GitHubDatasetRepository._normalize_candles(candles)
 
-    def _get_json(self, path, token=None):
-        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-            response = client.get(self._url(path), headers=self._headers(token, "application/vnd.github.object+json"))
+    def _request(self, method, path, *, token=None, **kwargs):
+        with httpx.Client(timeout=120.0, follow_redirects=True) as client:
+            response = client.request(method, self._url(path), headers=self._headers(token), **kwargs)
         if response.status_code == 404:
             return None
+        if response.status_code in (409, 422):
+            raise RuntimeError(f"GitHub dataset operation rejected ({response.status_code}): {response.text[:500]}")
         response.raise_for_status()
-        return response.json()
+        return response
 
     def _get_raw(self, path, token=None):
-        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-            response = client.get(self._url(path), headers=self._headers(token, "application/vnd.github.raw+json"))
-        if response.status_code == 404:
+        response = self._request("GET", f"contents/{path.lstrip('/')}", token=token, headers=self._headers(token, "application/vnd.github.raw+json"))
+        if response is None:
             return None
-        response.raise_for_status()
         if len(response.content) > MAX_FILE_BYTES:
             raise ValueError("dataset file exceeds the configured GitHub size safety limit")
         return response.content
 
+    def _get_json(self, path, token=None):
+        response = self._request("GET", f"contents/{path.lstrip('/')}", token=token, headers=self._headers(token, "application/vnd.github.object+json"))
+        return None if response is None else response.json()
+
     def _read_manifest(self, token=None):
         raw = self._get_raw(MANIFEST_PATH, token)
         if raw is None:
-            return {"schemaVersion": 1, "datasets": []}
+            return {"schemaVersion": 2, "datasets": []}
         try:
             manifest = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"GitHub dataset manifest is invalid: {exc}") from exc
-        if manifest.get("schemaVersion") != 1 or not isinstance(manifest.get("datasets"), list):
+        if manifest.get("schemaVersion") not in (1, 2) or not isinstance(manifest.get("datasets"), list):
             raise RuntimeError("GitHub dataset manifest schema is invalid")
-        return manifest
+        return {"schemaVersion": 2, "datasets": manifest["datasets"]}
+
+    def _manifest_cached(self):
+        cached = self._cache.get("manifest")
+        if cached and cached["expires"] > time.monotonic():
+            return json.loads(json.dumps(cached["value"]))
+        manifest = self._read_manifest()
+        self._cache["manifest"] = {"expires": time.monotonic() + self._cache_ttl, "value": manifest}
+        return json.loads(json.dumps(manifest))
+
+    def _invalidate_cache(self):
+        self._cache.clear()
 
     def list(self, token=None):
-        manifest = self._read_manifest(token)
+        manifest = self._manifest_cached() if token is None else self._read_manifest(token)
         return sorted(manifest["datasets"], key=lambda item: item.get("updatedAt", 0), reverse=True)
 
     def get(self, dataset_id_value, token=None):
-        manifest = self._read_manifest(token)
-        metadata = next((item for item in manifest["datasets"] if item.get("id") == dataset_id_value), None)
+        metadata = next((item for item in self.list(token) if item.get("id") == dataset_id_value), None)
         if metadata is None:
             return None
-        raw = self._get_raw(metadata["path"], token)
-        if raw is None:
-            raise RuntimeError("manifest references a missing dataset file")
-        actual_hash = hashlib.sha256(raw).hexdigest()
-        if actual_hash != metadata.get("sha256"):
-            raise RuntimeError("dataset checksum does not match manifest")
-        candles = self._parse_csv(raw)
+        if metadata.get("partitions"):
+            candles = []
+            for partition in metadata["partitions"]:
+                raw = self._get_raw(partition["path"], token)
+                if raw is None:
+                    raise RuntimeError("manifest references a missing dataset partition")
+                if hashlib.sha256(raw).hexdigest() != partition["sha256"]:
+                    raise RuntimeError("dataset partition checksum does not match manifest")
+                part_candles = self._parse_csv(raw)
+                if len(part_candles) != int(partition["count"]):
+                    raise RuntimeError("dataset partition row count does not match manifest")
+                candles.extend(part_candles)
+        else:
+            raw = self._get_raw(metadata["path"], token)
+            if raw is None:
+                raise RuntimeError("manifest references a missing dataset file")
+            if hashlib.sha256(raw).hexdigest() != metadata.get("sha256"):
+                raise RuntimeError("dataset checksum does not match manifest")
+            candles = self._parse_csv(raw)
         if len(candles) != int(metadata["count"]):
             raise RuntimeError("dataset row count does not match manifest")
         if dataset_id(candles) != metadata["contentId"]:
             raise RuntimeError("dataset content identity does not match manifest")
-        return {"metadata": dict(metadata), "candles": candles, "csv": raw.decode("utf-8")}
+        return {"metadata": dict(metadata), "candles": candles, "csv": self._csv_bytes(candles).decode("utf-8")}
 
-    def publish(self, *, symbol, timeframe, from_ms, to_ms, candles, token, metadata=None):
-        if not token or not token.strip():
-            raise PermissionError("GitHub publish token is required")
+    def _partition(self, candles):
+        parts = []
+        for offset in range(0, len(candles), MAX_PARTITION_CANDLES):
+            chunk = candles[offset:offset + MAX_PARTITION_CANDLES]
+            raw = self._csv_bytes(chunk)
+            if len(raw) > MAX_FILE_BYTES:
+                raise ValueError("dataset partition exceeds GitHub size safety limit")
+            parts.append((offset // MAX_PARTITION_CANDLES + 1, chunk, raw))
+        return parts
+
+    def publish(self, *, symbol, timeframe, from_ms, to_ms, candles, token=None, metadata=None):
+        active_token = (token or self.token).strip()
+        if not active_token:
+            raise PermissionError("DATASET_GITHUB_TOKEN is not configured")
         symbol = str(symbol or "").strip().upper()
         timeframe = str(timeframe or "").strip()
         if not re.fullmatch(r"[A-Z0-9._-]{2,32}", symbol):
@@ -175,25 +213,18 @@ class GitHubDatasetRepository:
         if timeframe not in _TIMEFRAME_SECONDS:
             raise ValueError("unsupported dataset timeframe")
         normalized = self._normalize_candles(candles)
-        raw = self._csv_bytes(normalized)
-        if len(raw) > MAX_FILE_BYTES:
-            raise ValueError("dataset is too large for GitHub regular-file storage; split the range before publishing")
-
         content_id = dataset_id(normalized)
-        sha256 = hashlib.sha256(raw).hexdigest()
-        existing_manifest = self._read_manifest(token)
-        existing = next((item for item in existing_manifest["datasets"] if item.get("contentId") == content_id), None)
+        existing = next((item for item in self._read_manifest(active_token)["datasets"] if item.get("contentId") == content_id), None)
         if existing:
             return existing
 
         start = int(from_ms if from_ms is not None else normalized[0]["time"])
         end = int(to_ms if to_ms is not None else normalized[-1]["time"])
-        path = f"datasets/{symbol}/{timeframe}/{content_id}.csv"
-        now = __import__("time").time_ns() // 1_000_000
+        now = int(time.time() * 1000)
         record = {
             "id": f"{symbol}-{timeframe}-{content_id[:16]}",
             "contentId": content_id,
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "symbol": symbol,
             "timeframe": timeframe,
             "timeframeSec": _TIMEFRAME_SECONDS[timeframe],
@@ -201,47 +232,74 @@ class GitHubDatasetRepository:
             "to": end,
             "count": len(normalized),
             "format": "CSV",
-            "path": path,
-            "sha256": sha256,
-            "byteLength": len(raw),
             "source": "binance",
             "status": "validated",
             "version": 1,
             "createdAt": now,
             "updatedAt": now,
+            "partitions": [],
             **(metadata or {}),
         }
+        entries = []
+        for number, chunk, raw in self._partition(normalized):
+            path = f"datasets/{symbol}/{timeframe}/{content_id[:16]}/part-{number:04d}.csv"
+            record["partitions"].append({
+                "id": f"{record['id']}-p{number:04d}",
+                "path": path,
+                "from": chunk[0]["time"],
+                "to": chunk[-1]["time"],
+                "count": len(chunk),
+                "byteLength": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+            })
+            entries.append((path, raw))
 
-        encoded = base64.b64encode(raw).decode("ascii")
-        with self._manifest_lock:
-            self._put(path, encoded, f"data: publish {record['id']}", token)
-            manifest = self._read_manifest(token)
-            if any(item.get("contentId") == content_id for item in manifest["datasets"]):
-                return next(item for item in manifest["datasets"] if item.get("contentId") == content_id)
-            manifest["datasets"].append(record)
-            manifest["datasets"].sort(key=lambda item: item.get("updatedAt", 0), reverse=True)
-            manifest_bytes = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
-            current = self._get_json(MANIFEST_PATH, token)
-            self._put(
-                MANIFEST_PATH,
-                base64.b64encode(manifest_bytes).decode("ascii"),
-                f"data: update dataset manifest ({record['id']})",
-                token,
-                sha=current.get("sha") if current else None,
-            )
+        with self._lock:
+            latest = self._read_manifest(active_token)
+            existing = next((item for item in latest["datasets"] if item.get("contentId") == content_id), None)
+            if existing:
+                return existing
+            latest["schemaVersion"] = 2
+            latest["datasets"].append(record)
+            latest["datasets"].sort(key=lambda item: item.get("updatedAt", 0), reverse=True)
+            manifest_raw = (json.dumps(latest, indent=2, sort_keys=True) + "\n").encode("utf-8")
+            self._atomic_commit(entries + [(MANIFEST_PATH, manifest_raw)], f"data: publish dataset {record['id']}", active_token)
+            self._invalidate_cache()
         return record
 
-    def _put(self, path, content_b64, message, token, sha=None):
-        body = {
-            "message": message,
-            "content": content_b64,
-            "branch": self.branch,
-        }
-        if sha:
-            body["sha"] = sha
-        with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-            response = client.put(self._url(path), headers=self._headers(token, "application/vnd.github+json"), json=body)
-        if response.status_code in (409, 422):
-            raise RuntimeError(f"GitHub refused dataset write ({response.status_code}): {response.text[:500]}")
-        response.raise_for_status()
-        return response.json()
+    def _atomic_commit(self, entries, message, token):
+        for attempt in range(3):
+            ref = self._request("GET", f"git/ref/heads/{self.branch}", token=token)
+            if ref is None:
+                raise RuntimeError(f"GitHub branch not found: {self.branch}")
+            parent_sha = ref["object"]["sha"]
+            parent = self._request("GET", f"git/commits/{parent_sha}", token=token).json()
+            base_tree = parent["tree"]["sha"]
+            tree_entries = []
+            for path, raw in entries:
+                blob = self._request(
+                    "POST",
+                    "git/blobs",
+                    token=token,
+                    json={"content": base64.b64encode(raw).decode("ascii"), "encoding": "base64"},
+                ).json()
+                tree_entries.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+            tree = self._request("POST", "git/trees", token=token, json={"base_tree": base_tree, "tree": tree_entries}).json()
+            commit = self._request(
+                "POST",
+                "git/commits",
+                token=token,
+                json={"message": message, "tree": tree["sha"], "parents": [parent_sha]},
+            ).json()
+            try:
+                self._request(
+                    "PATCH",
+                    f"git/refs/heads/{self.branch}",
+                    token=token,
+                    json={"sha": commit["sha"], "force": False},
+                )
+                return commit["sha"]
+            except RuntimeError:
+                if attempt == 2:
+                    raise
+        raise RuntimeError("GitHub atomic dataset commit failed")
