@@ -3,8 +3,8 @@ import { HistoricalDataManager } from '../src/data/HistoricalDataManager.js';
 import { CandleStore } from '../src/data/CandleStore.js';
 import { CandleCache } from '../src/data/CandleCache.js';
 import { CandleIntegrity } from '../src/data/CandleIntegrity.js';
-import { DeltaClient } from '../src/data/DeltaClient.js';
-import { DeltaCandleProvider, TIMEFRAME_SECONDS } from '../src/data/DeltaCandleProvider.js';
+import { BinanceClient } from '../src/data/BinanceClient.js';
+import { BinanceCandleProvider } from '../src/data/BinanceCandleProvider.js';
 
 function candle(time, close) { return { time, open: close, high: close+1, low: close-1, close, volume: 10 }; }
 const c = candle;
@@ -13,6 +13,7 @@ function mockClient(responses, gridOrigin = 1000) {
   // responses: Map key `${start}-${end}` -> array or function
   return {
     gridOrigin,
+    getGridSpec: () => ({ origin: gridOrigin, timeframeUnit: 'seconds', alignment: 'UTC' }),
     fetchCandles: async ({ start, end, signal }) => {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       const key = `${start}-${end}`;
@@ -108,7 +109,7 @@ describe('HistoricalDataManager — fetching', () => {
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const client = mockClient({ '*': [c(1000,100), c(1060,101)] });
-    const provider = new DeltaCandleProvider({ client, maxCandles: 100000, chunkSize: 2000 });
+    const provider = new BinanceCandleProvider({ client, maxCandles: 100000, chunkSize: 2000 });
     const mgr = new HistoricalDataManager({ provider, store, cache, concurrency: 1 });
     const { candles, metadata } = await mgr.load({ symbol: 'BTCUSD', timeframe: '1m', from: 1000, to: 1100 });
     expect(candles.length).toBe(2);
@@ -131,7 +132,7 @@ describe('HistoricalDataManager — fetching', () => {
         return res;
       }
     };
-    const provider = new DeltaCandleProvider({ client, maxCandles: 100000, chunkSize: 2 });
+    const provider = new BinanceCandleProvider({ client, maxCandles: 100000, chunkSize: 2 });
     const mgr = new HistoricalDataManager({ provider, store, cache, concurrency: 2, chunkSize: 2 });
     const { candles } = await mgr.load({ symbol: 'BTCUSD', timeframe: '1m', from: 1000, to: 1180 });
     // 1000,1060,1120,1180 =4
@@ -146,7 +147,7 @@ describe('HistoricalDataManager — fetching', () => {
       '1000-1120': [c(1000,100), c(1060,101), c(1120,102)],
       '1121-1240': [c(1120,102), c(1180,103), c(1240,104)], // duplicate 1120
     });
-    const provider = new DeltaCandleProvider({ client, maxCandles: 100000, chunkSize: 2 });
+    const provider = new BinanceCandleProvider({ client, maxCandles: 100000, chunkSize: 2 });
     const mgr = new HistoricalDataManager({ provider, store, cache, concurrency: 1, chunkSize: 2 });
     // Need to force chunks to align to our mock keys: we use timeframe 1m, chunkSize 2 => 120 sec range
     // Request 1000-1240 will create chunks 1000-1119, 1120-1239, 1240-1240 etc not matching mock keys -> simplify: test integrity dedup directly
@@ -160,7 +161,7 @@ describe('HistoricalDataManager — fetching', () => {
     const targetStore = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const client = mockClient({ '*': [c(1000, 100), c(1060, 101)] });
-    const provider = new DeltaCandleProvider({ client, maxCandles: 100000 });
+    const provider = new BinanceCandleProvider({ client, maxCandles: 100000 });
     const mgr = new HistoricalDataManager({ provider, store: sharedStore, cache });
 
     const result = await mgr.load({
@@ -190,7 +191,7 @@ describe('HistoricalDataManager — fetching', () => {
         return [c(1000,100)];
       }
     };
-    const provider = new DeltaCandleProvider({ client, maxCandles: 100000 });
+    const provider = new BinanceCandleProvider({ client, maxCandles: 100000 });
     const mgr = new HistoricalDataManager({ provider, store, cache });
     const ac = new AbortController();
     const p = mgr.load({ symbol: 'BTCUSD', timeframe: '1m', from: 1000, to: 5000, signal: ac.signal });
@@ -212,7 +213,7 @@ describe('HistoricalDataManager — fetching', () => {
         return [c(1000,100)];
       }
     };
-    const provider = new DeltaCandleProvider({ client, maxCandles: 100000 });
+    const provider = new BinanceCandleProvider({ client, maxCandles: 100000 });
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const mgr = new HistoricalDataManager({ provider, store, cache, maxRetries: 3 });
@@ -226,8 +227,8 @@ describe('HistoricalDataManager — fetching', () => {
     const cache1 = new CandleCache({ enableIDB: false });
     const clientSlow = { gridOrigin: 1000, fetchCandles: async ({signal})=>{ await new Promise(r=>setTimeout(r,60)); if(signal?.aborted) throw new DOMException('Aborted','AbortError'); return [c(1000,100)]; } };
     const clientFast = { gridOrigin: 2000, fetchCandles: async ()=> [c(2000,200)] };
-    const providerSlow = new DeltaCandleProvider({ client: clientSlow, maxCandles: 100000 });
-    const providerFast = new DeltaCandleProvider({ client: clientFast, maxCandles: 100000 });
+    const providerSlow = new BinanceCandleProvider({ client: clientSlow, maxCandles: 100000 });
+    const providerFast = new BinanceCandleProvider({ client: clientFast, maxCandles: 100000 });
     const mgrSlow = new HistoricalDataManager({ provider: providerSlow, store: store1, cache: cache1 });
     const mgrFast = new HistoricalDataManager({ provider: providerFast, store: new CandleStore(), cache: new CandleCache({enableIDB:false}) });
     const ac = new AbortController();
@@ -242,7 +243,7 @@ describe('HistoricalDataManager — fetching', () => {
   it('caching hit avoids fetch', async () => {
     let fetches = 0;
     const client = { gridOrigin: 1000, fetchCandles: async ({ start, end })=>{ fetches++; const res=[]; for(let t=start; t<=end; t+=60) if(t===1000||t===1060) res.push(c(t,100)); return res; } };
-    const provider = new DeltaCandleProvider({ client, maxCandles: 100000 });
+    const provider = new BinanceCandleProvider({ client, maxCandles: 100000 });
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const mgr = new HistoricalDataManager({ provider, store, cache });
@@ -267,7 +268,7 @@ describe('HistoricalDataManager — fetching', () => {
         return res;
       }
     };
-    const provider = new DeltaCandleProvider({ client, maxCandles: 100000, chunkSize: 2 });
+    const provider = new BinanceCandleProvider({ client, maxCandles: 100000, chunkSize: 2 });
     const store = new CandleStore();
     const cache = new CandleCache({ enableIDB: false });
     const mgr = new HistoricalDataManager({ provider, store, cache, chunkSize: 2, concurrency: 1 });
