@@ -27,9 +27,7 @@ export function datasets(snapshot, savedDatasets = []) {
         <td>
           <div class="dataset-actions">
             <button type="button" data-data-action="open-replay" data-dataset-id="${escapeText(dataset.id)}">Replay</button>
-            <button type="button" data-data-action="export-dataset" data-dataset-id="${escapeText(dataset.id)}">Export CSV</button>
-            <button type="button" 
-          </div>
+            <button type="button" data-data-action="export-dataset" data-dataset-id="${escapeText(dataset.id)}">Export CSV</button>\n          </div>
         </td>
       </tr>`).join('')
     : '<tr><td colspan="6">No GitHub replay datasets. Go to Downloads and publish one.</td></tr>';
