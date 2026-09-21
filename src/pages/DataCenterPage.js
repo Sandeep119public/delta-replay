@@ -68,6 +68,7 @@ export class DataCenterPage {
     if (!this._initialized || !this._element) return;
     const token = ++this._renderToken;
     const sessionState = this.session.snapshot();
+    await this.data.listDatasets().catch(() => {});
     const snapshot = this.data.snapshot();
     const storageEstimate = await this.data.storageEstimate();
     if (!this._initialized || token !== this._renderToken) return;
