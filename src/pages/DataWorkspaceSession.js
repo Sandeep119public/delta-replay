@@ -100,6 +100,19 @@ export class DataWorkspaceSession {
     }
   }
 
+  async cancelDownload() {
+    if (!this._download.jobId || !['running', 'starting'].includes(this._download.status)) return;
+    try {
+      await this.data.cancelDownload(this._download.jobId);
+      this._download = { ...this._download, status: 'cancelled', error: 'Download cancelled' };
+      this._job('Historical data download', 'cancelled', this._download.pct);
+    } catch (error) {
+      this._download = { ...this._download, error: errorMessage(error) };
+      this._job('Historical data download', 'failed');
+    }
+    this._notify();
+  }
+
   async clearCurrent() {
     try {
       await this.data.clearCurrent();

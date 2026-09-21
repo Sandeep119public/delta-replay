@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 from ..services.binance_dataset_download import BinanceDatasetDownloadService
 from ..services.github_dataset_repository import GitHubDatasetRepository
+from ..services.experiment_fingerprint import fingerprint
 
 
 router = APIRouter()
@@ -72,6 +73,65 @@ def get_dataset(dataset_id: str):
     return {"metadata": result["metadata"]}
 
 
+@router.get("/{dataset_id}/fingerprint")
+def get_dataset_fingerprint(
+    dataset_id: str,
+    feature_version: str = "unknown",
+    model_version: str = "unknown",
+    code_commit: str | None = None,
+    seed: int | None = None,
+):
+    result = repository.get_partitions(dataset_id)
+    if result is None:
+        raise HTTPException(404, "Dataset not found")
+    return fingerprint(
+        dataset_content_id=result["metadata"]["contentId"],
+        feature_version=feature_version,
+        model_version=model_version,
+        code_commit=code_commit,
+        configuration={"symbol": result["metadata"].get("symbol"), "timeframe": result["metadata"].get("timeframe")},
+        seed=seed,
+    )
+
+
+@router.get("/{dataset_id}/partitions")
+def get_dataset_partitions(dataset_id: str):
+    try:
+        result = repository.get_partitions(dataset_id)
+    except Exception as exc:
+        raise HTTPException(502, f"Unable to read GitHub dataset partitions: {exc}") from exc
+    if result is None:
+        raise HTTPException(404, "Dataset not found")
+    return result
+
+
+@router.get("/{dataset_id}/range")
+def get_dataset_range(
+    dataset_id: str,
+    from_time: int | None = None,
+    to_time: int | None = None,
+    offset: int = 0,
+    limit: int = 5000,
+):
+    if offset < 0:
+        raise HTTPException(422, "offset must be non-negative")
+    try:
+        result = repository.get_candle_range(
+            dataset_id,
+            from_time=from_time,
+            to_time=to_time,
+            offset=offset,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"Unable to read dataset range: {exc}") from exc
+    if result is None:
+        raise HTTPException(404, "Dataset not found")
+    return result
+
+
 @router.get("/{dataset_id}/candles")
 def get_dataset_candles(dataset_id: str):
     result = _load(dataset_id)
@@ -98,6 +158,15 @@ def start_download(payload: DatasetRangeRequest, authorization: str | None = Hea
         raise HTTPException(422, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(502, f"Unable to start Binance download: {exc}") from exc
+
+
+@router.post("/downloads/{job_id}/cancel")
+def cancel_download(job_id: str, authorization: str | None = Header(default=None)):
+    _require_publish_secret(authorization)
+    result = downloads.cancel(job_id)
+    if result is None:
+        raise HTTPException(404, "Download job not found")
+    return result
 
 
 @router.get("/downloads/{job_id}")

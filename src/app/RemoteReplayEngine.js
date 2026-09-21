@@ -124,6 +124,19 @@ export class RemoteReplayEngine {
     return clone(this.state.visibleCandles);
   }
 
+  loadDataset(datasetId) {
+    if (this._destroyed) return Promise.resolve(this.getState());
+    if (!datasetId) return Promise.reject(new TypeError('Replay dataset id is required'));
+    this.pause();
+    const generation = this._invalidateGeneration();
+    return this._call(
+      `/load-dataset/${encodeURIComponent(datasetId)}`,
+      { method: 'POST' },
+      generation,
+      'load',
+    );
+  }
+
   load(candles) {
     if (this._destroyed) return Promise.resolve(this.getState());
     this.pause();

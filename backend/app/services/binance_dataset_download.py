@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 import uuid
@@ -5,6 +6,7 @@ import uuid
 import httpx
 
 from .github_dataset_repository import GitHubDatasetRepository
+from .dataset_job_repository import DatasetJobRepository
 
 
 _INTERVAL_MS = {
@@ -18,10 +20,19 @@ _INTERVAL_MS = {
 class BinanceDatasetDownloadService:
     """Server-owned Binance historical downloader and GitHub publisher."""
 
-    def __init__(self, repository=None):
+    def __init__(self, repository=None, job_repository=None):
         self.repository = repository or GitHubDatasetRepository()
+        self.job_repository = job_repository or DatasetJobRepository()
         self._jobs = {}
         self._lock = threading.RLock()
+        self._cancelled = set()
+        self._workers = threading.BoundedSemaphore(max(1, int(os.getenv('DATASET_DOWNLOAD_CONCURRENCY', '1'))))
+        self._recover()
+
+    def _recover(self):
+        for job in self.job_repository.recoverable():
+            self._jobs[job['jobId']] = job
+            threading.Thread(target=self._run, args=(job['jobId'],), daemon=True).start()
 
     def start(self, *, symbol, timeframe, from_ms, to_ms):
         symbol = str(symbol or "").strip().upper()
@@ -32,9 +43,15 @@ class BinanceDatasetDownloadService:
             raise ValueError("unsupported dataset timeframe")
         if not symbol or start < 0 or end <= start:
             raise ValueError("invalid dataset download range")
-        job_id = uuid.uuid4().hex
+        existing = self.job_repository.active(symbol, timeframe, start, end)
+        if existing:
+            with self._lock: self._jobs[existing['jobId']] = existing
+            threading.Thread(target=self._run, args=(existing['jobId'],), daemon=True).start()
+            return existing
+        durable = self.job_repository.create(symbol=symbol, timeframe=timeframe, from_ms=start, to_ms=end, total=max(1, (end-start)//_INTERVAL_MS[timeframe]))
+        job_id = durable['jobId'] if durable else uuid.uuid4().hex
         with self._lock:
-            self._jobs[job_id] = {
+            self._jobs[job_id] = durable or {
                 "jobId": job_id,
                 "status": "starting",
                 "symbol": symbol,
@@ -55,13 +72,31 @@ class BinanceDatasetDownloadService:
     def get(self, job_id):
         with self._lock:
             job = self._jobs.get(str(job_id))
-            return dict(job) if job else None
+        if job:
+            return dict(job)
+        durable = self.job_repository.get(job_id)
+        if durable:
+            with self._lock: self._jobs[str(job_id)] = durable
+            return dict(durable)
+        return None
+
+    def cancel(self, job_id):
+        with self._lock:
+            job = self._jobs.get(str(job_id)) or self.job_repository.get(job_id)
+            if not job:
+                return None
+            if job['status'] in {'complete', 'failed', 'cancelled'}:
+                return job
+            self._cancelled.add(str(job_id))
+        self._update(job_id, status='cancelled', error='Cancelled by operator')
+        return self.get(job_id)
 
     def _update(self, job_id, **changes):
         with self._lock:
             job = self._jobs.get(job_id)
             if job:
                 job.update(changes)
+        self.job_repository.update(job_id, **changes)
 
     @staticmethod
     def _fetch_page(client, params):
@@ -72,6 +107,12 @@ class BinanceDatasetDownloadService:
                     "https://fapi.binance.com/fapi/v1/klines",
                     params=params,
                 )
+                if response.status_code == 429:
+                    retry_after = float(response.headers.get('Retry-After', '2'))
+                    time.sleep(min(30, max(1, retry_after)))
+                    continue
+                if response.status_code == 418:
+                    raise RuntimeError('Binance IP temporarily banned; retry later')
                 response.raise_for_status()
                 return response.json()
             except (httpx.HTTPError, ValueError) as exc:
@@ -82,13 +123,24 @@ class BinanceDatasetDownloadService:
 
     def _run(self, job_id):
         job = self.get(job_id)
-        candles = []
-        cursor = job["from"]
+        persisted_chunks = self.job_repository.load_chunks(job_id)
+        candles = [candle for chunk in persisted_chunks for candle in chunk]
+        cursor = int(job.get('cursor', job['from']))
         interval_ms = _INTERVAL_MS[job["timeframe"]]
+        if candles:
+            cursor = max(cursor, candles[-1]['time'] * 1000 + interval_ms)
+        acquired = self._workers.acquire(timeout=30)
+        if not acquired:
+            self._update(job_id, status='failed', pct=100, error='Download concurrency limit reached')
+            return
         try:
+            if str(job_id) in self._cancelled:
+                return
             self._update(job_id, status="running")
             with httpx.Client(timeout=60.0, follow_redirects=True) as client:
                 while cursor < job["to"]:
+                    if str(job_id) in self._cancelled:
+                        return
                     rows = self._fetch_page(client, {
                         "symbol": job["symbol"],
                         "interval": job["timeframe"],
@@ -98,11 +150,12 @@ class BinanceDatasetDownloadService:
                     })
                     if not rows:
                         break
+                    page_candles = []
                     for row in rows:
                         open_time = int(row[0])
                         if open_time < job["from"] or open_time >= job["to"]:
                             continue
-                        candles.append({
+                        page_candles.append({
                             "time": open_time // 1000,
                             "open": float(row[1]),
                             "high": float(row[2]),
@@ -110,6 +163,10 @@ class BinanceDatasetDownloadService:
                             "close": float(row[4]),
                             "volume": float(row[5]),
                         })
+                    if page_candles:
+                        candles.extend(page_candles)
+                        self.job_repository.append_chunk(job_id, len(persisted_chunks), page_candles[0]['time']*1000, page_candles[-1]['time']*1000, page_candles)
+                        persisted_chunks.append(page_candles)
                     last_time = int(rows[-1][0])
                     next_cursor = last_time + interval_ms
                     if next_cursor <= cursor:
@@ -117,6 +174,7 @@ class BinanceDatasetDownloadService:
                     cursor = next_cursor
                     self._update(
                         job_id,
+                        cursor=cursor,
                         loaded=len(candles),
                         pct=min(99, (cursor - job["from"]) / max(1, job["to"] - job["from"]) * 100),
                     )
@@ -139,5 +197,10 @@ class BinanceDatasetDownloadService:
                 metadata={"downloadedBy": "server", "candleSource": "binance-futures"},
             )
             self._update(job_id, status="complete", loaded=len(candles), pct=100, dataset=dataset)
+            self.job_repository.clear_chunks(job_id)
         except Exception as exc:
             self._update(job_id, status="failed", pct=100, error=str(exc))
+        finally:
+            self._workers.release()
+            with self._lock:
+                self._cancelled.discard(str(job_id))

@@ -13,6 +13,8 @@ Configure the dataset repository with:
 
     DATASET_GITHUB_REPO=Sandeep119public/delta-replay
     DATASET_GITHUB_BRANCH=datasets
+DATASET_FORMAT=PARQUET
+APP_GIT_COMMIT=<deployment-commit>
 
 Datasets are immutable and content-addressed:
 
@@ -22,7 +24,7 @@ Datasets are immutable and content-addressed:
         15m/
           <content-id>/\n            2026-01.csv\n            2026-02.csv
 
-The manifest records symbol, timeframe, range, row count, format, source, byte size, SHA-256 and content identity.
+The manifest records symbol, timeframe, range, row count, format, source, partition byte size, SHA-256, content identity and an explicit integrity report. CSV remains supported for interoperability; Parquet can be enabled with DATASET_FORMAT=PARQUET for faster columnar server-side reads.
 
 Publishing is server-authorized. Render holds the GitHub token in DATASET_GITHUB_TOKEN and the operator-only DATASET_PUBLISH_SECRET protects dataset jobs. Never put the GitHub token in VITE_* variables or browser storage.
 
@@ -72,7 +74,7 @@ The cleanup job uses a PostgreSQL transaction-scoped advisory lock so overlappin
 
 ## Scale behavior
 
-The dataset API accepts at most 100,000 candles for the legacy direct-publish endpoint. Normal historical downloads run as server-owned jobs and partition the resulting dataset before publishing. Replay UI state exposes a sliding 2,000-candle window while retaining the full immutable dataset for persistence and reconstruction.
+Historical downloads are durable, resumable jobs when PostgreSQL is configured. Download pages are checkpointed in PostgreSQL so Render restarts can resume instead of losing the entire job. The dataset API supports partition metadata and bounded range reads. The legacy direct-publish endpoint accepts at most 100,000 candles. Replay UI state exposes a sliding 2,000-candle window while retaining the full immutable dataset for persistence and reconstruction.
 
 ## Development quick start
 
@@ -146,7 +148,7 @@ Replay is a separate process:
         ↓
     select GitHub dataset
         ↓
-    GET /api/v1/datasets/{id}/candles
+    GET /api/v1/datasets/{id}/partitions\n    GET /api/v1/datasets/{id}/range?offset=...&limit=...\n    GET /api/v1/datasets/{id}/candles
         ↓
     strict integrity validation
         ↓
@@ -182,3 +184,60 @@ The dataset manifest records the dataset identity and SHA-256. The backend verif
 ### Important ownership rule
 
 Do not connect Binance directly to the replay engine. Replay depends only on `RemoteDatasetRepository`. Browser IndexedDB is a disposable acceleration cache. Do not create another replay engine, dataset store, or historical-data abstraction.
+
+
+## Research reproducibility
+
+Every immutable dataset has a deterministic contentId. Research runs should additionally bind:
+
+- dataset content identity
+- feature-set version
+- model version
+- application Git commit
+- experiment configuration
+- random seed
+
+The backend exposes /api/v1/datasets/{id}/fingerprint and implements the same canonical SHA-256 fingerprinting logic in backend/app/services/experiment_fingerprint.py. This makes an experiment reproducible without treating a human-readable dataset name as identity.
+
+## Storage formats
+
+The repository boundary supports canonical CSV and Parquet partitions. Parquet uses typed columns and Zstandard compression for server-side reads. CSV remains the export/interoperability format. The replay API returns bounded JSON windows rather than requiring the browser to download an entire historical dataset.
+
+## Dataset lifecycle
+
+    LIVE
+      Binance WebSocket
+           |
+           v
+         Chart
+
+    DOWNLOAD
+      Render job
+           |
+           +-- Binance pagination/retry
+           +-- durable checkpoints
+           +-- integrity validation
+           +-- immutable GitHub commit
+                         |
+                         v
+                    Dataset manifest
+
+    REPLAY
+      dataset ID
+           |
+           v
+      Render dataset loader
+           |
+           +-- bounded range reads
+           +-- deterministic ReplaySession
+                         |
+                         v
+                  PaperTradingEngine
+
+    RESEARCH
+      dataset content ID
+           +
+      feature/model/code/config/seed
+           |
+           v
+      experiment fingerprint

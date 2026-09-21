@@ -56,6 +56,11 @@ export function createDataWorkspacePort({ dataManager, candleStore, candleCache,
       });
     },
 
+    async cancelDownload(jobId) {
+      if (typeof datasetRepository.cancelDownload !== 'function') throw new Error('Dataset cancellation is unavailable');
+      return datasetRepository.cancelDownload(jobId);
+    },
+
     async download(params) {
       return enqueue(async () => {
         emit(loadingListeners, { symbol: params.symbol, timeframe: params.timeframe });

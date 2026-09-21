@@ -85,6 +85,18 @@ export class RemoteDatasetRepository {
     return { metadata: dataset.metadata, candles: dataset.candles };
   }
 
+  async getRange(id, { from = null, to = null, offset = 0, limit = 5000 } = {}) {
+    if (!id) throw new Error('Dataset id is required');
+    const params = new URLSearchParams();
+    if (from != null) params.set('from_time', String(from));
+    if (to != null) params.set('to_time', String(to));
+    params.set('offset', String(offset));
+    params.set('limit', String(limit));
+    const dataset = await request(`/${encodeURIComponent(id)}/range?${params}`);
+    if (!dataset?.metadata || !Array.isArray(dataset.candles)) throw new Error('Remote dataset range is invalid');
+    return dataset;
+  }
+
   async getCsv(id) {
     if (!id) throw new Error('Dataset id is required');
     const dataset = await request(`/${encodeURIComponent(id)}/csv`);
@@ -108,6 +120,10 @@ export class RemoteDatasetRepository {
     onProgress?.(state);
     if (state.status !== 'complete') throw new Error(state.error || 'Dataset download failed');
     return state.dataset;
+  }
+
+  async cancelDownload(jobId) {
+    return this._authorizedRequest(`/downloads/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', body: '{}' });
   }
 
   async save({ symbol, timeframe, from, to, candles, metadata = {} }) {

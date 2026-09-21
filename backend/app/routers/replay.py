@@ -4,8 +4,10 @@ from ..models import CandleBatch
 from ..domain.execution import EXECUTION_MODEL
 from ..services.replay_timeline import ReplayDivergenceError
 from ..services.session_manager import atomic_session, get_session
+from ..services.github_dataset_repository import GitHubDatasetRepository
 
 router = APIRouter()
+dataset_repository = GitHubDatasetRepository()
 
 
 def trading_api_snapshot(engine):
@@ -41,6 +43,24 @@ def _active_replay_symbol(session, requested_symbol=None):
 @router.get("/state")
 def state(request: Request):
     return {**get_session(request).replay.state(), "executionModel": EXECUTION_MODEL}
+
+
+@router.post("/load-dataset/{dataset_id}")
+def load_dataset(request: Request, dataset_id: str):
+    try:
+        dataset = dataset_repository.get(dataset_id)
+    except Exception as exc:
+        raise HTTPException(502, f"Unable to load replay dataset: {exc}") from exc
+    if dataset is None:
+        raise HTTPException(404, "Dataset not found")
+
+    def replace(session):
+        result = session.load(dataset["candles"])
+        result["datasetId"] = dataset["metadata"]["id"]
+        result["datasetMetadata"] = dataset["metadata"]
+        return replay_snapshot(session, result)
+
+    return atomic_session(request, replace)
 
 
 @router.post("/load")

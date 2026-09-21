@@ -10,10 +10,8 @@ function deps(overrides = {}) {
   return {
     datasetRepository: {
       list: vi.fn(async () => [{ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2 }]),
-      getCandles: vi.fn(async () => ({
-        metadata: { id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', format: 'CSV' },
-        candles,
-      })),
+      get: vi.fn(async () => ({ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV', from: 60, to: 120 })),
+      getRange: vi.fn(async () => ({ metadata: { id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', format: 'CSV' }, candles })),
     },
     candleStore: {
       get: vi.fn((index) => candles[index] || null),
@@ -33,7 +31,7 @@ function deps(overrides = {}) {
       setPendingStartIndex: vi.fn(),
     },
     replayEngine: {
-      load: vi.fn(async () => undefined),
+      loadDataset: vi.fn(async () => ({ status: 'ready', total: 2, totalCandles: 2, currentIndex: -1, startIndex: -1, visibleCandles: [] })),
       getState: vi.fn(() => ({ status: 'ready', totalCandles: 2, currentIndex: -1, startIndex: -1 })),
       start: vi.fn(async () => undefined),
     },
@@ -58,8 +56,8 @@ describe('ReplayLoadService', () => {
     await service.loadAndPrepareReplay({ datasetId: 'BTCUSDT__1M__60__120' });
 
     expect(d.datasetRepository.list).toHaveBeenCalledOnce();
-    expect(d.datasetRepository.getCandles).toHaveBeenCalledWith('BTCUSDT__1M__60__120');
-    expect(d.replayEngine.load).toHaveBeenCalledWith(candles);
+    expect(d.datasetRepository.getRange).toHaveBeenCalledWith('BTCUSDT__1M__60__120', { offset: 0, limit: 2000 });
+    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith('BTCUSDT__1M__60__120');
   });
 
   it('never calls a network data manager because replay loading has no data manager dependency', () => {
@@ -68,12 +66,12 @@ describe('ReplayLoadService', () => {
 
   it('rejects when no saved replay dataset exists', async () => {
     const d = deps({
-      datasetRepository: { list: vi.fn(async () => []), getCandles: vi.fn() },
+      datasetRepository: { list: vi.fn(async () => []), get: vi.fn(), getRange: vi.fn() },
     });
     const service = createReplayLoadService(d);
 
     await expect(service.loadAndPrepareReplay()).rejects.toThrow(/download historical Binance data first/i);
-    expect(d.replayEngine.load).not.toHaveBeenCalled();
+    expect(d.replayEngine.loadDataset).not.toHaveBeenCalled();
   });
 
   it('does not replace replay state after a trading activity guard rejects the load', async () => {
@@ -84,29 +82,25 @@ describe('ReplayLoadService', () => {
 
     await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'x' });
 
-    expect(d.datasetRepository.getCandles).not.toHaveBeenCalled();
-    expect(d.replayEngine.load).not.toHaveBeenCalled();
+    expect(d.datasetRepository.get).not.toHaveBeenCalled();
+    expect(d.replayEngine.loadDataset).not.toHaveBeenCalled();
     expect(d.tradingErrorView.show).toHaveBeenCalledWith(expect.stringContaining('trading activity'));
   });
 
-  it('validates the stored candles before handing them to replay', async () => {
+  it('rejects a server-side dataset load failure before changing replay state', async () => {
     const d = deps({
-      datasetRepository: {
-        list: vi.fn(async () => [{ id: 'bad', symbol: 'BTCUSDT', timeframe: '1m', count: 2 }]),
-        getCandles: vi.fn(async () => ({
-          metadata: { id: 'bad', symbol: 'BTCUSDT', timeframe: '1m' },
-          candles: [
-            { time: 60, open: 100, high: 101, low: 99, close: 100, volume: 1 },
-            { time: 180, open: 100, high: 102, low: 99, close: 101, volume: 1 },
-          ],
-        })),
+      replayEngine: {
+        loadDataset: vi.fn(async () => { throw new Error('dataset integrity failure'); }),
+        getState: vi.fn(() => ({ status: 'ready', totalCandles: 0, currentIndex: -1, startIndex: -1 })),
+        start: vi.fn(async () => undefined),
       },
     });
 
     await expect(createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'bad' }))
-      .rejects.toThrow();
-    expect(d.replayEngine.load).not.toHaveBeenCalled();
+      .rejects.toThrow(/integrity failure/i);
+    expect(d.appState.setReplayDatasetId).not.toHaveBeenCalled();
   });
+
 
   it('publishes the committed replay dataset after remote replay load succeeds', async () => {
     const d = deps();
