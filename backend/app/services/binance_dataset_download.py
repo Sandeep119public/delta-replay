@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 import uuid
@@ -24,6 +25,8 @@ class BinanceDatasetDownloadService:
         self.job_repository = job_repository or DatasetJobRepository()
         self._jobs = {}
         self._lock = threading.RLock()
+        self._cancelled = set()
+        self._workers = threading.BoundedSemaphore(max(1, int(os.getenv('DATASET_DOWNLOAD_CONCURRENCY', '1'))))
         self._recover()
 
     def _recover(self):
@@ -77,6 +80,17 @@ class BinanceDatasetDownloadService:
             return dict(durable)
         return None
 
+    def cancel(self, job_id):
+        with self._lock:
+            job = self._jobs.get(str(job_id)) or self.job_repository.get(job_id)
+            if not job:
+                return None
+            if job['status'] in {'complete', 'failed', 'cancelled'}:
+                return job
+            self._cancelled.add(str(job_id))
+        self._update(job_id, status='cancelled', error='Cancelled by operator')
+        return self.get(job_id)
+
     def _update(self, job_id, **changes):
         with self._lock:
             job = self._jobs.get(job_id)
@@ -93,6 +107,12 @@ class BinanceDatasetDownloadService:
                     "https://fapi.binance.com/fapi/v1/klines",
                     params=params,
                 )
+                if response.status_code == 429:
+                    retry_after = float(response.headers.get('Retry-After', '2'))
+                    time.sleep(min(30, max(1, retry_after)))
+                    continue
+                if response.status_code == 418:
+                    raise RuntimeError('Binance IP temporarily banned; retry later')
                 response.raise_for_status()
                 return response.json()
             except (httpx.HTTPError, ValueError) as exc:
@@ -109,10 +129,18 @@ class BinanceDatasetDownloadService:
         interval_ms = _INTERVAL_MS[job["timeframe"]]
         if candles:
             cursor = max(cursor, candles[-1]['time'] * 1000 + interval_ms)
+        acquired = self._workers.acquire(timeout=30)
+        if not acquired:
+            self._update(job_id, status='failed', pct=100, error='Download concurrency limit reached')
+            return
         try:
+            if str(job_id) in self._cancelled:
+                return
             self._update(job_id, status="running")
             with httpx.Client(timeout=60.0, follow_redirects=True) as client:
                 while cursor < job["to"]:
+                    if str(job_id) in self._cancelled:
+                        return
                     rows = self._fetch_page(client, {
                         "symbol": job["symbol"],
                         "interval": job["timeframe"],
@@ -172,3 +200,7 @@ class BinanceDatasetDownloadService:
             self.job_repository.clear_chunks(job_id)
         except Exception as exc:
             self._update(job_id, status="failed", pct=100, error=str(exc))
+        finally:
+            self._workers.release()
+            with self._lock:
+                self._cancelled.discard(str(job_id))
