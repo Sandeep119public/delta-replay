@@ -28,7 +28,7 @@ class PostgresSessionRepository(SessionRepository):
         return psycopg.connect(self.dsn, connect_timeout=self.connect_timeout, row_factory=dict_row)
 
     def _verify_schema(self) -> None:
-        required_tables = {"schema_migrations", "replay_datasets", "replay_sessions", "replay_events"}
+        required_tables = {"schema_migrations", "replay_datasets", "replay_sessions", "replay_events", "dataset_download_jobs", "dataset_download_chunks"}
         with self._connect() as connection:
             rows = connection.execute(
                 """SELECT table_name
