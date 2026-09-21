@@ -35,7 +35,6 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   let chartManager = null;
   let modeController = null;
 
-  chartManager = null;
   const callbacks = {
     onRetry: () => replayCapabilities.load({ autoStart: false }),
     onFollow: () => {
@@ -51,7 +50,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     onLoadReplay: ({ targetSec } = {}) => replayCapabilities.load({ targetSec, autoStart: false }),
     onPreviewWindow: (idx) => replayCapabilities.preview(idx),
     onSeek: (idx) => commandController?.trySeek(idx),
-    onTimeframeChange: (timeframe) => { void liveDatasetChange('timeframe', timeframe); },
+    onTimeframeChange: (timeframe) => { if (appState.mode === 'live') void liveDatasetChange('timeframe', timeframe); },
   };
 
   const chartContainer = requireElement('chart-container', mount.ownerDocument || document);
@@ -135,6 +134,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     liveMarket,
     datasetRepository,
     replayCapabilities,
+    chartManager,
     dataStatus: ui.el('data-status'),
   });
   const commandSurface = createCommandSurface({ focusTradePanel: mobileDrawer?.focusTradingPanel });
