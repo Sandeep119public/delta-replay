@@ -26,8 +26,8 @@ class FakeElement {
 }
 
 function deps() {
-  globalThis.document = { createElement: () => new FakeElement() };
   const page = new FakeElement();
+  page.ownerDocument = { createElement: () => new FakeElement() };
   const datasetSelect = new FakeElement();
   const liveButton = new FakeElement();
   const replayButton = new FakeElement();
