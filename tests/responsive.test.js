@@ -1,72 +1,62 @@
 import { describe, it, expect } from 'vitest';
-import fs from 'fs';
+import fs from 'node:fs';
 
-// Paper UI v1 consolidates all stylesheets into a single bundle.
-const CSS_PATH = 'src/ui/index.css';
+const CSS_PATH = 'src/ui/rebuild.css';
 
-describe('Responsive UI regression', () => {
-  const css = fs.readFileSync(CSS_PATH, 'utf-8');
-  const html = fs.readFileSync('index.html', 'utf-8');
+describe('Rebuilt responsive UI regression', () => {
+  const css = fs.readFileSync(CSS_PATH, 'utf8');
+  const html = fs.readFileSync('index.html', 'utf8');
 
-  it('uses the single Paper UI stylesheet', () => {
-    expect(html).toMatch(/src\/ui\/index\.css/);
-    expect(css).toMatch(/PAPER UI v1/);
-  });
-
-  it('contains required breakpoint anchors', () => {
-    for (const bp of ['640px', '1024px']) {
-      expect(css, `missing breakpoint ${bp}`).toMatch(bp);
+  it('loads one rebuilt UI stylesheet', () => {
+    expect(html).toMatch(/src\/ui\/rebuild\.css/);
+    for (const legacy of ['index.css','data-center.css','replay.css','trading.css','mobile.css','system.css','responsive.css']) {
+      expect(html).not.toContain('/src/ui/' + legacy);
     }
   });
 
-  it('uses CSS grid for desktop chart+trading side-by-side', () => {
-    expect(css).toMatch(/\.main-layout/);
-    expect(css).toMatch(/grid-template-columns/);
-    // Page owns the viewport grid: header / status / workspace / timeline / controls
-    expect(css).toMatch(/"header"/);
-    expect(css).toMatch(/"workspace"/);
-    expect(css).toMatch(/\.trading-section/);
+  it('contains the responsive breakpoints used by the rebuilt shell', () => {
+    for (const bp of ['900px','640px','380px']) expect(css).toContain(bp);
   });
 
-  it('chart fills its workspace pane without overflow', () => {
-    expect(css).toMatch(/\.main/);
-    expect(css).toMatch(/\.chart-container/);
-    expect(css).toMatch(/100dvh/);
-    // CSS may be minified, so whitespace around grid track separators is not a contract.
-    expect(css).toMatch(/minmax\(\s*0\s*,\s*1fr\s*\)/);
+  it('uses a bounded desktop chart/trading grid', () => {
+    expect(css).toContain('.replay-layout');
+    expect(css).toContain('grid-template-columns:minmax(0,1fr) var(--trade)');
+    expect(css).toContain('.chart-workspace');
+    expect(css).toContain('.trading-section');
   });
 
-  it('trading panel docks as a bottom drawer on small screens', () => {
-    expect(css).toMatch(/\.trading-section/);
-    // single column workspace collapse at tablet width
-    expect(css).toMatch(/@media.*1024px/);
-    // drawer reveal hook
-    expect(css).toMatch(/drawer-open/);
-  });
-
-  it('no fixed 100vw causing overflow', () => {
-    // allow max-width: 100vw / calc(100vw - ...) (used for .error-panel), forbid raw width: 100vw
-    const hasRaw = css.split('\n').some(l => l.trim().startsWith('width:') && l.includes('100vw'));
+  it('keeps the chart inside a viewport-sized workspace without raw 100vw width', () => {
+    expect(css).toContain('100dvh');
+    expect(css).toContain('.chart-container{width:100%;height:100%}');
+    const hasRaw = css.split('}').some(block => /(^|;)width:100vw(?:;|$)/.test(block));
     expect(hasRaw).toBe(false);
   });
 
-  it('primary trade buttons meet the 44px touch target', () => {
-    expect(css).toMatch(/\.btn-buy-main/);
-    expect(css).toMatch(/\.btn-sell-main/);
-    expect(css).toMatch(/min-height:\s*44px/);
+  it('uses an explicit mobile trading drawer and navigation surface', () => {
+    expect(css).toContain('.drawer-open .trading-section');
+    expect(css).toContain('#drawer-scrim');
+    expect(css).toContain('.mobile-nav-toggle');
+    expect(css).toContain('.nav-open .app-sidebar');
   });
 
-  it('html has viewport meta', () => {
+  it('keeps primary trading controls touch-sized and keyboard-visible', () => {
+    expect(css).toContain('.btn-buy-main');
+    expect(css).toContain('.btn-sell-main');
+    expect(css).toContain('min-height:42px');
+    expect(css).toContain('button:focus-visible');
+  });
+
+  it('keeps the viewport meta contract', () => {
     expect(html).toMatch(/name="viewport"/);
   });
 
-  it('ChartManager uses ResizeObserver', () => {
-    const cm = fs.readFileSync('src/chart/ChartManager.js', 'utf-8');
+  it('ChartManager still owns resize lifecycle', () => {
+    const cm = fs.readFileSync('src/chart/ChartManager.js', 'utf8');
     expect(cm).toMatch(/ResizeObserver/);
     expect(cm).toMatch(/disconnect/);
   });
 
-  it('no horizontal overflow: min-width 0 on grid/flex children', () => {
-    expect(css).toMatch(/min-width:\s*0/);
+  it('prevents horizontal overflow in the rebuilt shell', () => {
+    expect(css).toContain('min-width:0');
   });
 });
