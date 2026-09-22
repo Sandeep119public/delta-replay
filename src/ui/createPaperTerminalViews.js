@@ -11,10 +11,7 @@ export function createPaperTerminalViews(ctx) {
     replayPort,
     trading,
     tradingEvents,
-    onLoadReplay = null,
-    onPreviewWindow = null,
     onSeek = null,
-    onTimeframeChange = null,
     timeframeSelect,
     orderTypeSelect,
     limitPriceInput,
@@ -71,5 +68,5 @@ export function createPaperTerminalViews(ctx) {
     getSymbol,
   });
 
-  return { sparkline, toastView, floatingPosView, dateSelector: { destroy() {} }, tradingPanel };
+  return { sparkline, toastView, floatingPosView, tradingPanel };
 }
