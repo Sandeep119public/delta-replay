@@ -11,7 +11,7 @@ describe('rebuilt replay controls', () => {
   });
 
   it('uses dataset selection as the replay data boundary', () => {
-    const source = fs.readFileSync('src/app/main.js', 'utf8');
+    const source = fs.readFileSync('src/main.js', 'utf8');
     expect(source).toContain('_requestGeneration');
     expect(source).toContain('selectDataset');
     expect(source).toContain('datasetSource');
