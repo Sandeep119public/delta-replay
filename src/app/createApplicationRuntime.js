@@ -47,10 +47,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       coordinator?.applyWindowedChart(idx);
       chartManager.followCurrent();
     },
-    onLoadReplay: ({ targetSec } = {}) => replayCapabilities.load({ targetSec, autoStart: false }),
-    onPreviewWindow: (idx) => replayCapabilities.preview(idx),
     onSeek: (idx) => commandController?.trySeek(idx),
-    onTimeframeChange: (timeframe) => { if (appState.mode === 'live') void liveDatasetChange('timeframe', timeframe); },
   };
 
   const chartContainer = requireElement('chart-container', mount.ownerDocument || document);
@@ -106,10 +103,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     timeline: ui.timeline,
     controls: ui.controls,
     modeBanner: ui.modeBanner,
-    onLoadReplay: callbacks.onLoadReplay,
-    onPreviewWindow: callbacks.onPreviewWindow,
     onSeek: callbacks.onSeek,
-    onTimeframeChange: callbacks.onTimeframeChange,
     ...form,
   });
   const selectorBindings = bindDatasetSelectors(ui, replay.actions);
@@ -174,7 +168,6 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       ui.adapter,
       ui.chartManager,
       views.tradingPanel,
-      views.dateSelector,
       views.sparkline,
       views.floatingPosView,
       views.toastView,
