@@ -40,8 +40,8 @@ describe('Rebuilt responsive UI regression', () => {
   });
 
   it('keeps primary trading controls touch-sized and keyboard-visible', () => {
-    expect(css).toContain('.btn-buy-main');
-    expect(css).toContain('.btn-sell-main');
+    expect(css).toContain('.order-action.buy');
+    expect(css).toContain('.order-action.sell');
     expect(css).toContain('min-height:42px');
     expect(css).toContain('button:focus-visible');
   });
