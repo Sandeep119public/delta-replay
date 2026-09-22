@@ -2,9 +2,7 @@ export function createPaperPorts(el) {
   return {
     replay: () => ({
       dataStatusEl: el('data-status'), cacheBadgeEl: el('cache-badge'),
-      startReplayBtn: el('start-replay-btn'), headerStartReplayBtn: el('header-start-replay-btn'),
-      loadBtn: el('load-btn'), fromDateEl: el('from-date'), fromTimeEl: el('from-time'),
-      toDateEl: el('to-date'), toTimeEl: el('to-time'),
+      startReplayBtn: el('header-start-replay-btn'),
     }),
     orderForm: () => ({
       timeframeSelect: el('timeframe-select'), orderTypeSelect: el('order-type'),
