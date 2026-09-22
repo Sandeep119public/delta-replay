@@ -39,12 +39,14 @@ export class MarketModeController {
     this.mode = 'live';
     this.destroyed = false;
     this._listeners = [];
+    this._requestGeneration = 0;
     this._pageChangeHandler = (event) => {
       if (this.destroyed) return;
       if (event?.detail?.page === 'replay') {
         if (this.mode !== 'replay') void this.setMode('replay');
         else void this.refreshDatasets();
       } else {
+        void this.pauseReplay?.();
         this.liveMarket.stop();
       }
     };
@@ -135,11 +137,13 @@ export class MarketModeController {
 
   async refreshDatasets() {
     if (this.destroyed || this.mode !== 'replay') return;
+    const generation = ++this._requestGeneration;
     const [datasets, localDatasets] = await Promise.all([
       this.datasetRepository.list(),
       this.localDatasetRepository.list(),
     ]);
 
+    if (this.destroyed || this.mode !== 'replay' || generation !== this._requestGeneration) return;
     if (this.datasetSelect) {
       this.datasetSelect.replaceChildren();
       if (!datasets.length && !localDatasets.length) {
@@ -193,10 +197,12 @@ export class MarketModeController {
 
   async selectDataset(selection) {
     if (this.destroyed || this.mode !== 'replay' || !selection) return;
+    const generation = ++this._requestGeneration;
     const parsed = this._parseSelection(selection);
     const dataset = parsed.source === 'local'
       ? await this.localDatasetRepository.get(parsed.id)
       : await this.datasetRepository.get(parsed.id);
+    if (this.destroyed || this.mode !== 'replay' || generation !== this._requestGeneration) return;
     const metadata = dataset?.metadata || dataset;
     if (!metadata) {
       this._setStatus('REPLAY · dataset not found');
@@ -214,7 +220,7 @@ export class MarketModeController {
 
     try {
       const loaded = await this.replayCapabilities.load({ datasetId: metadata.id, datasetSource: parsed.source, autoStart: false });
-      if (loaded && !this.destroyed && this.mode === 'replay') {
+      if (loaded && !this.destroyed && this.mode === 'replay' && generation === this._requestGeneration) {
         this._setStatus('REPLAY · ' + (parsed.source === 'local' ? 'LOCAL · ' : 'GITHUB · ') + metadata.symbol + ' · ' + metadata.timeframe + ' · ready');
       }
     } catch (error) {

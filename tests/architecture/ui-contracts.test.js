@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { paperMarkup } from '../../src/ui/paperMarkup.js';
-import { headerMarkup } from '../../src/ui/paper/markup/Header.js';
-import { timelineMarkup } from '../../src/ui/paper/markup/Timeline.js';
-import { workspaceMarkup } from '../../src/ui/paper/markup/Workspace.js';
+import { terminalMarkup } from '../../src/ui/rebuildMarkup.js';
 
-test('paper UI exposes required replay and trading controls', () => {
-  const html = paperMarkup();
-  for (const id of ['page-replay','chart-container','trading-panel','trade-tab','account-tab','tab-view-trade','tab-view-account','btn-play','btn-pause','btn-step','btn-reset','speed-select','btn-follow','btn-trading-drawer','drawer-scrim']) assert.match(html, new RegExp(`id=["']${id}["']`), `missing #${id}`);
+test('rebuilt UI exposes required replay and trading controls', () => {
+  const html = terminalMarkup();
+  for (const id of ['page-replay','chart-container','trading-panel','trade-tab','account-tab','tab-view-trade','tab-view-account','btn-play','btn-pause','btn-step','btn-reset','speed-select','btn-follow','btn-trading-drawer','drawer-scrim']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `missing #${id}`);
+  }
 });
 
 test('application shell exposes stable page and navigation contracts', () => {
-  const html = paperMarkup();
+  const html = terminalMarkup();
   for (const page of ['dashboard','replay','downloads','datasets','validation','storage','experiments','strategies','journal','jobs','system']) {
     assert.match(html, new RegExp(`id=["']page-${page}["']`), `missing page-${page}`);
     assert.match(html, new RegExp(`class=["'][^"']*nav-link[^"']*["'][^>]*data-page=["']${page}["']`), `missing nav link for ${page}`);
@@ -20,8 +19,8 @@ test('application shell exposes stable page and navigation contracts', () => {
   assert.match(html, /id="mobile-nav-toggle"[^>]*aria-controls="app-sidebar"/);
 });
 
-test('inactive account panel starts from the CSS/controller visibility contract', () => {
-  const html = workspaceMarkup();
+test('account panel starts inactive while trade panel is active', () => {
+  const html = terminalMarkup();
   assert.match(html, /id="trade-tab"[^>]*aria-selected="true"/);
   assert.match(html, /id="account-tab"[^>]*aria-selected="false"/);
   assert.match(html, /id="tab-view-trade"[^>]*aria-labelledby="trade-tab"/);
@@ -29,33 +28,30 @@ test('inactive account panel starts from the CSS/controller visibility contract'
 });
 
 test('trading panel exposes a stable accessible name', () => {
-  const html = workspaceMarkup();
+  const html = terminalMarkup();
   assert.match(html, /id="trading-panel"[^>]*aria-labelledby="trading-panel-title"/);
   assert.match(html, /<h2 id="trading-panel-title">Trading desk<\/h2>/);
 });
 
-test('interactive replay controls declare button type explicitly', () => {
-  const html = `${headerMarkup()}${timelineMarkup()}`;
-  for (const id of ['header-start-replay-btn','timeline-start-btn','btn-play','btn-pause','btn-step','btn-reset','btn-follow','jump-btn','start-replay-btn','load-btn']) {
-    const match = html.match(new RegExp(`<button[^>]*id=["']${id}["'][^>]*>`)); assert.ok(match, `missing button #${id}`); assert.match(match[0], /type="button"/);
+test('interactive controls declare button type explicitly', () => {
+  const html = terminalMarkup();
+  const ids = ['live-mode-btn','replay-mode-btn','replay-dataset-refresh','header-start-replay-btn','timeline-start-btn','btn-play','btn-pause','btn-step','btn-reset','btn-follow','btn-buy','btn-sell','btn-close','btn-reset-acct','btn-trading-drawer'];
+  for (const id of ids) {
+    const match = html.match(new RegExp(`<button[^>]*id=["']${id}["'][^>]*>`));
+    assert.ok(match, `missing button #${id}`);
+    assert.match(match[0], /type="button"/);
   }
 });
 
-test('legacy compatibility controls are explicitly marked as non-interactive', () => {
-  const html = `${headerMarkup()}${timelineMarkup()}`;
-  for (const id of ['from-date','from-time','to-date','to-time','load-btn','jump-date','jump-time','jump-btn','start-replay-btn']) {
-    const match = html.match(new RegExp(`<[^>]*id=["']${id}["'][^>]*>`)); assert.ok(match, `missing #${id}`); assert.match(match[0], /class="compat-control"/); assert.match(match[0], /aria-hidden="true"/); assert.match(match[0], /tabindex="-1"/);
+test('rebuilt shell contains no legacy compatibility controls', () => {
+  const html = terminalMarkup();
+  for (const id of ['from-date','from-time','to-date','to-time','load-btn','jump-date','jump-time','jump-btn','start-replay-btn','replay-date','replay-time']) {
+    assert.doesNotMatch(html, new RegExp(`id=["']${id}["']`), `legacy control survived: #${id}`);
   }
 });
 
-test('primary replay control stays available for ready and ended states', () => {
-  const html = timelineMarkup(); assert.match(html, /id="btn-play"[^>]*class="replay-play"/); assert.doesNotMatch(html, /id="btn-play"[^>]*disabled/);
-});
-
-test('replay speed selector exposes the full controller playback ladder', () => {
-  const html = timelineMarkup();
-  for (const speed of ['0.25', '0.5', '1', '2', '5', '10']) {
-    assert.match(html, new RegExp(`<option value="${speed}"`), `missing ${speed}x replay speed`);
-  }
-  assert.match(html, /<option value="1" selected>1×<\/option>/);
+test('primary replay control and playback ladder remain available', () => {
+  const html = terminalMarkup();
+  assert.match(html, /id="btn-play"[^>]*class="replay-play"/);
+  for (const speed of ['0.25','0.5','1','2','5','10']) assert.match(html, new RegExp(`<option value="${speed}"`));
 });

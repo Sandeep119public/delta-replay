@@ -31,13 +31,11 @@ function showFatalError(error) {
 }
 
 window.addEventListener('error', (event) => {
-  console.error('[Delta Replay] unhandled error', event.error || event.message);
-  showFatalError(event.error || event.message || 'Unhandled browser error');
+  console.error('[Delta Replay] unhandled browser error', event.error || event.message);
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('[Delta Replay] unhandled rejection', event.reason);
-  showFatalError(event.reason || 'Unhandled promise rejection');
+  console.error('[Delta Replay] unhandled promise rejection', event.reason);
 });
 
 try {

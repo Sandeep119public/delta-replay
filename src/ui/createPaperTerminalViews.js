@@ -1,7 +1,6 @@
 import { TimelineSparkline } from './TimelineSparkline.js';
 import { ToastNotificationView } from './ToastNotificationView.js';
 import { FloatingPositionView } from './FloatingPositionView.js';
-import { ReplayDateSelector } from './ReplayDateSelector.js';
 import { TradingPanel } from './TradingPanel.js';
 
 export function createPaperTerminalViews(ctx) {
@@ -35,17 +34,6 @@ export function createPaperTerminalViews(ctx) {
   });
   const toastView = new ToastNotificationView();
   const floatingPosView = new FloatingPositionView({ trading, getSymbol });
-  const dateSelector = new ReplayDateSelector({
-    dataset,
-    candles,
-    replay: replayPort,
-    timeframeSelect,
-    onLoadReplay,
-    onPreviewWindow,
-    onSeek,
-    onTimeframeChange,
-    onJump: onSeek,
-  });
   const tradingPanel = new TradingPanel({
     trading,
     tradingEvents,
@@ -83,5 +71,5 @@ export function createPaperTerminalViews(ctx) {
     getSymbol,
   });
 
-  return { sparkline, toastView, floatingPosView, dateSelector, tradingPanel };
+  return { sparkline, toastView, floatingPosView, dateSelector: { destroy() {} }, tradingPanel };
 }
