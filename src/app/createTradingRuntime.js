@@ -2,7 +2,7 @@ import { bindTradingEvents } from '../ui/bindTradingEvents.js';
 import { bindTradingState } from '../ui/TradingStateBridge.js';
 import { createChartTradingActions } from './ChartTradingActions.js';
 
-export function createTradingRuntime({ trading, tradingEvents, actions, ui, views, form, coordinator }) {
+export function createTradingRuntime({ trading, tradingEvents, actions, ui, views, form, reportTradingError = null }) {
   const tradingBindings = bindTradingEvents({
     tradingEvents,
     actions,
@@ -15,7 +15,7 @@ export function createTradingRuntime({ trading, tradingEvents, actions, ui, view
       if (intent.action === 'SET_SL') return trading.actions.setStopLoss(intent.symbol, intent.price);
       return { success: true };
     },
-    reportError: (message) => coordinator?.showTradingError(message),
+    reportError: reportTradingError,
   });
   const chartTradingController = ui.createChartTradingController({
     chartManager: ui.chartManager,
