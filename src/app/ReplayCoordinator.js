@@ -1,7 +1,4 @@
 import { createDatasetChangeService } from './DatasetChangeService.js';
-
-export const VISIBLE_WINDOW = 1000;
-import { createDatasetChangeService } from './DatasetChangeService.js';
 import { createReplayLoadService } from './ReplayLoadService.js';
 
 export { VISIBLE_WINDOW };
