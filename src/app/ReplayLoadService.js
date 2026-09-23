@@ -122,13 +122,12 @@ export function createReplayLoadService({
 
       // One canonical dataset. The timeline, replay cursor, chart and
       // presentation all operate on the exact same complete candle sequence.
-      candleStore.load(integrity.validCandles, replayMetadata);
       appState.setReplayDatasetId(replayMetadata.datasetId, source);
       appState.symbol = metadata.symbol;
       appState.timeframe = metadata.timeframe;
       appState.setCandles(integrity.validCandles, replayMetadata);
 
-      const loadResult = await replayEngine.loadDataset(integrity.validCandles, { startIndex: 0 });
+      const loadResult = await replayEngine.loadDataset(integrity.validCandles, { startIndex: 0, metadata: replayMetadata });
       if (token !== loadToken || destroyed) return null;
 
       const total = candleStore.getCount();
