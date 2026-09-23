@@ -1,4 +1,6 @@
-import { createReplayPreviewService, VISIBLE_WINDOW } from './ReplayPreviewService.js';
+import { createDatasetChangeService } from './DatasetChangeService.js';
+
+export const VISIBLE_WINDOW = 1000;
 import { createDatasetChangeService } from './DatasetChangeService.js';
 import { createReplayLoadService } from './ReplayLoadService.js';
 
@@ -25,9 +27,9 @@ export class ReplayCoordinator {
     }
     this.tradingErrorView = tradingErrorView;
 
-    const previewService = createReplayPreviewService({ candleStore, chartManager, chartAdapter });
-    this.previewService = previewService;
-
+    this.candleStore = candleStore;
+    this.chartManager = chartManager;
+    this.chartAdapter = chartAdapter;
     this.loadService = createReplayLoadService({
       datasetRepository,
       localDatasetRepository,
@@ -74,8 +76,18 @@ export class ReplayCoordinator {
   }
 
   updateLoadButton() { return this.loadService.updateLoadButton(); }
-  updatePreviewWindow(idx) { return this.previewService.updatePreviewWindow(idx); }
-  applyWindowedChart(idx) { return this.previewService.applyWindowedChart(idx); }
+  updatePreviewWindow(idx) {
+    if (!this.candleStore.getCount()) return;
+    this.chartAdapter.showPreview(this.candleStore, idx, VISIBLE_WINDOW);
+    this.chartManager.setAutoFollow(true);
+  }
+
+  applyWindowedChart(idx) {
+    const total = this.candleStore.getCount();
+    if (!total) return;
+    const start = Math.max(0, idx - VISIBLE_WINDOW + 1);
+    this.chartManager.setData(this.candleStore.sliceWindow(start, idx), { fit: false });
+  }
   handleSymbolTimeframeChange(kind, newValue, selectElement) { return this.datasetChangeService.handleSymbolTimeframeChange(kind, newValue, selectElement); }
   showTradingError(msg) { this.tradingErrorView?.show(msg); }
   destroy() { this.loadService.destroy(); }
