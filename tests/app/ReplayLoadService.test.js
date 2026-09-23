@@ -68,7 +68,7 @@ describe('ReplayLoadService', () => {
     const d = deps({
       replayEngine: { loadDataset: vi.fn(async () => { throw new Error('integrity failure'); }) },
     });
-    await expect(createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'bad' })).rejects.toThrow(/integrity failure/i);
+    await expect(createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'BTCUSDT__1M__60__120' })).rejects.toThrow(/integrity failure/i);
     expect(d.appState.setReplayDatasetId).not.toHaveBeenCalled();
   });
 

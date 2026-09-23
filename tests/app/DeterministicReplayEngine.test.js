@@ -118,7 +118,7 @@ describe('DeterministicReplayEngine', () => {
   });
 
   it('seeks deterministically without altering the dataset', async () => {
-    const engine = new TestEngine();
+    const engine = TestEngine();
     await engine.loadDataset(candles);
     await engine.start(1);
     await engine.seek(4);
@@ -128,7 +128,7 @@ describe('DeterministicReplayEngine', () => {
   });
 
   it('never exposes candles after the replay cursor', async () => {
-    const engine = new TestEngine();
+    const engine = TestEngine();
     await engine.loadDataset(candles);
     await engine.start(1);
     const visible = engine.getVisibleCandles();
@@ -136,7 +136,7 @@ describe('DeterministicReplayEngine', () => {
   });
 
   it('resets to ready without losing the chosen start index', async () => {
-    const engine = new TestEngine();
+    const engine = TestEngine();
     await engine.loadDataset(candles);
     await engine.start(2);
     await engine.stepForward();
@@ -145,7 +145,7 @@ describe('DeterministicReplayEngine', () => {
   });
 
   it('ends cleanly at the final candle', async () => {
-    const engine = new TestEngine();
+    const engine = TestEngine();
     await engine.loadDataset(candles);
     await engine.start(5);
     expect(engine.getState().status).toBe('ended');
@@ -154,7 +154,7 @@ describe('DeterministicReplayEngine', () => {
   });
 
   it('changes playback speed without changing the cursor', async () => {
-    const engine = new TestEngine();
+    const engine = TestEngine();
     await engine.loadDataset(candles);
     await engine.start(2);
     engine.setSpeed(5);
