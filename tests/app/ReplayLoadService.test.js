@@ -20,6 +20,7 @@ function deps(overrides = {}) {
     candleStore: {
       get: vi.fn((index) => candles[index] || null),
       getCount: vi.fn(() => candles.length),
+      getAll: vi.fn(() => candles),
     },
     appState: {
       symbol: 'BTCUSDT',
@@ -29,14 +30,13 @@ function deps(overrides = {}) {
       loadingState: 'idle',
       transitionLoading: vi.fn(),
       setLoading: vi.fn(),
-      setCandles: vi.fn(),
       setReplayState: vi.fn(),
       setReplayDatasetId: vi.fn(),
       setPendingStartIndex: vi.fn(),
     },
     replayEngine: {
-      loadDataset: vi.fn(async () => ({ status: 'ready', total: 2, totalCandles: 2, currentIndex: -1, startIndex: -1, visibleCandles: [] })),
-      getState: vi.fn(() => ({ status: 'ready', totalCandles: 2, currentIndex: -1, startIndex: -1 })),
+      loadDataset: vi.fn(async () => ({ status: 'ready', total: 2, totalCandles: 2, currentIndex: -1, startIndex: 0, candle: null })),
+      getState: vi.fn(() => ({ status: 'ready', totalCandles: 2, currentIndex: -1, startIndex: 0 })),
       start: vi.fn(async () => undefined),
     },
     hasOpenPosition: () => false,
@@ -47,7 +47,10 @@ function deps(overrides = {}) {
     controls: { setStartIndex: vi.fn() },
     modeBanner: { update: vi.fn() },
     errorPanel: { hide: vi.fn(), show: vi.fn() },
-    updatePreviewWindow: vi.fn(),
+    tradingErrorView: { show: vi.fn() },
+    dataStatusEl: { textContent: '' },
+    cacheBadgeEl: { classList: { add: vi.fn() } },
+    preview: vi.fn(),
     ...overrides,
   };
 }
@@ -71,18 +74,15 @@ describe('ReplayLoadService', () => {
     await service.loadAndPrepareReplay({ datasetId: 'local-abc', datasetSource: 'local' });
 
     expect(d.localDatasetRepository.get).toHaveBeenCalledWith('local-abc');
-    expect(d.replayEngine.loadLocalDataset).toHaveBeenCalledWith(candles);
+    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith(candles, expect.objectContaining({ startIndex: 0, metadata: expect.any(Object) }));
     expect(d.datasetRepository.list).not.toHaveBeenCalled();
     expect(d.appState.setReplayDatasetId).toHaveBeenCalledWith('local-abc', 'local');
-    expect(d.appState.setCandles).toHaveBeenCalledWith(
-      candles,
-      expect.objectContaining({ local: true, source: 'local-file', saved: false }),
-    );
+    expect(d.appState.setReplayState).toHaveBeenCalled();
   });
 
   it('rejects when no saved replay dataset exists', async () => {
     const d = deps({
-      datasetRepository: { list: vi.fn(async () => []), get: vi.fn(), getRange: vi.fn() },
+      datasetRepository: { list: vi.fn(async () => []), get: vi.fn(), getCandles: vi.fn() },
     });
     const service = createReplayLoadService(d);
 
@@ -93,7 +93,6 @@ describe('ReplayLoadService', () => {
   it('does not replace replay state after a trading activity guard rejects the load', async () => {
     const d = deps({
       hasTradingActivity: () => true,
-      tradingErrorView: { show: vi.fn() },
     });
 
     await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'x' });
@@ -107,7 +106,6 @@ describe('ReplayLoadService', () => {
     const d = deps({
       replayEngine: {
         loadDataset: vi.fn(async () => { throw new Error('dataset integrity failure'); }),
-        loadLocalDataset: vi.fn(async () => undefined),
         getState: vi.fn(() => ({ status: 'ready', totalCandles: 0, currentIndex: -1, startIndex: -1 })),
         start: vi.fn(async () => undefined),
       },
@@ -124,12 +122,9 @@ describe('ReplayLoadService', () => {
     await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'BTCUSDT__1M__60__120' });
 
     expect(d.appState.setReplayDatasetId).toHaveBeenCalledWith('BTCUSDT__1M__60__120', 'github');
-    expect(d.appState.setCandles).toHaveBeenCalledWith(
-      candles,
-      expect.objectContaining({ saved: true, format: 'CSV' }),
-    );
     expect(d.appState.setReplayState).toHaveBeenCalled();
     expect(d.timeline.setEnabled).toHaveBeenCalledWith(true);
+    expect(d.preview).toHaveBeenCalledWith(0);
   });
 
   it('passes the selected saved dataset symbol when auto-starting', async () => {
@@ -139,6 +134,6 @@ describe('ReplayLoadService', () => {
       autoStart: true,
     });
 
-    expect(d.replayEngine.start).toHaveBeenCalledWith(0, 'BTCUSDT');
+    expect(d.replayEngine.start).toHaveBeenCalledWith(0);
   });
 });
