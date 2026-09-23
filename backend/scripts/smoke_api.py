@@ -18,9 +18,9 @@ CANDLES = [
 ]
 
 
-def request(path: str, method: str = "GET", payload: dict | None = None) -> dict:
+def request(path: str, method: str = "GET", payload: dict | None = None, session_id: str = SESSION_ID) -> dict:
     data = None if payload is None else json.dumps(payload).encode("utf-8")
-    headers = {"X-Session-ID": SESSION_ID}
+    headers = {"X-Session-ID": session_id}
     if data:
         headers["Content-Type"] = "application/json"
     request_obj = urllib.request.Request(
