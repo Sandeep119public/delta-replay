@@ -7,7 +7,6 @@ import { TRADING_PRESENTATION_EVENTS, assertTradingPresentation } from '../ports
 export class TimelineSparkline {
   constructor({ canvasEl = null, replay = null, replayPort = null, trading = null, tradingEvents = null, onSeek = null, height = 36, palette = null } = {}) {
     this.canvas = canvasEl;
-    this.candles = candles;
     this.replayPort = replay ?? replayPort;
     this.trading = trading ? assertTradingPresentation(trading) : null;
     this.tradingEvents = tradingEvents;

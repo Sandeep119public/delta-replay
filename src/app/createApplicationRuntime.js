@@ -22,7 +22,6 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
   const dataset = createDatasetView(appState);
-  const candles = createCandleView(candleStore);
   const statusView = createReplayStatusView({ replayPort, appState });
   let replayCapabilities = null;
   let commandController = null;
