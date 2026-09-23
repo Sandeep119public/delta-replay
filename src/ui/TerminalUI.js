@@ -23,8 +23,19 @@ export function createTerminalUI({ mount, replayPort, replayCommands, trading = 
   const timeframeSelector = new TimeframeSelector(el('timeframe-select'), dataset);
   try { chartManager.init(themeManager.getTheme()); } catch (error) { console.error('Chart init failed:', error); }
   adapter.attach();
-  const timeline = new Timeline({ sliderEl: el('timeline-slider'), startLabelEl: el('timeline-start-label'), currentLabelEl: el('timeline-current-label'), endLabelEl: el('timeline-end-label'), indexLabelEl: el('timeline-index-label'), timeLabelEl: el('timeline-time-label'), startIndexLabelEl: el('start-index-label'), startTimeLabelEl: el('start-time-label') });
-  const controls = new ReplayControls({ playBtn: el('btn-play'), pauseBtn: el('btn-pause'), stepBtn: el('btn-step'), resetBtn: el('btn-reset'), startReplayBtn: null, speedSelect: el('speed-select'), statusEl: el('replay-status'), replayPort, commands: replayCommands, followBtn: el('btn-follow'), onFollowClick: onFollow });
+  const timeline = new Timeline({ sliderEl: el('timeline-slider'), startLabelEl: el('timeline-start-label'), startTimeLabelEl: el('start-time-label'), currentLabelEl: el('timeline-current-label'), endLabelEl: el('timeline-end-label'), indexLabelEl: el('timeline-index-label'), timeLabelEl: el('timeline-time-label'), startIndexLabelEl: el('start-index-label') });
+  const controls = new ReplayControls({
+    playBtn: el('btn-play'),
+    pauseBtn: el('btn-pause'),
+    stepBtn: el('btn-step'),
+    resetBtn: el('btn-reset'),
+    speedSelect: el('speed-select'),
+    statusEl: el('replay-status'),
+    replayPort,
+    commands: replayCommands,
+    followBtn: el('btn-follow'),
+    onFollowClick: onFollow,
+  });
   const errorPanel = new ErrorPanel({ onRetry });
   const modeBanner = new ModeBanner();
   const tradingErrorView = new TradingErrorView({ element: el('trading-error') });
