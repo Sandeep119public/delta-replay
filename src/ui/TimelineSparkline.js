@@ -154,11 +154,11 @@ export class TimelineSparkline {
         const exitIdx = this._indexForTime(Number(trade?.closedAt), times);
         const side = String(trade?.side || '').toUpperCase();
         const entryColor = side === 'SHORT' || side === 'SELL' ? this.palette.short : this.palette.long;
-        if (entryIdx >= 0 && Number.isFinite(Number(trade?.entryPrice))) {
+        if (entryIdx >= 0 && entryIdx <= cursor && Number.isFinite(Number(trade?.entryPrice))) {
           const ex = xForIndex(entryIdx), ey = Math.min(Math.max(y(Number(trade.entryPrice)), 4), height - 4);
           ctx.beginPath(); ctx.moveTo(ex, ey - 4); ctx.lineTo(ex - 3.5, ey + 2.5); ctx.lineTo(ex + 3.5, ey + 2.5); ctx.closePath(); ctx.fillStyle = entryColor; ctx.fill();
         }
-        if (exitIdx >= 0 && Number.isFinite(Number(trade?.exitPrice))) {
+        if (exitIdx >= 0 && exitIdx <= cursor && Number.isFinite(Number(trade?.exitPrice))) {
           const ex = xForIndex(exitIdx), ey = Math.min(Math.max(y(Number(trade.exitPrice)), 4), height - 4);
           ctx.beginPath(); ctx.arc(ex, ey, 3, 0, Math.PI * 2); ctx.fillStyle = Number(trade?.netPnL ?? trade?.realizedPnL ?? 0) >= 0 ? this.palette.win : this.palette.loss; ctx.fill();
         }

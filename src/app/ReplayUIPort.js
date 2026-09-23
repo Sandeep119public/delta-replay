@@ -16,7 +16,7 @@ function freezeCandleArray(candles) {
 
 export function createReplayUIPort(engine) {
   if (!engine || typeof engine !== 'object') throw new TypeError('createReplayUIPort requires replay engine');
-  for (const method of ['play', 'pause', 'stepForward', 'reset', 'start', 'setSpeed', 'seek', 'getState', 'getTotalCandles', 'getVisibleCandles', 'getCandleWindow', 'getTimelineTimes']) {
+  for (const method of ['play', 'pause', 'stepForward', 'reset', 'start', 'setSpeed', 'seek', 'getState', 'getTotalCandles', 'getCandle', 'getVisibleCandles', 'getCandleWindow', 'getTimelineTimes']) {
     if (typeof engine[method] !== 'function') throw new TypeError('Replay engine does not expose ' + method);
   }
 
@@ -30,6 +30,10 @@ export function createReplayUIPort(engine) {
     seek: (...args) => engine.seek(...args),
     getState: () => freezeValue(engine.getState()),
     getTotalCandles: () => engine.getTotalCandles(),
+    getCandle: (index) => {
+      const candle = engine.getCandle(index);
+      return candle ? Object.freeze(candle) : null;
+    },
     getVisibleCandles: () => freezeCandleArray(engine.getVisibleCandles()),
     getCandleWindow: (index, windowSize = 1000) => freezeCandleArray(engine.getCandleWindow(index, windowSize)),
     getTimelineTimes: () => Object.freeze(engine.getTimelineTimes().slice()),

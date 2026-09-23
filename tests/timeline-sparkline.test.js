@@ -53,9 +53,11 @@ describe('TimelineSparkline', () => {
   beforeEach(() => {
     ctx = createCtx();
     canvas = createCanvas(ctx);
-    candleStore = { getAll: vi.fn(() => candles) };
+    candleStore = { getAll: vi.fn(() => candles), getCount: vi.fn(() => candles.length) };
     engine = {
-      getState: vi.fn(() => ({ status: 'paused', currentIndex: 10 })),
+      getState: vi.fn(() => ({ status: 'paused', currentIndex: 10, datasetId: 'd1' })),
+      getTotalCandles: vi.fn(() => candles.length),
+      getTimelineTimes: vi.fn(() => candles.map((c) => c.time)),
       on: vi.fn(),
       off: vi.fn(),
     };
@@ -67,12 +69,13 @@ describe('TimelineSparkline', () => {
     expect(empty.render()).toBe(false);
 
     candleStore.getAll.mockReturnValue([]);
+    engine.getTotalCandles.mockReturnValue(0);
     const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: createTradingPresentation(tradingEngine) });
     expect(view.render()).toBe(true);
     expect(ctx.clearRect).toHaveBeenCalled();
   });
 
-  it('draws the close-price sparkline and replay cursor', () => {
+  it('draws only the revealed close-price sparkline and replay cursor', () => {
     const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: createTradingPresentation(tradingEngine) });
     expect(view.render()).toBe(true);
     // sparkline path + cursor line both stroke
@@ -88,15 +91,18 @@ describe('TimelineSparkline', () => {
     ]);
     const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: createTradingPresentation(tradingEngine) });
     view.render();
-    // 2 entries (triangles via fill) + 2 exits (arcs)
-    expect(ctx.arc.mock.calls.length).toBe(2);
-    expect(ctx.fill.mock.calls.length).toBeGreaterThanOrEqual(4);
+    // Only the first trade is revealed at cursor #10.
+    expect(ctx.arc.mock.calls.length).toBe(1);
+    expect(ctx.fill.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('clicking the canvas seeks to the nearest candle index', () => {
+  it('clicking the canvas seeks to the nearest candle index without re-reading the dataset', () => {
     const onSeek = vi.fn();
     const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: createTradingPresentation(tradingEngine), onSeek });
+    view.render();
+    const reads = candleStore.getAll.mock.calls.length;
     view._handleClick({ offsetX: 150 });
+    expect(candleStore.getAll.mock.calls.length).toBe(reads);
     expect(onSeek).toHaveBeenCalledTimes(1);
     const idx = onSeek.mock.calls[0][0];
     // middle of 20 candles -> index ~9-10
@@ -104,9 +110,19 @@ describe('TimelineSparkline', () => {
     expect(idx).toBeLessThanOrEqual(10);
   });
 
+  it('does not rebuild the dataset overview for each replay tick', () => {
+    const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: createTradingPresentation(tradingEngine) });
+    view.render();
+    const reads = candleStore.getAll.mock.calls.length;
+    engine.getState.mockReturnValue({ status: 'paused', currentIndex: 11, datasetId: 'd1' });
+    view.render();
+    expect(candleStore.getAll.mock.calls.length).toBe(reads);
+  });
+
   it('touch tap and drag scrub to the nearest candle index', () => {
     const onSeek = vi.fn();
     const view = new TimelineSparkline({ canvasEl: canvas, candles: candleStore, replay: engine, trading: createTradingPresentation(tradingEngine), onSeek });
+    view.render();
     view._handleTouch({ touches: [{ clientX: 30 }] }, false);
     expect(onSeek).toHaveBeenCalledTimes(1);
     // 30/300 * 19 ≈ 1.9 -> index 2
