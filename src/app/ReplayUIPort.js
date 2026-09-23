@@ -1,7 +1,6 @@
 /**
  * Narrow, immutable replay capability exposed to presentation code.
- * Presentation can drive replay, query visible state, and subscribe only to
- * presentation lifecycle events. Execution-only market events are unreachable.
+ * The presentation layer sees the browser-owned replay state only.
  */
 function freezeValue(value) {
   if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
@@ -38,5 +37,6 @@ export function createReplayUIPort(engine) {
     onSeeked: (listener) => subscribe('seeked', listener),
     onReset: (listener) => subscribe('reset', listener),
     onStepped: (listener) => subscribe('stepped', listener),
+    onPlaybackError: (listener) => subscribe('playbackError', listener),
   });
 }
