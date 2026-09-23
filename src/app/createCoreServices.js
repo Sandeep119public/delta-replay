@@ -22,6 +22,7 @@ export function createCoreServices() {
   const backtestApi = new BackendService('backtest', sessionId);
   const replayTradingEngine = new RemoteTradingEngine(tradingApi, mutationPipeline);
   const engine = new DeterministicReplayEngine({
+    candleStore,
     symbolProvider: () => appState.symbol,
     onCandle: ({ candle, index, symbol }) => replayTradingEngine.onMarketCandle({ candle, index, symbol }),
   });
