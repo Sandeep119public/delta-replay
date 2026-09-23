@@ -81,8 +81,8 @@ describe('MarketModeController', () => {
     expect(d.datasetRepository.get).not.toHaveBeenCalled();
     expect(d.replayCapabilities.load).toHaveBeenCalledWith({ datasetId: 'btc-1m', datasetSource: 'github', autoStart: false });
     expect(d.liveMarket.start).not.toHaveBeenCalled();
-    expect(d.appState.replayDatasetId).toBe('btc-1m');
-    expect(d.appState.replayDatasetSource).toBe('github');
+    expect(d.symbolSelect.value).toBe('BTCUSDT');
+    expect(d.timeframeSelect.value).toBe('1m');
   });
 
   it('loads a browser-local dataset directly through replay loading', async () => {
@@ -95,6 +95,6 @@ describe('MarketModeController', () => {
 
     expect(d.localDatasetRepository.get).not.toHaveBeenCalled();
     expect(d.replayCapabilities.load).toHaveBeenCalledWith({ datasetId: 'local-btc-1m', datasetSource: 'local', autoStart: false });
-    expect(d.appState.replayDatasetSource).toBe('local');
+    expect(d.symbolSelect.value).toBe('BTCUSDT');
   });
 });

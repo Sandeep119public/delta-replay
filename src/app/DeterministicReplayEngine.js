@@ -33,6 +33,7 @@ export class DeterministicReplayEngine {
       totalCandles: 0,
       speed: 1,
       candle: null,
+      datasetId: null,
     };
     this.timer = null;
     this.intent = 0;
@@ -95,13 +96,18 @@ export class DeterministicReplayEngine {
     const candle = index >= 0 ? this.store.get(index) : null;
     if (!candle || !this.onCandle) return { index, previousIndex, candle };
 
-    const processing = Promise.resolve().then(() => this.onCandle({
-      candle,
-      index,
-      symbol: this.symbol(),
-      state: this.getState(),
-      event,
-    }));
+    let processing;
+    try {
+      processing = Promise.resolve(this.onCandle({
+        candle,
+        index,
+        symbol: this.symbol(),
+        state: this.getState(),
+        event,
+      }));
+    } catch (error) {
+      processing = Promise.reject(error);
+    }
     this._candleProcessing = processing;
     try {
       const result = await processing;
@@ -137,6 +143,7 @@ export class DeterministicReplayEngine {
         startIndex: -1,
         totalCandles: 0,
         candle: null,
+        datasetId: null,
       };
       return this.publish('idle');
     }
@@ -151,6 +158,7 @@ export class DeterministicReplayEngine {
       startIndex: start,
       totalCandles: total,
       candle: null,
+      datasetId: metadata.datasetId ?? metadata.id ?? null,
     };
     return this.publish('ready');
   }

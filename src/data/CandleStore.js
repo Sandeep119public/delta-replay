@@ -58,6 +58,8 @@ export class CandleStore {
     return this._byTime.has(targetSec) ? this._byTime.get(targetSec) : -1;
   }
 
+  findIndexByTime(targetSec) { return this.findNearestIndexByTime(targetSec); }
+
   findNearestIndexByTime(targetSec) {
     if (!this._candles.length) return -1;
     let lo = 0;
