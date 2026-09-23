@@ -196,7 +196,7 @@ jobs:
 
   deploy:
     name: Deploy validated frontend
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && vars.DELTA_REPLAY_API_BASE_URL != '' }}
     needs: [security, frontend, backend, integration]
     runs-on: ubuntu-latest
     timeout-minutes: 10
