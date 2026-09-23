@@ -4,7 +4,7 @@ import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { createApplicationActions } from './ApplicationActions.js';
 
 export function createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView, liveDatasetChange = null }) {
-  const { appState, candleStore, engine, datasetRepository, tradingEngine } = services;
+  const { appState, candleStore, engine, datasetRepository, localDatasetRepository, tradingEngine } = services;
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
     hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
@@ -14,6 +14,7 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
 
   const coordinator = new ReplayCoordinator({
     datasetRepository,
+    localDatasetRepository,
     candleStore,
     appState,
     replayEngine: engine,
@@ -41,6 +42,17 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
     onError: (msg) => coordinator.showTradingError(msg),
   });
 
+  const replayLifecycle = bindReplayLifecycle({
+    engine,
+    appState,
+    candleStore,
+    statusView,
+    timeline: ui.timeline,
+    modeBanner: ui.modeBanner,
+    preview: replayRuntime.capabilities.preview,
+    chartManager: ui.chartManager,
+  });
+
   return {
     replayTradingCapabilities,
     coordinator,
@@ -57,16 +69,7 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
       errorPanel: ui.errorPanel,
       liveDatasetChange,
     }),
-    replayLifecycle: bindReplayLifecycle({
-      engine,
-      appState,
-      candleStore,
-      statusView,
-      timeline: ui.timeline,
-      modeBanner: ui.modeBanner,
-      preview: replayRuntime.capabilities.preview,
-      chartManager: ui.chartManager,
-    }),
+    replayLifecycle,
     unbindKeyboardShortcuts: commandController.bindKeyboardShortcuts(),
   };
 }
