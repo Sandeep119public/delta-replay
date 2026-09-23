@@ -1,12 +1,11 @@
 export class ReplayControls {
-  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, replayPort, commands, followBtn = null, onFollowClick = null }) {
+  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, speedSelect, statusEl, replayPort, commands, followBtn = null, onFollowClick = null }) {
     if (!replayPort || !commands) throw new TypeError('ReplayControls requires replay state and commands');
     this.commands = commands;
     this.playBtn = playBtn;
     this.pauseBtn = pauseBtn;
     this.stepBtn = stepBtn;
     this.resetBtn = resetBtn;
-    this.startReplayBtn = startReplayBtn;
     this.speedSelect = speedSelect;
     this.statusEl = statusEl;
     this.replayPort = replayPort;
@@ -14,22 +13,24 @@ export class ReplayControls {
     this.onFollowClick = onFollowClick;
     this._listeners = [];
     this._subscriptions = [];
-    this._listen = (el, type, handler) => {
+
+    const listen = (el, type, handler) => {
       el?.addEventListener?.(type, handler);
       if (el?.removeEventListener) this._listeners.push([el, type, handler]);
     };
 
-    this._listen(this.playBtn, 'click', () => { void this._safeAction(() => this.commands.togglePlayPause()); });
-    this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.commands.pause()); });
-    this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.commands.stepForward()); });
-    this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.commands.reset()); });
-    this._listen(this.speedSelect, 'change', () => {
+    listen(this.playBtn, 'click', () => { void this._safeAction(() => this.commands.togglePlayPause()); });
+    listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.commands.pause()); });
+    listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.commands.stepForward()); });
+    listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.commands.reset()); });
+    listen(this.speedSelect, 'change', () => {
       void this._safeAction(() => this.commands.setSpeed(this.speedSelect.value), (error) => {
         if (this.speedSelect && error) this.speedSelect.value = String(this.replayPort.getState().speed);
       });
     });
 
-    if (this.followBtn) this._listen(this.followBtn, 'click', () => {
+    listen(this.followBtn, 'click', () => {
+      if (!this.followBtn) return;
       this.onFollowClick?.();
       this.followBtn.classList.add('hidden');
     });
@@ -65,18 +66,6 @@ export class ReplayControls {
     }
   }
 
-  setStartIndex(idx) {
-    const n = Number(idx);
-    const total = this.replayPort.getTotalCandles?.() ?? this.replayPort.getState()?.totalCandles ?? 0;
-    const valid = Number.isInteger(n) && n >= 0 && n < total;
-    if (valid) {
-      if (this.startReplayBtn) { this.startReplayBtn.dataset.startIndex = String(n); this.startReplayBtn.disabled = false; }
-    } else {
-      if (this.startReplayBtn) { delete this.startReplayBtn.dataset.startIndex; this.startReplayBtn.disabled = true; }
-    }
-    return valid;
-  }
-
   render(state) {
     if (!state) return;
     const total = Number(state.totalCandles ?? state.total ?? 0);
@@ -90,19 +79,11 @@ export class ReplayControls {
 
     if (this.statusEl) {
       this.statusEl.textContent = String(state.status).toUpperCase();
-      this.statusEl.className = `replay-status ${state.status}`;
+      this.statusEl.className = 'replay-status ' + state.status;
     }
     try {
       document.body?.classList?.toggle('velocity-boost', Number(state.speed) >= 5);
     } catch {}
-
-    if (this.startReplayBtn) {
-      const text = isReady ? 'START REPLAY' : (isPlaying ? 'PAUSE' : isPaused ? 'RESUME' : isEnded ? 'REPLAY AGAIN' : 'START REPLAY');
-      const label = isReady ? 'Start replay' : (isPlaying ? 'Pause replay' : isPaused ? 'Resume replay' : isEnded ? 'Replay again' : 'Start replay');
-      this.startReplayBtn.textContent = text;
-      this.startReplayBtn.setAttribute?.('aria-label', label);
-      this.startReplayBtn.disabled = !hasData || isIdle || (isReady && Number.isNaN(Number(this.startReplayBtn.dataset.startIndex)));
-    }
 
     if (this.playBtn) {
       this.playBtn.classList.toggle('hidden', isPlaying);
@@ -126,7 +107,7 @@ export class ReplayControls {
 
   setEnabledForPreview(enabled = true) {
     const disabled = !enabled;
-    [this.playBtn, this.pauseBtn, this.stepBtn, this.resetBtn, this.startReplayBtn, this.speedSelect]
+    [this.playBtn, this.pauseBtn, this.stepBtn, this.resetBtn, this.speedSelect]
       .forEach((element) => { if (element) element.disabled = disabled; });
   }
 
