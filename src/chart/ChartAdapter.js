@@ -15,7 +15,7 @@ export class ChartAdapter {
     if (this._destroyed || !this.replayPort || !this.chart) return;
     this.detach();
 
-    const render = (index, { fit = false } = {}) => {
+    const renderWindow = (index, { fit = false } = {}) => {
       if (this._destroyed || !this.chart) return;
       const window = this.replayPort.getVisibleCandles?.() || [];
       if (!window.length) {
@@ -29,16 +29,29 @@ export class ChartAdapter {
       this._lastRenderedIndex = index;
     };
 
+    const renderStep = (index) => {
+      if (this._destroyed || !this.chart || index <= this._lastRenderedIndex) return;
+      const candle = this.replayPort.getCandleWindow?.(index, 1)?.[0];
+      if (!candle) {
+        renderWindow(index, { fit: false });
+        return;
+      }
+      const updated = this.chart.updateRevealedCandle?.(candle);
+      if (!updated) {
+        renderWindow(index, { fit: false });
+        return;
+      }
+      this._lastRenderedIndex = index;
+    };
+
     const subscriptions = [
-      [this.replayPort.onStarted, ({ index }) => render(index, { fit: true })],
-      [this.replayPort.onSeeked, ({ index }) => render(index, { fit: true })],
+      [this.replayPort.onStarted, ({ index }) => renderWindow(index, { fit: true })],
+      [this.replayPort.onSeeked, ({ index }) => renderWindow(index, { fit: true })],
       [this.replayPort.onReset, (payload) => {
         const state = this.replayPort.getState();
-        render(payload?.index ?? state.currentIndex, { fit: true });
+        renderWindow(payload?.index ?? state.currentIndex, { fit: true });
       }],
-      [this.replayPort.onStepped, ({ index }) => {
-        if (index > this._lastRenderedIndex) render(index, { fit: false });
-      }],
+      [this.replayPort.onStepped, ({ index }) => renderStep(index)],
     ];
 
     for (const [subscribe, handler] of subscriptions) {
@@ -73,6 +86,6 @@ export class ChartAdapter {
     if (!window.length) return;
     this.chart.setRevealedMax?.(window[window.length - 1].time);
     this.chart.setData(window, { fit: true });
-    this._lastRenderedIndex = -1;
+    this._lastRenderedIndex = index;
   }
 }

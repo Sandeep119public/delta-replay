@@ -45,7 +45,8 @@ export function createReplayLoadService({
       throw error;
     }
 
-    const listing = datasets.find((dataset) => dataset.id === selectedId);
+    const listing = datasets.find((dataset) => dataset.id === selectedId)
+      || await datasetRepository.get(selectedId);
     if (!listing) {
       const error = new Error('Selected replay dataset no longer exists');
       error.code = 'DATASET_NOT_FOUND';

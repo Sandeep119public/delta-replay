@@ -23,7 +23,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const replayPort = createReplayUIPort(engine);
   const dataset = createDatasetView(appState);
   const candles = createCandleView(candleStore);
-  const statusView = createReplayStatusView({ engine, appState, candleStore });
+  const statusView = createReplayStatusView({ engine, appState });
   let replayCapabilities = null;
   let commandController = null;
   let chartManager = null;
@@ -154,6 +154,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     candleCache,
     resources: [
       replay,
+      tradingEngine,
       mutationPipeline,
       selectorBindings,
       timelineBindings,

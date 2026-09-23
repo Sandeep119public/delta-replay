@@ -10,7 +10,7 @@ This document is the fast orientation layer for human and AI-assisted changes. T
 | `src/ui/` | DOM rendering, controls, interaction, accessibility | UI and interaction behavior |
 | `src/data/` | candle providers, stores, caches, historical data | market-data behavior |
 | `src/indicators/` | indicator calculations and indicator data | technical indicators |
-| `src/state/` | application state | state shape and state transitions |
+| `src/state/` | application state only, never historical candle storage | state shape and state transitions |
 | `src/core/` | framework-neutral core primitives | low-level shared behavior |
 | `src/chart/` | chart integration and chart/replay translation | chart behavior |
 | `src/pages/` | page-level composition | route/page wiring |
@@ -21,7 +21,11 @@ This document is the fast orientation layer for human and AI-assisted changes. T
 | `backend/` | HTTP API, persistence, backend tests | server behavior |
 | `tests/architecture/` | architectural and UI contract tests | boundary changes |
 
-The current frontend keeps replay and trading remote adapters under `src/app/` because they coordinate backend capabilities and application state rather than constituting independent browser domain layers. The architecture policy intentionally describes the tree that exists, not planned directories that are not present.
+The frontend replay data path is intentionally browser-owned after a dataset is selected:
+
+`saved/local dataset -> ReplayLoadService -> CandleStore -> DeterministicReplayEngine -> ReplayUIPort -> Chart/UI`.
+
+Paper-trading integration is an application-level observer of replay candles. The replay engine does not know which trading implementation consumes its candle callback.
 
 ## Composition rules
 
@@ -31,7 +35,7 @@ Prefer this flow:
 
 `UI intent -> application action/port -> domain or adapter -> state/event -> UI`
 
-Avoid making UI components reach directly into backend services or low-level engines when an existing port/adapter exists.
+For replay, there is exactly one mutable dataset owner: `CandleStore`. `AppState` contains application/session metadata but never stores, loads, or exposes candle collections. UI components may receive immutable presentation views, but they must not retain the historical candle dataset themselves when they only need timestamps or the current replay window.
 
 ## DOM contracts
 
@@ -45,53 +49,17 @@ When changing a required ID, role, tab relationship, hidden state, or compatibil
 
 ## Lifecycle rules
 
-Every listener, subscription, timer, observer, chart handle, or cache handle created by application code should have an obvious cleanup owner.
+Every listener, subscription, timer, observer, chart handle, or cache handle created by application code should have an obvious cleanup owner. Replay runtime owns replay command cleanup; the application lifecycle owns service cleanup. Cleanup should be idempotent because multiple lifecycle signals can converge on the same teardown path.
 
-Prefer `destroy()` or an unsubscribe function and register it with the application lifecycle. Cleanup should be idempotent because multiple lifecycle signals can converge on the same teardown path.
+## Data and replay rules
 
-## Architecture policy integrity
-
-Every declared `src/<layer>/` must exist, and every actual first-level directory under `src/` must be declared. This prevents the architecture checker from silently ignoring a renamed, deleted, or newly introduced layer.
-
-The policy is versioned. The current schema version is exposed by `scripts/architecture-policy.mjs` and is consumed by the context tooling and architecture tests.
-
-## AI context and changed-file routing
-
-Use the same machine-backed architecture policy that the verifier uses:
-
-```bash
-npm run vibe:context
-npm run vibe:context:json
-npm run vibe:changed
-npm run vibe:changed:json
-```
-
-The JSON variants expose ownership, dependency rules, verification commands, and changed-file impact routing. Treat this output as an agent-facing API. Do not copy ownership, dependency, or impact tables into new scripts; update `scripts/architecture-policy.mjs` instead.
-
-## Safe vibe-coding loop
-
-Use the smallest useful verification command while iterating, then run the full gate before pushing:
-
-```bash
-npm run vibe:fast
-npm run vibe:check
-```
-
-Useful project commands:
-
-```bash
-npm run dev
-npm run dev:host
-npm run vibe:where
-npm run vibe:context
-npm run test:ui-contracts
-npm test
-npm run build
-```
-
-## Change-size rule
-
-A small behavior change should normally have a small diff. If an experiment requires touching unrelated modules, look for a missing boundary before continuing.
+- Historical replay reads only saved datasets from GitHub-backed storage or browser-local storage. Replay does not fetch live candles.
+- Dataset loading validates the complete dataset before committing it to `CandleStore`.
+- Timeline stores timestamps and cursor metadata, not candle objects.
+- Chart preview and playback both read through the same replay presentation port.
+- During playback, replay cursor transitions are serialized with the optional candle consumer. A failed consumer does not silently advance the external replay state.
+- Playback speed controls the replay timer; the cursor itself is deterministic and independent of wall-clock timing.
+- Live mode owns the Binance market stream separately from replay mode.
 
 ## AI-assisted development rules
 
@@ -106,13 +74,16 @@ A small behavior change should normally have a small diff. If an experiment requ
 
 The runtime keeps one canonical owner for each mutable concern:
 
-- ReplaySession owns replay lifecycle and session history; ReplayTimeline owns ordered event history.
-- PaperTradingEngine owns trading state and execution behavior.
-- RemoteTradingEngine exposes canonical remote commands: submitOrder, closePosition, setRisk, clearRisk, cancelOrder, cancelAll, reset, setStartingBalance, and setFeeRate.
-- TradingPresentationAdapter is the only place where UI intent names are translated to those remote commands.
-- SessionMutationPipeline has two explicit concurrency modes: serial for state mutations and latest for independently refreshable reads/market-candle updates. Generation invalidation remains the lifecycle boundary.
-- Replay symbol queries are named by intent: latest_replay_symbol means the most recent replay step, while latest_market_context_symbol means the most recent market context event. They are intentionally distinct because supplemental symbol candles can change market context without changing replay identity.
-- Session persistence is exposed through ReplaySession: serialize_replay_session and restore_replay_session. Component-level compatibility wrappers are not part of the public persistence API.
-- UI styles are organized into semantic layers: replay.css, trading.css, mobile.css, system.css, and responsive.css. Historical phase filenames are implementation history, not new extension points.
+- `CandleStore` owns the loaded replay dataset.
+- `DeterministicReplayEngine` owns replay cursor/lifecycle state.
+- `AppState` owns application/session metadata and loading state, not candle data.
+- `ReplayLoadService` is the single replay dataset loading/validation workflow.
+- `MarketModeController` owns LIVE/REPLAY mode and dataset-list UI; it delegates actual dataset loading to `ReplayLoadService`.
+- `ReplayUIPort` is the presentation boundary for replay state, visible windows, timeline timestamps, and replay commands.
+- `Timeline` owns only slider/cursor UI state, timestamps, and trade markers.
+- `ChartAdapter` uses one replay data path for preview, seek, and playback.
+- `SessionMutationPipeline` serializes trading mutations and prevents stale responses from replacing newer session state.
+- `RemoteTradingEngine` remains the trading adapter; it is not part of replay data ownership.
+- Replay runtime owns its command controller and keyboard binding cleanup. The application lifecycle owns the runtime and destroys the remote trading engine separately.
 
-These rules are architectural constraints, not compatibility shims. New callers should use the canonical APIs rather than adding aliases.
+New callers should use these canonical APIs rather than adding compatibility aliases or alternate data paths.

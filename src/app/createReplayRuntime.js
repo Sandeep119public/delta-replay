@@ -1,4 +1,3 @@
-import { createDatasetChangeService } from './DatasetChangeService.js';
 import { createReplayLoadService } from './ReplayLoadService.js';
 import { ReplayCommandController } from './ReplayCommandController.js';
 
@@ -34,14 +33,9 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
 
   let commandController = null;
   let keyboardCleanup = null;
-
   const reportStatus = () => ui.modeBanner.update(statusView.snapshot());
 
   const loadReplay = async ({ datasetId = null, datasetSource = null, autoStart = false } = {}) => {
-    if (engine.getTotalCandles() && appState.mode !== 'replay') {
-      engine.pause();
-    }
-
     ui.errorPanel?.hide();
     if (replayPorts.dataStatusEl) replayPorts.dataStatusEl.textContent = 'Loading replay dataset…';
     reportStatus();
@@ -58,7 +52,7 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
       ui.timeline.setPosition(state.startIndex);
       appState.setPendingStartIndex(state.startIndex);
       preview(state.startIndex);
-      if (replayPorts.cacheBadgeEl) replayPorts.cacheBadgeEl.classList.add('hidden');
+      replayPorts.cacheBadgeEl?.classList.add('hidden');
 
       if (replayPorts.dataStatusEl) {
         const label = metadata.local ? 'Local dataset: ' : 'Saved dataset: ';
@@ -85,25 +79,9 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
     }
   };
 
-  const changeDataset = createDatasetChangeService({
-    hasOpenPosition: replayTradingCapabilities.hasOpenPosition,
-    hasTradingActivity: replayTradingCapabilities.hasTradingActivity,
-    clearPendingOrders: replayTradingCapabilities.clearPendingOrders,
-    appState,
-    candleStore,
-    replayEngine: engine,
-    chartManager: ui.chartManager,
-    timeline: ui.timeline,
-    controls: ui.controls,
-    reportError: reportTradingError,
-    invalidateLoad: () => loadService.invalidateCurrentLoad(),
-    reload: () => loadReplay({ autoStart: false }),
-  });
-
   const replayCapabilities = Object.freeze({
     load: (options = {}) => loadReplay(options),
     preview,
-    changeDataset: (kind, value, sourceEl) => changeDataset.handleSymbolTimeframeChange(kind, value, sourceEl),
   });
 
   commandController = new ReplayCommandController({
@@ -139,7 +117,7 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
       if (appState.mode === 'live' && typeof liveDatasetChange === 'function') {
         return liveDatasetChange(kind, value, sourceEl);
       }
-      return replayCapabilities.changeDataset(kind, value, sourceEl);
+      return false;
     },
 
     previewTimeline(index) {
@@ -194,7 +172,6 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
 
   const destroy = () => {
     loadService.destroy();
-    changeDataset?.destroy?.();
     keyboardCleanup?.();
     commandController?.destroy?.();
     keyboardCleanup = null;

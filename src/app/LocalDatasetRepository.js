@@ -5,7 +5,6 @@ const DB_NAME = 'delta-replay-local-datasets-v1';
 const STORE_NAME = 'datasets';
 const CSV_HEADER = ['time', 'open', 'high', 'low', 'close', 'volume'];
 const MAX_FILE_BYTES = 90 * 1024 * 1024;
-
 const memory = new Map();
 
 function csvLine(values) {
@@ -13,9 +12,7 @@ function csvLine(values) {
 }
 
 function toCsv(candles) {
-  return [csvLine(CSV_HEADER), ...candles.map((c) => csvLine([
-    c.time, c.open, c.high, c.low, c.close, c.volume,
-  ]))].join('\n') + '\n';
+  return [csvLine(CSV_HEADER), ...candles.map((c) => csvLine([c.time, c.open, c.high, c.low, c.close, c.volume]))].join('\n') + '\n';
 }
 
 function parseCsv(text) {
@@ -30,14 +27,7 @@ function parseCsv(text) {
     if (!line) continue;
     const cells = line.split(',');
     if (cells.length !== CSV_HEADER.length) throw new Error('Local dataset CSV row ' + (i + 2) + ' has an invalid column count');
-    raw.push({
-      time: cells[0],
-      open: cells[1],
-      high: cells[2],
-      low: cells[3],
-      close: cells[4],
-      volume: cells[5],
-    });
+    raw.push({ time: cells[0], open: cells[1], high: cells[2], low: cells[3], close: cells[4], volume: cells[5] });
   }
   if (!raw.length) throw new Error('Local dataset CSV contains no candles');
   return CandleNormalizer.normalizeBatch(raw, { timestampUnit: 'seconds' });
@@ -47,24 +37,17 @@ function inferIdentity(fileName) {
   const name = String(fileName || '').replace(/\.csv$/i, '');
   const match = name.match(/^([A-Z0-9._-]{2,32})-(1m|3m|5m|15m|30m|1h|2h|4h|6h|8h|12h|1d|3d|1w)(?:-([a-f0-9]{16,64}))?$/i);
   if (!match) throw new Error('Local dataset filename must be SYMBOL-TIMEFRAME.csv or SYMBOL-TIMEFRAME-CONTENTID.csv');
-  return {
-    symbol: match[1].toUpperCase(),
-    timeframe: match[2],
-    contentIdPrefix: match[3]?.toLowerCase() || '',
-  };
+  return { symbol: match[1].toUpperCase(), timeframe: match[2], contentIdPrefix: match[3]?.toLowerCase() || '' };
 }
 
 function canonicalValue(value) {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new Error('Replay dataset contains a non-finite number');
-    const normalized = value.toLocaleString('en-US', { useGrouping: false, maximumSignificantDigits: 21 });
-    return normalized;
+    return value.toLocaleString('en-US', { useGrouping: false, maximumSignificantDigits: 21 });
   }
   if (Array.isArray(value)) return value.map(canonicalValue);
-  if (typeof value === 'object') {
-    return Object.fromEntries(Object.keys(value).sort().map((key) => [String(key), canonicalValue(value[key])]));
-  }
+  if (typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map((key) => [String(key), canonicalValue(value[key])]));
   throw new Error('Unsupported replay dataset value');
 }
 
@@ -72,10 +55,7 @@ async function datasetContentId(candles) {
   const canonical = JSON.stringify(canonicalValue(candles));
   if (!globalThis.crypto?.subtle) {
     let h1 = 0x811c9dc5;
-    for (let i = 0; i < canonical.length; i += 1) {
-      h1 ^= canonical.charCodeAt(i);
-      h1 = Math.imul(h1, 0x01000193);
-    }
+    for (let i = 0; i < canonical.length; i += 1) { h1 ^= canonical.charCodeAt(i); h1 = Math.imul(h1, 0x01000193); }
     return (h1 >>> 0).toString(16).padStart(8, '0').repeat(8);
   }
   const bytes = new TextEncoder().encode(canonical);
@@ -95,13 +75,32 @@ function openDatabase() {
   });
 }
 
+function memoryList() {
+  return [...memory.values()].map((item) => ({ ...item.metadata })).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+async function putPersistent(record) {
+  const db = await openDatabase();
+  if (!db) return false;
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(record);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error || new Error('Unable to store local dataset'));
+      tx.onabort = () => reject(tx.error || new Error('Unable to store local dataset'));
+    });
+    return true;
+  } finally {
+    try { db.close(); } catch {}
+  }
+}
+
 export class LocalDatasetRepository {
   async list() {
-    if (!globalThis.indexedDB) {
-      return [...memory.values()].map((item) => ({ ...item.metadata })).sort((a, b) => b.updatedAt - a.updatedAt);
-    }
+    if (!globalThis.indexedDB) return memoryList();
     const db = await openDatabase();
-    if (!db) return [...memory.values()].map((item) => ({ ...item.metadata }));
+    if (!db) return memoryList();
     const values = await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const request = tx.objectStore(STORE_NAME).getAll();
@@ -181,22 +180,12 @@ export class LocalDatasetRepository {
       createdAt: now,
       updatedAt: now,
     };
-    const record = { id: metadata.id, metadata, candles };
-    memory.set(record.id, structuredClone(record));
 
-    if (globalThis.indexedDB) {
-      const db = await openDatabase();
-      if (db) {
-        await new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_NAME, 'readwrite');
-          tx.objectStore(STORE_NAME).put(record);
-          tx.oncomplete = resolve;
-          tx.onerror = () => reject(tx.error || new Error('Unable to store local dataset'));
-          tx.onabort = () => reject(tx.error || new Error('Unable to store local dataset'));
-        });
-        try { db.close(); } catch {}
-      }
+    const record = { id: metadata.id, metadata, candles };
+    if (globalThis.indexedDB && await putPersistent(record)) {
+      return structuredClone(metadata);
     }
+    memory.set(record.id, structuredClone(record));
     return structuredClone(metadata);
   }
 

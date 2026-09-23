@@ -13,7 +13,12 @@ class TestCandleStore {
 }
 
 const candles = Array.from({ length: 6 }, (_, i) => ({
-  time: (i + 1) * 60, open: 100 + i, high: 101 + i, low: 99 + i, close: 100.5 + i, volume: 10,
+  time: (i + 1) * 60,
+  open: 100 + i,
+  high: 101 + i,
+  low: 99 + i,
+  close: 100.5 + i,
+  volume: 10,
 }));
 
 describe('DeterministicReplayEngine', () => {
@@ -28,26 +33,51 @@ describe('DeterministicReplayEngine', () => {
     expect(engine.getTimelineTimes()).toEqual([60, 120, 180, 240, 300, 360]);
   });
 
-  it('awaits the candle processor before advancing', async () => {
-    let resolveCandle;
-    const onCandle = vi.fn(() => new Promise((resolve) => { resolveCandle = resolve; }));
+  it('awaits the candle processor before completing a step', async () => {
+    const processing = [];
+    const onCandle = vi.fn(({ index }) => new Promise((resolve) => processing.push({ index, resolve })));
     const engine = new DeterministicReplayEngine({ candleStore: new TestCandleStore(), onCandle });
     await engine.loadDataset(candles);
+
     const startPromise = engine.start(1);
     await Promise.resolve();
     expect(onCandle).toHaveBeenCalledOnce();
     expect(engine.getState().currentIndex).toBe(1);
-    resolveCandle();
+    processing.shift().resolve();
     await startPromise;
 
-    let stepResolved = false;
     const step = engine.stepForward();
     await Promise.resolve();
     expect(engine.getState().currentIndex).toBe(2);
-    expect(stepResolved).toBe(false);
-    resolveCandle = () => { stepResolved = true; };
+    expect(onCandle).toHaveBeenCalledTimes(2);
+    let completed = false;
+    step.finally(() => { completed = true; });
+    await Promise.resolve();
+    expect(completed).toBe(false);
+    processing.shift().resolve();
     await step;
-    expect(stepResolved).toBe(true);
+    expect(completed).toBe(true);
+  });
+
+  it('continues playback across ticks instead of becoming paused after the first tick', async () => {
+    vi.useFakeTimers();
+    try {
+      const seen = [];
+      const engine = new DeterministicReplayEngine({
+        candleStore: new TestCandleStore(),
+        onCandle: async ({ index }) => { seen.push(index); },
+      });
+      await engine.loadDataset(candles);
+      engine.setSpeed(10);
+      await engine.play();
+      await vi.advanceTimersByTimeAsync(125);
+      expect(engine.getState().status).toBe('playing');
+      expect(engine.getState().currentIndex).toBeGreaterThanOrEqual(2);
+      expect(seen.length).toBeGreaterThanOrEqual(3);
+      engine.pause();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('clears stale candles when an empty dataset is loaded', async () => {

@@ -11,7 +11,7 @@ describe('ReplayCommandController', () => {
       on: () => () => {},
       pause: vi.fn(async () => {}),
     };
-    const controller = new ReplayCommandController({ engine, candleStore: { getCount: () => 3 }, appState: {}, onError: vi.fn() });
+    const controller = new ReplayCommandController({ engine, appState: {}, onError: vi.fn() });
     const first = controller.stepForward();
     const second = controller.stepForward();
     expect(engine.stepForward).toHaveBeenCalledTimes(1);

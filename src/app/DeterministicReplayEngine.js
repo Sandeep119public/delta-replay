@@ -36,6 +36,7 @@ export class DeterministicReplayEngine {
     };
     this.timer = null;
     this.intent = 0;
+    this._candleProcessing = null;
     this.destroyed = false;
   }
 
@@ -50,9 +51,7 @@ export class DeterministicReplayEngine {
   }
 
   getTotalCandles() { return this.store.getCount(); }
-
   getCandle(index) { return this.store.get(index); }
-
   getTimelineTimes() { return this.store.getTimes(); }
 
   getCandleWindow(index, windowSize = 1000) {
@@ -86,27 +85,49 @@ export class DeterministicReplayEngine {
     return this.getState();
   }
 
-  async emitCandle(event, previousIndex = null) {
-    const index = this.state.currentIndex;
+  async _waitForCandleProcessing() {
+    const pending = this._candleProcessing;
+    if (!pending) return;
+    try { await pending; } catch {}
+  }
+
+  async _processCandle(index, event, previousIndex) {
     const candle = index >= 0 ? this.store.get(index) : null;
-    const payload = { index, previousIndex, candle, state: this.getState() };
-    this.events.emit(event, payload);
-    if (!candle || !this.onCandle) return;
-    const result = await this.onCandle({
+    if (!candle || !this.onCandle) return { index, previousIndex, candle };
+
+    const processing = Promise.resolve().then(() => this.onCandle({
       candle,
       index,
       symbol: this.symbol(),
       state: this.getState(),
       event,
-    });
-    if (result?.success === false) {
-      throw new Error(result.message || 'Replay market-candle processing failed');
+    }));
+    this._candleProcessing = processing;
+    try {
+      const result = await processing;
+      if (result?.success === false) {
+        throw new Error(result.message || 'Replay market-candle processing failed');
+      }
+      return { index, previousIndex, candle };
+    } finally {
+      if (this._candleProcessing === processing) this._candleProcessing = null;
     }
+  }
+
+  _emitCandleEvent(event, { index, previousIndex, candle }) {
+    this.events.emit(event, {
+      index,
+      previousIndex,
+      candle,
+      state: this.getState(),
+    });
   }
 
   async loadDataset(candles, { startIndex = 0, metadata = {} } = {}) {
     if (this.destroyed) return this.getState();
     this.pause();
+    await this._waitForCandleProcessing();
+
     if (!Array.isArray(candles) || !candles.length) {
       this.store.clear();
       this.state = {
@@ -136,49 +157,82 @@ export class DeterministicReplayEngine {
 
   async start(index = this.state.startIndex >= 0 ? this.state.startIndex : 0) {
     if (this.destroyed || !this.getTotalCandles()) return this.getState();
+    await this._waitForCandleProcessing();
     const n = Number(index);
     if (!Number.isInteger(n) || n < 0 || n >= this.getTotalCandles()) {
       throw new RangeError('Replay start index is outside dataset');
     }
+
     this.pause();
+    const previousIndex = this.state.currentIndex;
     this.state = { ...this.state, startIndex: n, currentIndex: n };
-    this.publish('paused');
-    await this.emitCandle('started');
-    if (n === this.getTotalCandles() - 1) this.publish('ended');
-    return this.getState();
+    try {
+      const payload = await this._processCandle(n, 'started', previousIndex);
+      const status = n === this.getTotalCandles() - 1 ? 'ended' : 'paused';
+      this.publish(status);
+      this._emitCandleEvent('started', payload);
+      return this.getState();
+    } catch (error) {
+      this.state = { ...this.state, currentIndex: previousIndex, candle: previousIndex >= 0 ? this.store.get(previousIndex) : null };
+      this.publish(previousIndex >= 0 ? 'paused' : 'ready');
+      throw error;
+    }
   }
 
   async seek(index) {
     if (this.destroyed) return this.getState();
+    await this._waitForCandleProcessing();
     const n = Number(index);
     if (!Number.isInteger(n) || n < 0 || n >= this.getTotalCandles()) {
       throw new RangeError('Replay seek index is outside dataset');
     }
+
     this.pause();
-    const previous = this.state.currentIndex;
+    const previousIndex = this.state.currentIndex;
     this.state = { ...this.state, currentIndex: n };
-    this.publish('paused');
-    await this.emitCandle('seeked', previous);
-    if (n === this.getTotalCandles() - 1) this.publish('ended');
-    return this.getState();
+    try {
+      const payload = await this._processCandle(n, 'seeked', previousIndex);
+      const status = n === this.getTotalCandles() - 1 ? 'ended' : 'paused';
+      this.publish(status);
+      this._emitCandleEvent('seeked', payload);
+      return this.getState();
+    } catch (error) {
+      this.state = { ...this.state, currentIndex: previousIndex, candle: previousIndex >= 0 ? this.store.get(previousIndex) : null };
+      this.publish(previousIndex >= 0 ? 'paused' : 'ready');
+      throw error;
+    }
   }
 
   async stepForward() {
     if (this.destroyed || this.state.currentIndex < 0) return this.getState();
-    const previous = this.state.currentIndex;
-    const next = Math.min(previous + 1, this.getTotalCandles() - 1);
-    if (next === previous) return this.publish('ended');
+    await this._waitForCandleProcessing();
 
+    const previousIndex = this.state.currentIndex;
+    const next = Math.min(previousIndex + 1, this.getTotalCandles() - 1);
+    if (next === previousIndex) {
+      this.pause();
+      return this.publish('ended');
+    }
+
+    const wasPlaying = this.state.status === 'playing';
     this.state = { ...this.state, currentIndex: next };
-    this.publish('paused');
-    await this.emitCandle('stepped', previous);
-    if (next === this.getTotalCandles() - 1) this.publish('ended');
-    return this.getState();
+    try {
+      const payload = await this._processCandle(next, 'stepped', previousIndex);
+      const status = next === this.getTotalCandles() - 1 ? 'ended' : (wasPlaying ? 'playing' : 'paused');
+      this.publish(status);
+      this._emitCandleEvent('stepped', payload);
+      return this.getState();
+    } catch (error) {
+      this.state = { ...this.state, currentIndex: previousIndex, candle: this.store.get(previousIndex) };
+      this.publish(wasPlaying ? 'playing' : 'paused');
+      throw error;
+    }
   }
 
   async reset() {
     if (this.destroyed) return this.getState();
     this.pause();
+    await this._waitForCandleProcessing();
     this.state = {
       ...this.state,
       status: this.getTotalCandles() ? 'ready' : 'idle',
