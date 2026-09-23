@@ -188,8 +188,8 @@ def test_order_requires_an_active_replay_index():
         json={"symbol": "BTCUSDT", "side": "buy", "quantity": 1, "type": "market"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["candle"] == CANDLES[0]
+    assert response.status_code == 409
+    assert "start replay" in response.json()["detail"]
     assert manager.get(str(session)).trading.orders == {}
 
 
