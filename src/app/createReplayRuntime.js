@@ -10,6 +10,7 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
   const { appState, candleStore, engine, datasetRepository, localDatasetRepository, tradingEngine } = services;
   const replayPorts = ui.getReplayPorts();
   const reportTradingError = (message) => ui.tradingErrorView?.show(message);
+
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
     hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
@@ -38,8 +39,9 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
     modeBanner: ui.modeBanner,
     errorPanel: ui.errorPanel,
     tradingErrorView: ui.tradingErrorView,
-    updatePreviewWindow: preview,
-    ...replayPorts,
+    dataStatusEl: replayPorts.dataStatusEl,
+    cacheBadgeEl: replayPorts.cacheBadgeEl,
+    preview,
   });
 
   const changeDataset = createDatasetChangeService({
@@ -52,8 +54,6 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
     chartManager: ui.chartManager,
     timeline: ui.timeline,
     controls: ui.controls,
-    startReplayBtn: replayPorts.startReplayBtn,
-    headerStartReplayBtn: replayPorts.headerStartReplayBtn,
     reportError: reportTradingError,
     invalidateLoad: () => loadService.invalidateCurrentLoad(),
     reload: () => loadService.loadAndPrepareReplay({ autoStart: false }),
