@@ -61,7 +61,7 @@ describe('ReplayLoadService', () => {
 
     expect(d.datasetRepository.list).toHaveBeenCalledOnce();
     expect(d.datasetRepository.getCandles).toHaveBeenCalledWith('BTCUSDT__1M__60__120');
-    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith('BTCUSDT__1M__60__120');
+    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith(candles, { startIndex: 0 });
   });
 
   it('loads a browser-local dataset without contacting the GitHub dataset repository', async () => {
