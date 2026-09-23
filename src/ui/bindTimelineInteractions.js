@@ -1,11 +1,10 @@
 import { TRADING_PRESENTATION_EVENTS, assertTradingPresentation } from '../ports/TradingPresentationPort.js';
 
-export function bindTimelineInteractions({ timeline, candles = null, trading = null, tradingEvents = null, actions }) {
+export function bindTimelineInteractions({ timeline, replayPort = null, trading = null, tradingEvents = null, actions }) {
   timeline.onChange((idx) => actions.previewTimeline(idx));
   timeline.onCommit((idx) => actions.commitTimeline(idx));
   timeline.onStartHere((idx) => actions.startAt(idx));
-  if (!candles) throw new TypeError('candle view is required');
-  const candleView = candles;
+  if (!replayPort) throw new TypeError('replay port is required');
   const tradingView = trading ? assertTradingPresentation(trading) : null;
 
   const eventPort = tradingEvents || (tradingView ? {
@@ -16,17 +15,18 @@ export function bindTimelineInteractions({ timeline, candles = null, trading = n
   const refreshMarkers = () => {
     try {
       const trades = tradingView?.snapshot().trades || [];
-      if (!trades.length || !candleView.getCount()) return timeline.setMarkers([]);
-      const all = candleView.getAll?.() || [];
+      const count = replayPort.getTotalCandles?.() || 0;
+      if (!trades.length || !count) return timeline.setMarkers([]);
+      const times = replayPort.getTimelineTimes?.() || [];
       const markers = [];
       for (const t of trades) {
         const ts = t.openedAt ?? t.entryTime ?? t.time;
         let index = Number.isInteger(t.entryIndex) ? t.entryIndex : -1;
         if (index < 0 && Number.isFinite(ts)) {
-          let lo = 0, hi = all.length - 1;
+          let lo = 0, hi = times.length - 1;
           while (lo <= hi) {
             const mid = lo + Math.floor((hi - lo) / 2);
-            if (all[mid].time <= ts) { index = mid; lo = mid + 1; } else hi = mid - 1;
+            if (times[mid] <= ts) { index = mid; lo = mid + 1; } else hi = mid - 1;
           }
           if (index < 0) index = 0;
         }

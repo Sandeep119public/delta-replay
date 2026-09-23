@@ -17,7 +17,7 @@ import { BinanceLiveMarketService } from './BinanceLiveMarketService.js';
 import { MarketModeController } from './MarketModeController.js';
 
 export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
-  const { appState, candleStore, engine, candleCache, datasetRepository, localDatasetRepository, tradingEngine, mutationPipeline } = services;
+  const { appState, engine, candleCache, datasetRepository, localDatasetRepository, tradingEngine, mutationPipeline } = services;
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
@@ -95,7 +95,6 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     trading,
     tradingEvents,
     dataset,
-    candles,
     chart: { chartManager, adapter: chartAdapter },
     callbacks,
   });
@@ -113,7 +112,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     ...form,
   });
   const selectorBindings = bindDatasetSelectors(ui, replay.actions);
-  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, actions: replay.actions });
+  const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, replayPort, trading, tradingEvents, actions: replay.actions });
   const tradingRuntime = createTradingRuntime({
     trading,
     tradingEvents,

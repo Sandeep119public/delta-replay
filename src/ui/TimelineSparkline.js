@@ -5,9 +5,8 @@ import { TRADING_PRESENTATION_EVENTS, assertTradingPresentation } from '../ports
  * cache is invalid; replay ticks redraw the cached overview and cursor.
  */
 export class TimelineSparkline {
-  constructor({ canvasEl = null, candles = null, replay = null, replayPort = null, trading = null, tradingEvents = null, onSeek = null, height = 36, palette = null } = {}) {
+  constructor({ canvasEl = null, replay = null, replayPort = null, trading = null, tradingEvents = null, onSeek = null, height = 36, palette = null } = {}) {
     this.canvas = canvasEl;
-    this.candles = candles;
     this.replayPort = replay ?? replayPort;
     this.trading = trading ? assertTradingPresentation(trading) : null;
     this.tradingEvents = tradingEvents;
@@ -63,10 +62,13 @@ export class TimelineSparkline {
     this._cache = null;
   }
 
-  _candles() { return this.candles?.getAll?.() || []; }
+  _candles() {
+    const count = this._datasetCount();
+    return count && this.replayPort?.getCandleWindow?.(count - 1, count) || [];
+  }
   _trades() { return this.trading?.snapshot().trades || []; }
   _cursor() { return this.replayPort?.getState?.().currentIndex ?? -1; }
-  _datasetCount() { return this.replayPort?.getTotalCandles?.() ?? this.candles?.getCount?.() ?? 0; }
+  _datasetCount() { return this.replayPort?.getTotalCandles?.() ?? 0; }
 
   _datasetKey(count) {
     const state = this.replayPort?.getState?.() || {};

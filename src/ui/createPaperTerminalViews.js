@@ -7,7 +7,6 @@ export function createPaperTerminalViews(ctx) {
   const {
     el,
     dataset,
-    candles,
     replayPort,
     trading,
     tradingEvents,
