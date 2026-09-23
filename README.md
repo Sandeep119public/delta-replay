@@ -153,13 +153,13 @@ Replay is a separate process:
         ↓
     strict integrity validation
         ↓
-    RemoteReplayEngine
+    CandleStore
         ↓
-    POST /api/v1/replay/load
+    DeterministicReplayEngine
         ↓
-    ReplaySession
+    ReplayUIPort → Chart/UI
         ↓
-    ReplayService + PaperTradingEngine + ReplayTimeline
+    optional replay candle consumer → trading adapter
 
 The replay path contains **no historical-data provider** and therefore has no Binance download dependency. Render owns historical downloads. GitHub is the authoritative replay dataset store. Browser IndexedDB is not required for historical downloads.
 
@@ -180,7 +180,7 @@ The dataset manifest records the dataset identity and SHA-256. The backend verif
 5. In **Data Center → Datasets**, choose **Download CSV** on the GitHub dataset. Your current browser downloads the actual replay file.
 6. To use that file in this or another browser, open **Data Center → Datasets → Open local CSV** and select the file. The app validates it and stores a browser-local copy in IndexedDB.
 7. Switch to **REPLAY** and select either **GitHub** or **Browser local** as the dataset source.
-8. Start/seek/play the replay. Replay execution remains on the backend, while the selected candle dataset source is explicit.
+8. Start/seek/play the replay. The complete validated candle dataset is owned by the browser replay engine. Trading execution may still use the backend paper-trading adapter, but replay timing and cursor movement are local and deterministic.
 
 ### Local browser replay
 
@@ -214,7 +214,7 @@ The backend exposes /api/v1/datasets/{id}/fingerprint and implements the same ca
 
 ## Storage formats
 
-The repository boundary supports canonical CSV and Parquet partitions. Parquet uses typed columns and Zstandard compression for server-side reads. CSV remains the export/interoperability format. The replay API returns bounded JSON windows for GitHub-backed replay. Local CSV replay is imported by the browser and then sent to the replay session in validated chunks, avoiding the 100,000-candle batch ceiling of the generic direct-load endpoint.
+The repository boundary supports canonical CSV and Parquet partitions. Parquet uses typed columns and Zstandard compression for server-side reads. CSV remains the export/interoperability format. The replay API returns bounded JSON windows for GitHub-backed replay. Local CSV replay is imported, validated, and stored in browser IndexedDB. Replay then loads the complete validated dataset into the browser-owned CandleStore and does not fetch historical candles from Binance during playback.
 
 ## Dataset lifecycle
 
@@ -239,13 +239,17 @@ The repository boundary supports canonical CSV and Parquet partitions. Parquet u
       dataset ID
            |
            v
-      Render dataset loader
+      browser replay loader
            |
-           +-- bounded range reads
-           +-- deterministic ReplaySession
+           +-- GitHub dataset or browser-local CSV
+           +-- strict validation
+           +-- CandleStore
+           +-- DeterministicReplayEngine
                          |
                          v
-                  PaperTradingEngine
+                 Replay presentation
+                         |
+                         +-- optional trading adapter
 
     RESEARCH
       dataset content ID

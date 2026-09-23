@@ -4,7 +4,7 @@ import { ReplayCommandController } from './ReplayCommandController.js';
 const VISIBLE_WINDOW = 1000;
 
 export function createReplayRuntime({ services, ui, replayPort, statusView, liveDatasetChange = null }) {
-  const { appState, candleStore, engine, datasetRepository, localDatasetRepository, tradingEngine } = services;
+  const { appState, engine, datasetRepository, localDatasetRepository, tradingEngine } = services;
   const replayPorts = ui.getReplayPorts();
   const reportTradingError = (message) => ui.tradingErrorView?.show(message);
 
@@ -12,7 +12,6 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
     hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
     hasTradingActivity: () => tradingEngine.hasTradingActivity(),
-    clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
   });
 
   const preview = (index) => {

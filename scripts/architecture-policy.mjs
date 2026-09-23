@@ -50,7 +50,7 @@ export const RULES = [
   'Every listener, timer, subscription, observer, and resource needs a cleanup path.',
   'Keep patches small. Avoid broad formatting or unrelated refactors.',
   'Every declared source layer must correspond to a real src/<layer>/ directory.',
-  'PaperTradingEngine is the single canonical backend execution/accounting engine.',
+  'RemoteTradingEngine is the frontend trading adapter; backend PaperTradingEngine remains the canonical execution/accounting engine.',
 ];
 
 export const CHECKS = {
