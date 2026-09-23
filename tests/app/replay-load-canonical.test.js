@@ -65,7 +65,7 @@ describe('ReplayLoadService canonical dataset loading', () => {
     const d = deps();
     await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'd1', datasetSource: 'github' });
     expect(d.datasetRepository.getCandles).toHaveBeenCalledWith('d1');
-    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith(candles, { startIndex: 0 });
+    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith(candles, expect.objectContaining({ startIndex: 0, metadata: expect.any(Object) }));
     expect(d.candleStore.load).not.toHaveBeenCalled();
     expect(d.timeline.setTotal).toHaveBeenCalledWith(candles.length, candles);
   });
