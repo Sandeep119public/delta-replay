@@ -67,14 +67,14 @@ export class DeterministicReplayEngine {
     }
   }
 
-  async loadDataset(candles, { startIndex = 0 } = {}) {
+  async loadDataset(candles, { startIndex = 0, metadata = {} } = {}) {
     if (this.destroyed) return this.getState();
     this.pause();
     if (!Array.isArray(candles) || !candles.length) {
       this.state = { ...this.state, status: 'idle', currentIndex: -1, startIndex: -1, totalCandles: 0, candle: null };
       return this.publish('idle');
     }
-    this.store.load(candles);
+    this.store.load(candles, metadata);
     const total = this.store.getCount();
     const start = Math.min(Math.max(0, Math.trunc(Number(startIndex) || 0)), total - 1);
     this.state = { ...this.state, status: 'ready', currentIndex: -1, startIndex: start, totalCandles: total, candle: null };
