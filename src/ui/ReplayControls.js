@@ -1,9 +1,7 @@
-import { assertReplayCommandPresentationPort } from '../ports/ReplayCommandPresentationPort.js';
-
 export class ReplayControls {
-  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, replayPort, commandPort, followBtn = null, onFollowClick = null }) {
-    if (!replayPort) throw new TypeError('ReplayControls requires replayPort');
-    this.commandPort = assertReplayCommandPresentationPort(commandPort);
+  constructor({ playBtn, pauseBtn, stepBtn, resetBtn, startReplayBtn, speedSelect, statusEl, replayPort, commands, followBtn = null, onFollowClick = null }) {
+    if (!replayPort || !commands) throw new TypeError('ReplayControls requires replay state and commands');
+    this.commands = commands;
     this.playBtn = playBtn;
     this.pauseBtn = pauseBtn;
     this.stepBtn = stepBtn;
@@ -21,12 +19,12 @@ export class ReplayControls {
       if (el?.removeEventListener) this._listeners.push([el, type, handler]);
     };
 
-    this._listen(this.playBtn, 'click', () => { void this._safeAction(() => this.commandPort.togglePlayPause()); });
-    this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.commandPort.pause()); });
-    this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.commandPort.stepForward()); });
-    this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.commandPort.reset()); });
+    this._listen(this.playBtn, 'click', () => { void this._safeAction(() => this.commands.togglePlayPause()); });
+    this._listen(this.pauseBtn, 'click', () => { void this._safeAction(() => this.commands.pause()); });
+    this._listen(this.stepBtn, 'click', () => { void this._safeAction(() => this.commands.stepForward()); });
+    this._listen(this.resetBtn, 'click', () => { void this._safeAction(() => this.commands.reset()); });
     this._listen(this.speedSelect, 'change', () => {
-      void this._safeAction(() => this.commandPort.setSpeed(this.speedSelect.value), (error) => {
+      void this._safeAction(() => this.commands.setSpeed(this.speedSelect.value), (error) => {
         if (this.speedSelect && error) this.speedSelect.value = String(this.replayPort.getState().speed);
       });
     });
@@ -52,6 +50,7 @@ export class ReplayControls {
     this._listeners = [];
     this._subscriptions = [];
     this.onFollowClick = null;
+    this.commands = null;
   }
 
   async _safeAction(action, onError = null) {
