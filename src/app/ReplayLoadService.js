@@ -32,20 +32,49 @@ export function createReplayLoadService({
   let loadToken = 0;
   let destroyed = false;
 
-  function reportStatus() {
-    modeBanner?.update?.(statusView.snapshot());
-  }
+  const timeframeSeconds = (value) => ({
+    '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800,
+    '1h': 3600, '2h': 7200, '4h': 14400, '6h': 21600, '8h': 28800,
+    '12h': 43200, '1d': 86400, '3d': 259200, '1w': 604800,
+  }[value] || null);
 
-  function timeframeSeconds(value) {
-    return {
-      '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800,
-      '1h': 3600, '2h': 7200, '4h': 14400, '6h': 21600, '8h': 28800,
-      '12h': 43200, '1d': 86400, '3d': 259200, '1w': 604800,
-    }[value] || null;
+  const reportStatus = () => modeBanner?.update?.(statusView.snapshot());
+
+  async function readDataset(source, datasetId) {
+    if (source === 'local') {
+      if (!localDatasetRepository) throw new Error('Browser local dataset storage is unavailable');
+      const record = await localDatasetRepository.get(datasetId);
+      if (!record?.metadata || !Array.isArray(record.candles)) {
+        throw new Error('Local replay dataset was not found in this browser');
+      }
+      return { metadata: record.metadata, candles: record.candles };
+    }
+
+    const datasets = await datasetRepository.list();
+    const selectedId = datasetId || appState.replayDatasetId || datasets[0]?.id;
+    if (!selectedId) {
+      const error = new Error('No saved replay dataset. Download historical Binance data first.');
+      error.code = 'NO_DATASET';
+      throw error;
+    }
+
+    const listing = datasets.find((dataset) => dataset.id === selectedId) || await datasetRepository.get(selectedId);
+    if (!listing) throw new Error('Selected replay dataset no longer exists');
+
+    if (typeof datasetRepository.getCandles !== 'function') {
+      throw new Error('Saved replay dataset reader is unavailable');
+    }
+
+    const payload = await datasetRepository.getCandles(selectedId);
+    if (!payload?.metadata || !Array.isArray(payload.candles)) {
+      throw new Error('Saved replay dataset is invalid');
+    }
+    return { metadata: payload.metadata || listing, candles: payload.candles };
   }
 
   async function loadAndPrepareReplay({ datasetId = null, datasetSource = null, autoStart = false } = {}) {
     if (destroyed) return null;
+
     if (hasTradingActivity()) {
       tradingErrorView?.show('Cannot replace replay data after trading activity. Reset the simulation first.');
       return null;
@@ -63,76 +92,50 @@ export function createReplayLoadService({
 
     try {
       const source = datasetSource || appState.replayDatasetSource || 'github';
-      let metadata;
-      let candles;
-      let loadResult;
-
-      if (source === 'local') {
-        if (!localDatasetRepository) throw new Error('Browser local dataset storage is unavailable');
-        const record = await localDatasetRepository.get(datasetId);
-        if (!record?.metadata || !Array.isArray(record.candles)) throw new Error('Local replay dataset was not found in this browser');
-        metadata = record.metadata;
-        candles = record.candles;
-        if (typeof replayEngine.loadLocalDataset !== 'function') throw new Error('Chunked local replay loading is unavailable');
-        loadResult = await replayEngine.loadLocalDataset(candles);
-      } else {
-        const datasets = await datasetRepository.list();
-        if (token !== loadToken || destroyed) return null;
-
-        const selectedId = datasetId || appState.replayDatasetId || datasets[0]?.id;
-        if (!selectedId) {
-          const error = new Error('No saved replay dataset. Download historical Binance data first.');
-          error.code = 'NO_DATASET';
-          throw error;
-        }
-
-        metadata = datasets.find((dataset) => dataset.id === selectedId) || await datasetRepository.get(selectedId);
-        if (!metadata) throw new Error('Selected replay dataset no longer exists');
-        loadResult = await replayEngine.loadDataset(selectedId);
-        if (typeof datasetRepository.getRange === 'function') {
-          const preview = await datasetRepository.getRange(selectedId, { offset: 0, limit: 2000 });
-          candles = preview.candles;
-        } else {
-          candles = Array.isArray(loadResult.visibleCandles) ? loadResult.visibleCandles : [];
-        }
-      }
-
+      const { metadata, candles } = await readDataset(source, datasetId);
       if (token !== loadToken || destroyed) return null;
-      const total = Number(loadResult?.total || loadResult?.totalCandles || metadata.count || candles?.length || 0);
-      if (!total) throw new Error('Replay dataset is empty');
-
-      const previewCandles = Array.isArray(candles) ? candles.slice(0, 2000) : [];
-      if (!previewCandles.length) throw new Error('Replay dataset preview is empty');
+      if (!candles.length) throw new Error('Replay dataset is empty');
 
       const timeframeSec = metadata.timeframeSec || timeframeSeconds(metadata.timeframe);
-      const integrity = CandleIntegrity.process(previewCandles, {
-        from: previewCandles[0].time,
-        to: previewCandles[previewCandles.length - 1].time,
+      const integrity = CandleIntegrity.process(candles, {
+        from: candles[0].time,
+        to: candles[candles.length - 1].time,
         timeframeSec,
         origin: 0,
         strict: true,
         policy: 'STRICT',
         timestampUnit: 'seconds',
       });
-
+      if (!integrity.validCandles.length || integrity.validCandles.length !== candles.length) {
+        throw new Error('Replay dataset failed strict integrity validation');
+      }
       if (token !== loadToken || destroyed) return null;
-      if (!integrity.validCandles.length) throw new Error('Replay dataset preview failed validation');
 
       const replayMetadata = {
         ...metadata,
-        datasetId: metadata.id,
+        datasetId: metadata.id || datasetId,
         local: source === 'local',
         saved: source !== 'local',
         source: source === 'local' ? 'local-file' : 'binance',
         quality: 'VALID',
       };
 
-      appState.setReplayDatasetId(metadata.id, source);
+      // One canonical dataset. The timeline, replay cursor, chart and
+      // presentation all operate on the exact same complete candle sequence.
+      candleStore.load(integrity.validCandles, replayMetadata);
+      appState.setReplayDatasetId(replayMetadata.datasetId, source);
       appState.symbol = metadata.symbol;
       appState.timeframe = metadata.timeframe;
       appState.setCandles(integrity.validCandles, replayMetadata);
-      appState.setReplayState(replayEngine.getState());
-      timeline?.setTotal(total, integrity.validCandles);
+
+      const loadResult = await replayEngine.loadDataset(integrity.validCandles, { startIndex: 0 });
+      if (token !== loadToken || destroyed) return null;
+
+      const total = candleStore.getCount();
+      if (!total) throw new Error('Replay dataset is empty');
+
+      appState.setReplayState(loadResult);
+      timeline?.setTotal(total, candleStore.getAll());
       appState.setPendingStartIndex(0);
       controls?.setStartIndex(0);
       timeline?.setPosition(0);
@@ -140,26 +143,33 @@ export function createReplayLoadService({
 
       if (startReplayBtn) startReplayBtn.disabled = false;
       if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
-      if (cacheBadgeEl) cacheBadgeEl.classList.add('hidden');
+      cacheBadgeEl?.classList.add('hidden');
+
       if (dataStatusEl) {
         const label = source === 'local' ? 'Local dataset: ' : 'Saved dataset: ';
         dataStatusEl.textContent = label + metadata.symbol + ' · ' + metadata.timeframe + ' · ' + total.toLocaleString() + ' candles';
       }
+
       timeline?.setEnabled(true);
       appState.transitionLoading(LoadingState.SUCCESS);
       reportStatus();
 
       if (autoStart) await replayEngine.start(0, metadata.symbol);
-      return metadata;
+      return replayMetadata;
     } catch (error) {
       if (token !== loadToken || destroyed) return null;
+
       if (error?.code === 'NO_DATASET') {
         appState.transitionLoading(LoadingState.EMPTY, error);
         errorPanel?.show({ category: 'NO_DATA', userMessage: error.message, message: error.message });
         if (dataStatusEl) dataStatusEl.textContent = 'No saved replay dataset';
       } else {
         appState.transitionLoading(LoadingState.INVALID_DATA, error);
-        errorPanel?.show({ category: 'INVALID_DATA', userMessage: error?.message || 'Replay dataset failed validation', message: error?.message || String(error) });
+        errorPanel?.show({
+          category: 'INVALID_DATA',
+          userMessage: error?.message || 'Replay dataset failed validation',
+          message: error?.message || String(error),
+        });
         if (dataStatusEl) dataStatusEl.textContent = 'Replay dataset failed validation';
       }
       reportStatus();
