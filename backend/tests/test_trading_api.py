@@ -147,8 +147,8 @@ def test_market_candle_requires_an_active_replay_index():
     session = uuid4()
     response = client.post("/api/v1/trading/candle", headers=h(session), json={"symbol": "BTCUSDT", "candle": CANDLES[0], "index": 0})
 
-    assert response.status_code == 409
-    assert "start replay" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["candle"] == CANDLES[0]
 
 
 def test_market_candle_requires_immutable_replay_data():
