@@ -1,7 +1,6 @@
 import { createDatasetChangeService } from './DatasetChangeService.js';
 import { createReplayLoadService } from './ReplayLoadService.js';
 import { ReplayCommandController } from './ReplayCommandController.js';
-import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { createApplicationActions } from './ApplicationActions.js';
 
 const VISIBLE_WINDOW = 1000;
@@ -76,16 +75,28 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
     onError: reportTradingError,
   });
 
-  const replayLifecycle = bindReplayLifecycle({
-    engine,
-    appState,
-    candleStore,
-    statusView,
-    timeline: ui.timeline,
-    modeBanner: ui.modeBanner,
-    preview,
-    chartManager: ui.chartManager,
-  });
+  const subscriptions = [
+    engine.on('stateChanged', (state) => {
+      appState.setReplayState(state);
+      if (state.currentIndex >= 0) ui.timeline.setPosition(state.currentIndex);
+      ui.modeBanner.update(statusView.snapshot());
+    }),
+    engine.on('reset', (payload) => {
+      const state = payload?.state ?? payload;
+      if (state?.status === 'ready') {
+        const startIndex = Number.isInteger(state.startIndex) ? state.startIndex : appState.pendingStartIndex;
+        preview(startIndex);
+        const candle = candleStore.get(startIndex);
+        if (candle) ui.chartManager.setRevealedMax(candle.time);
+        return;
+      }
+      const index = payload?.index ?? state?.index;
+      if (Number.isInteger(index) && index >= 0) {
+        const candle = candleStore.get(index);
+        if (candle) ui.chartManager.setRevealedMax(candle.time);
+      }
+    }),
+  ];
 
   const actions = createApplicationActions({
     replay: replayCapabilities,
@@ -105,11 +116,13 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
     replayCapabilities,
     commandController,
     actions,
-    replayLifecycle,
     showTradingError: reportTradingError,
     unbindKeyboardShortcuts: commandController.bindKeyboardShortcuts(),
     destroy() {
       loadService.destroy();
+      subscriptions.splice(0).forEach((unsubscribe) => {
+        try { unsubscribe?.(); } catch {}
+      });
     },
   };
 }
