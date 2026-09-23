@@ -33,7 +33,6 @@ function deps(source = 'github') {
     transitionLoading: vi.fn(),
     setLoading: vi.fn(),
     setReplayDatasetId: vi.fn(),
-    setCandles: vi.fn(),
     setReplayState: vi.fn(),
     setPendingStartIndex: vi.fn(),
   };
@@ -56,7 +55,7 @@ function deps(source = 'github') {
     controls: { setStartIndex: vi.fn() },
     modeBanner: { update: vi.fn() },
     errorPanel: { hide: vi.fn(), show: vi.fn() },
-    updatePreviewWindow: vi.fn(),
+    preview: vi.fn(),
   };
 }
 
@@ -75,7 +74,7 @@ describe('ReplayLoadService canonical dataset loading', () => {
     await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'l1', datasetSource: 'local' });
     expect(d.localDatasetRepository.get).toHaveBeenCalledWith('l1');
     expect(d.datasetRepository.getCandles).not.toHaveBeenCalled();
-    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith(candles, { startIndex: 0 });
+    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith(candles, expect.objectContaining({ startIndex: 0, metadata: expect.any(Object) }));
     expect(d.timeline.setTotal).toHaveBeenCalledWith(candles.length, candles);
   });
 });
