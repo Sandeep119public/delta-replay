@@ -1,10 +1,15 @@
-import { ReplayCoordinator } from './ReplayCoordinator.js';
+import { createDatasetChangeService } from './DatasetChangeService.js';
+import { createReplayLoadService } from './ReplayLoadService.js';
 import { ReplayCommandController } from './ReplayCommandController.js';
 import { bindReplayLifecycle } from './bindReplayLifecycle.js';
 import { createApplicationActions } from './ApplicationActions.js';
 
-export function createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView, liveDatasetChange = null }) {
+const VISIBLE_WINDOW = 1000;
+
+export function createReplayRuntime({ services, ui, replayPort, statusView, liveDatasetChange = null }) {
   const { appState, candleStore, engine, datasetRepository, localDatasetRepository, tradingEngine } = services;
+  const replayPorts = ui.getReplayPorts();
+  const reportTradingError = (message) => ui.tradingErrorView?.show(message);
   const replayTradingCapabilities = Object.freeze({
     hasOpenPosition: () => tradingEngine.hasOpenPosition(),
     hasPendingOrders: () => tradingEngine.getPendingOrders().length > 0,
@@ -12,34 +17,63 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
     clearPendingOrders: (reason) => tradingEngine.clearPendingOrders(reason),
   });
 
-  const coordinator = new ReplayCoordinator({
+  const preview = (index) => {
+    if (!candleStore.getCount()) return;
+    ui.adapter.showPreview(candleStore, index, VISIBLE_WINDOW);
+    ui.chartManager.setAutoFollow(true);
+  };
+
+  const loadService = createReplayLoadService({
     datasetRepository,
     localDatasetRepository,
     candleStore,
     appState,
     replayEngine: engine,
-    tradingCapabilities: replayTradingCapabilities,
+    hasOpenPosition: replayTradingCapabilities.hasOpenPosition,
+    hasPendingOrders: replayTradingCapabilities.hasPendingOrders,
+    hasTradingActivity: replayTradingCapabilities.hasTradingActivity,
     statusView,
-    chartManager: ui.chartManager,
-    chartAdapter: ui.adapter,
     timeline: ui.timeline,
     controls: ui.controls,
-    errorPanel: ui.errorPanel,
     modeBanner: ui.modeBanner,
+    errorPanel: ui.errorPanel,
     tradingErrorView: ui.tradingErrorView,
-    ...ui.getReplayPorts(),
+    updatePreviewWindow: preview,
+    ...replayPorts,
   });
-  replayRuntime.attach(coordinator);
+
+  const changeDataset = createDatasetChangeService({
+    hasOpenPosition: replayTradingCapabilities.hasOpenPosition,
+    hasTradingActivity: replayTradingCapabilities.hasTradingActivity,
+    clearPendingOrders: replayTradingCapabilities.clearPendingOrders,
+    appState,
+    candleStore,
+    replayEngine: engine,
+    chartManager: ui.chartManager,
+    timeline: ui.timeline,
+    controls: ui.controls,
+    startReplayBtn: replayPorts.startReplayBtn,
+    headerStartReplayBtn: replayPorts.headerStartReplayBtn,
+    reportError: reportTradingError,
+    invalidateLoad: () => loadService.invalidateCurrentLoad(),
+    reload: () => loadService.loadAndPrepareReplay({ autoStart: false }),
+  });
+
+  const replayCapabilities = Object.freeze({
+    load: (options = {}) => loadService.loadAndPrepareReplay(options),
+    preview,
+    changeDataset: (kind, value, sourceEl) => changeDataset.handleSymbolTimeframeChange(kind, value, sourceEl),
+  });
 
   const commandController = new ReplayCommandController({
     engine,
     appState,
     candleStore,
-    headerBtn: ui.getReplayPorts().headerStartReplayBtn,
+    headerBtn: replayPorts.headerStartReplayBtn,
     tradingCapabilities: replayTradingCapabilities,
-    onLoad: ({ autoStart }) => replayRuntime.capabilities.load({ autoStart }),
-    onPreview: (index) => replayRuntime.capabilities.preview(index),
-    onError: (msg) => coordinator.showTradingError(msg),
+    onLoad: ({ autoStart }) => replayCapabilities.load({ autoStart }),
+    onPreview: preview,
+    onError: reportTradingError,
   });
 
   const replayLifecycle = bindReplayLifecycle({
@@ -49,27 +83,33 @@ export function createReplayRuntime({ services, ui, replayPort, replayRuntime, s
     statusView,
     timeline: ui.timeline,
     modeBanner: ui.modeBanner,
-    preview: replayRuntime.capabilities.preview,
+    preview,
     chartManager: ui.chartManager,
+  });
+
+  const actions = createApplicationActions({
+    replay: replayCapabilities,
+    commandController,
+    replayPort,
+    appState,
+    statusView,
+    modeBanner: ui.modeBanner,
+    timeline: ui.timeline,
+    controls: ui.controls,
+    errorPanel: ui.errorPanel,
+    liveDatasetChange,
   });
 
   return {
     replayTradingCapabilities,
-    coordinator,
+    replayCapabilities,
     commandController,
-    actions: createApplicationActions({
-      replay: replayRuntime.capabilities,
-      commandController,
-      replayPort,
-      appState,
-      statusView,
-      modeBanner: ui.modeBanner,
-      timeline: ui.timeline,
-      controls: ui.controls,
-      errorPanel: ui.errorPanel,
-      liveDatasetChange,
-    }),
+    actions,
     replayLifecycle,
+    showTradingError: reportTradingError,
     unbindKeyboardShortcuts: commandController.bindKeyboardShortcuts(),
+    destroy() {
+      loadService.destroy();
+    },
   };
 }
