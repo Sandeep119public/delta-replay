@@ -1,6 +1,6 @@
 /**
  * ChartAdapter bridges replay presentation state to ChartManager.
- * It deliberately consumes only the narrow replay presentation port.
+ * It deliberately consumes only the replay presentation port.
  */
 export class ChartAdapter {
   constructor(replayPort, chartManager) {
@@ -15,11 +15,9 @@ export class ChartAdapter {
     if (this._destroyed || !this.replayPort || !this.chart) return;
     this.detach();
 
-    const WINDOW = 1000;
     const visibleWindow = () => {
       if (this._destroyed || !this.replayPort) return [];
-      const visible = this.replayPort.getVisibleCandles?.() || [];
-      return visible.length > WINDOW ? visible.slice(-WINDOW) : visible;
+      return this.replayPort.getVisibleCandles?.() || [];
     };
 
     const render = (index, { fit = false } = {}) => {
@@ -31,13 +29,9 @@ export class ChartAdapter {
         return;
       }
 
-      if (typeof this.chart.renderReplayWindow === 'function') {
-        this.chart.renderReplayWindow(window, { fit });
-      } else {
-        this.chart.setRevealedMax?.(window[window.length - 1].time);
-        this.chart.setData(window, { fit });
-        if (!fit && this.chart.followCurrent) this.chart.followCurrent();
-      }
+      this.chart.setRevealedMax?.(window[window.length - 1].time);
+      this.chart.setData(window, { fit });
+      if (!fit && this.chart.followCurrent) this.chart.followCurrent();
       this._lastRenderedIndex = index;
     };
 
@@ -70,33 +64,16 @@ export class ChartAdapter {
     this.chart = null;
   }
 
-  showPreview(candlesOrStore, targetIndex = null, windowSize = 1000) {
-    if (this._destroyed || !this.chart || !candlesOrStore) return;
-    let win;
-    let revealedTime = null;
-
-    if (typeof candlesOrStore.sliceWindow === 'function' && typeof candlesOrStore.getCount === 'function') {
-      const count = candlesOrStore.getCount();
-      if (!count) return;
-      const idx = Number.isInteger(targetIndex) && targetIndex >= 0 ? targetIndex : count - 1;
-      const start = Math.max(0, idx - windowSize + 1);
-      win = candlesOrStore.sliceWindow(start, idx);
-      revealedTime = candlesOrStore.get(idx)?.time ?? null;
-    } else {
-      const arr = Array.isArray(candlesOrStore) ? candlesOrStore : (candlesOrStore?.getAll?.() || []);
-      if (!arr.length) return;
-      const idx = Number.isInteger(targetIndex) && targetIndex >= 0 ? targetIndex : arr.length - 1;
-      const start = Math.max(0, idx - windowSize + 1);
-      win = arr.slice(start, idx + 1);
-      revealedTime = win[win.length - 1]?.time ?? null;
-    }
-
-    this.chart.setRevealedMax?.(revealedTime);
-    this.chart.setData(win, { fit: true });
+  showPreview(candleStore, targetIndex = null, windowSize = 1000) {
+    if (this._destroyed || !this.chart || !candleStore) return;
+    const count = candleStore.getCount?.() || 0;
+    if (!count) return;
+    const rawIndex = Number.isInteger(targetIndex) && targetIndex >= 0 ? targetIndex : count - 1;
+    const index = Math.min(rawIndex, count - 1);
+    const start = Math.max(0, index - windowSize + 1);
+    const window = candleStore.sliceWindow(start, index);
+    this.chart.setRevealedMax?.(candleStore.get(index)?.time ?? null);
+    this.chart.setData(window, { fit: true });
     this._lastRenderedIndex = -1;
-  }
-
-  showPreviewWindow(candles, centerIdx, windowSize = 1000) {
-    return this.showPreview(candles, centerIdx, windowSize);
   }
 }
