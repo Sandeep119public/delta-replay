@@ -1,6 +1,12 @@
 import { CandleIntegrity } from '../data/CandleIntegrity.js';
 import { LoadingState } from '../data/DataError.js';
 
+const TIMEFRAME_SECONDS = Object.freeze({
+  '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800,
+  '1h': 3600, '2h': 7200, '4h': 14400, '6h': 21600, '8h': 28800,
+  '12h': 43200, '1d': 86400, '3d': 259200, '1w': 604800,
+});
+
 export function createReplayLoadService({
   datasetRepository,
   localDatasetRepository = null,
@@ -18,27 +24,30 @@ export function createReplayLoadService({
   tradingErrorView = null,
   dataStatusEl = null,
   cacheBadgeEl = null,
-  startReplayBtn = null,
-  headerStartReplayBtn = null,
-  updatePreviewWindow,
+  preview,
 }) {
-  const required = { datasetRepository, candleStore, appState, replayEngine, statusView, timeline, controls, modeBanner };
-  for (const [name, value] of Object.entries(required)) if (!value) throw new TypeError('createReplayLoadService requires ' + name);
-  if (typeof hasOpenPosition !== 'function') throw new TypeError('createReplayLoadService requires hasOpenPosition() capability');
-  if (typeof hasPendingOrders !== 'function') throw new TypeError('createReplayLoadService requires hasPendingOrders() capability');
-  if (typeof hasTradingActivity !== 'function') throw new TypeError('createReplayLoadService requires hasTradingActivity() capability');
-  if (typeof updatePreviewWindow !== 'function') throw new TypeError('createReplayLoadService requires updatePreviewWindow callback');
+  const required = {
+    datasetRepository,
+    candleStore,
+    appState,
+    replayEngine,
+    statusView,
+    timeline,
+    controls,
+    modeBanner,
+    preview,
+  };
+  for (const [name, value] of Object.entries(required)) {
+    if (!value) throw new TypeError('createReplayLoadService requires ' + name);
+  }
+  for (const [name, value] of Object.entries({ hasOpenPosition, hasPendingOrders, hasTradingActivity })) {
+    if (typeof value !== 'function') throw new TypeError('createReplayLoadService requires ' + name + '() capability');
+  }
 
   let loadToken = 0;
   let destroyed = false;
 
-  const timeframeSeconds = (value) => ({
-    '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800,
-    '1h': 3600, '2h': 7200, '4h': 14400, '6h': 21600, '8h': 28800,
-    '12h': 43200, '1d': 86400, '3d': 259200, '1w': 604800,
-  }[value] || null);
-
-  const reportStatus = () => modeBanner?.update?.(statusView.snapshot());
+  const reportStatus = () => modeBanner.update(statusView.snapshot());
 
   async function readDataset(source, datasetId) {
     if (source === 'local') {
@@ -69,7 +78,7 @@ export function createReplayLoadService({
     if (!payload?.metadata || !Array.isArray(payload.candles)) {
       throw new Error('Saved replay dataset is invalid');
     }
-    return { metadata: payload.metadata || listing, candles: payload.candles };
+    return { metadata: payload.metadata, candles: payload.candles };
   }
 
   async function loadAndPrepareReplay({ datasetId = null, datasetSource = null, autoStart = false } = {}) {
@@ -96,7 +105,7 @@ export function createReplayLoadService({
       if (token !== loadToken || destroyed) return null;
       if (!candles.length) throw new Error('Replay dataset is empty');
 
-      const timeframeSec = metadata.timeframeSec || timeframeSeconds(metadata.timeframe);
+      const timeframeSec = metadata.timeframeSec || TIMEFRAME_SECONDS[metadata.timeframe];
       const integrity = CandleIntegrity.process(candles, {
         from: candles[0].time,
         to: candles[candles.length - 1].time,
@@ -120,28 +129,25 @@ export function createReplayLoadService({
         quality: 'VALID',
       };
 
-      // One canonical dataset. The timeline, replay cursor, chart and
-      // presentation all operate on the exact same complete candle sequence.
       appState.setReplayDatasetId(replayMetadata.datasetId, source);
       appState.symbol = metadata.symbol;
       appState.timeframe = metadata.timeframe;
-      appState.setCandles(integrity.validCandles, replayMetadata);
 
-      const loadResult = await replayEngine.loadDataset(integrity.validCandles, { startIndex: 0, metadata: replayMetadata });
+      const loadResult = await replayEngine.loadDataset(integrity.validCandles, {
+        startIndex: 0,
+        metadata: replayMetadata,
+      });
       if (token !== loadToken || destroyed) return null;
 
-      const total = candleStore.getCount();
+      const total = loadResult.totalCandles ?? candleStore.getCount();
       if (!total) throw new Error('Replay dataset is empty');
 
       appState.setReplayState(loadResult);
-      timeline?.setTotal(total, candleStore.getAll());
+      timeline.setTotal(total, candleStore.getAll());
       appState.setPendingStartIndex(0);
-      controls?.setStartIndex(0);
-      timeline?.setPosition(0);
-      updatePreviewWindow(0);
-
-      if (startReplayBtn) startReplayBtn.disabled = false;
-      if (headerStartReplayBtn) headerStartReplayBtn.disabled = false;
+      controls.setStartIndex(0);
+      timeline.setPosition(0);
+      preview(0);
       cacheBadgeEl?.classList.add('hidden');
 
       if (dataStatusEl) {
@@ -149,11 +155,11 @@ export function createReplayLoadService({
         dataStatusEl.textContent = label + metadata.symbol + ' · ' + metadata.timeframe + ' · ' + total.toLocaleString() + ' candles';
       }
 
-      timeline?.setEnabled(true);
+      timeline.setEnabled(true);
       appState.transitionLoading(LoadingState.SUCCESS);
       reportStatus();
 
-      if (autoStart) await replayEngine.start(0, metadata.symbol);
+      if (autoStart) await replayEngine.start(0);
       return replayMetadata;
     } catch (error) {
       if (token !== loadToken || destroyed) return null;
@@ -183,15 +189,11 @@ export function createReplayLoadService({
 
   return Object.freeze({
     loadAndPrepareReplay,
-    updateLoadButton() {},
-    clearCurrentLoad() { loadToken += 1; },
     invalidateCurrentLoad() { loadToken += 1; },
-    listDatasets: () => datasetRepository.list(),
     destroy() {
       if (destroyed) return;
       destroyed = true;
       loadToken += 1;
-      tradingErrorView?.destroy?.();
     },
   });
 }
