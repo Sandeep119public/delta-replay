@@ -12,6 +12,7 @@ function deps(overrides = {}) {
       list: vi.fn(async () => [{ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV' }]),
       get: vi.fn(async () => ({ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV', from: 60, to: 120 })),
       getRange: vi.fn(async () => ({ metadata: { id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', format: 'CSV' }, candles })),
+      getCandles: vi.fn(async () => ({ metadata: { id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', format: 'CSV' }, candles })),
     },
     localDatasetRepository: {
       get: vi.fn(async () => ({ metadata: { id: 'local-abc', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV', from: 60, to: 120 }, candles })),
@@ -35,7 +36,6 @@ function deps(overrides = {}) {
     },
     replayEngine: {
       loadDataset: vi.fn(async () => ({ status: 'ready', total: 2, totalCandles: 2, currentIndex: -1, startIndex: -1, visibleCandles: [] })),
-      loadLocalDataset: vi.fn(async () => ({ status: 'ready', total: 2, totalCandles: 2, currentIndex: -1, startIndex: -1, visibleCandles: [] })),
       getState: vi.fn(() => ({ status: 'ready', totalCandles: 2, currentIndex: -1, startIndex: -1 })),
       start: vi.fn(async () => undefined),
     },
@@ -60,7 +60,7 @@ describe('ReplayLoadService', () => {
     await service.loadAndPrepareReplay({ datasetId: 'BTCUSDT__1M__60__120' });
 
     expect(d.datasetRepository.list).toHaveBeenCalledOnce();
-    expect(d.datasetRepository.getRange).toHaveBeenCalledWith('BTCUSDT__1M__60__120', { offset: 0, limit: 2000 });
+    expect(d.datasetRepository.getCandles).toHaveBeenCalledWith('BTCUSDT__1M__60__120');
     expect(d.replayEngine.loadDataset).toHaveBeenCalledWith('BTCUSDT__1M__60__120');
   });
 
