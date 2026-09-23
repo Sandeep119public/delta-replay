@@ -7,36 +7,48 @@ import { ChartAdapter } from '../chart/ChartAdapter.js';
 import { bindTimelineInteractions } from '../ui/bindTimelineInteractions.js';
 import { bindMobileDrawer } from '../ui/bindMobileDrawer.js';
 import { createCommandSurface } from '../ui/CommandSurface.js';
-import { createDeferredReplayCommandPresentationPort } from '../ports/ReplayCommandPresentationPort.js';
 import { createTradingPresentation } from './TradingPresentationAdapter.js';
 import { createDatasetView, createCandleView, createReplayStatusView } from './DatasetPresentationAdapter.js';
 import { createReplayUIPort } from './ReplayUIPort.js';
 import { createLifecycleGuard } from './createLifecycleGuard.js';
-import { createReplayCapabilities } from './ReplayCapabilities.js';
 import { createReplayRuntime } from './createReplayRuntime.js';
 import { createTradingRuntime } from './createTradingRuntime.js';
 import { BinanceLiveMarketService } from './BinanceLiveMarketService.js';
 import { MarketModeController } from './MarketModeController.js';
+
+const REPLAY_WINDOW = 1000;
 
 export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
   const { appState, candleStore, engine, candleCache, datasetRepository, localDatasetRepository, tradingEngine, mutationPipeline } = services;
   const trading = createTradingPresentation(tradingEngine);
   const tradingEvents = trading;
   const replayPort = createReplayUIPort(engine);
-  const commandBridge = createDeferredReplayCommandPresentationPort();
-  const commandPort = commandBridge.port;
   const dataset = createDatasetView(appState);
   const candles = createCandleView(candleStore);
   const statusView = createReplayStatusView({ engine, appState, candleStore });
-  const replayRuntime = createReplayCapabilities();
-  const replayCapabilities = replayRuntime.capabilities;
-  let coordinator = null;
+  let replayCapabilities = null;
   let commandController = null;
   let chartManager = null;
   let modeController = null;
 
+  const replayCommands = Object.freeze({
+    togglePlayPause: (...args) => commandController?.togglePlayPause(...args) ?? false,
+    pause: (...args) => commandController?.pause(...args) ?? false,
+    stepForward: (...args) => commandController?.stepForward(...args) ?? false,
+    reset: (...args) => commandController?.reset(...args) ?? false,
+    setSpeed: (...args) => commandController?.setSpeed(...args) ?? false,
+  });
+
+  const renderReplayWindow = (idx) => {
+    const total = candleStore.getCount();
+    if (!total) return;
+    const index = Math.min(Math.max(0, Number(idx)), total - 1);
+    const start = Math.max(0, index - REPLAY_WINDOW + 1);
+    chartManager.setData(candleStore.sliceWindow(start, index), { fit: false });
+  };
+
   const callbacks = {
-    onRetry: () => replayCapabilities.load({ autoStart: false }),
+    onRetry: () => replayCapabilities?.load({ autoStart: false }),
     onFollow: () => {
       const idx = replayPort.getState().currentIndex;
       chartManager.setAutoFollow(true);
@@ -44,7 +56,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       const candle = candleStore.get(idx);
       if (!candle) return;
       chartManager.setRevealedMax(candle.time);
-      coordinator?.applyWindowedChart(idx);
+      renderReplayWindow(idx);
       chartManager.followCurrent();
     },
     onSeek: (idx) => commandController?.trySeek(idx),
@@ -79,12 +91,13 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       return false;
     }
   };
+
   const chartAdapter = new ChartAdapter(replayPort, chartManager);
   const mobileNavBinding = bindMobileNavigation();
   const ui = createTerminalUI({
     mount,
     replayPort,
-    commandPort,
+    replayCommands,
     trading,
     tradingEvents,
     dataset,
@@ -93,10 +106,9 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     callbacks,
   });
 
-  const replay = createReplayRuntime({ services, ui, replayPort, replayRuntime, statusView, liveDatasetChange });
-  coordinator = replay.coordinator;
+  const replay = createReplayRuntime({ services, ui, replayPort, statusView, liveDatasetChange });
+  replayCapabilities = replay.replayCapabilities;
   commandController = replay.commandController;
-  commandBridge.bind(commandController);
 
   const form = ui.getOrderFormPorts();
   const views = ui.createTerminalViews({
@@ -108,7 +120,15 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   });
   const selectorBindings = bindDatasetSelectors(ui, replay.actions);
   const timelineBindings = bindTimelineInteractions({ timeline: ui.timeline, candles, trading, tradingEvents, actions: replay.actions });
-  const tradingRuntime = createTradingRuntime({ trading, tradingEvents, actions: replay.actions, ui, views, form, coordinator });
+  const tradingRuntime = createTradingRuntime({
+    trading,
+    tradingEvents,
+    actions: replay.actions,
+    ui,
+    views,
+    form,
+    reportTradingError: replay.showTradingError,
+  });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
   const loadBtn = ui.getReplayPorts().loadBtn;
   const onLoadClick = () => replay.actions.load();
@@ -143,7 +163,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     engine,
     candleCache,
     resources: [
-      replay.coordinator,
+      replay,
       mutationPipeline,
       selectorBindings,
       timelineBindings,
@@ -172,7 +192,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       views.floatingPosView,
       views.toastView,
     ],
-    extraCleanup: [unbindAutoFollow, commandBridge],
+    extraCleanup: [unbindAutoFollow],
   });
   const lifecycle = createLifecycleGuard({
     start() {
@@ -182,5 +202,5 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     destroy,
   });
 
-  return { start: lifecycle.start, destroy: lifecycle.destroy, ui, coordinator, mobileDrawer, commandSurface };
+  return { start: lifecycle.start, destroy: lifecycle.destroy, ui, mobileDrawer, commandSurface, replayCapabilities };
 }
