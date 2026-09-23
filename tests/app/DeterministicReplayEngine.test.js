@@ -1,13 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DeterministicReplayEngine } from '../../src/app/DeterministicReplayEngine.js';
 
+class TestCandleStore {
+  constructor() { this.candles = []; }
+  load(candles) { this.candles = candles.map((c) => ({ ...c })); }
+  clear() { this.candles = []; }
+  getCount() { return this.candles.length; }
+  get(index) { return this.candles[index] ? { ...this.candles[index] } : null; }
+  sliceWindow(start, end) { return this.candles.slice(start, end + 1).map((c) => ({ ...c })); }
+}
+
 const candles = Array.from({ length: 6 }, (_, i) => ({
   time: (i + 1) * 60, open: 100 + i, high: 101 + i, low: 99 + i, close: 100.5 + i, volume: 10,
 }));
 
 describe('DeterministicReplayEngine', () => {
   it('loads the complete dataset and starts at the selected candle', async () => {
-    const engine = new DeterministicReplayEngine();
+    const engine = new DeterministicReplayEngine({ candleStore: new TestCandleStore() });
     await engine.loadDataset(candles);
     expect(engine.getTotalCandles()).toBe(6);
     expect(engine.getState().currentIndex).toBe(-1);
@@ -18,7 +27,7 @@ describe('DeterministicReplayEngine', () => {
 
   it('steps exactly one candle with no network dependency', async () => {
     const onCandle = vi.fn();
-    const engine = new DeterministicReplayEngine({ onCandle, symbolProvider: () => 'SOLUSDT' });
+    const engine = new DeterministicReplayEngine({ candleStore: new TestCandleStore(), onCandle, symbolProvider: () => 'SOLUSDT' });
     await engine.loadDataset(candles);
     await engine.start(1);
     await engine.stepForward();
