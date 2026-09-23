@@ -142,13 +142,18 @@ def test_market_candle_rejects_index_that_differs_from_replay_index():
     assert "must match replay index" in response.json()["detail"]
 
 
-def test_market_candle_requires_an_active_replay_index():
+def test_browser_owned_market_candle_can_start_without_backend_replay_dataset():
     client = TestClient(app)
     session = uuid4()
     response = client.post("/api/v1/trading/candle", headers=h(session), json={"symbol": "BTCUSDT", "candle": CANDLES[0], "index": 0})
 
     assert response.status_code == 200
     assert response.json()["candle"] == CANDLES[0]
+    assert response.json()["trading"]["index"] == 0
+    restored = manager.get(str(session))
+    assert restored.replay.candles == []
+    assert restored.trading.index == 0
+    assert restored.history[-1]["type"] == "candle"
 
 
 def test_market_candle_requires_immutable_replay_data():

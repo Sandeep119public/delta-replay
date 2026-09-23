@@ -33,7 +33,8 @@ def _validate_history(history, *, replay_index=None) -> None:
 def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, market_state: dict) -> None:
     if not isinstance(market_state, dict):
         raise ValueError("trading market state must be an object")
-    if trading.index > replay.index:
+    browser_owned = not replay.candles
+    if not browser_owned and trading.index > replay.index:
         raise ValueError("trading index cannot be ahead of replay index")
     for symbol, market in market_state.items():
         if not isinstance(symbol, str) or symbol != symbol.strip().upper() or not symbol.strip():
@@ -52,7 +53,7 @@ def _validate_market_state(replay: ReplayService, trading: PaperTradingEngine, m
                 raise ValueError(f"market candle {field} for {symbol} is invalid")
         if candle["high"] < max(candle["open"], candle["close"]) or candle["low"] > min(candle["open"], candle["close"]):
             raise ValueError(f"market candle range for {symbol} is invalid")
-        if index >= len(replay.candles):
+        if not browser_owned and index >= len(replay.candles):
             raise ValueError(f"market index for {symbol} is outside replay dataset")
     missing_position_markets = sorted(set(trading.positions) - set(market_state))
     if missing_position_markets:
@@ -84,7 +85,8 @@ def simulation_id(document: Dict[str, Any]) -> str:
 
 def _serialize_components(replay: ReplayService, trading: PaperTradingEngine, history: list[dict] | None = None) -> Dict[str, Any]:
     history = deepcopy(history or [])
-    _validate_history(history, replay_index=replay.index)
+    history_limit = replay.index if replay.candles else trading.index
+    _validate_history(history, replay_index=history_limit)
     document = {
         "version": SESSION_STATE_VERSION,
         "replay": replay.export_state(),
@@ -123,7 +125,8 @@ def restore_session_bundle(document: Dict[str, Any]):
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"invalid session state: {exc}") from exc
     history = [] if version == 1 else deepcopy(document.get("history", []))
-    _validate_history(history, replay_index=replay.index)
+    history_limit = replay.index if replay.candles else trading.index
+    _validate_history(history, replay_index=history_limit)
     if version >= 3:
         simulation = document.get("simulation")
         if not isinstance(simulation, dict):
