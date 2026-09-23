@@ -37,7 +37,7 @@ export class RemoteTradingEngine {
   on(event, handler) { return this._destroyed ? () => {} : this.events.on(event, handler); }
   async _request(path, options = {}, action = null) {
     if (this._destroyed) return { applied: false, stale: true, response: null };
-    const mode = action === 'refresh' || action === 'candle' ? 'latest' : 'serial';
+    const mode = action === 'refresh' ? 'latest' : 'serial';
     return this.mutationPipeline.run(
       () => this.api.request(path, options),
       {
@@ -62,6 +62,18 @@ export class RemoteTradingEngine {
     this._emitStateTransitions(previous, action, response?.events || []);
   }
   syncFromReplayStep(response = {}) { return this.syncFromReplayLifecycle(response, 'candle'); }
+  async onReplaySeek(payload = null) {
+    if (this._destroyed) return { success: false, message: 'Trading engine is destroyed' };
+    const candle = payload?.candle || null;
+    if (!candle) return { success: false, message: 'Replay seek requires a candle' };
+    const body = JSON.stringify({ symbol: String(payload.symbol || candle.symbol || 'BTCUSDT').toUpperCase(), candle, index: payload.index });
+    try {
+      const result = await this._request('/replay/seek', { method: 'POST', body }, 'replay-seek');
+      return this._destroyed ? { success: false, message: 'Trading engine is destroyed' } : result.applied ? result.response : { success: true, ...this.getStateSnapshot(), stale: true };
+    } catch (error) {
+      return { success: false, message: error?.message || 'Replay seek failed', error };
+    }
+  }
   syncFromReplayLifecycle(response = {}, action = 'replay-sync') {
     if (this._destroyed) return this.getStateSnapshot();
     const previous = this.data;

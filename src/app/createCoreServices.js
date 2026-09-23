@@ -24,8 +24,10 @@ export function createCoreServices() {
   const engine = new DeterministicReplayEngine({
     candleStore,
     symbolProvider: () => appState.symbol,
-    onCandle: async ({ candle, index, symbol }) => {
-      const result = await replayTradingEngine.onMarketCandle({ candle, index, symbol });
+    onCandle: async ({ candle, index, symbol, event }) => {
+      const result = event === 'seeked'
+        ? await replayTradingEngine.onReplaySeek({ candle, index, symbol })
+        : await replayTradingEngine.onMarketCandle({ candle, index, symbol });
       if (result?.success === false) {
         throw new Error(result.message || 'Replay market-candle processing failed');
       }

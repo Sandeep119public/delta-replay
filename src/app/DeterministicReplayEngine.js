@@ -89,7 +89,7 @@ export class DeterministicReplayEngine {
   async _waitForCandleProcessing() {
     const pending = this._candleProcessing;
     if (!pending) return;
-    try { await pending; } catch {}
+    await pending;
   }
 
   async _processCandle(index, event, previousIndex) {
@@ -223,14 +223,17 @@ export class DeterministicReplayEngine {
     }
 
     const wasPlaying = this.state.status === 'playing';
+    const operationIntent = this.intent;
     this.state = { ...this.state, currentIndex: next };
     try {
       const payload = await this._processCandle(next, 'stepped', previousIndex);
+      if (operationIntent !== this.intent) return this.getState();
       const status = next === this.getTotalCandles() - 1 ? 'ended' : (wasPlaying ? 'playing' : 'paused');
       this.publish(status);
       this._emitCandleEvent('stepped', payload);
       return this.getState();
     } catch (error) {
+      if (operationIntent !== this.intent) return this.getState();
       this.state = { ...this.state, currentIndex: previousIndex, candle: this.store.get(previousIndex) };
       this.publish(wasPlaying ? 'playing' : 'paused');
       throw error;

@@ -265,35 +265,49 @@ def clear_risk(request: Request, symbol: str, target: Literal["all", "stopLoss",
         raise HTTPException(422, str(exc))
 
 
+@router.post("/replay/seek")
+def replay_seek(request: Request, command: MarketCandleRequest):
+    if command.candle is None or command.index is None or command.index < 0:
+        raise HTTPException(422, "replay seek requires candle and non-negative index")
+
+    def reposition(session):
+        symbol = _requested_market_symbol(session, command.symbol)
+        result = session.seek_from_browser(command.index, symbol, normalize_candle(command.candle.model_dump()))
+        return {"index": result["index"], "candle": result["candle"], "trading": snapshot(session.trading)}
+
+    try:
+        return atomic_session(request, reposition)
+    except ReplayDivergenceError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 @router.post("/candle")
 def process(request: Request, command: MarketCandleRequest | None = None):
     command = command or MarketCandleRequest()
 
     def process_candle(session):
         replay_index = session.replay.state()["index"]
-        if replay_index < 0:
-            raise HTTPException(409, "Load data and start replay before processing a market candle")
-
-        replay_symbol = _replay_symbol(session)
         symbol = _requested_market_symbol(session, command.symbol)
-        if command.index is not None and command.index != replay_index:
-            raise HTTPException(409, "candle index must match replay index for deterministic history")
 
         if command.candle is None:
+            if replay_index < 0:
+                raise HTTPException(409, "a candle is required before processing a market candle")
+            replay_symbol = _replay_symbol(session)
             if symbol != replay_symbol:
                 raise HTTPException(409, "a candle is required when processing a supplemental symbol")
             candle = normalize_candle(session.replay.candles[replay_index])
+            index = replay_index
         else:
             candle = normalize_candle(command.candle.model_dump())
-            if symbol == replay_symbol:
+            index = command.index if command.index is not None else replay_index + 1
+            if index < 0:
+                raise HTTPException(422, "candle index must be non-negative")
+            if replay_index >= 0 and symbol == _replay_symbol(session) and index == replay_index and session.replay.candles:
                 expected = normalize_candle(session.replay.candles[replay_index])
                 if candle != expected:
-                    raise HTTPException(
-                        409,
-                        "candle data must match the immutable replay candle for deterministic history",
-                    )
-
-        index = replay_index
+                    raise HTTPException(409, "candle data must match the immutable replay candle for deterministic history")
         existing = session.trading.get_latest_market(symbol)
         is_same_index_retry = existing is not None and existing.get("index") == index
         events = session.process_candle(candle, index, symbol, record=not is_same_index_retry)

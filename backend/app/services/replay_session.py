@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 from .paper_engine import PaperTradingEngine
 from .replay_service import ReplayService
-from .replay_timeline import ReplayDivergenceError, ReplayTimeline, rebuild_trading
+from .replay_timeline import ReplayDivergenceError, ReplayTimeline, rebuild_trading, validate_history, _apply_command
 
 
 @dataclass
@@ -106,6 +106,74 @@ class ReplaySession:
         result = self.replay.seek(index)
         self.reconstruct_trading(result["index"], symbol)
         return result
+
+    def seek_from_browser(self, index: int, symbol: str, candle: dict) -> dict:
+        """Synchronize backend trading with the browser-owned replay cursor."""
+        index = ReplayService._index(index)
+        if index < 0 or not isinstance(candle, dict):
+            raise ValueError("replay seek requires a non-negative index and candle")
+        normalized_symbol = str(symbol).strip().upper()
+        if not normalized_symbol:
+            raise ValueError("replay symbol must be provided")
+
+        has_activity = bool(
+            self.trading.has_open_position()
+            or self.trading.pending_orders()
+            or self.trading.trades
+            or self.trading.orders
+            or self.trading.funding
+        )
+        if has_activity:
+            if index > self.trading.index:
+                raise ReplayDivergenceError("cannot seek beyond processed market history while trading activity exists")
+            if index < self.trading.index:
+                self._reconstruct_from_market_history(index)
+            market = self.trading.get_latest_market(normalized_symbol)
+            if not market or market["index"] != index or market["candle"] != candle:
+                raise ReplayDivergenceError("browser seek candle is not present in persisted market history")
+            return {"index": index, "candle": deepcopy(candle)}
+
+        self.replace_trading(self._new_trading())
+        self.replace_history([])
+        self.trading.on_candle(candle, index, normalized_symbol)
+        self.record("candle", index, {"candle": deepcopy(candle), "index": index, "symbol": normalized_symbol})
+        return {"index": index, "candle": deepcopy(candle)}
+
+    def _reconstruct_from_market_history(self, target_index: int) -> None:
+        history = self.history
+        validate_history(history, replay_index_limit=target_index)
+        by_index = {}
+        for event in history:
+            idx = event.get("replayIndex", -1)
+            if idx >= 0:
+                by_index.setdefault(idx, []).append(event)
+        market_indices = sorted(by_index)
+        if not market_indices or market_indices[-1] < target_index:
+            raise ReplayDivergenceError("market history does not cover the requested replay position")
+        first = market_indices[0]
+        required = list(range(first, target_index + 1))
+        if market_indices[:len(required)] != required:
+            raise ReplayDivergenceError("market history contains a gap before the requested replay position")
+
+        current = self.trading
+        rebuilt = PaperTradingEngine(
+            current.account.starting_balance,
+            current.fee_rate,
+            current.margin_rate,
+            current.maint_margin_rate,
+        )
+        for event in history:
+            if event["replayIndex"] == -1:
+                if event["type"] in {"capital", "fee_rate"}:
+                    _apply_command(rebuilt, event)
+                continue
+            if event["replayIndex"] > target_index:
+                break
+            _apply_command(rebuilt, event)
+        if rebuilt.index != target_index:
+            raise ReplayDivergenceError("market history reconstruction did not reach requested replay position")
+        self.replace_trading(rebuilt)
+        self.replace_history([deepcopy(event) for event in history if event.get("replayIndex", -1) <= target_index])
 
     def reset_replay(self, symbol: str) -> dict:
         """Reset replay and trading together, preserving simulation configuration."""

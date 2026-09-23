@@ -160,16 +160,11 @@ export class ReplayCommandController {
     }
   }
 
-  setSpeed(speed) {
+  async setSpeed(speed) {
     if (this.destroyed || this.busy || !this.hasData() || !this.allowed('setSpeed')) return false;
     const value = Number(speed);
     if (!PLAYBACK_SPEEDS.includes(value)) return false;
-    try {
-      return this.engine.setSpeed(value);
-    } catch (error) {
-      this.error(error?.message);
-      return false;
-    }
+    return this.run(() => this.engine.setSpeed(value));
   }
 
   async pause() {

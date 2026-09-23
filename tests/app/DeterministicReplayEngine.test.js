@@ -82,6 +82,22 @@ describe('DeterministicReplayEngine', () => {
     }
   });
 
+  it('does not resurrect playback after pause while candle processing is pending', async () => {
+    let release;
+    const engine = new DeterministicReplayEngine({
+      candleStore: new TestCandleStore(),
+      onCandle: ({ index }) => index === 1 ? new Promise((resolve) => { release = resolve; }) : undefined,
+    });
+    await engine.loadDataset(candles);
+    await engine.start(0);
+    await engine.play();
+    await vi.waitFor(() => expect(engine.getState().currentIndex).toBe(1));
+    engine.pause();
+    release();
+    await vi.waitFor(() => expect(engine.getState().status).toBe('paused'));
+    expect(engine.getState().currentIndex).toBe(1);
+  });
+
   it('clears stale candles when an empty dataset is loaded', async () => {
     const store = new TestCandleStore();
     const engine = new DeterministicReplayEngine({ candleStore: store });

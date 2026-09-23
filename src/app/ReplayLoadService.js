@@ -125,6 +125,11 @@ export function createReplayLoadService({
       return { metadata: replayMetadata, state: loadResult };
     } catch (error) {
       if (token !== loadToken || destroyed) return null;
+      if (['NO_DATASET', 'DATASET_NOT_FOUND'].includes(error?.code)) {
+        try { await replayEngine.loadDataset([]); } catch (clearError) { console.warn('[ReplayLoadService] failed to clear stale replay dataset', clearError); }
+        appState.setReplayDatasetId(null, null);
+        appState.setPendingStartIndex(0);
+      }
       const state = error?.code === 'NO_DATASET' ? LoadingState.EMPTY : LoadingState.INVALID_DATA;
       appState.transitionLoading(state, error);
       throw error;

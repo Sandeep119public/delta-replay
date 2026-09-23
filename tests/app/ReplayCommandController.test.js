@@ -43,8 +43,8 @@ describe('ReplayCommandController', () => {
     const controller = new ReplayCommandController({
       engine: engine({ setSpeed, getState: () => ({ status: 'ready', speed: 1 }) }),
     });
-    expect(controller.setSpeed('5')).toBe(5);
-    expect(controller.setSpeed('3')).toBe(false);
+    await expect(controller.setSpeed('5')).resolves.toBe(true);
+    await expect(controller.setSpeed('3')).resolves.toBe(false);
     expect(setSpeed).toHaveBeenCalledTimes(1);
     expect(setSpeed).toHaveBeenCalledWith(5);
   });
