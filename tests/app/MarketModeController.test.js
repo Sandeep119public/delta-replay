@@ -58,6 +58,14 @@ function deps() {
 }
 
 describe('MarketModeController', () => {
+  it('invalidates an in-flight replay load when switching back to live', async () => {
+    const d = deps();
+    d.replayCapabilities.invalidateLoad = vi.fn();
+    const controller = new MarketModeController(d);
+    await controller.setMode('live', { force: true });
+    expect(d.replayCapabilities.invalidateLoad).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps live market and replay as separate modes', async () => {
     const d = deps();
     const controller = new MarketModeController(d);

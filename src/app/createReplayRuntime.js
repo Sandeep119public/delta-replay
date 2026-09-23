@@ -82,6 +82,7 @@ export function createReplayRuntime({ services, ui, replayPort, statusView, live
   const replayCapabilities = Object.freeze({
     load: (options = {}) => loadReplay(options),
     preview,
+    invalidateLoad: () => loadService.invalidateCurrentLoad(),
   });
 
   commandController = new ReplayCommandController({

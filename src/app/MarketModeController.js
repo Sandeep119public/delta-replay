@@ -116,6 +116,8 @@ export class MarketModeController {
     this._syncButtons();
 
     if (mode === 'live') {
+      this._requestGeneration += 1;
+      this.replayCapabilities.invalidateLoad?.();
       await this.pauseReplay?.();
       this.liveMarket.stop();
       this._setStatus('LIVE · connecting…');
