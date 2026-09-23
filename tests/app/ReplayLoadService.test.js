@@ -61,7 +61,7 @@ describe('ReplayLoadService', () => {
       datasetRepository: { list: vi.fn(async () => []), getCandles: vi.fn() },
     });
     await expect(createReplayLoadService(d).loadAndPrepareReplay()).rejects.toThrow(/download historical Binance data first/i);
-    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith([]);
+    expect(d.replayEngine.loadDataset).not.toHaveBeenCalled();
   });
 
   it('rejects before changing replay identity when engine load fails', async () => {

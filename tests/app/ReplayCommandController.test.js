@@ -38,7 +38,7 @@ describe('ReplayCommandController', () => {
     expect(start).not.toHaveBeenCalled();
   });
 
-  it('sets only supported playback speeds and rejects arbitrary values', async () => {
+  it('sets only supported playback speeds and rejects arbitrary values', () => {
     const setSpeed = vi.fn((speed) => speed);
     const controller = new ReplayCommandController({
       engine: engine({ setSpeed, getState: () => ({ status: 'ready', speed: 1 }) }),

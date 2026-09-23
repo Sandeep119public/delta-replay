@@ -23,7 +23,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const replayPort = createReplayUIPort(engine);
   const dataset = createDatasetView(appState);
   const candles = createCandleView(candleStore);
-  const statusView = createReplayStatusView({ engine, appState });
+  const statusView = createReplayStatusView({ replayPort, appState });
   let replayCapabilities = null;
   let commandController = null;
   let chartManager = null;
@@ -43,7 +43,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       const idx = replayPort.getState().currentIndex;
       chartManager.setAutoFollow(true);
       if (idx < 0) return;
-      const candle = engine.getCandle(idx);
+      const candle = replayPort.getCandle(idx);
       if (!candle) return;
       chartManager.setRevealedMax(candle.time);
       chartAdapter.showPreview(idx, 1000);

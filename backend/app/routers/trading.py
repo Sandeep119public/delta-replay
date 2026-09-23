@@ -304,13 +304,10 @@ def process(request: Request, command: MarketCandleRequest | None = None):
             index = command.index if command.index is not None else replay_index + 1
             if index < 0:
                 raise HTTPException(422, "candle index must be non-negative")
-            if replay_index >= 0 and symbol == _replay_symbol(session):
-                if index != replay_index:
-                    raise HTTPException(409, "candle index must match replay index")
-                if session.replay.candles:
-                    expected = normalize_candle(session.replay.candles[replay_index])
-                    if candle != expected:
-                        raise HTTPException(409, "candle data must match the immutable replay candle for deterministic history")
+            if replay_index >= 0 and symbol == _replay_symbol(session) and index == replay_index and session.replay.candles:
+                expected = normalize_candle(session.replay.candles[replay_index])
+                if candle != expected:
+                    raise HTTPException(409, "candle data must match the immutable replay candle for deterministic history")
         existing = session.trading.get_latest_market(symbol)
         is_same_index_retry = existing is not None and existing.get("index") == index
         events = session.process_candle(candle, index, symbol, record=not is_same_index_retry)

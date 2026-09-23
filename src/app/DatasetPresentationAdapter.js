@@ -29,20 +29,20 @@ export function createCandleView(candleStore) {
   });
 }
 
-export function createReplayStatusView({ engine, appState }) {
-  if (!engine || !appState) {
-    throw new TypeError('createReplayStatusView requires engine and appState');
+export function createReplayStatusView({ replayPort, appState }) {
+  if (!replayPort || !appState) {
+    throw new TypeError('createReplayStatusView requires replayPort and appState');
   }
   return Object.freeze({
     snapshot() {
-      const replayState = engine.getState?.() || { status: 'idle', currentIndex: -1 };
+      const replayState = replayPort.getState?.() || { status: 'idle', currentIndex: -1 };
       return Object.freeze({
-        total: engine.getTotalCandles?.() || 0,
+        total: replayPort.getTotalCandles?.() || 0,
         status: replayState.status || 'idle',
         loadingState: appState.loadingState,
         pendingStartIndex: appState.pendingStartIndex ?? 0,
         currentIndex: replayState.currentIndex ?? -1,
-        candleAt: (index) => freezeValue(engine.getCandle?.(index) ?? null),
+        candleAt: (index) => freezeValue(replayPort.getCandle?.(index) ?? null),
       });
     },
   });
