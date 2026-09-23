@@ -1,11 +1,3 @@
-import { LoadingState } from '../data/DataError.js';
-
-/**
- * DatasetChangeService owns symbol/timeframe switching: state validation,
- * load-session invalidation, and reload triggering. Dataset changes are a
- * transaction boundary: if the current simulation has trading history, the
- * change is rejected before any UI/store state is mutated.
- */
 export function createDatasetChangeService({
   hasOpenPosition,
   hasTradingActivity = null,
@@ -20,7 +12,9 @@ export function createDatasetChangeService({
   invalidateLoad,
   reload,
 }) {
-  if (!appState || !candleStore || !replayEngine) throw new TypeError('createDatasetChangeService requires appState, candleStore, and replayEngine');
+  if (!appState || !candleStore || !replayEngine) {
+    throw new TypeError('createDatasetChangeService requires appState, candleStore, and replayEngine');
+  }
   if (typeof hasOpenPosition !== 'function') throw new TypeError('createDatasetChangeService requires hasOpenPosition() capability');
   if (hasTradingActivity !== null && typeof hasTradingActivity !== 'function') throw new TypeError('createDatasetChangeService hasTradingActivity must be a function');
   if (typeof reportError !== 'function' || typeof invalidateLoad !== 'function' || typeof reload !== 'function') {
@@ -39,14 +33,12 @@ export function createDatasetChangeService({
         reportError('Unsupported dataset change: ' + kind);
         return false;
       }
-
       if (hasOpenPosition()) {
         const msg = 'Cannot change ' + kind + ' while a position is open. Close the position first.';
         reportError(msg);
         if (selectElement) selectElement.value = kind === 'symbol' ? appState.symbol : appState.timeframe;
         return false;
       }
-
       if (hasTradingActivity?.()) {
         const msg = 'Cannot change ' + kind + ' after trading activity. Reset the simulation first.';
         reportError(msg);
@@ -76,24 +68,27 @@ export function createDatasetChangeService({
           }
         }
 
-        if (kind === 'symbol') appState.symbol = nextValue;
+        if (kind === 'symbol') appState.symbol = nextValue.toUpperCase();
         else appState.timeframe = nextValue;
 
         invalidateLoad();
-        try { replayEngine.pause?.(); } catch (error) { console.warn('[DatasetChange] pause during dataset change failed', error); }
+        try { replayEngine.pause?.(); } catch {}
         candleStore.clear();
-
-        timeline?.setTotal(0, []);
+        timeline?.setTotal(0);
         chartManager?.clear();
         chartManager?.setRevealedMax(null);
         chartManager?.setAutoFollow(true);
         appState.setPendingStartIndex(0);
         controls?.setStartIndex(0);
-        appState.transitionLoading(LoadingState.IDLE);
 
         try {
-          return await reload();
+          const result = await reload();
+          if (result) return true;
+          throw new Error('Dataset reload was cancelled or superseded');
         } catch (error) {
+          if (kind === 'symbol') appState.symbol = previousValue;
+          else appState.timeframe = previousValue;
+          if (selectElement) selectElement.value = previousValue;
           reportError(error?.message || 'Unable to load ' + kind + ' dataset.');
           return false;
         }

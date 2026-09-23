@@ -1,17 +1,19 @@
-const SPEEDS = Object.freeze([0.25, 0.5, 1, 2, 5, 10]);
 const BASE_STEP_DELAY_MS = 500;
 
 class Events {
   constructor() { this.map = new Map(); }
+
   on(event, handler) {
     const listeners = this.map.get(event) || new Set();
     listeners.add(handler);
     this.map.set(event, listeners);
     return () => listeners.delete(handler);
   }
+
   emit(event, payload) {
     for (const handler of this.map.get(event) || []) {
-      try { handler(payload); } catch (error) { console.warn(`[ReplayEngine] ${event} handler failed`, error); }
+      try { handler(payload); }
+      catch (error) { console.warn('[ReplayEngine] ' + event + ' handler failed', error); }
     }
   }
 }
@@ -24,24 +26,52 @@ export class DeterministicReplayEngine {
     this.onCandle = onCandle;
     this.symbolProvider = symbolProvider;
     this.events = new Events();
-    this.state = { status: 'idle', currentIndex: -1, startIndex: -1, totalCandles: 0, speed: 1, candle: null };
+    this.state = {
+      status: 'idle',
+      currentIndex: -1,
+      startIndex: -1,
+      totalCandles: 0,
+      speed: 1,
+      candle: null,
+    };
     this.timer = null;
     this.intent = 0;
     this.destroyed = false;
   }
 
   on(event, handler) { return this.destroyed ? () => {} : this.events.on(event, handler); }
-  getState() { return { ...this.state, total: this.state.totalCandles, candle: this.state.candle && { ...this.state.candle } }; }
+
+  getState() {
+    return {
+      ...this.state,
+      total: this.state.totalCandles,
+      candle: this.state.candle ? { ...this.state.candle } : null,
+    };
+  }
+
   getTotalCandles() { return this.store.getCount(); }
+
+  getCandle(index) { return this.store.get(index); }
+
+  getTimelineTimes() { return this.store.getTimes(); }
+
+  getCandleWindow(index, windowSize = 1000) {
+    const n = Number(index);
+    const size = Math.max(1, Math.trunc(Number(windowSize) || 1000));
+    if (!Number.isInteger(n) || n < 0 || n >= this.getTotalCandles()) return [];
+    return this.store.sliceWindow(Math.max(0, n - size + 1), n);
+  }
+
   getVisibleCandles() {
-    const end = this.state.currentIndex;
-    return end < 0 ? [] : this.store.sliceWindow(Math.max(0, end - 999), end);
+    return this.state.currentIndex < 0 ? [] : this.getCandleWindow(this.state.currentIndex, 1000);
   }
 
   symbol() {
-    const value = String(this.symbolProvider() || '').trim().toUpperCase();
-    if (!value) throw new TypeError('Replay symbol must be provided');
-    return value;
+    const fromDataset = String(this.store.getSymbol?.() || '').trim().toUpperCase();
+    if (fromDataset) return fromDataset;
+    const fallback = String(this.symbolProvider() || '').trim().toUpperCase();
+    if (!fallback) throw new TypeError('Replay symbol must be provided');
+    return fallback;
   }
 
   publish(status = this.state.status) {
@@ -56,14 +86,21 @@ export class DeterministicReplayEngine {
     return this.getState();
   }
 
-  emitCandle(event, previousIndex = null) {
+  async emitCandle(event, previousIndex = null) {
     const index = this.state.currentIndex;
     const candle = index >= 0 ? this.store.get(index) : null;
     const payload = { index, previousIndex, candle, state: this.getState() };
     this.events.emit(event, payload);
-    if (candle && this.onCandle) {
-      Promise.resolve(this.onCandle({ candle, index, symbol: this.symbol(), state: this.getState(), event }))
-        .catch((error) => this.events.emit('playbackError', error));
+    if (!candle || !this.onCandle) return;
+    const result = await this.onCandle({
+      candle,
+      index,
+      symbol: this.symbol(),
+      state: this.getState(),
+      event,
+    });
+    if (result?.success === false) {
+      throw new Error(result.message || 'Replay market-candle processing failed');
     }
   }
 
@@ -71,36 +108,58 @@ export class DeterministicReplayEngine {
     if (this.destroyed) return this.getState();
     this.pause();
     if (!Array.isArray(candles) || !candles.length) {
-      this.state = { ...this.state, status: 'idle', currentIndex: -1, startIndex: -1, totalCandles: 0, candle: null };
+      this.store.clear();
+      this.state = {
+        ...this.state,
+        status: 'idle',
+        currentIndex: -1,
+        startIndex: -1,
+        totalCandles: 0,
+        candle: null,
+      };
       return this.publish('idle');
     }
+
     this.store.load(candles, metadata);
     const total = this.store.getCount();
     const start = Math.min(Math.max(0, Math.trunc(Number(startIndex) || 0)), total - 1);
-    this.state = { ...this.state, status: 'ready', currentIndex: -1, startIndex: start, totalCandles: total, candle: null };
+    this.state = {
+      ...this.state,
+      status: 'ready',
+      currentIndex: -1,
+      startIndex: start,
+      totalCandles: total,
+      candle: null,
+    };
     return this.publish('ready');
   }
 
   async start(index = this.state.startIndex >= 0 ? this.state.startIndex : 0) {
     if (this.destroyed || !this.getTotalCandles()) return this.getState();
     const n = Number(index);
-    if (!Number.isInteger(n) || n < 0 || n >= this.getTotalCandles()) throw new RangeError('Replay start index is outside dataset');
+    if (!Number.isInteger(n) || n < 0 || n >= this.getTotalCandles()) {
+      throw new RangeError('Replay start index is outside dataset');
+    }
     this.pause();
     this.state = { ...this.state, startIndex: n, currentIndex: n };
-    this.publish(n === this.getTotalCandles() - 1 ? 'ended' : 'paused');
-    this.emitCandle('started');
+    this.publish('paused');
+    await this.emitCandle('started');
+    if (n === this.getTotalCandles() - 1) this.publish('ended');
     return this.getState();
   }
 
   async seek(index) {
     if (this.destroyed) return this.getState();
     const n = Number(index);
-    if (!Number.isInteger(n) || n < 0 || n >= this.getTotalCandles()) throw new RangeError('Replay seek index is outside dataset');
+    if (!Number.isInteger(n) || n < 0 || n >= this.getTotalCandles()) {
+      throw new RangeError('Replay seek index is outside dataset');
+    }
     this.pause();
     const previous = this.state.currentIndex;
     this.state = { ...this.state, currentIndex: n };
-    this.publish(n === this.getTotalCandles() - 1 ? 'ended' : 'paused');
-    this.emitCandle('seeked', previous);
+    this.publish('paused');
+    await this.emitCandle('seeked', previous);
+    if (n === this.getTotalCandles() - 1) this.publish('ended');
     return this.getState();
   }
 
@@ -108,22 +167,24 @@ export class DeterministicReplayEngine {
     if (this.destroyed || this.state.currentIndex < 0) return this.getState();
     const previous = this.state.currentIndex;
     const next = Math.min(previous + 1, this.getTotalCandles() - 1);
-    if (next === previous) {
-      this.pause();
-      return this.publish('ended');
-    }
+    if (next === previous) return this.publish('ended');
+
     this.state = { ...this.state, currentIndex: next };
-    const status = next === this.getTotalCandles() - 1 ? 'ended' : 'paused';
-    this.publish(status);
-    this.emitCandle('stepped', previous);
-    if (status === 'ended') this.pause();
+    this.publish('paused');
+    await this.emitCandle('stepped', previous);
+    if (next === this.getTotalCandles() - 1) this.publish('ended');
     return this.getState();
   }
 
   async reset() {
     if (this.destroyed) return this.getState();
     this.pause();
-    this.state = { ...this.state, status: this.getTotalCandles() ? 'ready' : 'idle', currentIndex: -1, candle: null };
+    this.state = {
+      ...this.state,
+      status: this.getTotalCandles() ? 'ready' : 'idle',
+      currentIndex: -1,
+      candle: null,
+    };
     this.publish(this.state.status);
     this.events.emit('reset', { index: -1, startIndex: this.state.startIndex, state: this.getState() });
     return this.getState();
@@ -138,19 +199,23 @@ export class DeterministicReplayEngine {
     this.state = { ...this.state, status: 'playing' };
     this.publish('playing');
 
-    const tick = async () => {
-      this.timer = null;
-      if (this.destroyed || intent !== this.intent || this.state.status !== 'playing') return;
-      try { await this.stepForward(); }
-      catch (error) { this.pause(); this.events.emit('playbackError', error); return; }
-      if (!this.destroyed && intent === this.intent && this.state.status === 'playing') this.schedule(intent);
+    const schedule = () => {
+      if (this.destroyed || intent !== this.intent || this.state.status !== 'playing' || this.timer) return;
+      this.timer = setTimeout(async () => {
+        this.timer = null;
+        if (this.destroyed || intent !== this.intent || this.state.status !== 'playing') return;
+        try {
+          await this.stepForward();
+        } catch (error) {
+          this.pause();
+          this.events.emit('playbackError', error);
+          return;
+        }
+        if (!this.destroyed && intent === this.intent && this.state.status === 'playing') schedule();
+      }, Math.max(16, BASE_STEP_DELAY_MS / this.state.speed));
     };
 
-    this.schedule = (token) => {
-      if (this.destroyed || token !== this.intent || this.state.status !== 'playing' || this.timer) return;
-      this.timer = setTimeout(() => { void tick(); }, Math.max(16, BASE_STEP_DELAY_MS / this.state.speed));
-    };
-    this.schedule(intent);
+    schedule();
     return this.getState();
   }
 

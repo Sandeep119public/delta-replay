@@ -40,6 +40,7 @@ export class MarketModeController {
     this.destroyed = false;
     this._listeners = [];
     this._requestGeneration = 0;
+
     this._pageChangeHandler = (event) => {
       if (this.destroyed) return;
       if (event?.detail?.page === 'replay') {
@@ -66,9 +67,7 @@ export class MarketModeController {
     this._listen(this.liveButton, 'click', () => { void this.setMode('live'); });
     this._listen(this.replayButton, 'click', () => { void this.setMode('replay'); });
     this._listen(this.datasetRefresh, 'click', () => { void this.refreshDatasets(); });
-    this._listen(this.datasetSelect, 'change', () => {
-      void this.selectDataset(this.datasetSelect?.value);
-    });
+    this._listen(this.datasetSelect, 'change', () => { void this.selectDataset(this.datasetSelect?.value); });
     globalThis.window?.addEventListener?.('pagechange', this._pageChangeHandler);
     globalThis.window?.addEventListener?.('delta-replay-datasets-changed', this._datasetChangedHandler);
     globalThis.window?.addEventListener?.('delta-replay-local-datasets-changed', this._localDatasetChangedHandler);
@@ -144,6 +143,7 @@ export class MarketModeController {
     ]);
 
     if (this.destroyed || this.mode !== 'replay' || generation !== this._requestGeneration) return;
+
     if (this.datasetSelect) {
       this.datasetSelect.replaceChildren();
       if (!datasets.length && !localDatasets.length) {
@@ -187,7 +187,10 @@ export class MarketModeController {
     const current = this.appState.replayDatasetId
       ? { source: this.appState.replayDatasetSource || 'github', id: this.appState.replayDatasetId }
       : null;
-    const selected = current && ((current.source === 'local' && localDatasets.some((item) => item.id === current.id)) || (current.source === 'github' && datasets.some((item) => item.id === current.id)))
+    const selected = current && (
+      (current.source === 'local' && localDatasets.some((item) => item.id === current.id)) ||
+      (current.source === 'github' && datasets.some((item) => item.id === current.id))
+    )
       ? current
       : (datasets[0] ? { source: 'github', id: datasets[0].id } : { source: 'local', id: localDatasets[0].id });
 
@@ -199,32 +202,34 @@ export class MarketModeController {
     if (this.destroyed || this.mode !== 'replay' || !selection) return;
     const generation = ++this._requestGeneration;
     const parsed = this._parseSelection(selection);
-    const dataset = parsed.source === 'local'
-      ? await this.localDatasetRepository.get(parsed.id)
-      : await this.datasetRepository.get(parsed.id);
-    if (this.destroyed || this.mode !== 'replay' || generation !== this._requestGeneration) return;
-    const metadata = dataset?.metadata || dataset;
-    if (!metadata) {
-      this._setStatus('REPLAY · dataset not found');
+    if (!parsed.id || !['github', 'local'].includes(parsed.source)) {
+      this._setStatus('REPLAY · invalid dataset selection');
       return;
     }
 
     await this.pauseReplay?.();
-    this.appState.setReplayDatasetId(metadata.id, parsed.source);
-    this.appState.symbol = metadata.symbol;
-    this.appState.timeframe = metadata.timeframe;
-    if (this.symbolSelect) this.symbolSelect.value = metadata.symbol;
-    if (this.timeframeSelect) this.timeframeSelect.value = metadata.timeframe;
-    this._syncButtons();
-    this._setStatus('REPLAY · ' + (parsed.source === 'local' ? 'LOCAL · ' : 'GITHUB · ') + metadata.symbol + ' · ' + metadata.timeframe + ' · loading…');
+    this._setStatus('REPLAY · ' + (parsed.source === 'local' ? 'LOCAL' : 'GITHUB') + ' · loading…');
 
     try {
-      const loaded = await this.replayCapabilities.load({ datasetId: metadata.id, datasetSource: parsed.source, autoStart: false });
-      if (loaded && !this.destroyed && this.mode === 'replay' && generation === this._requestGeneration) {
-        this._setStatus('REPLAY · ' + (parsed.source === 'local' ? 'LOCAL · ' : 'GITHUB · ') + metadata.symbol + ' · ' + metadata.timeframe + ' · ready');
+      const metadata = await this.replayCapabilities.load({
+        datasetId: parsed.id,
+        datasetSource: parsed.source,
+        autoStart: false,
+      });
+      if (this.destroyed || this.mode !== 'replay' || generation !== this._requestGeneration) return;
+      if (metadata) {
+        if (this.symbolSelect) this.symbolSelect.value = metadata.symbol || '';
+        if (this.timeframeSelect) this.timeframeSelect.value = metadata.timeframe || '';
+        this._setStatus(
+          'REPLAY · ' +
+          (parsed.source === 'local' ? 'LOCAL · ' : 'GITHUB · ') +
+          (metadata.symbol || '—') + ' · ' + (metadata.timeframe || '—') + ' · ready',
+        );
       }
     } catch (error) {
-      this._setStatus('REPLAY · ' + (error?.message || 'unable to load dataset'));
+      if (generation === this._requestGeneration && !this.destroyed) {
+        this._setStatus('REPLAY · ' + (error?.message || 'unable to load dataset'));
+      }
     }
   }
 

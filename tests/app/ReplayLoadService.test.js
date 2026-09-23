@@ -9,18 +9,11 @@ const candles = [
 function deps(overrides = {}) {
   return {
     datasetRepository: {
-      list: vi.fn(async () => [{ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV' }]),
-      get: vi.fn(async () => ({ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV', from: 60, to: 120 })),
-      getRange: vi.fn(async () => ({ metadata: { id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', format: 'CSV' }, candles })),
-      getCandles: vi.fn(async () => ({ metadata: { id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', format: 'CSV' }, candles })),
+      list: vi.fn(async () => [{ id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', count: 2 }]),
+      getCandles: vi.fn(async () => ({ metadata: { id: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m', timeframeSec: 60 }, candles })),
     },
     localDatasetRepository: {
-      get: vi.fn(async () => ({ metadata: { id: 'local-abc', symbol: 'BTCUSDT', timeframe: '1m', count: 2, format: 'CSV', from: 60, to: 120 }, candles })),
-    },
-    candleStore: {
-      get: vi.fn((index) => candles[index] || null),
-      getCount: vi.fn(() => candles.length),
-      getAll: vi.fn(() => candles),
+      get: vi.fn(async () => ({ metadata: { id: 'local-abc', symbol: 'BTCUSDT', timeframe: '1m', timeframeSec: 60 }, candles })),
     },
     appState: {
       symbol: 'BTCUSDT',
@@ -35,105 +28,55 @@ function deps(overrides = {}) {
       setPendingStartIndex: vi.fn(),
     },
     replayEngine: {
-      loadDataset: vi.fn(async () => ({ status: 'ready', total: 2, totalCandles: 2, currentIndex: -1, startIndex: 0, candle: null })),
-      getState: vi.fn(() => ({ status: 'ready', totalCandles: 2, currentIndex: -1, startIndex: 0 })),
-      start: vi.fn(async () => undefined),
+      loadDataset: vi.fn(async () => ({ status: 'ready', totalCandles: 2, currentIndex: -1, startIndex: 0 })),
     },
     hasOpenPosition: () => false,
     hasPendingOrders: () => false,
     hasTradingActivity: () => false,
-    statusView: { snapshot: vi.fn(() => ({})) },
-    timeline: { setTotal: vi.fn(), setPosition: vi.fn(), setEnabled: vi.fn() },
-    controls: { setStartIndex: vi.fn() },
-    modeBanner: { update: vi.fn() },
-    errorPanel: { hide: vi.fn(), show: vi.fn() },
-    tradingErrorView: { show: vi.fn() },
-    dataStatusEl: { textContent: '' },
-    cacheBadgeEl: { classList: { add: vi.fn() } },
-    preview: vi.fn(),
     ...overrides,
   };
 }
 
 describe('ReplayLoadService', () => {
-  it('loads only from the saved dataset repository', async () => {
+  it('loads the complete saved dataset and gives it to the replay engine', async () => {
     const d = deps();
-    const service = createReplayLoadService(d);
-
-    await service.loadAndPrepareReplay({ datasetId: 'BTCUSDT__1M__60__120' });
-
+    const result = await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'BTCUSDT__1M__60__120' });
     expect(d.datasetRepository.list).toHaveBeenCalledOnce();
     expect(d.datasetRepository.getCandles).toHaveBeenCalledWith('BTCUSDT__1M__60__120');
     expect(d.replayEngine.loadDataset).toHaveBeenCalledWith(candles, expect.objectContaining({ startIndex: 0, metadata: expect.any(Object) }));
+    expect(result.metadata).toMatchObject({ datasetId: 'BTCUSDT__1M__60__120', symbol: 'BTCUSDT', timeframe: '1m' });
   });
 
   it('loads a browser-local dataset without contacting the GitHub dataset repository', async () => {
     const d = deps();
-    const service = createReplayLoadService(d);
-
-    await service.loadAndPrepareReplay({ datasetId: 'local-abc', datasetSource: 'local' });
-
+    const result = await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'local-abc', datasetSource: 'local' });
     expect(d.localDatasetRepository.get).toHaveBeenCalledWith('local-abc');
-    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith(candles, expect.objectContaining({ startIndex: 0, metadata: expect.any(Object) }));
+    expect(d.replayEngine.loadDataset).toHaveBeenCalledWith(candles, expect.any(Object));
     expect(d.datasetRepository.list).not.toHaveBeenCalled();
-    expect(d.appState.setReplayDatasetId).toHaveBeenCalledWith('local-abc', 'local');
-    expect(d.appState.setReplayState).toHaveBeenCalled();
+    expect(result.metadata).toMatchObject({ datasetId: 'local-abc', local: true });
   });
 
   it('rejects when no saved replay dataset exists', async () => {
     const d = deps({
-      datasetRepository: { list: vi.fn(async () => []), get: vi.fn(), getCandles: vi.fn() },
+      datasetRepository: { list: vi.fn(async () => []), getCandles: vi.fn() },
     });
-    const service = createReplayLoadService(d);
-
-    await expect(service.loadAndPrepareReplay()).rejects.toThrow(/download historical Binance data first/i);
+    await expect(createReplayLoadService(d).loadAndPrepareReplay()).rejects.toThrow(/download historical Binance data first/i);
     expect(d.replayEngine.loadDataset).not.toHaveBeenCalled();
   });
 
-  it('does not replace replay state after a trading activity guard rejects the load', async () => {
+  it('rejects before changing replay identity when engine load fails', async () => {
     const d = deps({
-      hasTradingActivity: () => true,
+      replayEngine: { loadDataset: vi.fn(async () => { throw new Error('integrity failure'); }) },
     });
-
-    await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'x' });
-
-    expect(d.datasetRepository.get).not.toHaveBeenCalled();
-    expect(d.replayEngine.loadDataset).not.toHaveBeenCalled();
-    expect(d.tradingErrorView.show).toHaveBeenCalledWith(expect.stringContaining('trading activity'));
-  });
-
-  it('rejects a server-side dataset load failure before changing replay state', async () => {
-    const d = deps({
-      replayEngine: {
-        loadDataset: vi.fn(async () => { throw new Error('dataset integrity failure'); }),
-        getState: vi.fn(() => ({ status: 'ready', totalCandles: 0, currentIndex: -1, startIndex: -1 })),
-        start: vi.fn(async () => undefined),
-      },
-    });
-
-    await expect(createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'bad' }))
-      .rejects.toThrow(/integrity failure/i);
+    await expect(createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'bad' })).rejects.toThrow(/integrity failure/i);
     expect(d.appState.setReplayDatasetId).not.toHaveBeenCalled();
   });
 
-  it('publishes the committed replay dataset after remote replay load succeeds', async () => {
+  it('commits replay identity only after engine load succeeds', async () => {
     const d = deps();
-
     await createReplayLoadService(d).loadAndPrepareReplay({ datasetId: 'BTCUSDT__1M__60__120' });
-
     expect(d.appState.setReplayDatasetId).toHaveBeenCalledWith('BTCUSDT__1M__60__120', 'github');
     expect(d.appState.setReplayState).toHaveBeenCalled();
-    expect(d.timeline.setEnabled).toHaveBeenCalledWith(true);
-    expect(d.preview).toHaveBeenCalledWith(0);
-  });
-
-  it('passes the selected saved dataset symbol when auto-starting', async () => {
-    const d = deps();
-    await createReplayLoadService(d).loadAndPrepareReplay({
-      datasetId: 'BTCUSDT__1M__60__120',
-      autoStart: true,
-    });
-
-    expect(d.replayEngine.start).toHaveBeenCalledWith(0);
+    expect(d.appState.transitionLoading).toHaveBeenLastCalledWith(expect.any(String));
   });
 });

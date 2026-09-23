@@ -43,10 +43,10 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       const idx = replayPort.getState().currentIndex;
       chartManager.setAutoFollow(true);
       if (idx < 0) return;
-      const candle = candleStore.get(idx);
+      const candle = engine.getCandle(idx);
       if (!candle) return;
       chartManager.setRevealedMax(candle.time);
-      chartAdapter.showPreview(candleStore, idx, 1000);
+      chartAdapter.showPreview(idx, 1000);
       chartManager.followCurrent();
     },
     onSeek: (idx) => commandController?.trySeek(idx),
@@ -71,10 +71,14 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     if (kind !== 'symbol' && kind !== 'timeframe') return false;
     const normalized = String(value ?? '').trim();
     if (!normalized) return false;
-    if (kind === 'symbol') appState.symbol = normalized.toUpperCase();
-    else appState.timeframe = normalized;
+    const previousSymbol = appState.symbol;
+    const previousTimeframe = appState.timeframe;
+    const nextSymbol = kind === 'symbol' ? normalized.toUpperCase() : previousSymbol;
+    const nextTimeframe = kind === 'timeframe' ? normalized : previousTimeframe;
     try {
-      await liveMarket.start({ symbol: appState.symbol, timeframe: appState.timeframe });
+      await liveMarket.start({ symbol: nextSymbol, timeframe: nextTimeframe });
+      appState.symbol = nextSymbol;
+      appState.timeframe = nextTimeframe;
       return true;
     } catch (error) {
       uiStatusEl('LIVE · ' + (error?.message || 'unable to load market data'));
@@ -141,7 +145,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   });
   const commandSurface = createCommandSurface({ focusTradePanel: mobileDrawer?.focusTradingPanel });
   const destroy = bindApplicationLifecycle({
-    unbindKeyboardShortcuts: replay.unbindKeyboardShortcuts,
+    unbindKeyboardShortcuts: null,
     onDestroy: () => {
       onDestroy?.();
       router.destroy();
@@ -155,7 +159,6 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       timelineBindings,
       tradingRuntime.tradingBindings,
       tradingRuntime.tradingStateBridge,
-      replay.commandController,
       modeController,
       datasetRepository,
       localDatasetRepository,
@@ -182,7 +185,9 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
   const lifecycle = createLifecycleGuard({
     start() {
       ui.modeBanner.update(statusView.snapshot());
-      Promise.resolve(modeController?.setMode('live', { force: true })).catch((error) => { uiStatusEl('LIVE · ' + (error?.message || 'unable to start live market')); });
+      Promise.resolve(modeController?.setMode('live', { force: true })).catch((error) => {
+        uiStatusEl('LIVE · ' + (error?.message || 'unable to start live market'));
+      });
     },
     destroy,
   });

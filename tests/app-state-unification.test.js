@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { AppState } from '../src/state/AppState.js';
 import { LoadingState } from '../src/data/DataError.js';
 
-describe('AppState — Unification & Central Reactivity', () => {
+describe('AppState', () => {
   it('initializes with IDLE loading state and default attributes', () => {
     const state = new AppState();
     expect(state.loadingState).toBe(LoadingState.IDLE);
@@ -12,11 +12,20 @@ describe('AppState — Unification & Central Reactivity', () => {
     expect(state.retryCount).toBe(0);
   });
 
+  it('does not own historical candle data', () => {
+    const state = new AppState();
+    expect('candleStore' in state).toBe(false);
+    expect('_store' in state).toBe(false);
+    expect('candles' in state).toBe(false);
+    expect('totalCandles' in state).toBe(false);
+    expect(typeof state.setCandles).toBe('undefined');
+    expect(typeof state.setCandleStore).toBe('undefined');
+  });
+
   it('transitionLoading updates loadingState, error, and emits loadingStateChanged', () => {
     const state = new AppState();
     const handler = vi.fn();
     state.on('loadingStateChanged', handler);
-
     state.transitionLoading(LoadingState.LOADING);
     expect(state.loadingState).toBe(LoadingState.LOADING);
     expect(state.loading).toBe(true);
@@ -30,76 +39,29 @@ describe('AppState — Unification & Central Reactivity', () => {
     expect(state.dataError).toBe(mockError);
   });
 
-  it('setCandles preserves supplied candle metadata in the canonical store', () => {
-    const state = new AppState();
-    state.setCandles(
-      [{ time: 1000, open: 100, high: 105, low: 95, close: 102, volume: 12 }],
-      { symbol: 'BTCUSDT', timeframe: '1m', quality: 'VALID' },
-    );
-
-    expect(state.totalCandles).toBe(1);
-    expect(state._store.getMetadata()).toMatchObject({
-      symbol: 'BTCUSDT',
-      timeframe: '1m',
-      quality: 'VALID',
-      count: 1,
-    });
-  });
-
   it('setPendingStartIndex updates cursor and emits pendingStartIndexChanged', () => {
     const state = new AppState();
     const handler = vi.fn();
     state.on('pendingStartIndexChanged', handler);
-
     state.setPendingStartIndex(42);
     expect(state.pendingStartIndex).toBe(42);
     expect(handler).toHaveBeenCalledWith(42);
   });
 
-  it('snapshot includes all unified state fields', () => {
-    const state = new AppState();
-    state.setPendingStartIndex(10);
-    state.setRetryCount(2);
-    state.transitionLoading(LoadingState.SUCCESS);
-
-    const snap = state.snapshot();
-    expect(snap.pendingStartIndex).toBe(10);
-    expect(snap.retryCount).toBe(2);
-    expect(snap.loadingState).toBe(LoadingState.SUCCESS);
-  });
-
-  it('snapshot is deeply immutable and cannot mutate nested replay or error state', () => {
+  it('snapshot is deeply immutable', () => {
     const state = new AppState();
     const error = { userMessage: 'Failed network', context: { status: 503 } };
-    const replay = { status: 'paused', currentIndex: 7 };
+    const replay = { status: 'paused', currentIndex: 7, totalCandles: 10 };
     state.transitionLoading(LoadingState.NETWORK_ERROR, error);
     state.setReplayState(replay);
 
     const snap = state.snapshot();
     expect(Object.isFrozen(snap)).toBe(true);
-    expect(Object.isFrozen(snap.dataError)).toBe(true);
     expect(Object.isFrozen(snap.dataError.context)).toBe(true);
     expect(Object.isFrozen(snap.replayState)).toBe(true);
     expect(() => { snap.dataError.context.status = 200; }).toThrow();
     expect(() => { snap.replayState.currentIndex = 99; }).toThrow();
     expect(state.dataError.context.status).toBe(503);
     expect(state.replayState.currentIndex).toBe(7);
-  });
-
-  it('candle compatibility reads return frozen copies', () => {
-    const state = new AppState();
-    state.setCandles([{ time: 1000, open: 100, high: 105, low: 95, close: 102 }]);
-
-    const candles = state.candles;
-    const candle = state.getCandle(0);
-    const window = state.sliceWindow(0, 1);
-
-    expect(Object.isFrozen(candles)).toBe(true);
-    expect(Object.isFrozen(candles[0])).toBe(true);
-    expect(Object.isFrozen(candle)).toBe(true);
-    expect(Object.isFrozen(window)).toBe(true);
-    expect(Object.isFrozen(window[0])).toBe(true);
-    expect(() => { candle.close = 999; }).toThrow();
-    expect(state.getCandle(0).close).toBe(102);
   });
 });

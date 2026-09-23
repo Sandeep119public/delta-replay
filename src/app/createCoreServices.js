@@ -13,7 +13,6 @@ export function createCoreServices() {
   const sessionId = getSessionId();
   const appState = new AppState();
   const candleStore = new CandleStore();
-  appState.setCandleStore(candleStore);
   const candleCache = new CandleCache({ dbName: 'delta-replay-futures-v2' });
   const mutationPipeline = new SessionMutationPipeline();
   const datasetRepository = new RemoteDatasetRepository();
@@ -21,11 +20,19 @@ export function createCoreServices() {
   const tradingApi = new BackendService('trading', sessionId);
   const backtestApi = new BackendService('backtest', sessionId);
   const replayTradingEngine = new RemoteTradingEngine(tradingApi, mutationPipeline);
+
   const engine = new DeterministicReplayEngine({
     candleStore,
     symbolProvider: () => appState.symbol,
-    onCandle: ({ candle, index, symbol }) => replayTradingEngine.onMarketCandle({ candle, index, symbol }),
+    onCandle: async ({ candle, index, symbol }) => {
+      const result = await replayTradingEngine.onMarketCandle({ candle, index, symbol });
+      if (result?.success === false) {
+        throw new Error(result.message || 'Replay market-candle processing failed');
+      }
+      return result;
+    },
   });
+
   return {
     tradingEngine: replayTradingEngine,
     engine,
@@ -34,7 +41,6 @@ export function createCoreServices() {
     candleCache,
     datasetRepository,
     localDatasetRepository,
-    replayApi: null,
     tradingApi,
     backtestApi,
     mutationPipeline,

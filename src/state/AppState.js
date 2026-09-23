@@ -1,6 +1,5 @@
 import { EventEmitter } from '../core/EventEmitter.js';
 import { LoadingState } from '../data/DataError.js';
-import { CandleStore } from '../data/CandleStore.js';
 
 function freezeValue(value) {
   if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
@@ -11,14 +10,13 @@ function freezeValue(value) {
 }
 
 export class AppState extends EventEmitter {
-  constructor({ candleStore = null } = {}) {
+  constructor() {
     super();
     this.symbol = 'BTCUSDT';
     this.timeframe = '1m';
     this.mode = 'live';
     this.replayDatasetId = null;
     this.replayDatasetSource = null;
-    this._store = candleStore;
     this.loading = false;
     this.loadingState = LoadingState.IDLE;
     this.error = null;
@@ -26,40 +24,6 @@ export class AppState extends EventEmitter {
     this.pendingStartIndex = 0;
     this.retryCount = 0;
     this.replayState = null;
-  }
-
-  _ensureStore() {
-    if (!this._store) this._store = new CandleStore();
-    return this._store;
-  }
-
-  get candles() {
-    return freezeValue(this._store?.getAll?.() || []);
-  }
-
-  set candles(val) {
-    this.setCandles(val);
-  }
-
-  get totalCandles() {
-    return this._store?.getCount?.() || 0;
-  }
-
-  getCandle(index) {
-    return freezeValue(this._store?.get?.(index) ?? null);
-  }
-
-  sliceWindow(start, end) {
-    return freezeValue(this._store?.sliceWindow?.(start, end) || []);
-  }
-
-  setCandleStore(store) {
-    if (!store || typeof store.getCount !== 'function' || typeof store.getAll !== 'function') {
-      throw new TypeError('AppState.setCandleStore requires a CandleStore-compatible object');
-    }
-    this._store = store;
-    this.emit('candles', this.candles);
-    this.emit('change', this.snapshot());
   }
 
   setLoading(v) {
@@ -125,14 +89,6 @@ export class AppState extends EventEmitter {
     this.emit('change', this.snapshot());
   }
 
-  setCandles(candles, metadata = {}) {
-    const store = this._ensureStore();
-    if (!candles?.length) store.clear();
-    else store.load(candles, metadata || {});
-    this.emit('candles', this.candles);
-    this.emit('change', this.snapshot());
-  }
-
   setReplayState(rs) {
     this.replayState = rs;
     this.emit('replayState', freezeValue(rs));
@@ -146,7 +102,7 @@ export class AppState extends EventEmitter {
       mode: this.mode,
       replayDatasetId: this.replayDatasetId,
       replayDatasetSource: this.replayDatasetSource,
-      total: this.totalCandles,
+      total: this.replayState?.totalCandles ?? 0,
       loading: this.loading,
       loadingState: this.loadingState,
       error: this.error,

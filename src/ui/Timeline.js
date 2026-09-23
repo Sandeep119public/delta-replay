@@ -13,13 +13,12 @@ export class Timeline {
     this.startTimeLabelEl = startTimeLabelEl;
     this._total = 0;
     this._times = [];
-    this._candles = [];
-    this._onChange = null;
-    this._onCommit = null;
-    this._onStartHere = null;
     this._markers = [];
     this.markersEl = typeof document !== 'undefined' ? document.getElementById('timeline-markers') : null;
     this.startHereBtn = typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null;
+    this._onChange = null;
+    this._onCommit = null;
+    this._onStartHere = null;
     this._onInput = () => {
       const idx = this._clampIndex(this.slider.value);
       this.slider.value = String(idx);
@@ -50,7 +49,6 @@ export class Timeline {
     this._onStartHereClick = null;
     this._markers = [];
     this._times = [];
-    this._candles = [];
   }
 
   onChange(fn) { this._onChange = typeof fn === 'function' ? fn : null; }
@@ -86,20 +84,23 @@ export class Timeline {
       const pct = this._total > 1 ? (index / (this._total - 1)) * 100 : 0;
       const side = String(marker?.side ?? '').toUpperCase();
       const node = doc.createElement('span');
-      node.className = `tl-marker ${side === 'SELL' || side === 'SHORT' ? 'is-short' : 'is-long'}`;
-      node.style.left = `${pct}%`;
-      node.title = `${side || 'TRADE'} @ #${index}`;
+      node.className = 'tl-marker ' + (side === 'SELL' || side === 'SHORT' ? 'is-short' : 'is-long');
+      node.style.left = pct + '%';
+      node.title = (side || 'TRADE') + ' @ #' + index;
       node.setAttribute('aria-label', node.title);
       el.appendChild(node);
     }
   }
 
-  setTotal(total, candles = null) {
+  setTotal(total, times = null) {
     const numericTotal = Number(total);
     this._total = Number.isFinite(numericTotal) && numericTotal > 0 ? Math.floor(numericTotal) : 0;
-    this._times = Array.isArray(candles) ? candles.slice(0, this._total).map((c) => c?.time) : [];
-    this._candles = Array.isArray(candles) ? candles : [];
+    this._times = Array.isArray(times)
+      ? times.slice(0, this._total).map((value) => typeof value === 'object' ? value?.time : value)
+      : [];
+
     if (this._total === 0) {
+      this._times = [];
       this.slider.disabled = true;
       this.slider.min = '0';
       this.slider.max = '0';
@@ -109,6 +110,7 @@ export class Timeline {
       this._updateLabels(0);
       return;
     }
+
     this.slider.disabled = false;
     this.slider.min = '0';
     this.slider.max = String(this._total - 1);
@@ -117,10 +119,8 @@ export class Timeline {
     const btn = this.startHereBtn || (typeof document !== 'undefined' ? document.getElementById('timeline-start-btn') : null);
     if (btn) btn.disabled = false;
     this._updateLabels(initialIndex);
-    if (this._times.length) {
-      this._setText(this.startLabel, formatTime(this._times[0]));
-      this._setText(this.endLabel, formatTime(this._times[this._times.length - 1]));
-    }
+    this._setText(this.startLabel, formatTime(this._times[0]));
+    this._setText(this.endLabel, formatTime(this._times[this._total - 1]));
   }
 
   setPosition(index) {
@@ -140,24 +140,22 @@ export class Timeline {
   _updateProgress(idx) {
     if (!this.slider?.style || typeof this.slider.style.setProperty !== 'function') return;
     const pct = this._total > 1 ? (idx / (this._total - 1)) * 100 : 0;
-    this.slider.style.setProperty('--timeline-progress', `${pct}%`);
+    this.slider.style.setProperty('--timeline-progress', pct + '%');
   }
 
   getSelectedIndex() { return this._clampIndex(this.slider.value); }
-
   setEnabled(enabled) { this.slider.disabled = !enabled || this._total === 0; }
-
   _setText(element, text) { if (element) element.textContent = String(text); }
 
   _updateLabels(index) {
     const idx = this._clampIndex(index);
     this._updateProgress(idx);
-    const t = this._times[idx] ?? this._candles[idx]?.time;
+    const t = this._times[idx];
     const timeStr = Number.isFinite(Number(t)) ? formatTime(t) : '—';
-    this._setText(this.indexLabel, `${idx + 1} / ${this._total}`);
+    this._setText(this.indexLabel, (idx + 1) + ' / ' + this._total);
     this._setText(this.timeLabel, timeStr);
     this._setText(this.currentLabel, timeStr);
-    this._setText(this.startIndexLabel, `Replay cursor: #${idx + 1} of ${this._total}`);
+    this._setText(this.startIndexLabel, 'Replay cursor: #' + (idx + 1) + ' of ' + this._total);
     if (this.startTimeLabelEl) this._setText(this.startTimeLabelEl, Number.isFinite(Number(t)) ? timeStr : '—');
     this._renderMarkers();
   }

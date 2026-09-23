@@ -6,11 +6,6 @@ function freezeValue(value) {
   return Object.freeze(copy);
 }
 
-/**
- * Application-owned adapters that project AppState/CandleStore/ReplayEngine
- * into immutable presentation snapshots. The UI receives frozen copies, never
- * live references to stores — reading a view cannot observe later mutation.
- */
 export function createDatasetView(appState) {
   if (!appState || typeof appState !== 'object') {
     throw new TypeError('createDatasetView requires appState');
@@ -30,24 +25,24 @@ export function createCandleView(candleStore) {
     getCount: () => candleStore.getCount(),
     get: (index) => freezeValue(candleStore.get(index)),
     getAll: () => freezeValue(candleStore.getAll()),
-    findIndexByTime: (targetSec) => candleStore.findIndexByTime(targetSec),
+    findIndexByTime: (targetSec) => candleStore.findNearestIndexByTime(targetSec),
   });
 }
 
-export function createReplayStatusView({ engine, appState, candleStore }) {
-  if (!engine || !appState || !candleStore) {
-    throw new TypeError('createReplayStatusView requires engine, appState, and candleStore');
+export function createReplayStatusView({ engine, appState }) {
+  if (!engine || !appState) {
+    throw new TypeError('createReplayStatusView requires engine and appState');
   }
   return Object.freeze({
     snapshot() {
       const replayState = engine.getState?.() || { status: 'idle', currentIndex: -1 };
       return Object.freeze({
-        total: candleStore.getCount?.() || 0,
+        total: engine.getTotalCandles?.() || 0,
         status: replayState.status || 'idle',
         loadingState: appState.loadingState,
         pendingStartIndex: appState.pendingStartIndex ?? 0,
         currentIndex: replayState.currentIndex ?? -1,
-        candleAt: (index) => freezeValue(candleStore.get?.(index) ?? null),
+        candleAt: (index) => freezeValue(engine.getCandle?.(index) ?? null),
       });
     },
   });

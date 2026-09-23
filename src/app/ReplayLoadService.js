@@ -10,33 +10,13 @@ const TIMEFRAME_SECONDS = Object.freeze({
 export function createReplayLoadService({
   datasetRepository,
   localDatasetRepository = null,
-  candleStore,
   appState,
   replayEngine,
   hasOpenPosition,
   hasPendingOrders,
   hasTradingActivity,
-  statusView,
-  timeline,
-  controls,
-  modeBanner,
-  errorPanel,
-  tradingErrorView = null,
-  dataStatusEl = null,
-  cacheBadgeEl = null,
-  preview,
 }) {
-  const required = {
-    datasetRepository,
-    candleStore,
-    appState,
-    replayEngine,
-    statusView,
-    timeline,
-    controls,
-    modeBanner,
-    preview,
-  };
+  const required = { datasetRepository, appState, replayEngine };
   for (const [name, value] of Object.entries(required)) {
     if (!value) throw new TypeError('createReplayLoadService requires ' + name);
   }
@@ -47,12 +27,10 @@ export function createReplayLoadService({
   let loadToken = 0;
   let destroyed = false;
 
-  const reportStatus = () => modeBanner.update(statusView.snapshot());
-
   async function readDataset(source, datasetId) {
     if (source === 'local') {
       if (!localDatasetRepository) throw new Error('Browser local dataset storage is unavailable');
-      const record = await localDatasetRepository.get(datasetId);
+      const record = await localDatasetRepository.get(datasetId || appState.replayDatasetId);
       if (!record?.metadata || !Array.isArray(record.candles)) {
         throw new Error('Local replay dataset was not found in this browser');
       }
@@ -67,11 +45,11 @@ export function createReplayLoadService({
       throw error;
     }
 
-    const listing = datasets.find((dataset) => dataset.id === selectedId) || await datasetRepository.get(selectedId);
-    if (!listing) throw new Error('Selected replay dataset no longer exists');
-
-    if (typeof datasetRepository.getCandles !== 'function') {
-      throw new Error('Saved replay dataset reader is unavailable');
+    const listing = datasets.find((dataset) => dataset.id === selectedId);
+    if (!listing) {
+      const error = new Error('Selected replay dataset no longer exists');
+      error.code = 'DATASET_NOT_FOUND';
+      throw error;
     }
 
     const payload = await datasetRepository.getCandles(selectedId);
@@ -81,23 +59,22 @@ export function createReplayLoadService({
     return { metadata: payload.metadata, candles: payload.candles };
   }
 
-  async function loadAndPrepareReplay({ datasetId = null, datasetSource = null, autoStart = false } = {}) {
+  async function loadAndPrepareReplay({ datasetId = null, datasetSource = null } = {}) {
     if (destroyed) return null;
 
     if (hasTradingActivity()) {
-      tradingErrorView?.show('Cannot replace replay data after trading activity. Reset the simulation first.');
-      return null;
+      const error = new Error('Cannot replace replay data after trading activity. Reset the simulation first.');
+      error.code = 'TRADING_ACTIVITY';
+      throw error;
     }
     if (hasOpenPosition() || hasPendingOrders()) {
-      tradingErrorView?.show('Cannot change replay data while a position is open or a pending order exists. Close the position and cancel pending orders first.');
-      return null;
+      const error = new Error('Cannot change replay data while a position is open or a pending order exists. Close the position and cancel pending orders first.');
+      error.code = 'ACTIVE_TRADING';
+      throw error;
     }
 
     const token = ++loadToken;
     appState.transitionLoading(LoadingState.LOADING);
-    errorPanel?.hide();
-    if (dataStatusEl) dataStatusEl.textContent = 'Loading replay dataset…';
-    reportStatus();
 
     try {
       const source = datasetSource || appState.replayDatasetSource || 'github';
@@ -115,6 +92,7 @@ export function createReplayLoadService({
         policy: 'STRICT',
         timestampUnit: 'seconds',
       });
+
       if (!integrity.validCandles.length || integrity.validCandles.length !== candles.length) {
         throw new Error('Replay dataset failed strict integrity validation');
       }
@@ -129,61 +107,28 @@ export function createReplayLoadService({
         quality: 'VALID',
       };
 
-      appState.setReplayDatasetId(replayMetadata.datasetId, source);
-      appState.symbol = metadata.symbol;
-      appState.timeframe = metadata.timeframe;
-
       const loadResult = await replayEngine.loadDataset(integrity.validCandles, {
         startIndex: 0,
         metadata: replayMetadata,
       });
       if (token !== loadToken || destroyed) return null;
+      if (!loadResult?.totalCandles) throw new Error('Replay dataset is empty');
 
-      const total = loadResult.totalCandles ?? candleStore.getCount();
-      if (!total) throw new Error('Replay dataset is empty');
-
+      appState.setReplayDatasetId(replayMetadata.datasetId, source);
+      appState.symbol = metadata.symbol;
+      appState.timeframe = metadata.timeframe;
       appState.setReplayState(loadResult);
-      timeline.setTotal(total, candleStore.getAll());
       appState.setPendingStartIndex(0);
-      controls.setStartIndex(0);
-      timeline.setPosition(0);
-      preview(0);
-      cacheBadgeEl?.classList.add('hidden');
-
-      if (dataStatusEl) {
-        const label = source === 'local' ? 'Local dataset: ' : 'Saved dataset: ';
-        dataStatusEl.textContent = label + metadata.symbol + ' · ' + metadata.timeframe + ' · ' + total.toLocaleString() + ' candles';
-      }
-
-      timeline.setEnabled(true);
       appState.transitionLoading(LoadingState.SUCCESS);
-      reportStatus();
 
-      if (autoStart) await replayEngine.start(0);
-      return replayMetadata;
+      return { metadata: replayMetadata, state: loadResult };
     } catch (error) {
       if (token !== loadToken || destroyed) return null;
-
-      if (error?.code === 'NO_DATASET') {
-        appState.transitionLoading(LoadingState.EMPTY, error);
-        errorPanel?.show({ category: 'NO_DATA', userMessage: error.message, message: error.message });
-        if (dataStatusEl) dataStatusEl.textContent = 'No saved replay dataset';
-      } else {
-        appState.transitionLoading(LoadingState.INVALID_DATA, error);
-        errorPanel?.show({
-          category: 'INVALID_DATA',
-          userMessage: error?.message || 'Replay dataset failed validation',
-          message: error?.message || String(error),
-        });
-        if (dataStatusEl) dataStatusEl.textContent = 'Replay dataset failed validation';
-      }
-      reportStatus();
+      const state = error?.code === 'NO_DATASET' ? LoadingState.EMPTY : LoadingState.INVALID_DATA;
+      appState.transitionLoading(state, error);
       throw error;
     } finally {
-      if (token === loadToken && !destroyed) {
-        appState.setLoading(false);
-        reportStatus();
-      }
+      if (token === loadToken && !destroyed) appState.setLoading(false);
     }
   }
 
