@@ -1,7 +1,7 @@
 import { CandleStore } from '../data/CandleStore.js';
 import { CandleCache } from '../data/CandleCache.js';
 import { AppState } from '../state/AppState.js';
-import { LocalCapableReplayEngine } from './LocalCapableReplayEngine.js';
+import { DeterministicReplayEngine } from './DeterministicReplayEngine.js';
 import { RemoteTradingEngine } from './RemoteTradingEngine.js';
 import { BackendService } from './BackendService.js';
 import { SessionMutationPipeline } from './SessionMutationPipeline.js';
@@ -18,10 +18,25 @@ export function createCoreServices() {
   const mutationPipeline = new SessionMutationPipeline();
   const datasetRepository = new RemoteDatasetRepository();
   const localDatasetRepository = new LocalDatasetRepository();
-  const replayApi = new BackendService('replay', sessionId);
   const tradingApi = new BackendService('trading', sessionId);
   const backtestApi = new BackendService('backtest', sessionId);
-  const tradingEngine = new RemoteTradingEngine(tradingApi, mutationPipeline);
-  const engine = new LocalCapableReplayEngine(replayApi, tradingEngine, () => appState.symbol, mutationPipeline);
-  return { tradingEngine, engine, appState, candleStore, candleCache, datasetRepository, localDatasetRepository, replayApi, tradingApi, backtestApi, mutationPipeline, sessionId };
+  const replayTradingEngine = new RemoteTradingEngine(tradingApi, mutationPipeline);
+  const engine = new DeterministicReplayEngine({
+    symbolProvider: () => appState.symbol,
+    onCandle: ({ candle, index, symbol }) => replayTradingEngine.onMarketCandle({ candle, index, symbol }),
+  });
+  return {
+    tradingEngine: replayTradingEngine,
+    engine,
+    appState,
+    candleStore,
+    candleCache,
+    datasetRepository,
+    localDatasetRepository,
+    replayApi: null,
+    tradingApi,
+    backtestApi,
+    mutationPipeline,
+    sessionId,
+  };
 }
