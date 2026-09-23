@@ -12,6 +12,8 @@ class TestCandleStore {
   sliceWindow(start, end) { return this.candles.slice(start, end + 1).map((c) => ({ ...c })); }
 }
 
+const TestEngine = (overrides = {}) => new DeterministicReplayEngine({ candleStore: new TestCandleStore(), ...overrides });
+
 const candles = Array.from({ length: 6 }, (_, i) => ({
   time: (i + 1) * 60,
   open: 100 + i,
