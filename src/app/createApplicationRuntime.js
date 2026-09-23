@@ -16,8 +16,6 @@ import { createTradingRuntime } from './createTradingRuntime.js';
 import { BinanceLiveMarketService } from './BinanceLiveMarketService.js';
 import { MarketModeController } from './MarketModeController.js';
 
-const REPLAY_WINDOW = 1000;
-
 export function createApplicationRuntime({ services, mount, router, onDestroy = null, requireElement }) {
   const { appState, candleStore, engine, candleCache, datasetRepository, localDatasetRepository, tradingEngine, mutationPipeline } = services;
   const trading = createTradingPresentation(tradingEngine);
@@ -39,14 +37,6 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     setSpeed: (...args) => commandController?.setSpeed(...args) ?? false,
   });
 
-  const renderReplayWindow = (idx) => {
-    const total = candleStore.getCount();
-    if (!total) return;
-    const index = Math.min(Math.max(0, Number(idx)), total - 1);
-    const start = Math.max(0, index - REPLAY_WINDOW + 1);
-    chartManager.setData(candleStore.sliceWindow(start, index), { fit: false });
-  };
-
   const callbacks = {
     onRetry: () => replayCapabilities?.load({ autoStart: false }),
     onFollow: () => {
@@ -56,7 +46,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       const candle = candleStore.get(idx);
       if (!candle) return;
       chartManager.setRevealedMax(candle.time);
-      renderReplayWindow(idx);
+      chartAdapter.showPreview(candleStore, idx, 1000);
       chartManager.followCurrent();
     },
     onSeek: (idx) => commandController?.trySeek(idx),
@@ -130,10 +120,6 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
     reportTradingError: replay.showTradingError,
   });
   const unbindAutoFollow = ui.chartManager.onAutoFollowChange((isFollow) => ui.controls.setAutoFollow(isFollow));
-  const loadBtn = ui.getReplayPorts().loadBtn;
-  const onLoadClick = () => replay.actions.load();
-  loadBtn?.addEventListener('click', onLoadClick);
-  const loadBinding = { destroy() { loadBtn?.removeEventListener?.('click', onLoadClick); } };
   const mobileDrawer = bindMobileDrawer();
   modeController = new MarketModeController({
     page: ui.el('page-replay'),
@@ -169,14 +155,12 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       timelineBindings,
       tradingRuntime.tradingBindings,
       tradingRuntime.tradingStateBridge,
-      replay.replayLifecycle,
       replay.commandController,
       modeController,
       datasetRepository,
       localDatasetRepository,
       mobileDrawer,
       commandSurface,
-      loadBinding,
       mobileNavBinding,
       ui.symbolSelector,
       ui.timeframeSelector,
@@ -184,6 +168,7 @@ export function createApplicationRuntime({ services, mount, router, onDestroy = 
       ui.controls,
       ui.themeManager,
       ui.errorPanel,
+      ui.tradingErrorView,
       tradingRuntime.chartTradingController,
       ui.adapter,
       ui.chartManager,
