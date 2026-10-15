@@ -1,0 +1,35 @@
+name: Build Delta Paper Lab APK
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'apps/delta-paper-lab/**'
+      - '.github/workflows/build-delta-paper-apk.yml'
+    branches:
+      - 'build/delta-paper-lab'
+permissions:
+  contents: read
+jobs:
+  android-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        working-directory: apps/delta-paper-lab
+        run: gradle --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: delta-paper-lab-debug-apk
+          path: apps/delta-paper-lab/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
