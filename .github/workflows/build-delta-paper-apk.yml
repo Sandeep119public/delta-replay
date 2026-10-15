@@ -21,6 +21,18 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platforms;android-35 build-tools;35.0.0'
+      - name: Validate app JavaScript
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path('apps/delta-paper-lab/app/src/main/assets/index.html').read_text()
+          scripts = re.findall(r'<script>(.*?)</script>', html, re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f'Expected one inline app script, found {len(scripts)}')
+          Path('/tmp/delta-paper-lab.js').write_text(scripts[0])
+          PY
+          node --check /tmp/delta-paper-lab.js
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
