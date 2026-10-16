@@ -1,153 +1,138 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#090d12"><title>Delta Paper Lab</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#080d12">
+<title>Delta Paper Lab</title>
 <style>
-:root{color-scheme:dark;--bg:#090d12;--surface:#101720;--surface2:#151f2a;--line:#253341;--text:#edf4f7;--muted:#8496a8;--green:#47e0a2;--greenbg:#102c25;--red:#ff7185;--redbg:#301a21;--amber:#f4c66b;--blue:#91b8ff;--radius:18px}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 80% -10%,#17332d 0,transparent 35%),var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-bottom:84px}
-button,input,select{font:inherit}button{cursor:pointer}header{padding:19px 17px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px}.brand{font-size:17px;font-weight:850;letter-spacing:.07em}.brand em{font-style:normal;color:var(--green)}.subbrand{font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:2px}.sim-pill,.feed-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;padding:6px 9px;font-size:10px;font-weight:750;letter-spacing:.05em;white-space:nowrap}.sim-pill{color:var(--amber);background:#282217;border-color:#4a3a1b}.dot{width:6px;height:6px;border-radius:50%;background:currentColor}.wrap{max-width:680px;margin:auto;padding:0 13px}.panel{background:linear-gradient(145deg,rgba(20,30,41,.97),rgba(14,21,29,.98));border:1px solid var(--line);border-radius:var(--radius);padding:15px;margin-bottom:12px;box-shadow:0 8px 24px #00000013}.eyebrow{font-size:10px;font-weight:750;color:var(--muted);letter-spacing:.13em;text-transform:uppercase}.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.stack{display:flex;flex-direction:column;gap:4px}.muted{color:var(--muted)}.tiny{font-size:11px}.small{font-size:12px}.price{font-size:35px;font-weight:800;letter-spacing:-1.4px;line-height:1.12;font-variant-numeric:tabular-nums}.price-unit{font-size:12px;color:var(--muted);font-weight:650;letter-spacing:0}.change{font-size:12px;font-weight:750;padding:5px 8px;border-radius:8px;display:inline-flex;align-items:center;gap:4px}.up{color:var(--green);background:var(--greenbg)}.down{color:var(--red);background:var(--redbg)}.neutral{color:var(--muted);background:#1b2631}.feed-pill.live{color:var(--green);border-color:#285a49;background:#10231f}.feed-pill.stale{color:var(--amber);border-color:#574522;background:#282217}.feed-pill.offline{color:var(--red);border-color:#5b2c36;background:#2b171c}
-.watchlist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.asset{min-width:0;text-align:left;background:#101720;border:1px solid var(--line);border-radius:13px;padding:11px 10px;color:var(--text)}.asset.active{border-color:#47e0a2;background:linear-gradient(145deg,#14372d,#101c20);box-shadow:inset 0 0 0 1px #47e0a21c}.asset-name{font-size:12px;font-weight:800}.asset-price{font-size:14px;font-weight:800;margin:6px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}.asset-change{font-size:10px;font-weight:750}.hero{padding:17px}.hero-top{align-items:flex-start}.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:17px}.stat{background:#0c1219;border:1px solid #202c38;border-radius:12px;padding:10px}.stat label{display:block;color:var(--muted);font-size:10px;margin-bottom:5px}.stat strong{font-size:13px;font-weight:750;font-variant-numeric:tabular-nums}.bidask{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.quote{border-radius:10px;padding:9px 11px;background:#0c1219;border:1px solid #202c38}.quote strong{display:block;font-size:13px;margin-top:3px;font-variant-numeric:tabular-nums}.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}.section-title{font-size:15px;font-weight:800;letter-spacing:-.2px}.balance-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.balance-tile{padding:12px;background:#0b1218;border:1px solid #202c38;border-radius:12px}.balance-tile label{font-size:10px;color:var(--muted);display:block;margin-bottom:5px}.balance-tile strong{font-size:19px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}.balance-tile .sub{font-size:10px;color:var(--muted);margin-top:3px}.tabs{display:flex;gap:6px;background:#0a1117;border:1px solid #202c38;border-radius:12px;padding:4px;margin:12px 0}.tabs button{flex:1;border:0;border-radius:9px;padding:10px 7px;background:transparent;color:var(--muted);font-size:12px;font-weight:800}.tabs button.active{background:#1a2b2b;color:var(--green)}.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.field{display:flex;flex-direction:column;gap:6px;min-width:0}.field label{font-size:11px;color:var(--muted);font-weight:650}.field input,.field select{width:100%;min-width:0;background:#0a1117;color:var(--text);border:1px solid #2a3948;border-radius:10px;padding:12px 11px;outline:none}.field input:focus,.field select:focus{border-color:#47e0a2;box-shadow:0 0 0 2px #47e0a21c}.field input::placeholder{color:#566778}.primary,.secondary,.danger-btn{border-radius:11px;border:1px solid transparent;padding:13px 12px;font-weight:850}.primary{background:var(--green);color:#062117}.secondary{background:#182430;border-color:#2a3a49;color:var(--text)}.danger-btn{background:var(--redbg);border-color:#61303a;color:#ff9aaa}.order-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:13px}.buy{background:#153e30;color:#83f2c3;border-color:#2b6b51}.sell{background:#3b2028;color:#ff9baa;border-color:#75404b}.order-summary{margin-top:11px;padding:11px;border-radius:10px;background:#0a1117;border:1px solid #202c38;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.order-summary label{font-size:10px;color:var(--muted);display:block}.order-summary strong{font-size:12px;display:block;margin-top:4px;font-variant-numeric:tabular-nums}.notice{font-size:10px;line-height:1.5;color:var(--muted);margin-top:11px}.list-empty{padding:17px 8px;text-align:center;color:var(--muted);font-size:12px}.item{padding:12px 0;border-top:1px solid #23303c}.item:first-child{border-top:0;padding-top:2px}.item-title{font-weight:800;font-size:12px}.item-meta{font-size:10px;color:var(--muted);margin-top:4px}.item-value{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}.mini-btn{background:#17232e;border:1px solid #2a3a49;color:var(--text);border-radius:8px;padding:7px 9px;font-size:10px;font-weight:800}.footer-note{text-align:center;color:#617486;font-size:10px;padding:4px 8px 18px}.bottom-nav{position:fixed;z-index:10;bottom:0;left:0;right:0;background:#0b1118ed;backdrop-filter:blur(16px);border-top:1px solid #263440;padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.bottom-nav button{border:0;background:transparent;color:var(--muted);font-size:10px;font-weight:750;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:4px}.bottom-nav button.active{color:var(--green)}.nav-icon{font-size:17px;line-height:1}.toast{position:fixed;z-index:20;left:14px;right:14px;bottom:86px;background:#1b2a35;border:1px solid #405565;border-radius:12px;padding:12px 14px;font-size:12px;box-shadow:0 8px 30px #0008;display:none}.toast.show{display:block}.error-text{color:var(--red)}.hidden{display:none!important}
-@media(min-width:560px){.stats{grid-template-columns:repeat(4,minmax(0,1fr))}.balance-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.balance-tile strong{font-size:16px}}
-</style></head>
+:root{color-scheme:dark;--bg:#080d12;--panel:#101923;--panel2:#14212d;--line:#253544;--text:#f1f5f9;--muted:#91a0b1;--green:#00d68f;--red:#ff4058;--blue:#168cff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:radial-gradient(ellipse at 50% -15%,#14342e 0,transparent 38%),var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-bottom:88px}
+button,input{font:inherit}button{cursor:pointer;color:inherit}button:disabled{opacity:.45;cursor:not-allowed}
+header{max-width:560px;margin:auto;padding:20px 18px 14px;display:flex;align-items:center;justify-content:space-between}
+.brand{font-size:19px;font-weight:850;letter-spacing:.01em}.brand span{color:var(--green)}.subbrand{color:var(--muted);font-size:11px;margin-top:2px}.paper{font-size:10px;font-weight:800;letter-spacing:.08em;color:#8ef3c9;border:1px solid #215d49;background:#102a22;padding:6px 9px;border-radius:30px}
+main{max-width:560px;margin:auto;padding:0 13px}.screen{display:none}.screen.active{display:block}
+.card{background:linear-gradient(145deg,#121d27,#0d151d);border:1px solid var(--line);border-radius:19px;padding:17px;margin-bottom:12px}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:10px}.label{font-size:11px;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;font-weight:750}.symbol{font-size:17px;font-weight:850}.feed{font-size:10px;font-weight:800;letter-spacing:.06em;border-radius:20px;padding:5px 8px;background:#272b31;color:#c5ced7}.feed.live{background:#102b23;color:#64efb5}.feed.offline{background:#321d21;color:#ff8a98}
+.price{font-size:clamp(34px,9vw,45px);font-weight:850;letter-spacing:-1.7px;line-height:1.15;font-variant-numeric:tabular-nums;margin-top:17px;overflow-wrap:anywhere}.change{font-size:13px;font-weight:750;margin-top:6px}.green{color:var(--green)}.red{color:var(--red)}.muted{color:var(--muted)}.updated{font-size:11px;color:var(--muted);margin-top:12px}
+.section-title{font-size:16px;font-weight:850}.position{margin-top:13px;border-top:1px solid var(--line);padding-top:14px}.side-pill{display:inline-flex;padding:5px 9px;border-radius:7px;font-size:11px;font-weight:850;letter-spacing:.05em}.long{background:#103729;color:#51edb0}.short{background:#3a1c25;color:#ff8998}.position-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:16px}.metric{min-width:0}.metric label,.balance-metric label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}.metric strong{font-size:13px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.close-btn{width:100%;margin-top:15px;background:#202d39;border:1px solid #344453;border-radius:11px;padding:11px;font-weight:800}
+.order-card .section-title{margin-bottom:13px}.field-label{display:block;font-size:11px;color:var(--muted);font-weight:750;margin-bottom:7px}.amount-wrap{display:flex;align-items:center;border:1px solid #2a3b4b;border-radius:12px;background:#0a1118;padding:0 13px}.amount-wrap input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--text);font-size:22px;font-weight:800;padding:14px 0}.amount-wrap span{font-size:12px;color:var(--muted);margin-left:10px}.helper{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);margin-top:10px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}.trade-btn{border:0;border-radius:13px;padding:15px 7px;font-size:15px;font-weight:850;min-height:58px}.buy{background:linear-gradient(135deg,#00d68f,#00b879);color:#042418}.sell{background:linear-gradient(135deg,#ff5369,#e92d48);color:#fff}.notice{font-size:10px;color:var(--muted);text-align:center;margin:12px 6px 3px}
+.wallet-hero{padding:20px}.wallet-amount{font-size:35px;font-weight:850;letter-spacing:-1px;margin:5px 0 18px;font-variant-numeric:tabular-nums}.balance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px 10px;border-top:1px solid var(--line);padding-top:15px}.balance-metric strong{font-size:16px;font-weight:850;font-variant-numeric:tabular-nums}.wallet-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wallet-btn{border:1px solid var(--line);background:#152333;border-radius:12px;padding:13px 8px;font-size:13px;font-weight:800}.wallet-btn.primary{background:var(--green);color:#042418;border-color:transparent}.history-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #202c37}.history-item:last-child{border-bottom:0}.history-main{min-width:0}.history-title{font-size:13px;font-weight:800}.history-date{font-size:10px;color:var(--muted);margin-top:3px}.history-value{font-size:13px;font-weight:850;white-space:nowrap}.empty{color:var(--muted);font-size:13px;padding:16px 0;text-align:center}
+.bottom-nav{position:fixed;z-index:5;bottom:0;left:0;right:0;display:grid;grid-template-columns:1fr 1fr;background:#080d12f5;border-top:1px solid #263543;padding:8px max(18px,calc((100vw - 520px)/2)) calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(14px)}
+.nav-btn{border:0;background:transparent;color:var(--muted);font-weight:750;font-size:12px;padding:7px 10px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:10px}.nav-btn.active{color:#3ea5ff;background:#102235}.nav-icon{font-size:19px;line-height:1}
+.toast{position:fixed;z-index:10;bottom:86px;left:16px;right:16px;max-width:520px;margin:auto;background:#263543;color:white;border:1px solid #435665;border-radius:12px;padding:12px 14px;font-size:13px;box-shadow:0 10px 30px #0008;display:none}.toast.show{display:block}
+@media(min-width:500px){body{padding-bottom:94px}.card{padding:20px}.price{font-size:46px}}
+</style>
+</head>
 <body>
-<header><div><div class="brand">DELTA <em>PAPER LAB</em></div><div class="subbrand">Market terminal · Practice mode</div></div><div class="sim-pill"><span class="dot"></span> PAPER ONLY</div></header>
-<main class="wrap">
-<section class="panel hero" id="marketSection">
-<div class="section-head"><div class="stack"><div class="eyebrow">Market watch</div><div class="small muted">Delta Exchange India · Public data</div></div><button id="refreshBtn" class="mini-btn">↻ Refresh</button></div>
-<div class="watchlist" id="watchlist">
-<button class="asset active" data-symbol="BTCUSD"><div class="asset-name">₿ BTC <span class="muted">/ USD</span></div><div class="asset-price">Loading…</div><div class="asset-change muted">Waiting for feed</div></button>
-<button class="asset" data-symbol="ETHUSD"><div class="asset-name">◆ ETH <span class="muted">/ USD</span></div><div class="asset-price">Loading…</div><div class="asset-change muted">Waiting for feed</div></button>
-<button class="asset" data-symbol="SOLUSD"><div class="asset-name">◎ SOL <span class="muted">/ USD</span></div><div class="asset-price">Loading…</div><div class="asset-change muted">Waiting for feed</div></button>
+<header><div><div class="brand">DELTA <span>PAPER LAB</span></div><div class="subbrand">BTCUSDT perpetual · Practice mode</div></div><div class="paper">PAPER ONLY</div></header>
+<main>
+<section id="tradeScreen" class="screen active">
+<div class="card">
+<div class="topline"><div><div class="label">Binance USDⓈ-M Futures</div><div class="symbol" style="margin-top:5px">₿ BTCUSDT Perpetual</div></div><div id="feed" class="feed offline">CONNECTING</div></div>
+<div id="price" class="price">Connecting…</div>
+<div id="change" class="change muted">Waiting for Binance market data</div>
+<div id="updated" class="updated">Live futures ticker</div>
 </div>
-<div class="row hero-top"><div class="stack"><div class="row" style="justify-content:flex-start;gap:8px"><span id="assetTitle" class="section-title">Bitcoin</span><span class="feed-pill offline" id="feedStatus"><span class="dot"></span><span id="feedText">CONNECTING</span></span></div><div class="row" style="justify-content:flex-start;gap:8px;margin-top:8px;flex-wrap:wrap"><div class="price" id="lastPrice">--</div><span class="price-unit">USD</span></div><div class="row" style="justify-content:flex-start;margin-top:7px;gap:8px;flex-wrap:wrap"><span id="dayChange" class="change neutral">24h --</span><span class="tiny muted" id="lastUpdated">Waiting for live data…</span></div></div></div>
-<div class="stats">
-<div class="stat"><label>24H HIGH</label><strong id="high">--</strong></div><div class="stat"><label>24H LOW</label><strong id="low">--</strong></div><div class="stat"><label>MARK PRICE</label><strong id="mark">--</strong></div><div class="stat"><label>OPEN INTEREST</label><strong id="oi">--</strong></div>
+<div class="card">
+<div class="topline"><div class="section-title">Your position</div><span id="positionSide" class="side-pill long" style="display:none">LONG</span></div>
+<div id="noPosition" class="empty">No open position</div>
+<div id="positionDetails" class="position" style="display:none">
+<div class="position-grid">
+<div class="metric"><label>Unrealized P&amp;L</label><strong id="pnl">--</strong></div>
+<div class="metric"><label>Entry price</label><strong id="entry">--</strong></div>
+<div class="metric"><label>Size</label><strong id="size">--</strong></div>
 </div>
-<div class="bidask"><div class="quote"><span class="eyebrow">Best bid</span><strong class="green" id="bid">--</strong></div><div class="quote"><span class="eyebrow">Best ask</span><strong class="red" id="ask">--</strong></div></div>
-<div class="row" style="margin-top:11px"><span class="tiny muted">24h volume</span><strong id="volume" class="small">--</strong></div>
+<button id="closePosition" class="close-btn">Close position at market</button>
+</div>
+</div>
+<div class="card order-card">
+<div class="section-title">Market order</div>
+<label class="field-label" for="amount">ORDER SIZE (USDT)</label>
+<div class="amount-wrap"><input id="amount" type="number" min="5" step="1" value="100" inputmode="decimal" aria-label="Order size in USDT"><span>USDT</span></div>
+<div class="helper"><span>Available balance</span><strong id="availableTrade" style="color:var(--text)">10,000.00 USDT</strong></div>
+<div class="actions"><button id="buy" class="trade-btn buy">↑ Buy / Long</button><button id="sell" class="trade-btn sell">↓ Sell / Short</button></div>
+<div class="notice">Paper trades only. No real orders are sent to Binance.</div>
+</div>
 </section>
-<section class="panel" id="portfolioSection">
-<div class="section-head"><div><div class="eyebrow">Your sandbox</div><div class="section-title" style="margin-top:3px">Paper portfolio</div></div><button id="balanceBtn" class="mini-btn">Edit wallet</button></div>
+<section id="walletScreen" class="screen">
+<div class="card wallet-hero">
+<div class="label">Virtual wallet balance</div>
+<div id="walletBalance" class="wallet-amount">10,000.00 USDT</div>
 <div class="balance-grid">
-<div class="balance-tile"><label>Net equity</label><strong id="equity">$10,000.00</strong><div class="sub">Free + locked margin + P&L</div></div>
-<div class="balance-tile"><label>Available</label><strong id="available">$10,000.00</strong><div class="sub">Ready to use</div></div>
-<div class="balance-tile"><label>Unrealized P&L</label><strong id="upnl">$0.00</strong><div class="sub">Open positions</div></div>
-<div class="balance-tile"><label>Realized P&L</label><strong id="rpnl">$0.00</strong><div class="sub">Closed trade net</div></div>
+<div class="balance-metric"><label>Total equity</label><strong id="equity">10,000.00 USDT</strong></div>
+<div class="balance-metric"><label>Available balance</label><strong id="availableWallet">10,000.00 USDT</strong></div>
+<div class="balance-metric"><label>Unrealized P&amp;L</label><strong id="walletPnl">0.00 USDT</strong></div>
+<div class="balance-metric"><label>Realized P&amp;L</label><strong id="realized">0.00 USDT</strong></div>
 </div>
-</section>
-<section class="panel" id="tradeSection">
-<div class="section-head"><div><div class="eyebrow">Execution simulator</div><div class="section-title" style="margin-top:3px">Place paper order</div></div><span class="tiny muted" id="orderSymbol">BTCUSD</span></div>
-<div class="tabs"><button id="buyTab" class="active">Buy / Long</button><button id="sellTab">Sell / Short</button></div>
-<div class="field-grid">
-<div class="field"><label for="orderType">ORDER TYPE</label><select id="orderType"><option value="market">Market</option><option value="limit">Limit</option></select></div>
-<div class="field"><label for="leverage">LEVERAGE</label><select id="leverage"><option value="1">1×</option><option value="2">2×</option><option value="3">3×</option><option value="5" selected>5×</option><option value="10">10×</option><option value="20">20×</option></select></div>
-<div class="field"><label id="qtyLabel" for="qty">QUANTITY (BTC)</label><input id="qty" type="number" min="0.000001" step="0.001" value="0.001" inputmode="decimal"></div>
-<div class="field hidden" id="limitWrap"><label for="limitPrice">LIMIT PRICE (USD)</label><input id="limitPrice" type="number" min="0.000001" step="any" placeholder="Enter limit price" inputmode="decimal"></div>
-<div class="field"><label for="stopLoss">STOP LOSS (USD) · OPTIONAL</label><input id="stopLoss" type="number" min="0.000001" step="any" placeholder="Not set" inputmode="decimal"></div>
-<div class="field"><label for="takeProfit">TAKE PROFIT (USD) · OPTIONAL</label><input id="takeProfit" type="number" min="0.000001" step="any" placeholder="Not set" inputmode="decimal"></div>
 </div>
-<div class="order-summary"><div><label>Last price</label><strong id="summaryPrice">--</strong></div><div><label>Notional</label><strong id="summaryNotional">--</strong></div><div><label>Est. margin</label><strong id="summaryMargin">--</strong></div></div>
-<div class="order-actions"><button id="submitBuy" class="primary buy">Buy / Long</button><button id="submitSell" class="primary sell hidden">Sell / Short</button></div>
-<div class="notice">This is a simplified linear USD paper simulator, not an exchange order engine. It does not reproduce Delta contract multipliers, funding, liquidation, or exact fees. Orders are blocked until the selected market has fresh live data.</div>
+<div class="card"><div class="section-title" style="margin-bottom:13px">Wallet management</div><div class="wallet-actions"><button id="editBalance" class="wallet-btn primary">Edit balance</button><button id="resetBalance" class="wallet-btn">Reset to 10,000</button></div></div>
+<div class="card"><div class="topline"><div class="section-title">Trade history</div><span id="historyCount" class="label">0 trades</span></div><div id="history"><div class="empty">Your paper trades will appear here.</div></div></div>
 </section>
-<section class="panel" id="positionsSection">
-<div class="section-head"><div class="section-title">Open positions</div><span id="positionCount" class="feed-pill">0 OPEN</span></div><div id="positions"><div class="list-empty">No open positions yet. Place a paper order to start.</div></div>
-</section>
-<section class="panel" id="ordersSection">
-<div class="section-head"><div class="section-title">Pending limit orders</div><button id="cancelAll" class="mini-btn">Cancel all</button></div><div id="pendingOrders"><div class="list-empty">No pending orders.</div></div>
-</section>
-<section class="panel" id="historySection">
-<div class="section-head"><div class="section-title">Recent activity</div><button id="clearHistory" class="mini-btn">Clear history</button></div><div id="history"><div class="list-empty">Your simulated trades will appear here.</div></div>
-</section>
-<div class="footer-note">No exchange login · No API keys · No real orders<br>Market data supplied by Delta Exchange India's public API.</div>
 </main>
-<nav class="bottom-nav"><button class="active" data-target="marketSection"><span class="nav-icon">⌂</span>Markets</button><button data-target="tradeSection"><span class="nav-icon">⇄</span>Trade</button><button data-target="portfolioSection"><span class="nav-icon">▤</span>Portfolio</button></nav>
-<div id="toast" class="toast"></div>
+<nav class="bottom-nav"><button class="nav-btn active" data-screen="tradeScreen"><span class="nav-icon">↗</span>Trade</button><button class="nav-btn" data-screen="walletScreen"><span class="nav-icon">▣</span>Wallet</button></nav>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script>
 (function(){
 'use strict';
-const $=id=>document.getElementById(id), symbols=['BTCUSD','ETHUSD','SOLUSD'], names={BTCUSD:'Bitcoin',ETHUSD:'Ethereum',SOLUSD:'Solana'}, codes={BTCUSD:'BTC',ETHUSD:'ETH',SOLUSD:'SOL'}, key='dpl-v2-state';
+const $=id=>document.getElementById(id), STORE='delta-paper-lab-binance-v1', START=10000, FEE_RATE=0.0004;
 const fmt=(n,d=2)=>Number.isFinite(Number(n))?Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}):'--';
-const cash=n=>'$'+fmt(n,2), shortNum=n=>{n=Number(n);if(!Number.isFinite(n))return'--';if(Math.abs(n)>=1e9)return fmt(n/1e9,2)+'B';if(Math.abs(n)>=1e6)return fmt(n/1e6,2)+'M';if(Math.abs(n)>=1e3)return fmt(n/1e3,2)+'K';return fmt(n,2)};
-let state;try{state=JSON.parse(localStorage.getItem(key)||'null')}catch(e){state=null}
-if(!state||typeof state.balance!=='number')state={start:10000,balance:10000,positions:[],orders:[],history:[],fees:.0005};
-state.positions=Array.isArray(state.positions)?state.positions:[];state.orders=Array.isArray(state.orders)?state.orders:[];state.history=Array.isArray(state.history)?state.history:[];
-let market={}, selected='BTCUSD', side='long', requestBusy=false, lastError='', pollTimer=null, toastTimer=null;
-function persist(){try{localStorage.setItem(key,JSON.stringify(state))}catch(e){} renderPortfolio();renderLists();updateOrderSummary()}
+const usdt=n=>fmt(n,2)+' USDT';
+let state;try{state=JSON.parse(localStorage.getItem(STORE)||'null')}catch(e){state=null}
+if(!state||typeof state.balance!=='number')state={balance:START,position:null,history:[]};
+if(!Array.isArray(state.history))state.history=[];if(!state.position)state.position=null;
+let ticker=null,lastTick=0,socket=null,reconnectTimer=null,toastTimer=null,restBusy=false;
+function save(){try{localStorage.setItem(STORE,JSON.stringify(state))}catch(e){} renderAll()}
 function toast(msg){$('toast').textContent=msg;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3000)}
-function quote(sym){return market[sym]||null}
-function isFresh(q){return !!q&&q.receivedAt&&Date.now()-q.receivedAt<20000&&Number.isFinite(q.price)&&q.price>0}
-function activeQuote(){return quote(selected)}
-function ageLabel(q){if(!q||!q.receivedAt)return'No successful update';let s=Math.max(0,Math.floor((Date.now()-q.receivedAt)/1000));return s<2?'Updated just now':'Updated '+s+'s ago'}
-function normalizeTicker(d){if(!d||typeof d!=='object')return null;const p=Number(d.close??d.last_price??d.mark_price);if(!Number.isFinite(p)||p<=0)return null;let ts=Number(d.timestamp||0);if(ts>1e12)ts=Math.floor(ts/1000);return{symbol:d.symbol||'',price:p,mark:Number(d.mark_price)||null,open:Number(d.open)||null,high:Number(d.high)||null,low:Number(d.low)||null,change:Number(d.ltp_change_24h),oi:Number(d.oi_value_usd??d.oi_value??d.oi),volume:Number(d.turnover_usd??d.turnover??d.volume),bid:Number(d.quotes&&d.quotes.best_bid)||null,ask:Number(d.quotes&&d.quotes.best_ask)||null,serverTs:ts,receivedAt:Date.now()}}
-function handleMarketPayload(payload){requestBusy=false;let msg;try{msg=typeof payload==='string'?JSON.parse(payload):payload}catch(e){lastError='Could not parse market response';updateFeed();return}
-if(!msg||!msg.ok){lastError=(msg&&msg.error)||'Market data request failed';updateFeed();return}
-let body;try{body=JSON.parse(msg.body)}catch(e){lastError='Invalid response from market API';updateFeed();return}
-let result=body&&body.result;if(!result){lastError=(body&&body.error&&body.error.message)||'No ticker data returned';updateFeed();return}
-let list=Array.isArray(result)?result:[result];let updated=0;
-for(const d of list){const q=normalizeTicker(d);if(q&&symbols.includes(q.symbol)){market[q.symbol]=q;updated++}}
-if(!updated){lastError='Ticker response did not include BTCUSD, ETHUSD or SOLUSD';updateFeed();return}
-lastError='';renderMarket();updateFeed();updateOrderSummary();checkOrdersAndRisk();renderPortfolio();renderLists()}
-window.onNativeMarketData=handleMarketPayload;
-function fetchTickers(){if(requestBusy)return;requestBusy=true;
-if(window.MarketDataBridge&&typeof window.MarketDataBridge.fetchTickers==='function'){window.MarketDataBridge.fetchTickers(symbols.join(','));return}
-const url='https://api.india.delta.exchange/v2/tickers/'+symbols.join(',');
-const controller=typeof AbortController!=='undefined'?new AbortController():null;const timeout=controller?setTimeout(()=>controller.abort(),7000):null;
-fetch(url,{headers:{Accept:'application/json'},signal:controller?controller.signal:undefined,cache:'no-store'}).then(async r=>{const body=await r.text();handleMarketPayload({ok:r.ok,status:r.status,body,error:r.ok?'':'HTTP '+r.status})}).catch(e=>handleMarketPayload({ok:false,error:'Cannot reach Delta market data: '+(e&&e.message||'network error')})).finally(()=>{if(timeout)clearTimeout(timeout)})}
-function schedulePoll(){clearTimeout(pollTimer);pollTimer=setTimeout(()=>{fetchTickers();schedulePoll()},5000)}
-function updateFeed(){const fresh=symbols.some(s=>isFresh(quote(s)));let all=symbols.every(s=>isFresh(quote(s)));let el=$('feedStatus');el.className='feed-pill '+(fresh?'live':Object.keys(market).length?'stale':'offline');$('feedText').textContent=fresh?(all?'LIVE':'LIVE · PARTIAL'):Object.keys(market).length?'STALE':'OFFLINE';const q=activeQuote();$('lastUpdated').textContent=q?ageLabel(q):lastError?'Unable to connect · retrying':'Waiting for live data…';if(lastError)$('lastUpdated').title=lastError}
-function renderMarket(){
-for(const sym of symbols){const q=quote(sym),card=document.querySelector('[data-symbol="'+sym+'"]');if(!card)continue;
-card.querySelector('.asset-price').textContent=q?fmt(q.price,q.price<1?5:q.price<100?3:2):'--';
-const ch=q&&Number.isFinite(q.change)?q.change:null;const el=card.querySelector('.asset-change');el.textContent=ch===null?'Awaiting data':(ch>=0?'+':'')+fmt(ch,2)+'%';el.className='asset-change '+(ch===null?'muted':ch>=0?'green':'red');card.classList.toggle('active',sym===selected)}
-const q=activeQuote();$('assetTitle').textContent=names[selected];$('orderSymbol').textContent=selected;$('qtyLabel').textContent='QUANTITY ('+codes[selected]+')';
-if(!q){$('lastPrice').textContent='--';$('dayChange').textContent='24h --';$('dayChange').className='change neutral';['high','low','mark','oi','bid','ask','volume'].forEach(id=>$(id).textContent='--');updateFeed();return}
-$('lastPrice').textContent=fmt(q.price,q.price<1?5:q.price<100?3:2);
-$('dayChange').textContent=(q.change>=0?'+':'')+fmt(q.change,2)+'% · 24h';$('dayChange').className='change '+(q.change>=0?'up':'down');
-$('high').textContent=q.high?fmt(q.high,2):'--';$('low').textContent=q.low?fmt(q.low,2):'--';$('mark').textContent=q.mark?fmt(q.mark,2):'--';$('oi').textContent=q.oi?shortNum(q.oi):'--';$('bid').textContent=q.bid?fmt(q.bid,2):'--';$('ask').textContent=q.ask?fmt(q.ask,2):'--';$('volume').textContent=q.volume?shortNum(q.volume):'--';updateFeed()}
-function totalUPnl(){return state.positions.reduce((a,p)=>a+positionPnl(p),0)}
-function positionPnl(p){const q=quote(p.symbol);const current=q?q.price:p.entry;const delta=current-p.entry;return delta*p.qty*(p.side==='long'?1:-1)}
-function realized(){return state.history.reduce((a,h)=>a+(Number(h.net)||0),0)}
-function renderPortfolio(){const u=totalUPnl(),locked=state.positions.reduce((a,p)=>a+(Number(p.margin)||0),0),equity=state.balance+locked+u;
-$('equity').textContent=cash(equity);$('available').textContent=cash(state.balance);$('upnl').textContent=cash(u);$('upnl').className=u>=0?'green':'red';$('rpnl').textContent=cash(realized());$('rpnl').className=realized()>=0?'green':'red'}
-function record(label,p,price,pnl,net){state.history.unshift({id:Date.now()+Math.random(),label,symbol:p.symbol,side:p.side,price,qty:p.qty,pnl,net,time:new Date().toLocaleString()});state.history=state.history.slice(0,60)}
-function validateRisk(s,sl,tp,price){if(sl!==null&&(!(sl>0)||(s==='long'?sl>=price:sl<=price)))return'Stop loss must be below entry for a long or above entry for a short.';if(tp!==null&&(!(tp>0)||(s==='long'?tp<=price:tp>=price)))return'Take profit must be above entry for a long or below entry for a short.';return''}
-function execute(side,qty,lev,sl,tp,symbol=selected,price=null){const q=quote(symbol),px=price||(q&&q.price);if(!px||!isFresh(q)){toast('Order blocked: waiting for fresh live market data.');return false}const risk=validateRisk(side,sl,tp,px);if(risk){toast(risk);return false}
-const margin=qty*px/lev,fee=qty*px*state.fees;if(margin+fee>state.balance){toast('Insufficient available virtual balance.');return false}
-state.balance-=margin+fee;const p={id:Date.now()+Math.random(),symbol,side,qty,lev,entry:px,sl,tp,margin,entryFee:fee,openedAt:Date.now()};state.positions.push(p);record('OPEN',p,px,0,-fee);persist();toast(side==='long'?'Paper long opened':'Paper short opened');return true}
-function submitOrder(){const q=activeQuote();if(!isFresh(q)){toast('No fresh live price. Order was not placed.');return}
-const qty=Number($('qty').value),lev=Number($('leverage').value),limit=Number($('limitPrice').value),slRaw=$('stopLoss').value,tpRaw=$('takeProfit').value,sl=slRaw===''?null:Number(slRaw),tp=tpRaw===''?null:Number(tpRaw);
-if(!(qty>0)||!Number.isFinite(qty)){toast('Enter a quantity greater than zero.');return}
-if((slRaw!==''&&!Number.isFinite(sl))||(tpRaw!==''&&!Number.isFinite(tp))){toast('Check your stop-loss and take-profit values.');return}
-const px=$('orderType').value==='limit'?limit:q.price;if($('orderType').value==='limit'&&!(limit>0)){toast('Enter a valid limit price.');return}
-const err=validateRisk(side,sl,tp,px);if(err){toast(err);return}
-if($('orderType').value==='limit'&&((side==='long'&&limit<q.price)||(side==='short'&&limit>q.price))){const fee=qty*limit*state.fees,margin=qty*limit/lev;if(margin+fee>state.balance){toast('Insufficient virtual balance for this limit order.');return}
-state.orders.push({id:Date.now()+Math.random(),symbol:selected,side,qty,lev,limit,sl,tp,createdAt:Date.now()});persist();toast('Limit order queued. It will trigger when price reaches your level.');return}
-if($('orderType').value==='limit'&&((side==='long'&&limit>=q.price)||(side==='short'&&limit<=q.price))){execute(side,qty,lev,sl,tp,selected,q.price);return}
-execute(side,qty,lev,sl,tp)}
-function checkOrdersAndRisk(){for(const p of [...state.positions]){const q=quote(p.symbol);if(!q||!isFresh(q))continue;const hitSL=p.sl&&(p.side==='long'?q.price<=p.sl:q.price>=p.sl),hitTP=p.tp&&(p.side==='long'?q.price>=p.tp:q.price<=p.tp);if(hitSL||hitTP)closePosition(p.id,q.price,hitSL?'STOP LOSS':'TAKE PROFIT')}
-for(const o of [...state.orders]){const q=quote(o.symbol);if(!q||!isFresh(q))continue;const hit=o.side==='long'?q.price<=o.limit:q.price>=o.limit;if(hit){state.orders=state.orders.filter(x=>x.id!==o.id);execute(o.side,o.qty,o.lev,o.sl,o.tp,o.symbol,q.price);record('LIMIT FILLED',o,q.price,0,0)}}}
-function closePosition(id,price=null,reason='CLOSED'){const i=state.positions.findIndex(p=>String(p.id)===String(id));if(i<0)return;const p=state.positions[i],q=quote(p.symbol);if(!price&&!isFresh(q)){toast('Cannot close: market data is stale. Refresh the feed and try again.');return}const px=price||(q&&q.price);if(!px){toast('Cannot close: no market price available.');return}const gross=(px-p.entry)*p.qty*(p.side==='long'?1:-1),exitFee=px*p.qty*state.fees;state.balance+=p.margin+gross-exitFee;record(reason,p,px,gross,gross-exitFee);state.positions.splice(i,1);persist();toast('Paper position closed')}
-function renderLists(){
-$('positionCount').textContent=state.positions.length+' OPEN';
-$('positions').innerHTML=state.positions.length?state.positions.map(p=>{const q=quote(p.symbol),u=positionPnl(p);return '<div class="item"><div class="row"><div><div class="item-title '+(p.side==='long'?'green':'red')+'">'+p.side.toUpperCase()+' · '+p.symbol+'</div><div class="item-meta">Qty '+fmt(p.qty,6)+' · '+p.lev+'× · Entry $'+fmt(p.entry,2)+'</div><div class="item-meta">SL '+(p.sl?'$'+fmt(p.sl,2):'--')+' · TP '+(p.tp?'$'+fmt(p.tp,2):'--')+'</div></div><div class="stack" style="align-items:flex-end"><div class="item-value '+(u>=0?'green':'red')+'">'+cash(u)+'</div><button class="mini-btn" data-close="'+p.id+'">Close</button></div></div></div>'}).join(''):'<div class="list-empty">No open positions yet. Place a paper order to start.</div>';
-$('pendingOrders').innerHTML=state.orders.length?state.orders.map(o=>'<div class="item"><div class="row"><div><div class="item-title">'+o.side.toUpperCase()+' · '+o.symbol+'</div><div class="item-meta">Qty '+fmt(o.qty,6)+' · '+o.lev+'× · Limit $'+fmt(o.limit,2)+'</div></div><button class="mini-btn" data-cancel="'+o.id+'">Cancel</button></div></div>').join(''):'<div class="list-empty">No pending limit orders.</div>';
-$('history').innerHTML=state.history.length?state.history.slice(0,12).map(h=>'<div class="item"><div class="row"><div><div class="item-title">'+h.label+' · '+h.symbol+'</div><div class="item-meta">'+h.time+' · '+(h.qty?'Qty '+fmt(h.qty,6):'')+'</div></div><div class="item-value '+((h.net||0)>=0?'green':'red')+'">'+cash(h.net||0)+'</div></div></div>').join(''):'<div class="list-empty">Your simulated trades will appear here.</div>'}
-function updateOrderSummary(){const q=activeQuote(),qty=Number($('qty').value)||0,lev=Number($('leverage').value)||1,px=q&&q.price;$('summaryPrice').textContent=px&&isFresh(q)?'$'+fmt(px,2):'--';$('summaryNotional').textContent=px&&qty>0?cash(qty*px):'--';$('summaryMargin').textContent=px&&qty>0?cash(qty*px/lev):'--';const can=!!(q&&isFresh(q));$('submitBuy').disabled=!can;$('submitSell').disabled=!can;[$('submitBuy'),$('submitSell')].forEach(b=>{b.style.opacity=can?'1':'.45'})}
-function setSide(s){side=s;$('buyTab').classList.toggle('active',s==='long');$('sellTab').classList.toggle('active',s==='short');$('submitBuy').classList.toggle('hidden',s!=='long');$('submitSell').classList.toggle('hidden',s!=='short');updateOrderSummary()}
-function setSymbol(s){if(!symbols.includes(s))return;selected=s;renderMarket();updateOrderSummary();document.querySelectorAll('.asset').forEach(c=>c.classList.toggle('active',c.dataset.symbol===s))}
-function setOrderType(){const lim=$('orderType').value==='limit';$('limitWrap').classList.toggle('hidden',!lim);updateOrderSummary()}
-document.querySelectorAll('.asset').forEach(el=>el.addEventListener('click',()=>setSymbol(el.dataset.symbol)));
-$('refreshBtn').onclick=()=>{fetchTickers();toast('Refreshing public market data…')};
-$('buyTab').onclick=()=>setSide('long');$('sellTab').onclick=()=>setSide('short');$('submitBuy').onclick=()=>{setSide('long');submitOrder()};$('submitSell').onclick=()=>{setSide('short');submitOrder()};$('orderType').onchange=setOrderType;
-['qty','leverage','limitPrice','stopLoss','takeProfit'].forEach(id=>$(id).addEventListener('input',updateOrderSummary));
-$('balanceBtn').onclick=()=>{const v=Number(prompt('Set your virtual USD wallet balance. This does not move real money.',String(state.start)));if(v>0&&Number.isFinite(v)){const delta=v-state.start;state.start=v;state.balance+=delta;persist();toast('Virtual wallet updated.')}};
-$('cancelAll').onclick=()=>{state.orders=[];persist();toast('Pending orders cancelled.')};
-$('clearHistory').onclick=()=>{if(confirm('Clear recent activity? Open positions and wallet are unchanged.')){state.history=[];persist();toast('Activity history cleared.')}};
-document.addEventListener('click',e=>{const c=e.target.closest('[data-close]'),o=e.target.closest('[data-cancel]');if(c)closePosition(c.dataset.close);if(o){state.orders=state.orders.filter(x=>String(x.id)!==String(o.dataset.cancel));persist();toast('Limit order cancelled.')}});
-document.querySelectorAll('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.bottom-nav button').forEach(x=>x.classList.toggle('active',x===b));$(b.dataset.target).scrollIntoView({behavior:'smooth',block:'start'})}));
-window.addEventListener('online',()=>{lastError='';fetchTickers()});window.addEventListener('offline',()=>{lastError='Device is offline';updateFeed()});document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchTickers()});
-renderPortfolio();renderLists();renderMarket();updateOrderSummary();fetchTickers();schedulePoll();
+function fresh(){return ticker&&Date.now()-lastTick<20000&&ticker.price>0}
+function pnl(){if(!state.position||!ticker)return 0;const p=state.position;return (ticker.price-p.entry)*p.qty*(p.side==='long'?1:-1)}
+function equity(){return state.balance+(state.position?state.position.margin:0)+pnl()}
+function realized(){return state.history.reduce((sum,h)=>sum+(Number(h.net)||0),0)}
+function addHistory(action,side,price,size,net){state.history.unshift({action,side,price,size,net,time:new Date().toLocaleString()});state.history=state.history.slice(0,50)}
+function renderPrice(){
+const live=fresh();$('feed').textContent=live?'LIVE':ticker?'STALE':'CONNECTING';$('feed').className='feed '+(live?'live':'offline');
+if(ticker){$('price').textContent=fmt(ticker.price,2);$('change').textContent=(ticker.change>=0?'+':'')+fmt(ticker.change,2)+'% today';$('change').className='change '+(ticker.change>=0?'green':'red');$('updated').textContent='Binance futures · '+(live?'Live now':'Last update '+Math.max(1,Math.floor((Date.now()-lastTick)/1000))+'s ago')}
+else{$('price').textContent='Connecting…';$('change').textContent='Waiting for Binance market data';$('change').className='change muted';$('updated').textContent='Connecting to Binance USDⓈ-M Futures'}
+}
+function renderPosition(){
+const p=state.position,has=!!p&&!!ticker;$('noPosition').style.display=has?'none':'block';$('positionDetails').style.display=has?'block':'none';$('positionSide').style.display=has?'inline-flex':'none';
+if(has){const u=pnl();$('positionSide').textContent=p.side==='long'?'LONG':'SHORT';$('positionSide').className='side-pill '+(p.side==='long'?'long':'short');$('pnl').textContent=(u>=0?'+':'')+usdt(u);$('pnl').className=u>=0?'green':'red';$('entry').textContent=fmt(p.entry,2);$('size').textContent=usdt(p.notional)}
+$('availableTrade').textContent=usdt(state.balance);
+}
+function renderWallet(){
+const u=pnl(),eq=equity();$('walletBalance').textContent=usdt(state.balance);$('equity').textContent=usdt(eq);$('availableWallet').textContent=usdt(state.balance);$('walletPnl').textContent=(u>=0?'+':'')+usdt(u);$('walletPnl').className=u>=0?'green':'red';const r=realized();$('realized').textContent=(r>=0?'+':'')+usdt(r);$('realized').className=r>=0?'green':'red';$('historyCount').textContent=state.history.length+' trades';
+$('history').innerHTML=state.history.length?state.history.map(h=>'<div class="history-item"><div class="history-main"><div class="history-title">'+escapeHtml(h.action)+' · '+escapeHtml(h.side.toUpperCase())+'</div><div class="history-date">'+escapeHtml(h.time)+'</div></div><div class="history-value '+(h.net>=0?'green':'red')+'">'+(h.net>=0?'+':'')+fmt(h.net,2)+' USDT</div></div>').join(''):'<div class="empty">Your paper trades will appear here.</div>';
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function renderAll(){renderPrice();renderPosition();renderWallet()}
+function openPosition(side){
+if(!fresh()){toast('Waiting for a fresh Binance futures price.');return}
+if(state.position){toast('Close your current position before opening another.');return}
+const notional=Number($('amount').value),price=ticker.price;
+if(!Number.isFinite(notional)||notional<5){toast('Enter an order size of at least 5 USDT.');return}
+const fee=notional*FEE_RATE;if(notional+fee>state.balance){toast('Not enough available virtual balance.');return}
+state.balance-=notional+fee;state.position={side,entry:price,qty:notional/price,notional,margin:notional,entryFee:fee,openedAt:Date.now()};
+addHistory('OPEN',side,price,notional,-fee);save();toast(side==='long'?'Paper long opened':'Paper short opened');
+}
+function closePosition(){
+const p=state.position;if(!p)return;if(!fresh()){toast('Cannot close: Binance price is stale.');return}
+const gross=pnl(),exitFee=p.qty*ticker.price*FEE_RATE,net=gross-p.entryFee-exitFee;
+state.balance+=p.margin+gross-exitFee;addHistory('CLOSE',p.side,ticker.price,p.notional,net);state.position=null;save();toast('Position closed at live market price');
+}
+function onTicker(data){try{const d=typeof data==='string'?JSON.parse(data):data;const price=Number(d.c??d.p??d.price);if(!(price>0&&Number.isFinite(price)))return;ticker={price,change:Number(d.P??d.priceChangePercent??0)};lastTick=Date.now();renderAll()}catch(e){}}
+function connect(){
+clearTimeout(reconnectTimer);try{if(socket)socket.close()}catch(e){}
+try{socket=new WebSocket('wss://fstream.binance.com/ws/btcusdt@ticker');socket.onopen=()=>{};socket.onmessage=e=>onTicker(e.data);socket.onerror=()=>{};socket.onclose=()=>{reconnectTimer=setTimeout(connect,2500)}}catch(e){reconnectTimer=setTimeout(connect,2500)}
+}
+async function restFallback(){if(restBusy)return;restBusy=true;try{const r=await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=BTCUSDT',{cache:'no-store'});if(r.ok){const d=await r.json();if(!fresh())onTicker({c:d.lastPrice,P:d.priceChangePercent})}}catch(e){}finally{restBusy=false}}
+document.querySelectorAll('[data-screen]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-screen]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===b.dataset.screen));window.scrollTo({top:0,behavior:'smooth'})}));
+$('buy').addEventListener('click',()=>openPosition('long'));$('sell').addEventListener('click',()=>openPosition('short'));$('closePosition').addEventListener('click',closePosition);
+$('editBalance').addEventListener('click',()=>{const input=prompt('Set your virtual available balance in USDT:',String(state.balance.toFixed(2)));if(input===null)return;const n=Number(input);if(!Number.isFinite(n)||n<0){toast('Enter a valid non-negative balance.');return}state.balance=n;save();toast('Virtual balance updated')});
+$('resetBalance').addEventListener('click',()=>{if(!confirm('Reset wallet to 10,000 USDT and clear all positions and history?'))return;state={balance:START,position:null,history:[]};save();toast('Paper wallet reset')});
+window.addEventListener('online',connect);window.addEventListener('beforeunload',()=>{clearTimeout(reconnectTimer);try{socket&&socket.close()}catch(e){}});
+connect();restFallback();setInterval(()=>{renderAll();if(!fresh())restFallback()},3000);
 })();
-</script></body></html>
+</script>
+</body>
+</html>
